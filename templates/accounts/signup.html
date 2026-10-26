@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Create your account — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block title %}Create your account — {{ site.app_name|default:"Akilent" }}{% endblock %}
 {% block content %}
 {{ wizard_config|json_script:"signup-wizard-config" }}
 <script src="{% static 'js/signup-wizard.js' %}?v=6"></script>
@@ -12,7 +12,7 @@
         {% include "components/brand_mark.html" with class="w-12 h-12" %}
       </div>
       <h1 class="text-xl font-semibold text-ink">Create your account</h1>
-      <p class="text-sm text-gray-400 mt-1">Pick your channels, choose a plan, and tell us about your business</p>
+      <p class="text-sm text-ink-subtle mt-1">Pick your channels, choose a plan, and tell us about your business</p>
     </div>
 
     {# Stepper #}
@@ -21,13 +21,13 @@
         <li class="flex items-center gap-2">
           <button type="button" @click="goTo(i)" :aria-current="i === step ? 'step' : null"
                   class="flex items-center gap-1.5"
-                  :class="i === step ? 'text-accent' : (i < step ? 'text-gray-500 hover:text-gray-700' : 'text-gray-300 cursor-default')">
-            <span class="w-5 h-5 rounded-full border flex items-center justify-center text-[11px]"
+                  :class="i === step ? 'text-accent' : (i < step ? 'text-ink-subtle hover:text-ink-muted' : 'text-ink-subtle cursor-default')">
+            <span class="w-5 h-5 rounded-full border flex items-center justify-center text-xs"
                   :class="i < step ? 'bg-brand-600 border-brand-600 text-white' : (i === step ? 'border-brand-600' : 'border-gray-300')"
                   x-text="i < step ? '✓' : (i + 1)"></span>
             <span x-text="labelText" class="hidden sm:inline"></span>
           </button>
-          <span x-show="i < stepLabels.length - 1" class="text-gray-300">—</span>
+          <span x-show="i < stepLabels.length - 1" class="text-border-strong" aria-hidden="true">—</span>
         </li>
       </template>
     </ol>
@@ -49,9 +49,9 @@
 
       {# ---- Step 0: Choose channels ---- #}
       <div x-show="step === 0" class="card card-pad sm:!p-8 space-y-3" role="group" aria-labelledby="channels-question">
-        <p id="channels-question" class="text-sm text-gray-500 mb-2">Where do your customers reach you? Pick every channel you want to set up.</p>
+        <p id="channels-question" class="text-sm text-ink-subtle mb-2">Where do your customers reach you? Pick every channel you want to set up.</p>
         {% if not wizard_config.channelChoices %}
-          <div class="card card-pad text-sm text-gray-500" data-testid="signup-unavailable">
+          <div class="card card-pad text-sm text-ink-subtle" data-testid="signup-unavailable">
             Sign-ups are temporarily unavailable. Please check back soon.
           </div>
         {% endif %}
@@ -65,11 +65,11 @@
             </span>
             <span class="min-w-0">
               <span class="block font-medium text-ink" x-text="c.label"></span>
-              <span class="block text-xs text-gray-500" x-text="c.description"></span>
+              <span class="block text-xs text-ink-subtle" x-text="c.description"></span>
             </span>
           </button>
         </template>
-        <p x-show="channelCards.length" class="text-xs text-gray-500 pt-1">You can add the others later. The packages on the next step include everything you pick.</p>
+        <p x-show="channelCards.length" class="text-xs text-ink-subtle pt-1">You can add the others later. The packages on the next step include everything you pick.</p>
         <p x-show="channels.length && !filteredPlans.length" x-cloak class="field-error">No single package includes all of these yet. Untick one to see packages.</p>
         {% if form.selected_channels.errors %}
           <p class="field-error">{{ form.selected_channels.errors|join:" " }}</p>
@@ -79,8 +79,8 @@
       {# ---- Step 1: Select package ---- #}
       <div x-show="step === 1" x-cloak class="space-y-3">
         <div class="flex flex-wrap items-center justify-between gap-3">
-          <p class="text-sm text-gray-500">
-            Plans that include <span class="font-medium text-gray-700" x-text="channelLabel"></span>
+          <p class="text-sm text-ink-subtle">
+            Plans that include <span class="font-medium text-ink-muted" x-text="channelLabel"></span>
           </p>
           {% comment %}Billing term for paid plans. Longer terms cost less per month; the
           amounts come from billing.pricing.price_for, the same as checkout.{% endcomment %}
@@ -89,7 +89,7 @@
             <template x-for="o in cfg.periods" :key="o.value">
               <button type="button" role="radio" :aria-checked="period === o.value" @click="selectPeriod(o.value)"
                       class="rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
-                      :class="period === o.value ? 'tone-brand' : 'text-gray-500 hover:text-ink'">
+                      :class="period === o.value ? 'tone-brand' : 'text-ink-subtle hover:text-ink'">
                 <span x-text="o.label"></span>
                 <span x-show="o.savePct > 0" class="ml-1 text-teal-700" x-text="'−' + o.savePct + '%'"></span>
               </button>
@@ -97,7 +97,7 @@
           </div>
         </div>
         <template x-if="filteredPlans.length === 0">
-          <div class="card card-pad text-sm text-gray-500">
+          <div class="card card-pad text-sm text-ink-subtle">
             No packages are available for that selection yet. Go back and choose different channels.
           </div>
         </template>
@@ -108,15 +108,15 @@
                     :class="plan === p.slug ? 'border-brand-600 ring-2 ring-brand-100' : 'border-border hover:border-gray-300'">
               <div class="flex items-center justify-between">
                 <span class="font-semibold text-ink" x-text="p.name"></span>
-                <span x-show="p.popular" class="text-[10px] uppercase tracking-wide tone-brand rounded px-1.5 py-0.5">Popular</span>
+                <span x-show="p.popular" class="text-xs uppercase tracking-wide tone-brand rounded px-1.5 py-0.5">Popular</span>
               </div>
               <div class="mt-1 text-lg font-bold text-ink" x-text="priceLabel(p)"></div>
-              <div x-show="perMonthLabel(p)" class="text-xs text-gray-500">
+              <div x-show="perMonthLabel(p)" class="text-xs text-ink-subtle">
                 <span x-text="perMonthLabel(p)"></span>
                 <span x-show="periodInfo.savePct > 0" class="text-teal-700 font-medium" x-text="' · save ' + periodInfo.savePct + '%'"></span>
               </div>
-              <div x-show="p.trialDays" class="text-xs text-gray-400" x-text="p.trialDays + '-day free trial'"></div>
-              <ul class="mt-3 space-y-1 text-xs text-gray-500">
+              <div x-show="p.trialDays" class="text-xs text-ink-subtle" x-text="p.trialDays + '-day free trial'"></div>
+              <ul class="mt-3 space-y-1 text-xs text-ink-subtle">
                 <template x-for="f in p.features" :key="f">
                   <li class="flex items-start gap-1.5"><span class="text-brand-500">✓</span><span x-text="f"></span></li>
                 </template>
@@ -135,7 +135,7 @@
       {# ---- Step 2: Your details ---- #}
       <div x-show="step === 2" x-cloak class="card card-pad sm:!p-8 space-y-6">
         <div>
-          <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Your details</p>
+          <p class="text-xs font-semibold text-ink-subtle uppercase tracking-wide mb-3">Your details</p>
           <div class="grid sm:grid-cols-2 gap-3">
             {% include "components/form_field.html" with name="first_name" label="First name" required=True value=form.first_name.value error=form.first_name.errors|join:" " xmodel="fields.first_name" %}
             {% include "components/form_field.html" with name="last_name" label="Last name" required=True value=form.last_name.value error=form.last_name.errors|join:" " xmodel="fields.last_name" %}
@@ -144,23 +144,23 @@
           </div>
           <div class="grid sm:grid-cols-2 gap-3 mt-3">
             <div>
-              <label class="label" for="id_password1">Password <span class="text-red-500">*</span></label>
+              <label class="label" for="id_password1">Password <span class="tone-coral-fg">*</span></label>
               {% include "components/password_field.html" with id="id_password1" name="password1" autocomplete="new-password" error=form.password1.errors xmodel="fields.password1" %}
               {% if form.password1.errors %}<p class="field-error">{{ form.password1.errors|join:" " }}</p>{% endif %}
             </div>
             <div>
-              <label class="label" for="id_password2">Confirm password <span class="text-red-500">*</span></label>
+              <label class="label" for="id_password2">Confirm password <span class="tone-coral-fg">*</span></label>
               {% include "components/password_field.html" with id="id_password2" name="password2" autocomplete="new-password" error=form.password2.errors xmodel="fields.password2" %}
               {% if form.password2.errors %}<p class="field-error">{{ form.password2.errors|join:" " }}</p>{% endif %}
             </div>
           </div>
           {% if form.password1.help_text %}
-            <div class="text-xs text-gray-400 mt-1 [&>ul]:list-disc [&>ul]:pl-4 [&>ul]:space-y-0.5 [&>ul]:mt-1">{{ form.password1.help_text|safe }}</div>
+            <div class="text-xs text-ink-subtle mt-1 [&>ul]:list-disc [&>ul]:pl-4 [&>ul]:space-y-0.5 [&>ul]:mt-1">{{ form.password1.help_text|safe }}</div>
           {% endif %}
         </div>
 
         <div>
-          <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Business</p>
+          <p class="text-xs font-semibold text-ink-subtle uppercase tracking-wide mb-3">Business</p>
           <div class="grid sm:grid-cols-2 gap-3">
             {% include "components/form_field.html" with name="company_name" label="Company name" required=True value=form.company_name.value error=form.company_name.errors|join:" " xmodel="fields.company_name" %}
             {% include "components/form_field.html" with name="legal_name" label="Legal / registered name" value=form.legal_name.value error=form.legal_name.errors|join:" " %}
@@ -171,7 +171,7 @@
         </div>
 
         <div>
-          <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Address</p>
+          <p class="text-xs font-semibold text-ink-subtle uppercase tracking-wide mb-3">Address</p>
           <div class="grid sm:grid-cols-2 gap-3">
             {% include "components/form_field.html" with name="address_line1" label="Address line 1" required=True value=form.address_line1.value error=form.address_line1.errors|join:" " xmodel="fields.address_line1" %}
             {% include "components/form_field.html" with name="address_line2" label="Address line 2" value=form.address_line2.value error=form.address_line2.errors|join:" " %}
@@ -185,25 +185,25 @@
 
       {# ---- Step 3: Review ---- #}
       <div x-show="step === 3" x-cloak class="card card-pad sm:!p-8 space-y-3 text-sm">
-        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Review</p>
-        <div class="flex justify-between gap-4"><span class="text-gray-500">Channels</span><span class="font-medium text-ink text-right" x-text="channelLabel"></span></div>
-        <div class="flex justify-between"><span class="text-gray-500">Package</span>
+        <p class="text-xs font-semibold text-ink-subtle uppercase tracking-wide mb-1">Review</p>
+        <div class="flex justify-between gap-4"><span class="text-ink-subtle">Channels</span><span class="font-medium text-ink text-right" x-text="channelLabel"></span></div>
+        <div class="flex justify-between"><span class="text-ink-subtle">Package</span>
           <span class="font-medium text-ink"><span x-text="selectedPlan ? selectedPlan.name : ''"></span> · <span x-text="selectedPlan ? priceLabel(selectedPlan) : ''"></span></span>
         </div>
         <div class="flex justify-between" x-show="isPaid(selectedPlan)">
-          <span class="text-gray-500">Billing</span>
+          <span class="text-ink-subtle">Billing</span>
           <span class="font-medium text-ink">
             <span x-text="periodInfo.label"></span>
             <button type="button" @click="step = 1" class="ml-1 text-accent hover:text-accent-strong text-xs font-medium">Change</button>
           </span>
         </div>
         <div class="border-t border-border pt-3 space-y-2">
-          <div class="flex justify-between"><span class="text-gray-500">Name</span><span class="font-medium text-ink" x-text="fields.first_name + ' ' + fields.last_name"></span></div>
-          <div class="flex justify-between"><span class="text-gray-500">Email</span><span class="font-medium text-ink" x-text="fields.email"></span></div>
-          <div class="flex justify-between"><span class="text-gray-500">Company</span><span class="font-medium text-ink" x-text="fields.company_name"></span></div>
-          <div class="flex justify-between"><span class="text-gray-500">Address</span><span class="font-medium text-ink text-right" x-text="fields.address_line1 + ', ' + fields.city + ', ' + fields.country"></span></div>
+          <div class="flex justify-between"><span class="text-ink-subtle">Name</span><span class="font-medium text-ink" x-text="fields.first_name + ' ' + fields.last_name"></span></div>
+          <div class="flex justify-between"><span class="text-ink-subtle">Email</span><span class="font-medium text-ink" x-text="fields.email"></span></div>
+          <div class="flex justify-between"><span class="text-ink-subtle">Company</span><span class="font-medium text-ink" x-text="fields.company_name"></span></div>
+          <div class="flex justify-between"><span class="text-ink-subtle">Address</span><span class="font-medium text-ink text-right" x-text="fields.address_line1 + ', ' + fields.city + ', ' + fields.country"></span></div>
         </div>
-        <p class="text-xs text-gray-400 pt-2">
+        <p class="text-xs text-ink-subtle pt-2">
           <span x-show="isPaid(selectedPlan)">At checkout you'll pay <span x-text="dueLabel(selectedPlan)"></span>, less any account credit. It renews each term until you cancel.</span>
           <span x-show="!isPaid(selectedPlan)">Your account starts on a trial where available — you can add payment details later from Billing.</span>
           We'll email a link to confirm your address; you can keep setting up in the meantime.
@@ -218,7 +218,7 @@
         <button type="button" class="btn btn-primary" x-show="step < 3" :disabled="!canAdvance" @click="next()">Continue</button>
         <button type="submit" class="btn btn-primary" x-show="step === 3">Create account</button>
       </div>
-      <p class="text-xs text-gray-500 mt-3 text-right" x-show="step === 3">
+      <p class="text-xs text-ink-subtle mt-3 text-right" x-show="step === 3">
         By creating an account you agree to the <a href="{% url 'terms' %}" target="_blank" class="text-accent underline">Terms of service</a>
         and <a href="{% url 'privacy' %}" target="_blank" class="text-accent underline">Privacy policy</a>.
       </p>
@@ -248,7 +248,7 @@
               </button>
             </div>
             <h2 id="signup-pay-title" class="mt-4 text-lg font-semibold text-ink">Create your account and pay</h2>
-            <p id="signup-pay-desc" class="mt-1 text-sm text-gray-600">
+            <p id="signup-pay-desc" class="mt-1 text-sm text-ink-subtle">
               Your <span class="font-medium text-ink" x-text="selectedPlan ? selectedPlan.name : ''"></span> plan
               starts once it's paid. Here's what happens next.
             </p>
@@ -258,26 +258,26 @@
                 <span class="signup-pay-num">1</span>
                 <div>
                   <p class="font-medium text-ink">We create your account</p>
-                  <p class="text-gray-500">For <span x-text="fields.company_name"></span>, and you're signed in.</p>
+                  <p class="text-ink-subtle">For <span x-text="fields.company_name"></span>, and you're signed in.</p>
                 </div>
               </li>
               <li class="flex gap-3">
                 <span class="signup-pay-num">2</span>
                 <div>
                   <p class="font-medium text-ink">You pay <span class="tabular-nums" x-text="dueLabel(selectedPlan)"></span></p>
-                  <p class="text-gray-500" x-text="payNote"></p>
+                  <p class="text-ink-subtle" x-text="payNote"></p>
                 </div>
               </li>
               <li class="flex gap-3">
                 <span class="signup-pay-num">3</span>
                 <div>
                   <p class="font-medium text-ink">Your plan switches on</p>
-                  <p class="text-gray-500">As soon as the payment goes through. It renews every <span x-text="periodInfo.per"></span> until you cancel.</p>
+                  <p class="text-ink-subtle">As soon as the payment goes through. It renews every <span x-text="periodInfo.per"></span> until you cancel.</p>
                 </div>
               </li>
             </ol>
 
-            <p class="mt-5 rounded-lg bg-surface-muted px-3 py-2.5 text-xs text-gray-500">
+            <p class="mt-5 rounded-lg bg-surface-muted px-3 py-2.5 text-xs text-ink-subtle">
               If you don't finish paying, your account is kept. Sign in and choose
               <span class="font-medium text-ink">Complete payment</span> under Billing.
             </p>
@@ -292,7 +292,7 @@
       </div>
     </form>
 
-    <p class="text-center text-xs text-gray-400 mt-6">
+    <p class="text-center text-xs text-ink-subtle mt-6">
       Already have an account? <a href="{% url 'login' %}" class="text-accent hover:text-accent-strong">Sign in</a>
     </p>
   </div>

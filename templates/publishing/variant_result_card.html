@@ -15,18 +15,18 @@
       {{ variant|variant_status_badge }}
     </div>
     {% if variant.last_attempt_at %}
-    <p class="text-xs text-gray-500">{{ variant.last_attempt_at|timesince }} ago</p>
+    <p class="text-xs text-ink-subtle">{{ variant.last_attempt_at|timesince }} ago</p>
     {% endif %}
   </div>
 
   {# This channel's own time #}
   {% if variant.status == 'scheduled' and variant.scheduled_at %}
-  <p class="text-sm text-gray-600">Goes out {{ variant.scheduled_at|date:"D N j, H:i" }}</p>
+  <p class="text-sm text-ink-subtle">Goes out {{ variant.scheduled_at|date:"D N j, H:i" }}</p>
   {% elif variant.status == 'published' and variant.published_at %}
-  <p class="text-xs text-gray-500">Published {{ variant.published_at|date:"N j, H:i" }}</p>
+  <p class="text-xs text-ink-subtle">Published {{ variant.published_at|date:"N j, H:i" }}</p>
   {% endif %}
   {% if variant.status == 'draft' and variant.last_error %}
-  <p class="text-xs text-gray-600">{{ variant.last_error }}</p>
+  <p class="text-xs text-ink-subtle">{{ variant.last_error }}</p>
   {% endif %}
 
   {% if variant.status == 'scheduled' or variant.status == 'draft' and post.status in 'scheduled,publishing' %}
@@ -36,7 +36,7 @@
     <label for="reschedule-{{ variant.platform }}" class="sr-only">New time for {{ variant.platform|platform_display_name }}</label>
     <input type="datetime-local" name="scheduled_at" id="reschedule-{{ variant.platform }}" required
            value="{% if variant.scheduled_at %}{{ variant.scheduled_at|date:'Y-m-d\TH:i' }}{% endif %}"
-           class="input text-sm w-full sm:w-56">
+           class="input w-full sm:w-56">
     <button type="submit" class="btn btn-ghost text-xs">{% if variant.status == 'scheduled' %}Change time{% else %}Schedule this channel{% endif %}</button>
   </form>
   {% endif %}
@@ -52,19 +52,19 @@
 
   {# Publication ID (metadata) #}
   {% if variant.publication_id and variant.status == 'published' %}
-  <p class="text-xs text-gray-500">ID: {{ variant.publication_id }}</p>
+  <p class="text-xs text-ink-subtle">ID: {{ variant.publication_id }}</p>
   {% endif %}
 
   {% if variant.status == 'reconciling' %}
   <div class="tone-amber-bg tone-amber-border border rounded p-2 space-y-1">
     <p class="text-sm text-ink">We couldn't confirm whether this was published. Check {{ variant.platform|platform_display_name }}, then resolve it so it isn't posted twice.</p>
-    {% if variant.last_error %}<p class="text-xs text-gray-600">{{ variant|variant_error_message }}</p>{% endif %}
+    {% if variant.last_error %}<p class="text-xs text-ink-subtle">{{ variant|variant_error_message }}</p>{% endif %}
     <a href="{% url 'publishing:reconciliation-queue' %}" class="inline-block text-sm font-medium text-accent hover:underline">Resolve in Needs check →</a>
   </div>
   {% elif variant.last_error and variant.status == 'failed' %}
   <div class="tone-coral-bg tone-coral-border border rounded p-2 space-y-1">
-    <p class="text-xs font-medium text-red-700">Error</p>
-    <p class="text-xs text-red-700">{{ variant|variant_error_message }}</p>
+    <p class="text-xs font-medium tone-coral-fg">Error</p>
+    <p class="text-xs tone-coral-fg">{{ variant|variant_error_message }}</p>
   </div>
   {% endif %}
 
@@ -72,7 +72,7 @@
   {% if variant|is_variant_retryable %}
   <form method="post" action="{% url 'publishing:post-retry-variant' post.pk variant.platform %}" class="mt-2">
     {% csrf_token %}
-    <button type="submit" class="btn btn-ghost text-xs text-red-700 hover:tone-coral-bg">
+    <button type="submit" class="btn btn-ghost text-xs tone-coral-fg hover:tone-coral-bg">
       Retry this channel
     </button>
   </form>
@@ -80,7 +80,7 @@
 
   {# Metadata: attempt count, error type #}
   {% if variant.attempt_count > 0 %}
-  <div class="text-xs text-gray-500 mt-2 pt-2 border-t border-border">
+  <div class="text-xs text-ink-subtle mt-2 pt-2 border-t border-border">
     <p>{{ variant.attempt_count }} attempt{{ variant.attempt_count|pluralize }}</p>
     {% if variant.last_error_type %}
     <p>Error type: {{ variant.get_last_error_type_display }}</p>

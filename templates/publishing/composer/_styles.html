@@ -79,6 +79,8 @@
   .cmp-tab[aria-selected="true"]::after { content: ""; position: absolute; left: .5rem; right: .5rem; bottom: 0; height: 2px; border-radius: 2px; background: var(--color-brand-600); }
   .cmp-tab-badge { font-size: .625rem; font-weight: 600; padding: 0 .375rem; border-radius: 9999px; background: var(--tone-info-bg); color: var(--tone-info-fg); }
   .cmp-textarea { min-height: 10rem; resize: vertical; line-height: 1.6; font-size: .9375rem; }
+  /* 16px on touch screens, or iOS zooms the page in on focus (R4). */
+  @media (pointer: coarse) { .cmp-textarea { font-size: 1rem; } }
   .cmp-shared { border: 1px dashed var(--color-border-strong); border-radius: .875rem; padding: 1rem; font-size: .9375rem; line-height: 1.6; color: var(--color-ink-muted); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 14rem; overflow-y: auto; }
   .cmp-meter { display: flex; flex-wrap: wrap; gap: .25rem 1rem; margin-top: .5rem; font-size: .75rem; color: var(--color-ink-subtle); font-variant-numeric: tabular-nums; }
   .cmp-meter .is-near { color: var(--color-amber-700); }

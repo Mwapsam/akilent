@@ -5,7 +5,7 @@
 {% block content %}
 <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
   <div>
-    <a href="{% url 'publishing:index' %}" class="text-sm text-gray-500 hover:text-ink">&larr; Publishing</a>
+    <a href="{% url 'publishing:index' %}" class="text-sm text-ink-subtle hover:text-ink">&larr; Publishing</a>
     <h1 class="text-2xl font-semibold tracking-tight mt-1">Post</h1>
   </div>
   <div class="flex flex-wrap gap-2">
@@ -21,7 +21,7 @@
     {% if post.status == 'scheduled' %}
     <form method="post" action="{% url 'publishing:post-cancel' post.pk %}">
       {% csrf_token %}
-      <button type="submit" class="btn btn-ghost text-sm text-amber-600 hover:tone-amber-bg"
+      <button type="submit" class="btn btn-ghost text-sm tone-amber-fg hover:tone-amber-bg"
               data-confirm="Cancel this scheduled post?" data-confirm-label="Cancel post" data-confirm-cancel="Keep scheduled">Cancel</button>
     </form>
     {% endif %}
@@ -34,7 +34,7 @@
     {% if post.status in 'draft,scheduled,idea' %}
     <form method="post" action="{% url 'publishing:post-delete' post.pk %}">
       {% csrf_token %}
-      <button type="submit" class="btn btn-ghost text-sm text-red-600 hover:tone-coral-bg"
+      <button type="submit" class="btn btn-danger-ghost text-sm"
               data-confirm="Delete this post? This cannot be undone." data-confirm-danger data-confirm-label="Delete">Delete</button>
     </form>
     {% endif %}
@@ -45,13 +45,13 @@
   {% if requires_approval %}
   <div class="card card-pad space-y-3">
     <div class="flex items-center gap-2">
-      <span class="text-sm font-medium text-gray-500">Review</span>
+      <span class="text-sm font-medium text-ink-subtle">Review</span>
       {% if post.ai_assisted %}<span class="text-xs text-ink-subtle">AI-assisted caption</span>{% endif %}
       {% if approval_valid %}{% status_badge 'approved' 'Approved' %}{% elif post.approval_status == 'submitted' %}{% status_badge 'in_review' 'Waiting for review' %}{% elif post.approval_status == 'changes_requested' %}{% status_badge 'failed' 'Changes requested' %}{% else %}{% status_badge 'draft' 'Not submitted' %}{% endif %}
     </div>
 
     {% if approval_valid %}
-    <p class="text-sm text-gray-600">Approved by {{ post.approved_by.get_full_name|default:post.approved_by.username }} on {{ post.approved_at|date:"N j, Y H:i" }}. You can now schedule or publish it.</p>
+    <p class="text-sm text-ink-subtle">Approved by {{ post.approved_by.get_full_name|default:post.approved_by.username }} on {{ post.approved_at|date:"N j, Y H:i" }}. You can now schedule or publish it.</p>
     {% elif post.approval_status == 'submitted' %}
       {% if can_review %}
       <form method="post" action="{% url 'publishing:post-approve' post.pk %}">
@@ -60,16 +60,16 @@
       </form>
       <form method="post" action="{% url 'publishing:post-request-changes' post.pk %}" class="space-y-2">
         {% csrf_token %}
-        <textarea name="feedback" rows="2" required class="input w-full text-sm" placeholder="What should change?"></textarea>
+        <textarea name="feedback" rows="2" required class="input w-full" placeholder="What should change?"></textarea>
         <button type="submit" class="btn btn-ghost text-sm">Request changes</button>
       </form>
       {% else %}
-      <p class="text-sm text-gray-600">Waiting for an Owner or Admin to review this post.</p>
+      <p class="text-sm text-ink-subtle">Waiting for an Owner or Admin to review this post.</p>
       {% endif %}
     {% elif post.approval_status == 'changes_requested' %}
     <div class="tone-coral-bg rounded p-3">
-      <p class="text-xs font-medium text-red-700 mb-0.5">Feedback</p>
-      <p class="text-sm text-red-700 whitespace-pre-wrap">{{ post.approval_feedback }}</p>
+      <p class="text-xs font-medium tone-coral-fg mb-0.5">Feedback</p>
+      <p class="text-sm tone-coral-fg whitespace-pre-wrap">{{ post.approval_feedback }}</p>
     </div>
     {% if post.created_by_id == request.user.pk %}
     <form method="post" action="{% url 'publishing:post-resubmit-after-changes' post.pk %}">
@@ -78,7 +78,7 @@
     </form>
     {% endif %}
     {% else %}
-    <p class="text-sm text-gray-600">This workspace requires an Owner or Admin approval before posts are scheduled or published.</p>
+    <p class="text-sm text-ink-subtle">This workspace requires an Owner or Admin approval before posts are scheduled or published.</p>
     <form method="post" action="{% url 'publishing:post-submit-for-review' post.pk %}">
       {% csrf_token %}
       <button type="submit" class="btn btn-primary text-sm">Submit for review</button>
@@ -87,12 +87,12 @@
 
     {% if approval_logs %}
     <div class="pt-3 border-t border-border">
-      <p class="text-xs font-medium text-gray-500 mb-1">History</p>
+      <p class="text-xs font-medium text-ink-subtle mb-1">History</p>
       <ul class="space-y-1">
         {% for log in approval_logs %}
-        <li class="text-xs text-gray-500">
+        <li class="text-xs text-ink-subtle">
           {{ log.get_action_display }} by {{ log.performed_by.get_full_name|default:log.performed_by.username|default:"a former member" }} · {{ log.created_at|date:"N j, H:i" }}
-          {% if log.feedback %}<span class="block text-gray-400 whitespace-pre-wrap">“{{ log.feedback }}”</span>{% endif %}
+          {% if log.feedback %}<span class="block text-ink-subtle whitespace-pre-wrap">“{{ log.feedback }}”</span>{% endif %}
         </li>
         {% endfor %}
       </ul>
@@ -105,14 +105,14 @@
 
     {# Status #}
     <div class="flex items-center gap-2">
-      <span class="text-sm font-medium text-gray-500">Status</span>
+      <span class="text-sm font-medium text-ink-subtle">Status</span>
       {% status_badge post.status post.get_status_display %}
     </div>
 
     {# Per-channel status (if variants exist) #}
     {% if post.variants.exists %}
     <div class="mt-4 pt-3 border-t border-border">
-      <p class="text-sm font-medium text-gray-600 mb-2">Per-channel status</p>
+      <p class="text-sm font-medium text-ink-subtle mb-2">Per-channel status</p>
       <div class="space-y-2">
         {% for variant in post.variants.all %}
           {% include "publishing/variant_result_card.html" %}
@@ -124,32 +124,32 @@
     {# Linked plan item #}
     {% if post.plan_item %}
     <div class="flex items-center gap-2">
-      <span class="text-sm font-medium text-gray-500">Plan item</span>
+      <span class="text-sm font-medium text-ink-subtle">Plan item</span>
       <a href="{% url 'publishing:plan-edit' post.plan_item.pk %}"
          class="text-sm text-accent hover:underline">{{ post.plan_item.topic|truncatechars:60 }}</a>
     </div>
     {% endif %}
 
     <div>
-      <p class="text-sm text-gray-500 mb-0.5">Platforms</p>
+      <p class="text-sm text-ink-subtle mb-0.5">Platforms</p>
       <p class="text-sm font-medium">{{ post.platforms|platform_labels }}</p>
     </div>
 
     <div>
-      <p class="text-sm text-gray-500 mb-0.5">Type</p>
+      <p class="text-sm text-ink-subtle mb-0.5">Type</p>
       <p class="text-sm font-medium">{{ post.get_media_type_display }}</p>
     </div>
 
     {% if post.scheduled_at %}
     <div>
-      <p class="text-sm text-gray-500 mb-0.5">Scheduled</p>
+      <p class="text-sm text-ink-subtle mb-0.5">Scheduled</p>
       <p class="text-sm font-medium">{{ post.scheduled_at|date:"N j, Y H:i" }}</p>
     </div>
     {% endif %}
 
     {% if post.published_at %}
     <div>
-      <p class="text-sm text-gray-500 mb-0.5">Published</p>
+      <p class="text-sm text-ink-subtle mb-0.5">Published</p>
       <p class="text-sm font-medium">{{ post.published_at|date:"N j, Y H:i" }}</p>
     </div>
     {% endif %}
@@ -157,7 +157,7 @@
 
   {% if post.media_urls %}
   <div class="card card-pad">
-    <p class="text-sm text-gray-500 mb-2">Media{% if post.media_urls|length > 1 %} ({{ post.media_urls|length }}){% endif %}</p>
+    <p class="text-sm text-ink-subtle mb-2">Media{% if post.media_urls|length > 1 %} ({{ post.media_urls|length }}){% endif %}</p>
     {% if post.media_urls|length == 1 %}
       {% with only=post.media_urls.0 %}
       {% if only|media_kind == "video" %}
@@ -188,14 +188,14 @@
   {% endif %}
 
   <div class="card card-pad">
-    <p class="text-sm text-gray-500 mb-2">Caption{% if post.ai_assisted %} <span class="ml-1 text-xs font-medium text-ink-subtle">· Started from an AI suggestion</span>{% endif %}</p>
+    <p class="text-sm text-ink-subtle mb-2">Caption{% if post.ai_assisted %} <span class="ml-1 text-xs font-medium text-ink-subtle">· Started from an AI suggestion</span>{% endif %}</p>
     <p class="text-sm whitespace-pre-wrap">{{ post.caption|default:"(none)" }}</p>
     {% if post.platform_captions %}
     <div class="mt-3 space-y-2 border-t border-surface-subtle pt-3">
       {% for platform, override in post.platform_captions.items %}
       {% if override %}
       <div>
-        <p class="text-xs text-gray-400 mb-0.5">{{ platform|capfirst }} override</p>
+        <p class="text-xs text-ink-subtle mb-0.5">{{ platform|capfirst }} override</p>
         <p class="text-sm whitespace-pre-wrap">{{ override }}</p>
       </div>
       {% endif %}
@@ -203,45 +203,45 @@
     </div>
     {% endif %}
     <div class="mt-3 border-t border-surface-subtle pt-3">
-      <p class="text-xs text-gray-500 mb-1">Call to action</p>
+      <p class="text-xs text-ink-subtle mb-1">Call to action</p>
       {% if cta.kind == "whatsapp" %}
         <p class="text-sm"><span class="font-medium">Chat on WhatsApp</span> · "{{ cta.text }}"</p>
-        {% if cta.prefill %}<p class="text-xs text-gray-500 mt-0.5">First message: {{ cta.prefill }}</p>{% endif %}
+        {% if cta.prefill %}<p class="text-xs text-ink-subtle mt-0.5">First message: {{ cta.prefill }}</p>{% endif %}
         {% for label, url in cta_links %}
         <div class="copy-row flex flex-wrap items-center gap-x-2 text-xs mt-1">
-          <span class="text-gray-500">{{ label }}:</span>
-          <code class="copy-value text-gray-600 break-all">{{ url }}</code>
-          <button type="button" class="copy-btn text-brand-600 hover:underline">Copy</button>
+          <span class="text-ink-subtle">{{ label }}:</span>
+          <code class="copy-value text-ink-subtle break-all">{{ url }}</code>
+          <button type="button" class="copy-btn text-accent hover:underline">Copy</button>
         </div>
         {% endfor %}
       {% elif cta.kind == "link" %}
         <p class="text-sm"><span class="font-medium">Visit a link</span> · "{{ cta.text }}"</p>
         <div class="copy-row flex flex-wrap items-center gap-x-2 text-xs mt-1">
-          <a href="{{ cta.url }}" class="copy-value text-brand-600 hover:underline break-all" target="_blank" rel="noopener noreferrer">{{ cta.url }}</a>
-          <button type="button" class="copy-btn text-brand-600 hover:underline">Copy</button>
+          <a href="{{ cta.url }}" class="copy-value text-accent hover:underline break-all" target="_blank" rel="noopener noreferrer">{{ cta.url }}</a>
+          <button type="button" class="copy-btn text-accent hover:underline">Copy</button>
         </div>
       {% else %}
-        <p class="text-sm text-gray-500">None{% if editable %} · <a href="{% url 'publishing:post-new' %}?post_id={{ post.pk }}" class="underline">Add one</a>{% endif %}</p>
+        <p class="text-sm text-ink-subtle">None{% if editable %} · <a href="{% url 'publishing:post-new' %}?post_id={{ post.pk }}" class="underline">Add one</a>{% endif %}</p>
       {% endif %}
     </div>
   </div>
 
   {% if channel_options %}
   <div class="card card-pad space-y-4">
-    <p class="text-sm text-gray-500">Channel options</p>
+    <p class="text-sm text-ink-subtle">Channel options</p>
     {% for row in channel_options %}
     {% with o=row.options state=row.comment_state %}
     <div class="{% if not forloop.first %}border-t border-surface-subtle pt-4 {% endif %}space-y-1.5">
       <p class="text-sm font-medium text-ink">{{ row.variant.get_platform_display }}</p>
       <dl class="grid grid-cols-1 sm:grid-cols-[9rem_1fr] gap-x-4 gap-y-1 text-sm">
-        {% if o.alt_text %}<dt class="text-gray-500">Alt text</dt><dd class="break-words">{{ o.alt_text }}</dd>{% endif %}
-        {% if o.location %}<dt class="text-gray-500">Location</dt><dd>{{ o.location.name|default:o.location.id }}</dd>{% endif %}
-        {% if o.collaborators %}<dt class="text-gray-500">Collaborators</dt><dd>{% for n in o.collaborators %}@{{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}</dd>{% endif %}
-        {% if "share_to_feed" in o %}<dt class="text-gray-500">Feed</dt><dd>{% if o.share_to_feed %}Shown in feed and Reels{% else %}Reels tab only{% endif %}</dd>{% endif %}
-        {% if o.cover_url %}<dt class="text-gray-500">Cover</dt><dd>{% include "publishing/_media_thumb.html" with url=o.cover_url size="w-12 h-20" alt="Reel cover" %}</dd>
-        {% elif o.thumb_offset %}<dt class="text-gray-500">Cover</dt><dd>Frame at {% widthratio o.thumb_offset 1000 1 %} s</dd>{% endif %}
+        {% if o.alt_text %}<dt class="text-ink-subtle">Alt text</dt><dd class="break-words">{{ o.alt_text }}</dd>{% endif %}
+        {% if o.location %}<dt class="text-ink-subtle">Location</dt><dd>{{ o.location.name|default:o.location.id }}</dd>{% endif %}
+        {% if o.collaborators %}<dt class="text-ink-subtle">Collaborators</dt><dd>{% for n in o.collaborators %}@{{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}</dd>{% endif %}
+        {% if "share_to_feed" in o %}<dt class="text-ink-subtle">Feed</dt><dd>{% if o.share_to_feed %}Shown in feed and Reels{% else %}Reels tab only{% endif %}</dd>{% endif %}
+        {% if o.cover_url %}<dt class="text-ink-subtle">Cover</dt><dd>{% include "publishing/_media_thumb.html" with url=o.cover_url size="w-12 h-20" alt="Reel cover" %}</dd>
+        {% elif o.thumb_offset %}<dt class="text-ink-subtle">Cover</dt><dd>Frame at {% widthratio o.thumb_offset 1000 1 %} s</dd>{% endif %}
         {% if o.first_comment %}
-        <dt class="text-gray-500">First comment</dt>
+        <dt class="text-ink-subtle">First comment</dt>
         <dd class="space-y-1">
           <p class="whitespace-pre-wrap break-words">{{ o.first_comment }}</p>
           {% if state.status == "posted" %}
@@ -257,7 +257,7 @@
               </form>
             </div>
           {% else %}
-            <span class="text-xs text-gray-500">Posted when the post goes live.</span>
+            <span class="text-xs text-ink-subtle">Posted when the post goes live.</span>
           {% endif %}
         </dd>
         {% endif %}
@@ -283,19 +283,19 @@
     {% for variant in published %}
       {% include "publishing/_metric_card.html" %}
     {% endfor %}
-    <p class="text-xs text-gray-500">Numbers come from {{ published|join_platforms }} and can take up to 48 hours to settle. Hover a label to see what it counts.</p>
+    <p class="text-xs text-ink-subtle">Numbers come from {{ published|join_platforms }} and can take up to 48 hours to settle. Hover a label to see what it counts.</p>
   </div>
   {% endif %}
   {% endwith %}
 
   {% if post.error %}
   <div class="card card-pad tone-coral-bg tone-coral-border">
-    <p class="text-sm font-medium text-red-700 mb-1">Publishing error</p>
-    <p class="text-sm text-red-700">{{ post.error }}</p>
+    <p class="text-sm font-medium tone-coral-fg mb-1">Publishing error</p>
+    <p class="text-sm tone-coral-fg">{{ post.error }}</p>
     {% if post.status == 'failed' %}
     <form method="post" action="{% url 'publishing:post-retry' post.pk %}" class="mt-3">
       {% csrf_token %}
-      <button type="submit" class="btn btn-ghost text-sm text-red-700 hover:tone-coral-bg">Retry now</button>
+      <button type="submit" class="btn btn-ghost text-sm tone-coral-fg hover:tone-coral-bg">Retry now</button>
     </form>
     {% endif %}
   </div>

@@ -5,7 +5,7 @@ the counts stay current. The outer element carries the hx-* attributes and is
 swapped whole (outerHTML), so this one file is the single source for both paths.
 The poll is gated on document visibility — a backgrounded tab stops asking.
 {% endcomment %}
-<div id="work-queue"
+<div id="work-queue" data-auto-refresh
      hx-get="{% url 'dashboard-work-queue' %}"
      hx-trigger="every 30s [document.visibilityState === 'visible']"
      hx-swap="outerHTML"
@@ -46,7 +46,7 @@ The poll is gated on document visibility — a backgrounded tab stops asking.
   </a>
 
   {% if not waiting and not missed and not leads and not due %}
-    <p class="col-span-2 lg:col-span-4 flex items-center gap-2 text-sm text-gray-500 mt-1">
+    <p class="col-span-2 lg:col-span-4 flex items-center gap-2 text-sm text-ink-subtle mt-1">
       {% include "components/icon.html" with name="check-circle" class="w-4 h-4 text-teal-500" %}
       Nothing waiting. You're on top of it.
     </p>

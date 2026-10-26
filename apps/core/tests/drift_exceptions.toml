@@ -69,3 +69,19 @@ reason = "Help article tables scroll via `.article-body table` (pinned by test_d
 path = "legal/*"
 rule = "table-unwrapped"
 reason = "Legal page tables scroll via `.legal-doc table` (pinned by test_docs_shell_tables.py)."
+
+# --- Third-party brand marks --------------------------------------------------------
+[[exception]]
+path = "accounts/settings_integrations.html"
+rule = "hex-class"
+reason = "Instagram gradient, Facebook blue and HubSpot orange logo tiles: third-party brand colours, not Akilent tokens."
+
+[[exception]]
+path = "publishing/channels.html"
+rule = "hex-class"
+reason = "Instagram gradient and Facebook blue logo tiles: third-party brand colours, not Akilent tokens."
+
+[[exception]]
+path = "publishing/composer/_styles.html"
+rule = "hex-style"
+reason = "Composer chrome that must match the platforms: Instagram/Facebook destination marks, Instagram's carousel dot blue in the preview, and white on photo overlays."

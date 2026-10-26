@@ -20,7 +20,7 @@
         <label for="ig-alt-text" class="cmp-label">Alt text</label>
         <textarea id="ig-alt-text" name="ig_alt_text" rows="2" maxlength="1000" x-model="opts.instagram.alt_text"
                   placeholder="e.g. Three summer dresses in yellow, coral and teal on a rail"
-                  class="input w-full text-sm"></textarea>
+                  class="input w-full"></textarea>
         <p class="cmp-hint mt-1">Describes the image for people who use screen readers.</p>
       </div>
 
@@ -40,7 +40,7 @@
         <div x-show="!opts.instagram.location" class="relative">
           <input type="search" id="ig-location-q" x-model="loc.query" autocomplete="off" data-not-post
                  @input.debounce.350ms="searchLocations()" @keydown.escape="loc.results = []"
-                 placeholder="Search for a place" class="input w-full text-sm"
+                 placeholder="Search for a place" class="input w-full"
                  role="combobox" :aria-expanded="loc.results.length > 0" aria-controls="ig-location-results">
           <ul id="ig-location-results" role="listbox" x-show="loc.results.length > 0"
               class="absolute z-10 mt-1 w-full card p-1 max-h-60 overflow-y-auto">
@@ -64,7 +64,7 @@
         <label for="ig-collaborators" class="cmp-label">Collaborators</label>
         <input type="text" id="ig-collaborators" name="ig_collaborators" x-model="opts.instagram.collaborators"
                placeholder="@username, @username" autocomplete="off" autocapitalize="off" spellcheck="false"
-               class="input w-full text-sm">
+               class="input w-full">
         <p class="cmp-hint mt-1">Up to 3 accounts. Each gets an invite to show the post on their profile too.</p>
       </div>
 
@@ -92,12 +92,12 @@
                   @click="opts.instagram.cover_url = ''; touched()">Remove</button>
           <span class="cmp-hint" x-show="coverUploading">Uploading…</span>
         </div>
-        <p class="text-xs text-coral-600" x-show="coverError" x-text="coverError" role="alert"></p>
+        <p class="text-xs tone-coral-fg" x-show="coverError" x-text="coverError" role="alert"></p>
         <div x-show="!opts.instagram.cover_url">
           <label for="ig-thumb-offset" class="cmp-hint block mb-1">Or use a frame from the video, at</label>
           <div class="flex items-center gap-2">
             <input type="number" id="ig-thumb-offset" name="ig_thumb_offset" min="0" max="900" step="0.1"
-                   x-model="opts.instagram.thumb_offset" placeholder="0" class="input w-24 text-sm">
+                   x-model="opts.instagram.thumb_offset" placeholder="0" class="input w-24">
             <span class="text-sm text-ink-subtle">seconds</span>
           </div>
         </div>
@@ -107,7 +107,7 @@
         <label for="ig-first-comment" class="cmp-label">First comment</label>
         <textarea id="ig-first-comment" name="ig_first_comment" rows="2" maxlength="2200" x-model="opts.instagram.first_comment"
                   placeholder="e.g. More hashtags, or “Tap the link in our bio to order”"
-                  class="input w-full text-sm"></textarea>
+                  class="input w-full"></textarea>
         <p class="cmp-hint mt-1">Posted from your account right after the post goes live.</p>
       </div>
     </section>
@@ -118,7 +118,7 @@
         <label for="fb-first-comment" class="cmp-label">First comment</label>
         <textarea id="fb-first-comment" name="fb_first_comment" rows="2" maxlength="2200" x-model="opts.facebook.first_comment"
                   placeholder="e.g. Prices and sizes are in the photo description"
-                  class="input w-full text-sm"></textarea>
+                  class="input w-full"></textarea>
         <p class="cmp-hint mt-1">Posted from your Page right after the post goes live. Needs the Page reconnected once if it was connected before first comments existed.</p>
       </div>
     </section>

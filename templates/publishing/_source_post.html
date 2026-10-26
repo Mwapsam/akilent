@@ -10,23 +10,23 @@ a post is already credited. Three states, never blurred:
 {% post_tracking_on subject.account as tracking_on %}
 {% with att=subject.attribution %}{% if tracking_on or att.credits_post %}
 <div class="pt-2 border-t border-border" data-attribution="{% if att.credits_post %}post{% elif att.is_guess %}guess{% else %}none{% endif %}">
-  <p class="text-gray-500 mb-1">Where this came from</p>
+  <p class="text-ink-subtle mb-1">Where this came from</p>
   {% if att.credits_post %}
   <p class="font-medium text-ink">From a post:
     <a href="{% url 'publishing:post-detail' att.source_post_id %}" class="underline">{{ att.source_post.caption|truncatechars:60|default:"(no caption)" }}</a>
   </p>
-  <p class="text-xs text-gray-500">
+  <p class="text-xs text-ink-subtle">
     {% if att.source_variant %}{{ att.source_variant.get_platform_display }} · {% endif %}{% if att.entry_point.kind == 'tracked_link' %}the customer used the post's WhatsApp link · {% elif att.entry_point %}a reply to their comment on the post · {% else %}the chat started from the post · {% endif %}{% if att.source_campaign %}{{ att.source_campaign.name }} · {% endif %}made from this chat{% if att.workflow_run_id %} by an automation{% endif %}
   </p>
   {% elif att.is_guess %}
   <p class="font-medium text-ink">Linked to a recent chat (a guess)</p>
-  <p class="text-xs text-gray-500">No chat was chosen, so Akilent linked the customer's latest chat{% if att.conversation %} (<a href="{% url 'conversations:detail' att.conversation.public_id %}" class="underline">view it</a>){% endif %}. Because it's a guess, no post is credited with this.</p>
+  <p class="text-xs text-ink-subtle">No chat was chosen, so Akilent linked the customer's latest chat{% if att.conversation %} (<a href="{% url 'conversations:detail' att.conversation.public_id %}" class="underline">view it</a>){% endif %}. Because it's a guess, no post is credited with this.</p>
   {% elif att %}
   <p class="font-medium text-ink">From a chat, not from a tracked post</p>
-  <p class="text-xs text-gray-500">It was made from a chat, but the customer didn't arrive through a post's chat link or a comment reply.</p>
+  <p class="text-xs text-ink-subtle">It was made from a chat, but the customer didn't arrive through a post's chat link or a comment reply.</p>
   {% else %}
   <p class="font-medium text-ink">Not from a tracked post</p>
-  <p class="text-xs text-gray-500">It isn't linked to a chat, so no post is credited with it.</p>
+  <p class="text-xs text-ink-subtle">It isn't linked to a chat, so no post is credited with it.</p>
   {% endif %}
 </div>
 {% endif %}{% endwith %}

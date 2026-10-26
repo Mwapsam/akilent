@@ -172,7 +172,7 @@
       {% enddropdown %}
       <button class="btn btn-secondary btn-sm" @click="window.toast('success', 'Saved.')">Success toast (5s)</button>
       <button class="btn btn-secondary btn-sm" @click="window.toast('warning', 'Your WhatsApp number is waiting for Meta to approve it.')">Warning toast (8s)</button>
-      <button class="btn btn-secondary btn-sm" @click="window.toast('danger', 'This didn't save: something went wrong on our side. What you entered is still here.')">Error toast (stays)</button>
+      <button class="btn btn-secondary btn-sm" @click="window.toast('danger', 'Something went wrong on our side, so this may or may not have saved. Check before trying again.')">Error toast (stays)</button>
       <button class="btn btn-secondary btn-sm" @click="window.toast('info', 'Customer archived.', { action: { label: 'View archive', href: '/contacts/' } })">Toast with action</button>
       <button class="btn btn-secondary btn-sm" @click="$store.confirm.ask({title:'Delete?', message:'This cannot be undone.', danger:true})">Confirm dialog</button>
       <button class="btn btn-secondary btn-sm" @click="$dispatch('modal-open', 'sg-drawer')">Open drawer</button>

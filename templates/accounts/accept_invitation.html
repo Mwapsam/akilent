@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{% if invalid %}Invitation{% else %}Join {{ invite.account.company_name }}{% endif %} — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block title %}{% if invalid %}Invitation{% else %}Join {{ invite.account.company_name }}{% endif %} — {{ site.app_name|default:"Akilent" }}{% endblock %}
 {% block content %}
 <div class="min-h-viewport flex items-center justify-center px-4 py-12">
   <div class="w-full max-w-sm">
@@ -7,10 +7,10 @@
       <div class="inline-flex mb-4">{% include "components/brand_mark.html" with class="w-12 h-12" %}</div>
       {% if invalid %}
         <h1 class="text-xl font-semibold text-ink">Invitation not valid</h1>
-        <p class="text-sm text-gray-400 mt-1">This invitation has expired or already been used.</p>
+        <p class="text-sm text-ink-subtle mt-1">This invitation has expired or already been used.</p>
       {% else %}
         <h1 class="text-xl font-semibold text-ink">Join {{ invite.account.company_name }}</h1>
-        <p class="text-sm text-gray-400 mt-1">
+        <p class="text-sm text-ink-subtle mt-1">
           {% if invite.invited_by %}{{ invite.invited_by.get_username }} invited you{% else %}You've been invited{% endif %}
           as {{ invite.get_role_display }}.
         </p>
@@ -22,17 +22,17 @@
         <a href="/auth/login/" class="btn btn-primary btn-block">Go to sign in</a>
 
       {% elif mode == 'join' %}
-        <p class="text-sm text-gray-600 mb-4">You're signed in as <span class="font-medium">{{ user.get_username }}</span>. Accept to join this workspace.</p>
+        <p class="text-sm text-ink-subtle mb-4">You're signed in as <span class="font-medium">{{ user.get_username }}</span>. Accept to join this workspace.</p>
         <form method="post">{% csrf_token %}
           <button class="btn btn-primary btn-block" type="submit">Accept invitation</button>
         </form>
 
       {% elif mode == 'signin' %}
-        <p class="text-sm text-gray-600 mb-4">There's already an account for <span class="font-medium">{{ invite.email }}</span>. Sign in to accept this invitation.</p>
+        <p class="text-sm text-ink-subtle mb-4">There's already an account for <span class="font-medium">{{ invite.email }}</span>. Sign in to accept this invitation.</p>
         <a href="{{ login_url }}" class="btn btn-primary btn-block">Sign in to accept</a>
 
       {% else %}
-        <p class="text-sm text-gray-600 mb-5">Create your account for <span class="font-medium">{{ invite.email }}</span>.</p>
+        <p class="text-sm text-ink-subtle mb-5">Create your account for <span class="font-medium">{{ invite.email }}</span>.</p>
         {% if form.non_field_errors %}
           <div class="mb-4 alert alert-danger">{{ form.non_field_errors|join:" " }}</div>
         {% endif %}
@@ -56,7 +56,7 @@
     </div>
 
     {% if not invalid %}
-    <p class="text-center text-xs text-gray-400 mt-6">Joining {{ invite.account.company_name }}</p>
+    <p class="text-center text-xs text-ink-subtle mt-6">Joining {{ invite.account.company_name }}</p>
     {% endif %}
   </div>
 </div>

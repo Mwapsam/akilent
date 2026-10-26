@@ -2,7 +2,7 @@
 {# Messages render inline on this page, so the toast layer stays off. #}
 {% block toasts %}{% endblock %}
 {% load static %}
-{% block title %}Two-factor authentication — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block title %}Two-factor authentication — {{ site.app_name|default:"Akilent" }}{% endblock %}
 {% block content %}
 <div class="min-h-viewport flex items-center justify-center px-4 py-12">
   <div class="w-full max-w-sm">
@@ -12,9 +12,9 @@
       </div>
       <h1 class="text-xl font-semibold text-ink">Two-factor authentication</h1>
       {% if channel == "email" %}
-        <p class="text-sm text-gray-600 mt-1">Enter the 6-digit code we emailed you. It expires in 10 minutes.</p>
+        <p class="text-sm text-ink-subtle mt-1">Enter the 6-digit code we emailed you. It expires in 10 minutes.</p>
       {% else %}
-        <p class="text-sm text-gray-600 mt-1">Enter the 6-digit code from your authenticator app.</p>
+        <p class="text-sm text-ink-subtle mt-1">Enter the 6-digit code from your authenticator app.</p>
       {% endif %}
     </div>
 
@@ -64,7 +64,7 @@
       {% if passkey_available %}
         <div class="mt-4">
           <button type="button" id="passkey-signin-btn" class="btn btn-ghost btn-block">Use a passkey or security key</button>
-          <p id="passkey-signin-error" class="text-sm text-red-600 mt-2" role="alert" hidden></p>
+          <p id="passkey-signin-error" class="text-sm tone-coral-fg mt-2" role="alert" hidden></p>
         </div>
         <script src="{% static 'js/passkeys.js' %}" defer></script>
         <script defer>
@@ -85,7 +85,7 @@
       {% endif %}
     </div>
 
-    <p class="text-center text-xs text-gray-600 mt-6">
+    <p class="text-center text-xs text-ink-subtle mt-6">
       <a href="{% url 'login' %}" class="text-accent hover:text-accent-strong">Back to sign in</a>
       &middot; <a href="{% url 'help' %}" class="text-accent hover:text-accent-strong">Need help?</a>
     </p>

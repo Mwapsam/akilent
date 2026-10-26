@@ -15,19 +15,19 @@
 <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
   <div class="card card-pad text-center">
     <p class="text-2xl font-bold text-ink">{{ counts.idea }}</p>
-    <p class="text-xs text-gray-500 mt-0.5">Ideas</p>
+    <p class="text-xs text-ink-subtle mt-0.5">Ideas</p>
   </div>
   <div class="card card-pad text-center">
     <p class="text-2xl font-bold text-ink">{{ counts.planned }}</p>
-    <p class="text-xs text-gray-500 mt-0.5">Planned</p>
+    <p class="text-xs text-ink-subtle mt-0.5">Planned</p>
   </div>
   <div class="card card-pad text-center">
     <p class="text-2xl font-bold text-ink">{{ counts.in_production }}</p>
-    <p class="text-xs text-gray-500 mt-0.5">In production</p>
+    <p class="text-xs text-ink-subtle mt-0.5">In production</p>
   </div>
   <div class="card card-pad text-center">
     <p class="text-2xl font-bold text-ink">{{ counts.published }}</p>
-    <p class="text-xs text-gray-500 mt-0.5">Published</p>
+    <p class="text-xs text-ink-subtle mt-0.5">Published</p>
   </div>
 </div>
 
@@ -45,7 +45,7 @@
       <div class="flex items-start gap-3 p-2 rounded-lg hover:bg-surface-subtle group">
         <div class="shrink-0 text-center min-w-[40px]">
           {% if item.planned_date %}
-          <p class="text-xs text-gray-400">{{ item.planned_date|date:"D" }}</p>
+          <p class="text-xs text-ink-subtle">{{ item.planned_date|date:"D" }}</p>
           <p class="text-sm font-semibold text-ink">{{ item.planned_date|date:"j" }}</p>
           {% endif %}
         </div>
@@ -56,7 +56,7 @@
             {% endif %}
             <p class="text-sm font-medium text-ink truncate">{{ item.topic }}</p>
           </div>
-          <p class="text-xs text-gray-400 mt-0.5">
+          <p class="text-xs text-ink-subtle mt-0.5">
             {{ item.get_media_type_display }}
             {% if item.platforms %} · {{ item.platforms|join:", "|capfirst }}{% endif %}
             {% if item.pillar %} · {{ item.pillar.name }}{% endif %}
@@ -73,7 +73,7 @@
       {% endfor %}
     </div>
     {% else %}
-    <p class="text-sm text-gray-400 text-center py-8">No content planned for the next 7 days.</p>
+    <p class="text-sm text-ink-subtle text-center py-8">No content planned for the next 7 days. <a href="{% url 'publishing:plan-new' %}" class="text-accent hover:text-accent-strong underline">Plan a post</a></p>
     {% endif %}
   </div>
 
@@ -91,7 +91,7 @@
           <span class="inline-block w-2 h-2 rounded-full mr-1 align-middle" style="background:{{ item.pillar.color }}"></span>
           {% endif %}
           <span class="text-sm text-ink">{{ item.topic|truncatechars:60 }}</span>
-          <p class="text-xs text-gray-400 mt-0.5">{{ item.get_plan_status_display }}</p>
+          <p class="text-xs text-ink-subtle mt-0.5">{{ item.get_plan_status_display }}</p>
         </div>
         <div class="shrink-0 flex gap-1 md:pointer-fine:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 transition-opacity">
           <form method="post" action="{% url 'publishing:plan-create-post' item.pk %}">
@@ -103,7 +103,7 @@
       {% endfor %}
     </div>
     {% else %}
-    <p class="text-sm text-gray-400 text-center py-4">No ideas yet.</p>
+    <p class="text-sm text-ink-subtle text-center py-4">No ideas yet.</p>
     {% endif %}
     <div class="mt-4 pt-3 border-t border-surface-subtle">
       <a href="{% url 'publishing:plan-new' %}" class="text-sm text-accent hover:underline">+ Add idea</a>
@@ -113,7 +113,7 @@
 </div>
 
 {# Pillars and content themes quick links #}
-<div class="mt-4 flex gap-3 text-xs text-gray-400">
+<div class="mt-4 flex gap-3 text-xs text-ink-subtle">
   <a href="{% url 'publishing:pillars' %}" class="hover:text-ink">Manage pillars ({{ pillars|length }})</a>
   <span>·</span>
   <a href="{% url 'publishing:campaigns' %}" class="hover:text-ink">Manage themes ({{ campaigns|length }})</a>

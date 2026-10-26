@@ -664,6 +664,14 @@ what to do next.
   - Actions are same-origin paths only.
 - **Unsaved work:** editors register `akDirty.register(rootEl, () => hasUnsavedWork)`. Boosted navigation then asks before leaving. Plain forms use `x-data="dirtyGuard"`.
 - **Truthfulness:** a label maps 1:1 to a backend state (§2). An outcome that isn't known is shown as unknown ("may or may not have saved, check before trying again"), never as success or failure.
+- **Automatic refreshes** (added in Phase 1): an element opts in with `data-auto-refresh` (the value can list custom event names that also count). Its timed, `load` and `sse:…` requests never raise an error toast. A trusted click or submit on it still does, and so does any element that hasn't opted in. Server-sent `X-Toast` messages always show. The flag lives on the request (`xhr._akAuto`). `htmx.ajax()` sends no event, so code must not use an opted-in element as the source of a user-visible request.
+  - The element gets `data-stale` and fires `ak-refresh-failed`, then `ak-refresh-ok` once it recovers.
+  - The page says "not updating" in place, once. The inbox list is the reference.
+- **Region retry hook:** a `data-error-region` with `data-error-retry-event="name"` gets that event (on the region) from Try again, instead of a replay of the raw request. The inbox pane uses it so a retry goes through its own loader.
+- **Sends** (Phase 1, inbox `static/js/chat.js`), in three outcomes:
+  - **Not sent:** a 4xx, a sign-in redirect, or offline before sending. The text goes back in the box with the reason beside it.
+  - **Not confirmed:** a dropped connection, a timeout or a 5xx. The bubble stays, marked "Not confirmed", with Check now / Put back in reply box / Dismiss. It survives a reload until the thread shows the real message. There is no plain Retry.
+  - **Sent:** the server's status drives the ticks.
 
 ### Mobile floor (every screen, 360px up)
 

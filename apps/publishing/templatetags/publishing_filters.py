@@ -126,19 +126,28 @@ def variant_error_message(variant):
         return ""
 
     error_type = variant.last_error_type
-    error_msg = variant.last_error
+    error_msg = variant.last_error.rstrip(" .")
 
-    # Add context based on error type
+    # What happened, in the customer's words, and the next step. Nothing here promises an
+    # automatic retry: a failed channel stays failed until someone retries it (a provider
+    # outage is saved as FAILED too, in services.py).
+    channel = platform_display_name(variant.platform or "") or "the channel"
+    starts = channel[:1].upper() + channel[1:]  # the same name opening a sentence
     if error_type == "timeout":
-        return f"{error_msg} (ambiguous - may be in provider, requires reconciliation)"
+        return (
+            f"{error_msg}. {starts} didn't answer in time, so it may already be live. "
+            f"Check it on {channel} before trying again."
+        )
     if error_type == "permission":
-        return f"{error_msg} (permission issue - check account connection)"
+        return f"{error_msg}. Reconnect {channel} in Channels, then try again."
     if error_type == "rate_limit":
-        return f"{error_msg} (rate limited - retry after delay)"
+        return (
+            f"{error_msg}. {starts} asked us to slow down. Try again in a few minutes."
+        )
     if error_type == "provider_outage":
-        return f"{error_msg} (provider unavailable - will retry)"
+        return f"{error_msg}. {starts} had a problem on its side. Try again later."
     if error_type == "validation":
-        return f"{error_msg} (validation failed - fix and resubmit)"
+        return f"{error_msg}. Change the post to fix this, then try again."
     return error_msg
 
 

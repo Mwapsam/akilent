@@ -3,7 +3,7 @@
 <div class="card card-pad max-w-2xl space-y-4">
   <div>
     <h2 class="font-semibold mb-1">AI suggestions</h2>
-    <p class="text-sm text-gray-600">
+    <p class="text-sm text-ink-subtle">
       When a customer writes and none of your automations answered, AI can draft a reply for your team.
       A person on your team reads the suggestion, edits it if needed, and presses Send.
       <strong>AI sends nothing on its own unless you choose automatic replies below</strong>, and then only for the
@@ -27,15 +27,15 @@
   <div class="rounded-xl border border-border p-4 flex flex-wrap items-center justify-between gap-3">
     <div class="flex-1 min-w-0">
       <p class="font-medium text-ink">Teach AI about your business</p>
-      <p class="text-sm text-gray-600">
+      <p class="text-sm text-ink-subtle">
         Add your customers' questions and your answers: write them, paste or upload a list, or import them from your website. Then try a question to see how AI would reply.
-        <span class="block text-xs text-gray-500 mt-0.5">{{ knowledge_active }} answer{{ knowledge_active|pluralize }} in use{% if knowledge_review %} · {{ knowledge_review }} waiting for review{% endif %}</span>
+        <span class="block text-xs text-ink-subtle mt-0.5">{{ knowledge_active }} answer{{ knowledge_active|pluralize }} in use{% if knowledge_review %} · {{ knowledge_review }} waiting for review{% endif %}</span>
       </p>
     </div>
     <a href="{% url 'settings-ai-knowledge' %}" class="btn btn-primary btn-sm">Open knowledge base</a>
   </div>
 
-  <div class="rounded-xl border border-border p-4 text-sm text-gray-700">
+  <div class="rounded-xl border border-border p-4 text-sm text-ink-muted">
     <p class="font-medium text-ink">What is sent to the AI service</p>
     <ul class="list-disc pl-5 mt-1 space-y-0.5">
       <li>The last few messages of the one conversation being answered, and a short summary of its earlier messages. Phone numbers and email addresses in them are hidden.</li>
@@ -50,14 +50,14 @@
     <label class="flex items-start gap-3 rounded-xl border border-border px-4 py-3">
       <input type="checkbox" name="enabled" class="mt-1" {% if ai.enabled %}checked{% endif %} {% if not can_edit %}disabled{% endif %}>
       <span class="text-sm text-ink">Turn on AI suggestions. I agree that the information above is sent to the AI service to draft replies.
-        {% if ai.consented_at %}<span class="block text-xs text-gray-500 mt-0.5">Agreed {{ ai.consented_at|date:"j M Y" }}{% if ai.consented_by %} by {{ ai.consented_by.get_full_name|default:ai.consented_by.email }}{% endif %}.</span>{% endif %}
+        {% if ai.consented_at %}<span class="block text-xs text-ink-subtle mt-0.5">Agreed {{ ai.consented_at|date:"j M Y" }}{% if ai.consented_by %} by {{ ai.consented_by.get_full_name|default:ai.consented_by.email }}{% endif %}.</span>{% endif %}
       </span>
     </label>
     <div>
       <label class="label" for="ai-notes">What AI may tell customers about your business</label>
       <textarea id="ai-notes" name="business_notes" class="textarea" rows="8" maxlength="{{ max_notes }}" {% if not can_edit %}disabled{% endif %}
                 placeholder="Prices: 3 kW home system from K18,000, installed.&#10;Where: Plot 12, Cairo Road, Lusaka.&#10;Delivery: Lusaka next day; Copperbelt within 3 days.&#10;Payment: 50% deposit, balance on installation.">{{ ai.business_notes }}</textarea>
-      <p class="text-xs text-gray-500 mt-1">AI only states facts written here. Anything else, like a price that isn't listed, it leaves for your team to confirm.
+      <p class="text-xs text-ink-subtle mt-1">AI only states facts written here. Anything else, like a price that isn't listed, it leaves for your team to confirm.
         For longer or more structured answers (FAQs, policies), use the <a class="underline" href="{% url 'settings-ai-knowledge' %}">knowledge base</a> instead of one long block of notes.</p>
     </div>
 
@@ -66,13 +66,13 @@
       <label class="flex items-start gap-3 rounded-xl border border-border px-4 py-3">
         <input type="radio" name="reply_mode" value="suggest" class="mt-1" x-model="mode">
         <span class="text-sm text-ink"><span class="font-medium">Suggest replies for my team to send</span>
-          <span class="block text-xs text-gray-500 mt-0.5">AI drafts a reply; a person checks it and presses Send. Nothing goes out without your team.</span></span>
+          <span class="block text-xs text-ink-subtle mt-0.5">AI drafts a reply; a person checks it and presses Send. Nothing goes out without your team.</span></span>
       </label>
       <label class="flex items-start gap-3 rounded-xl border border-border px-4 py-3">
         <input type="radio" name="reply_mode" value="auto" class="mt-1" x-model="mode">
         <span class="text-sm text-ink"><span class="font-medium">Reply automatically to the questions I choose</span>
-          <span class="block text-xs text-gray-500 mt-0.5">AI answers on WhatsApp and Instagram straight away, like a customer asking when you're open at 9 pm or a question your knowledge base answers. Everything else stays a suggestion for your team.</span>
-          {% if ai.auto_consented_at %}<span class="block text-xs text-gray-500 mt-0.5">Chosen {{ ai.auto_consented_at|date:"j M Y" }}{% if ai.auto_consented_by %} by {{ ai.auto_consented_by.get_full_name|default:ai.auto_consented_by.email }}{% endif %}.</span>{% endif %}
+          <span class="block text-xs text-ink-subtle mt-0.5">AI answers on WhatsApp and Instagram straight away, like a customer asking when you're open at 9 pm or a question your knowledge base answers. Everything else stays a suggestion for your team.</span>
+          {% if ai.auto_consented_at %}<span class="block text-xs text-ink-subtle mt-0.5">Chosen {{ ai.auto_consented_at|date:"j M Y" }}{% if ai.auto_consented_by %} by {{ ai.auto_consented_by.get_full_name|default:ai.auto_consented_by.email }}{% endif %}.</span>{% endif %}
         </span>
       </label>
 
@@ -84,7 +84,7 @@
           <p class="text-sm font-medium text-ink">AI may answer these on its own</p>
           <div class="mt-1 grid gap-1 sm:grid-cols-2">
             {% for topic in topics %}
-            <label class="flex items-start gap-2 text-sm min-h-[2rem] {% if topic.locked %}text-gray-400{% else %}text-ink{% endif %}">
+            <label class="flex items-start gap-2 text-sm min-h-[2rem] {% if topic.locked %}text-ink-subtle{% else %}text-ink{% endif %}">
               <input type="checkbox" name="auto_topics" value="{{ topic.key }}" class="mt-1" {% if topic.on %}checked{% endif %} {% if topic.locked %}disabled{% endif %}>
               <span>{{ topic.label }}{% if topic.locked %}<span class="block text-xs">{{ topic.locked }}</span>{% endif %}</span>
             </label>
@@ -109,9 +109,9 @@
             When AI can't answer, tell the customer your team will reply
           </label>
           <input type="text" name="holding_reply_text" class="input w-full" maxlength="300" value="{{ holding_reply }}" aria-label="Message AI sends when it hands the conversation to your team">
-          <p class="text-xs text-gray-500">Sent once, then AI stays quiet until someone on your team replies.</p>
+          <p class="text-xs text-ink-subtle">Sent once, then AI stays quiet until someone on your team replies.</p>
         </div>
-        <div class="text-xs text-gray-600">
+        <div class="text-xs text-ink-subtle">
           <p class="font-medium text-ink">AI still hands it to your team when:</p>
           <ul class="list-disc pl-5 mt-0.5 space-y-0.5">
             <li>a price isn't in your catalogue or notes, a time isn't one of your opening hours, or a number or link can't be checked (so it can't invent a price or date);</li>
@@ -145,9 +145,9 @@
           {% else %}
           <span class="font-medium text-ink">{{ r.customer }}</span>
           {% endif %}
-          <span class="text-xs text-gray-500">{{ r.sent_at|date:"j M, H:i" }} · {{ r.topic }}</span>
+          <span class="text-xs text-ink-subtle">{{ r.sent_at|date:"j M, H:i" }} · {{ r.topic }}</span>
         </div>
-        <p class="mt-0.5 text-gray-700 whitespace-pre-line">{{ r.text }}</p>
+        <p class="mt-0.5 text-ink-muted whitespace-pre-line">{{ r.text }}</p>
       </li>
       {% endfor %}
     </ul>

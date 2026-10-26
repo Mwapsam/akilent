@@ -274,13 +274,23 @@
     Alpine.store("theme").init();
 
     // Confirm dialog: { open, title, message, confirmLabel, danger, _resolve }
+    // ask() resolves true/false. With opts.input ({ label, placeholder, value }) it asks for
+    // one line of text instead - the app's own dialog in place of window.prompt() - and
+    // resolves the text, or null when cancelled.
     Alpine.store("confirm", {
       open: false, title: "", message: "", confirmLabel: "Confirm", cancelLabel: "Cancel", danger: false, _resolve: null,
+      input: null, value: "",
       ask(opts) {
-        Object.assign(this, { open: true, title: "", danger: false, confirmLabel: "Confirm", cancelLabel: "Cancel" }, opts || {});
+        Object.assign(this, { open: true, title: "", danger: false, confirmLabel: "Confirm", cancelLabel: "Cancel", input: null }, opts || {});
+        this.value = (this.input && this.input.value) || "";
         return new Promise((res) => (this._resolve = res));
       },
-      respond(ok) { this.open = false; if (this._resolve) this._resolve(ok); this._resolve = null; },
+      respond(ok) {
+        const asked = !!this.input;
+        this.open = false;
+        if (this._resolve) this._resolve(asked ? (ok ? this.value : null) : ok);
+        this._resolve = null;
+      },
     });
   });
 
@@ -567,8 +577,13 @@
     const question = e.detail.question;
     if (!question) return; // no hx-confirm on this element — nothing to gate
     const store = window.Alpine && Alpine.store("confirm");
-    if (!store) return; // Alpine not up yet: let HTMX fall back to confirm()
     e.preventDefault();
+    // Still starting up: block rather than fall back to the browser's confirm(), the same
+    // as data-confirm below. Nothing is sent; a second click a moment later asks properly.
+    if (!store) {
+      if (window.toast) window.toast("danger", "Still loading. Try again in a moment.");
+      return;
+    }
     const el = e.detail.elt;
     store
       .ask({
@@ -969,9 +984,11 @@
   // htmx-ext-preload (vendor/htmx-ext-preload.js) warms a sidebar link's target on hover by
   // replaying the same boosted request early, marked with this header. It intercepts its own
   // htmx:beforeRequest to send the XHR itself and never lets htmx's normal completion path run —
-  // so htmx:afterRequest never fires for it. Progress-bar/aria-busy bookkeping below counts
-  // beforeRequest against afterRequest 1:1; treating a preload as boosted there would increment
-  // on hover and never decrement, permanently stranding the bar and #main's dimmed state.
+  // so htmx:afterRequest never fires for it. Progress-bar/aria-busy bookkeeping below counts
+  // htmx:beforeSend (a request actually sent, never one cancelled earlier, such as by the
+  // unsaved-work prompt) against afterRequest 1:1. Counting on beforeRequest, or counting a
+  // preload, increments without a matching decrement and strands the bar and #main's dimmed
+  // state. A preload is still excluded by this check, so the count never relies on it.
   const isPreloaded = (detail) =>
     !!(detail && detail.requestConfig && detail.requestConfig.headers && detail.requestConfig.headers["HX-Preloaded"] === "true");
 
@@ -1015,8 +1032,21 @@
   // every few seconds, a conversation opening in the pane, a form re-rendering -
   // also cross-faded the whole screen, which read as the screen flickering.
   document.addEventListener("htmx:beforeTransition", function (e) {
-    if (!isBoosted(e.detail)) e.preventDefault();
+    if (!isBoosted(e.detail)) { e.preventDefault(); return; }
+    // Name #main for this one transition only (see .ak-page-vt in assets/app.css); the
+    // wrapper below takes the name off again once the transition has finished.
+    if (document.startViewTransition) document.documentElement.classList.add("ak-page-vt");
   });
+  if (document.startViewTransition && !document.startViewTransition.__ak) {
+    const startVT = document.startViewTransition.bind(document);
+    document.startViewTransition = function () {
+      const t = startVT.apply(document, arguments);
+      const done = function () { document.documentElement.classList.remove("ak-page-vt"); };
+      if (t && t.finished) t.finished.then(done, done); else done();
+      return t;
+    };
+    document.startViewTransition.__ak = true;
+  }
 
   document.addEventListener("htmx:historyRestore", function (e) {
     // The restore response is a whole page; make sure its <title> wins.
@@ -1049,7 +1079,11 @@
     }
     return navProgressEl;
   }
-  document.addEventListener("htmx:beforeRequest", function (e) {
+  // beforeSend, not beforeRequest: a navigation can still be cancelled in beforeRequest
+  // (the unsaved-work guard does that when you choose "Stay on this page"), and a
+  // cancelled one never reaches afterRequest - the bar stuck halfway and <main> stayed
+  // dimmed for good. beforeSend only fires for a request that is actually going out.
+  document.addEventListener("htmx:beforeSend", function (e) {
     if (!isBoosted(e.detail) || isPreloaded(e.detail)) return;
     navBusyCount++;
     navProgressTimer = setTimeout(function () {

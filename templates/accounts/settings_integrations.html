@@ -25,9 +25,9 @@
           </span>
           {% endif %}
         </div>
-        <p class="text-sm text-gray-500">Publish images, videos, reels, and stories to Instagram directly from Akilent.</p>
+        <p class="text-sm text-ink-subtle">Publish images, videos, reels, and stories to Instagram directly from Akilent.</p>
         {% if not ig_publish_scope %}
-        <p class="text-xs text-gray-400 mt-1">This connection can't publish yet. Reconnect Instagram and allow Akilent to publish content.</p>
+        <p class="text-xs text-ink-subtle mt-1">This connection can't publish yet. Reconnect Instagram and allow Akilent to publish content.</p>
         {% endif %}
       </div>
     </div>
@@ -56,9 +56,9 @@
           </span>
           {% endif %}
         </div>
-        <p class="text-sm text-gray-500">Publish posts, photos, and videos to your Facebook Page.</p>
+        <p class="text-sm text-ink-subtle">Publish posts, photos, and videos to your Facebook Page.</p>
         {% if fb_connected and fb_page_name %}
-        <p class="text-xs text-gray-400 mt-1">Page: {{ fb_page_name }}</p>
+        <p class="text-xs text-ink-subtle mt-1">Page: {{ fb_page_name }}</p>
         {% endif %}
       </div>
     </div>
@@ -66,7 +66,7 @@
       {% if fb_connected %}
       <form method="post" action="{% url 'publishing:fb-disconnect' %}">
         {% csrf_token %}
-        <button type="submit" class="btn btn-ghost text-sm text-red-600 hover:text-red-700 hover:tone-coral-bg"
+        <button type="submit" class="btn btn-danger-ghost text-sm"
                 data-confirm="Disconnect this Facebook Page?" data-confirm-danger data-confirm-label="Disconnect">Disconnect</button>
       </form>
       {% else %}
@@ -96,11 +96,11 @@
           </span>
           {% endif %}
         </div>
-        <p class="text-sm text-gray-500">
+        <p class="text-sm text-ink-subtle">
           Sync contacts and deals between Akilent and HubSpot CRM. Changes in either platform are kept in step automatically.
         </p>
         {% if hs_connected and hs_portal_id %}
-        <p class="text-xs text-gray-400 mt-1">Portal ID: {{ hs_portal_id }}</p>
+        <p class="text-xs text-ink-subtle mt-1">Portal ID: {{ hs_portal_id }}</p>
         {% endif %}
       </div>
     </div>
@@ -109,7 +109,7 @@
       {% if hs_connected %}
       <form method="post" action="{% url 'hubspot:oauth-disconnect' %}">
         {% csrf_token %}
-        <button type="submit" class="btn btn-ghost text-sm text-red-600 hover:text-red-700 hover:tone-coral-bg"
+        <button type="submit" class="btn btn-danger-ghost text-sm"
                 data-confirm="Disconnect HubSpot? Sync will stop but your data stays intact." data-confirm-danger data-confirm-label="Disconnect">
           Disconnect
         </button>

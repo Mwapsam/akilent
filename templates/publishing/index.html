@@ -6,7 +6,7 @@
 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
   <div>
     <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
-    <p class="text-sm text-gray-500 mt-0.5">Plan, create, and publish content across your channels.</p>
+    <p class="text-sm text-ink-subtle mt-0.5">Plan, create, and publish content across your channels.</p>
   </div>
   <a href="{% url 'publishing:post-new' %}" class="btn btn-primary">New post</a>
 </div>
@@ -23,13 +23,13 @@
     <li class="rounded-lg border border-border px-3 py-2{% if b.warn %} tone-coral-bg{% endif %}">
       {% if b.url %}<a href="{{ b.url }}" class="block">{% endif %}
         <p class="text-xl font-bold text-ink">{{ b.count }}</p>
-        <p class="text-xs text-gray-500">{{ b.label }}</p>
+        <p class="text-xs text-ink-subtle">{{ b.label }}</p>
       {% if b.url %}</a>{% endif %}
     </li>
     {% endfor %}
     <li class="rounded-lg border border-border px-3 py-2">
       <p class="text-xl font-bold text-ink">{{ published_this_month }}</p>
-      <p class="text-xs text-gray-500">Published this month</p>
+      <p class="text-xs text-ink-subtle">Published this month</p>
     </li>
   </ul>
 </div>
@@ -40,7 +40,7 @@
   <div class="card card-pad">
     <div class="flex items-center justify-between mb-3">
       <h2 class="font-semibold text-ink">Needs you</h2>
-      {% if work.needs_you_total > work.needs_you|length %}<span class="text-xs text-gray-500">{{ work.needs_you|length }} of {{ work.needs_you_total }}</span>{% endif %}
+      {% if work.needs_you_total > work.needs_you|length %}<span class="text-xs text-ink-subtle">{{ work.needs_you|length }} of {{ work.needs_you_total }}</span>{% endif %}
     </div>
     {% if work.needs_you %}
     <ul class="space-y-2">
@@ -49,19 +49,19 @@
         <div class="flex items-start justify-between gap-2">
           <a href="{% url 'publishing:post-detail' row.post.pk %}" class="flex-1 min-w-0">
             <p class="text-sm font-medium text-ink truncate">{{ row.post.caption|truncatechars:50|default:"(no caption)" }}</p>
-            <p class="text-xs text-gray-500">{{ row.bucket_label }}{% if row.bucket == 'failed' and row.post.error %} · <span class="text-red-700">{{ row.post.error|truncatechars:70 }}</span>{% endif %}</p>
+            <p class="text-xs text-ink-subtle">{{ row.bucket_label }}{% if row.bucket == 'failed' and row.post.error %} · <span class="tone-coral-fg">{{ row.post.error|truncatechars:70 }}</span>{% endif %}</p>
           </a>
           {% if row.action.url %}
           <a href="{{ row.action.url }}" class="btn btn-ghost text-xs py-0.5 px-2 shrink-0">{{ row.action.label }}</a>
           {% else %}
-          <span class="text-xs text-gray-500 shrink-0 text-right" style="max-width:45%">{{ row.action.label }}</span>
+          <span class="text-xs text-ink-subtle shrink-0 text-right" style="max-width:45%">{{ row.action.label }}</span>
           {% endif %}
         </div>
       </li>
       {% endfor %}
     </ul>
     {% else %}
-    <p class="text-sm text-gray-400 text-center py-6">Nothing is waiting on you.</p>
+    <p class="text-sm text-ink-subtle text-center py-6">Nothing is waiting on you.</p>
     {% endif %}
   </div>
 
@@ -79,7 +79,7 @@
         {% include "publishing/_media_thumb.html" with url=post|first_media size="w-10 h-10" alt=post.caption|truncatechars:80 %}
         <div class="flex-1 min-w-0">
           <p class="text-sm font-medium text-ink truncate">{{ post.caption|truncatechars:60|default:"(no caption)" }}</p>
-          <p class="text-xs text-gray-400">
+          <p class="text-xs text-ink-subtle">
             {{ post.platforms|join:", "|capfirst }}
             {% if post.scheduled_at %} · {{ post.scheduled_at|date:"N j, H:i" }}{% endif %}
           </p>
@@ -88,7 +88,7 @@
       {% endfor %}
     </div>
     {% else %}
-    <p class="text-sm text-gray-400 text-center py-6">No scheduled posts.</p>
+    <p class="text-sm text-ink-subtle text-center py-6">No scheduled posts. <a href="{% url 'publishing:post-new' %}" class="text-accent hover:text-accent-strong underline">Create a post</a></p>
     {% endif %}
   </div>
 

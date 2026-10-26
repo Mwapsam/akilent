@@ -62,6 +62,7 @@
     function closePane() {
       // A load still in flight must not land in a closed pane or push a history entry.
       loadSeq++;
+      paneEpoch++;
       window.htmx.trigger(pane, "htmx:abort");
       delete split.dataset.open;
       split.classList.remove("has-conversation", "is-loading");
@@ -75,6 +76,10 @@
     // Only the latest call finishes the job: clicking B while A is still loading must
     // not leave A's title, history entry or focus behind once A's answer arrives.
     var loadSeq = 0;
+    // Bumped whenever the pane starts showing a different conversation (or closes). A form
+    // inside the pane (assign, tags, snooze) is stamped with it when sent, so its answer
+    // can't land over the next conversation once the person has moved on.
+    var paneEpoch = 0;
     var lastLoad = null; // what the pane's Try again repeats
     function pathOf(u) { return new URL(u, window.location.href).pathname; }
     // Pane loads carry this header (set below); nothing else sends it. Forms inside the pane
@@ -89,34 +94,13 @@
     }
     function openInPane(url, push) {
       var mine = ++loadSeq;
+      paneEpoch++; // and again when it swaps in (onBeforeSwap): forms sent meanwhile are A's
       lastLoad = { url: url, push: push };
       split.dataset.open = url;
       selectRow(rowFor(url));
       split.classList.add("has-conversation", "is-loading");
       var failed = false;
       var status = 0;
-      // With View Transitions on (app.js: globalViewTransitions unless reduced motion) htmx
-      // swaps after its promise has resolved, so "loaded" means the pane has settled, not
-      // that the request finished. Reading the pane at resolve time found it still empty and
-      // fell back to a full page load on every click, losing the list beside it.
-      var settled = false;
-      var onSettled = null;
-      function onSettle(e) {
-        // Only this load's own swap counts, not an earlier one finishing late. Compared by
-        // pathname: the same URL can arrive absolute from a row and relative from history.
-        var cfg = e.detail && e.detail.requestConfig;
-        if (isPaneLoad(e.detail) && cfg && pathOf(cfg.path) === pathOf(url)) {
-          settled = true;
-          if (onSettled) onSettled();
-        }
-      }
-      function whenSettled() {
-        return new Promise(function (resolve) {
-          if (settled || failed) return resolve();
-          onSettled = resolve;
-          setTimeout(resolve, 4000);
-        });
-      }
       // Only this load's own failure: a form inside the pane (assign, tags, snooze) also
       // targets the pane, and its error must not be read as the conversation failing to open.
       function onError(e) {
@@ -130,20 +114,19 @@
         document.removeEventListener("htmx:responseError", onError);
         document.removeEventListener("htmx:sendError", onError);
         document.removeEventListener("htmx:timeout", onError);
-        document.removeEventListener("htmx:afterSettle", onSettle);
       }
       document.addEventListener("htmx:responseError", onError);
       document.addEventListener("htmx:sendError", onError);
       document.addEventListener("htmx:timeout", onError);
-      document.addEventListener("htmx:afterSettle", onSettle);
       // htmx queues a second request on a source element behind the first and resolves its
       // promise at once, so clicking B then C opened B. The pane is the source, and any load
       // still in flight on it is cancelled first; onBeforeSwap below also drops a late answer
       // that is not for the conversation asked for last.
+      // app.js never runs a View Transition for a pane load (it isn't boosted), so the swap
+      // has happened by the time the promise resolves and the pane can be read straight away.
       window.htmx.trigger(pane, "htmx:abort");
       window.htmx
         .ajax("GET", url, { target: "#conversation-pane-inner", swap: "innerHTML", source: pane, headers: paneHeaders })
-        .then(whenSettled)
         .then(function () {
           stopListening();
           if (mine !== loadSeq) return; // a newer conversation was asked for meanwhile
@@ -204,10 +187,22 @@
     // A late answer for a conversation that is no longer the one asked for never replaces
     // the newer one (race safety: the last click wins, whatever order the answers arrive).
     // Also: nothing lands once the pane has been closed (Back to the inbox).
+    // A form's answer from a conversation that has since been replaced or closed is dropped
+    // the same way (what it did on the server still happened; only the stale view is not shown).
+    function inPane(el) { return !!el && (el === pane || pane.contains(el)); }
+    function onBeforeRequest(e) {
+      if (!isPaneLoad(e.detail) && inPane(e.detail.target) && e.detail.xhr) e.detail.xhr._akPaneEpoch = paneEpoch;
+    }
     function onBeforeSwap(e) {
       var cfg = e.detail && e.detail.requestConfig;
-      if (!isPaneLoad(e.detail) || !cfg) return;
+      if (!cfg) return;
+      if (!isPaneLoad(e.detail)) {
+        var xhr = e.detail.xhr;
+        if (xhr && xhr._akPaneEpoch !== undefined && xhr._akPaneEpoch !== paneEpoch) e.detail.shouldSwap = false;
+        return;
+      }
       if (!split.dataset.open || pathOf(cfg.path) !== pathOf(split.dataset.open)) e.detail.shouldSwap = false;
+      else paneEpoch++; // the pane is about to show this conversation
     }
 
     // The pane's error state asks for a retry through data-error-retry-event (app.js) rather
@@ -236,6 +231,7 @@
     window.addEventListener("popstate", onPopState);
     document.addEventListener("htmx:afterSwap", onAfterSwap);
     document.addEventListener("htmx:beforeSwap", onBeforeSwap);
+    document.addEventListener("htmx:beforeRequest", onBeforeRequest);
     pane.addEventListener("inbox-pane-retry", onRetry);
     window.addEventListener("resize", fit, { passive: true });
     return function cleanup() {
@@ -243,6 +239,7 @@
       window.removeEventListener("popstate", onPopState);
       document.removeEventListener("htmx:afterSwap", onAfterSwap);
       document.removeEventListener("htmx:beforeSwap", onBeforeSwap);
+      document.removeEventListener("htmx:beforeRequest", onBeforeRequest);
       pane.removeEventListener("inbox-pane-retry", onRetry);
       window.removeEventListener("resize", fit);
       document.title = inboxTitle;

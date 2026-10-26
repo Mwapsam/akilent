@@ -4,7 +4,7 @@
   <input id="theme-name-{{ prefix }}" type="text" name="name" value="{{ c.name|default:'' }}" placeholder="e.g. October product launch" class="input w-full" maxlength="200" required>
 </div>
 <div>
-  <label class="label" for="theme-objective-{{ prefix }}">What it should achieve <span class="font-normal text-gray-400">(optional)</span></label>
+  <label class="label" for="theme-objective-{{ prefix }}">What it should achieve <span class="font-normal text-ink-subtle">(optional)</span></label>
   <textarea id="theme-objective-{{ prefix }}" name="objective" rows="2" class="input w-full">{{ c.objective|default:'' }}</textarea>
 </div>
 <div class="grid gap-3 sm:grid-cols-2">

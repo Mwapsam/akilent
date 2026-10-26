@@ -11,7 +11,7 @@
 
   {% if codes %}
     <h2 class="font-semibold mb-1">Save your recovery codes</h2>
-    <p class="text-sm text-gray-600 mb-4">
+    <p class="text-sm text-ink-subtle mb-4">
       Each code works once, instead of an authenticator code, if you lose your phone.
       Store them somewhere safe, such as a password manager. Keep this page open until you have saved them.
     </p>
@@ -62,14 +62,14 @@
     </script>
   {% else %}
     <h2 class="font-semibold mb-1">Your recovery codes are no longer shown</h2>
-    <p class="text-sm text-gray-600 mb-4">
+    <p class="text-sm text-ink-subtle mb-4">
       For your safety, codes are shown for a short time only. Make a new set to continue.
       Your old codes stop working as soon as you make a new set.
     </p>
     {% if can_regenerate %}
       {% include "accounts/_recovery_regenerate_form.html" %}
     {% else %}
-      <p class="text-sm text-gray-600">Turn on an authenticator app to make new recovery codes.</p>
+      <p class="text-sm text-ink-subtle">Turn on an authenticator app to make new recovery codes.</p>
     {% endif %}
   {% endif %}
 </div>

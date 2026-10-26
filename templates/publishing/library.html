@@ -17,16 +17,16 @@
       x-data="{ more: {% if status_filter or bucket_filter or platform_filter or media_type_filter or date_from or date_to %}true{% else %}false{% endif %} }">
   <div class="flex flex-wrap gap-3 items-end">
     <div class="flex-1 min-w-[11rem]">
-      <label class="block text-xs font-medium text-gray-500 mb-1" for="library-q">Search</label>
-      <input type="text" id="library-q" name="q" value="{{ q }}" placeholder="Search captions…" class="input w-full text-sm py-1">
+      <label class="block text-xs font-medium text-ink-subtle mb-1" for="library-q">Search</label>
+      <input type="text" id="library-q" name="q" value="{{ q }}" placeholder="Search captions…" class="input w-full py-1">
     </div>
     <button type="button" class="btn btn-ghost text-sm py-1 sm:hidden" @click="more = !more" :aria-expanded="more" aria-controls="library-more-filters">
       Filters{% if status_filter or bucket_filter or platform_filter or media_type_filter or date_from or date_to %} <span class="inline-block w-2 h-2 rounded-full bg-brand-500" aria-label="(active)"></span>{% endif %}
     </button>
     <div id="library-more-filters" class="w-full grid grid-cols-2 gap-3 sm:contents" :class="{ 'max-sm:hidden': !more }">
     <div>
-      <label class="block text-xs font-medium text-gray-500 mb-1">Status</label>
-      <select name="status" onchange="this.form.submit()" class="input w-full sm:w-auto text-sm py-1">
+      <label class="block text-xs font-medium text-ink-subtle mb-1" for="library-status">Status</label>
+      <select name="status" id="library-status" onchange="this.form.submit()" class="input w-full sm:w-auto py-1">
         <option value="">All</option>
         {% for val, label in status_choices %}
         <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
@@ -34,8 +34,8 @@
       </select>
     </div>
     <div>
-      <label class="block text-xs font-medium text-gray-500 mb-1" for="library-bucket">Where it stands</label>
-      <select name="bucket" id="library-bucket" onchange="this.form.submit()" class="input w-full sm:w-auto text-sm py-1">
+      <label class="block text-xs font-medium text-ink-subtle mb-1" for="library-bucket">Where it stands</label>
+      <select name="bucket" id="library-bucket" onchange="this.form.submit()" class="input w-full sm:w-auto py-1">
         <option value="">All</option>
         {% for val, label in bucket_choices %}
         <option value="{{ val }}" {% if bucket_filter == val %}selected{% endif %}>{{ label }}</option>
@@ -43,16 +43,16 @@
       </select>
     </div>
     <div>
-      <label class="block text-xs font-medium text-gray-500 mb-1">Platform</label>
-      <select name="platform" onchange="this.form.submit()" class="input w-full sm:w-auto text-sm py-1">
+      <label class="block text-xs font-medium text-ink-subtle mb-1" for="library-platform">Platform</label>
+      <select name="platform" id="library-platform" onchange="this.form.submit()" class="input w-full sm:w-auto py-1">
         <option value="">All</option>
         <option value="instagram" {% if platform_filter == 'instagram' %}selected{% endif %}>Instagram</option>
         <option value="facebook" {% if platform_filter == 'facebook' %}selected{% endif %}>Facebook</option>
       </select>
     </div>
     <div>
-      <label class="block text-xs font-medium text-gray-500 mb-1">Media type</label>
-      <select name="media_type" onchange="this.form.submit()" class="input w-full sm:w-auto text-sm py-1">
+      <label class="block text-xs font-medium text-ink-subtle mb-1" for="library-media-type">Media type</label>
+      <select name="media_type" id="library-media-type" onchange="this.form.submit()" class="input w-full sm:w-auto py-1">
         <option value="">All</option>
         {% for val, label in media_type_choices %}
         <option value="{{ val }}" {% if media_type_filter == val %}selected{% endif %}>{{ label }}</option>
@@ -60,17 +60,17 @@
       </select>
     </div>
     <div>
-      <label class="block text-xs font-medium text-gray-500 mb-1">From</label>
-      <input type="date" name="date_from" value="{{ date_from }}" class="input w-full sm:w-auto text-sm py-1">
+      <label class="block text-xs font-medium text-ink-subtle mb-1" for="library-from">From</label>
+      <input type="date" name="date_from" id="library-from" value="{{ date_from }}" class="input w-full sm:w-auto py-1">
     </div>
     <div>
-      <label class="block text-xs font-medium text-gray-500 mb-1">To</label>
-      <input type="date" name="date_to" value="{{ date_to }}" class="input w-full sm:w-auto text-sm py-1">
+      <label class="block text-xs font-medium text-ink-subtle mb-1" for="library-to">To</label>
+      <input type="date" name="date_to" id="library-to" value="{{ date_to }}" class="input w-full sm:w-auto py-1">
     </div>
     </div>
     <button type="submit" class="btn btn-ghost text-sm py-1">Filter</button>
     {% if q or status_filter or bucket_filter or platform_filter or media_type_filter or date_from or date_to %}
-    <a href="{% url 'publishing:library' %}" class="btn btn-ghost text-sm py-1 text-gray-400">Clear</a>
+    <a href="{% url 'publishing:library' %}" class="btn btn-ghost text-sm py-1 text-ink-subtle">Clear</a>
     {% endif %}
   </div>
 </form>
@@ -81,18 +81,18 @@
 
   {% if page_obj.object_list %}
   <div class="flex flex-wrap items-center gap-x-3 gap-y-2 mb-3">
-    <label class="text-sm text-gray-500 flex items-center gap-1.5 min-h-9">
+    <label class="text-sm text-ink-subtle flex items-center gap-1.5 min-h-9">
       <input type="checkbox" id="select-all" class="rounded"> Select all
     </label>
     <div class="flex flex-wrap gap-2">
       <button type="submit" name="action" value="delete_drafts"
-              class="btn btn-ghost text-sm text-red-600 hover:tone-coral-bg"
+              class="btn btn-danger-ghost text-sm"
               data-confirm="Delete the selected drafts? This cannot be undone." data-confirm-danger data-confirm-label="Delete">Delete drafts</button>
       <button type="submit" name="action" value="cancel_scheduled"
-              class="btn btn-ghost text-sm text-amber-600 hover:tone-amber-bg"
+              class="btn btn-ghost text-sm tone-amber-fg hover:tone-amber-bg"
               data-confirm="Cancel the selected scheduled posts?" data-confirm-label="Cancel posts" data-confirm-cancel="Keep scheduled">Cancel scheduled</button>
     </div>
-    <span class="text-xs text-gray-500 ml-auto">{{ page_obj.paginator.count }} post{{ page_obj.paginator.count|pluralize }}</span>
+    <span class="text-xs text-ink-subtle ml-auto">{{ page_obj.paginator.count }} post{{ page_obj.paginator.count|pluralize }}</span>
   </div>
 
   <div class="card overflow-hidden table-wrap">
@@ -101,11 +101,11 @@
         <tr class="border-b border-surface-subtle">
           <th class="w-8 pl-3 pr-1 sm:px-3 py-2"><span class="sr-only">Select</span></th>
           <th class="w-12 px-1 py-2"><span class="sr-only">Media</span></th>
-          <th class="text-left px-3 sm:px-4 py-2 font-medium text-gray-500">Caption</th>
-          <th class="hidden md:table-cell text-left px-4 py-2 font-medium text-gray-500">Platform</th>
-          <th class="hidden md:table-cell text-left px-4 py-2 font-medium text-gray-500">Type</th>
-          <th class="text-left px-3 sm:px-4 py-2 font-medium text-gray-500">Status</th>
-          <th class="hidden sm:table-cell text-left px-4 py-2 font-medium text-gray-500">Created</th>
+          <th class="text-left px-3 sm:px-4 py-2 font-medium text-ink-subtle">Caption</th>
+          <th class="hidden md:table-cell text-left px-4 py-2 font-medium text-ink-subtle">Platform</th>
+          <th class="hidden md:table-cell text-left px-4 py-2 font-medium text-ink-subtle">Type</th>
+          <th class="text-left px-3 sm:px-4 py-2 font-medium text-ink-subtle">Status</th>
+          <th class="hidden sm:table-cell text-left px-4 py-2 font-medium text-ink-subtle">Created</th>
         </tr>
       </thead>
       <tbody>
@@ -122,15 +122,15 @@
             <a href="{% url 'publishing:post-detail' post.pk %}" class="font-medium text-ink hover:underline line-clamp-2">
               {{ post.caption|truncatechars:70|default:"(no caption)" }}
             </a>
-            <span class="md:hidden block text-xs text-gray-500 mt-0.5">{{ post.platforms|join:", "|capfirst }} · {{ post.get_media_type_display }}<span class="sm:hidden"> · {{ post.created_at|date:"N j" }}</span></span>
+            <span class="md:hidden block text-xs text-ink-subtle mt-0.5">{{ post.platforms|join:", "|capfirst }} · {{ post.get_media_type_display }}<span class="sm:hidden"> · {{ post.created_at|date:"N j" }}</span></span>
           </td>
-          <td class="hidden md:table-cell px-4 py-2 text-gray-500">{{ post.platforms|join:", "|capfirst }}</td>
-          <td class="hidden md:table-cell px-4 py-2 text-gray-500">{{ post.get_media_type_display }}</td>
+          <td class="hidden md:table-cell px-4 py-2 text-ink-subtle">{{ post.platforms|join:", "|capfirst }}</td>
+          <td class="hidden md:table-cell px-4 py-2 text-ink-subtle">{{ post.get_media_type_display }}</td>
           <td class="px-3 sm:px-4 py-2">
             {% status_badge post.status post.get_status_display %}
-            {% with reach=post|reach_summary %}{% if reach %}<span class="block text-xs text-gray-500 mt-0.5 tabular-nums">{{ reach }}</span>{% endif %}{% endwith %}
+            {% with reach=post|reach_summary %}{% if reach %}<span class="block text-xs text-ink-subtle mt-0.5 tabular-nums">{{ reach }}</span>{% endif %}{% endwith %}
           </td>
-          <td class="hidden sm:table-cell px-4 py-2 text-gray-500 whitespace-nowrap">{{ post.created_at|date:"N j, Y" }}</td>
+          <td class="hidden sm:table-cell px-4 py-2 text-ink-subtle whitespace-nowrap">{{ post.created_at|date:"N j, Y" }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -138,9 +138,16 @@
   </div>
 
   {% else %}
-  <div class="card card-pad text-center py-12">
-    <p class="text-gray-400">No posts match your filters.</p>
-    <a href="{% url 'publishing:library' %}" class="text-sm text-accent mt-2 inline-block">Clear filters</a>
+  {% comment %}Two different empties: filters hiding posts, or no posts at all. "No posts
+  match your filters" used to show with no filter set, pointing at a cause that wasn't there.{% endcomment %}
+  <div class="card">
+  {% if q or status_filter or bucket_filter or platform_filter or media_type_filter or date_from or date_to %}
+    {% url 'publishing:library' as library_url %}
+    {% include "components/empty_state.html" with icon="search" title="No posts match these filters" message="Try a different search, or clear the filters to see every post." action_url=library_url action_label="Clear filters" %}
+  {% else %}
+    {% url 'publishing:post-new' as new_url %}
+    {% include "components/empty_state.html" with icon="image" title="No posts yet" message="Posts you write, schedule or publish to Instagram and Facebook are kept here." action_url=new_url action_label="Create a post" %}
+  {% endif %}
   </div>
   {% endif %}
 
@@ -153,7 +160,7 @@
   <a href="{% querystring page=page_obj.previous_page_number %}"
      class="btn btn-ghost text-sm">← Prev</a>
   {% endif %}
-  <span class="text-sm text-gray-400">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+  <span class="text-sm text-ink-subtle">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
   {% if page_obj.has_next %}
   <a href="{% querystring page=page_obj.next_page_number %}"
      class="btn btn-ghost text-sm">Next →</a>

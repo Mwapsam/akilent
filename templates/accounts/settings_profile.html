@@ -10,7 +10,7 @@
     </div>
     {% include "components/form_field.html" with name="email" label="Email" type="email" value=form.email.value error=form.email.errors|join:" " help="Used for sign-in notices and password resets." %}
     <div class="pt-1">
-      <p class="text-xs text-gray-400 mb-3">Username <span class="font-medium text-gray-600">{{ user.get_username }}</span> can't be changed.</p>
+      <p class="text-xs text-ink-subtle mb-3">Username <span class="font-medium text-ink-subtle">{{ user.get_username }}</span> can't be changed.</p>
       <button class="btn btn-primary" type="submit">Save changes</button>
     </div>
   </form>

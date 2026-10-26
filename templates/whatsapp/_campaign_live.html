@@ -1,7 +1,7 @@
 {% comment %}Campaign progress + results. Polls itself every 5s while anything is still
 moving, and stops when the campaign is done (the response then has no trigger).{% endcomment %}
 <div id="campaign-live"
-     {% if in_progress %}hx-get="?part=live" hx-trigger="every 5s" hx-swap="outerHTML"{% endif %}>
+     {% if in_progress %}hx-get="?part=live" hx-trigger="every 5s" hx-swap="outerHTML" data-auto-refresh{% endif %}>
   <div class="flex flex-wrap items-center gap-3 mb-4">
     {% include "components/status.html" with state=state badge=True %}
     {% if in_progress and campaign.status != 'failed' %}

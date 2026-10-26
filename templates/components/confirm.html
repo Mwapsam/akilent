@@ -17,6 +17,13 @@ a destructive action. A bottom sheet below sm.{% endcomment %}
     <h2 id="confirm-title" class="text-base font-semibold text-ink"
         x-text="$store.confirm.title || 'Are you sure?'"></h2>
     <p id="confirm-message" class="text-sm text-ink-muted mt-2" x-text="$store.confirm.message"></p>
+    {% comment %}Asks for one line of text when ask() is given `input` (the app's own dialog
+    instead of the browser's prompt()). Enter answers with the text; focus starts in the field.{% endcomment %}
+    <form x-show="$store.confirm.input" class="mt-4" @submit.prevent="$store.confirm.respond(true)">
+      <label for="confirm-input" class="label" x-text="$store.confirm.input && $store.confirm.input.label"></label>
+      <input id="confirm-input" class="input" autofocus autocomplete="off"
+             x-model="$store.confirm.value" :placeholder="$store.confirm.input && $store.confirm.input.placeholder">
+    </form>
     <div class="mt-6 flex flex-col-reverse sm:flex-row sm:justify-end gap-3" data-dialog-body>
       <button type="button" class="btn btn-secondary"
               x-text="$store.confirm.cancelLabel || 'Cancel'"

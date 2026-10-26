@@ -721,6 +721,8 @@ def conversation_detail(request, public_id: str):
         ),
         "typingUrl": reverse("conversations:typing", args=[conversation.public_id]),
         "lastId": thread[-1].id if thread else 0,
+        # The browser's clock can be off; sends it is unsure of are timed against this.
+        "serverNow": now.isoformat(),
         "open": conversation.status == Conversation.Status.OPEN,
         # Only WhatsApp enforces a messaging window today; other channels report
         # it open so the composer behaves as it always has for them.

@@ -13,14 +13,14 @@
   <p class="text-sm mb-4"><a href="{% url 'settings-email-mfa' %}" class="text-accent hover:text-accent-strong">Email sign-in codes</a> are a separate option. <a href="{% url 'settings-passkeys' %}" class="text-accent hover:text-accent-strong">Passkeys and security keys</a> are too.</p>
 
   {% if enabled %}
-    <p class="text-sm text-gray-500 mb-4">
-      Two-factor authentication is <span class="font-medium text-green-600">enabled</span> on your account.
+    <p class="text-sm text-ink-subtle mb-4">
+      Two-factor authentication is <span class="font-medium tone-teal-fg">enabled</span> on your account.
       You'll be asked for a code from your authenticator app each time you sign in.
     </p>
     <form method="post" class="space-y-3 mb-4">
       {% csrf_token %}
       <input type="hidden" name="action" value="disable">
-      <p class="text-xs text-gray-600">To turn this off, confirm your password and a current code.</p>
+      <p class="text-xs text-ink-subtle">To turn this off, confirm your password and a current code.</p>
       <div>
         <label for="id_disable_password" class="label">Password</label>
         <input id="id_disable_password" type="password" name="password" autocomplete="current-password" required class="input w-64">
@@ -37,14 +37,14 @@
 
     <div class="border-t border-border pt-5 mt-5">
       <h3 class="font-medium text-ink mb-1">Recovery codes</h3>
-      <p class="text-sm text-gray-600 mb-4">
+      <p class="text-sm text-ink-subtle mb-4">
         Making a new set stops your old codes from working. Use this if you have lost them.
       </p>
       {% include "accounts/_recovery_regenerate_form.html" %}
     </div>
 
   {% else %}
-    <p class="text-sm text-gray-600 mb-4">
+    <p class="text-sm text-ink-subtle mb-4">
       Protect your account with a 6-digit code from an authenticator app such as
       Google Authenticator, Authy or 1Password. Scan the code below with the app.
     </p>
@@ -56,7 +56,7 @@
              class="w-48 h-48">
       </div>
       <div>
-        <p class="text-xs text-gray-600 mb-1">Can't scan? Type this key into your app as a time-based key:</p>
+        <p class="text-xs text-ink-subtle mb-1">Can't scan? Type this key into your app as a time-based key:</p>
         <div class="flex flex-wrap items-center gap-2">
           <code id="setup-key" class="text-xs font-mono tone-neutral-bg px-2 py-1 rounded select-all break-all">{{ secret }}</code>
           <button type="button" id="copy-setup-key" class="btn btn-ghost btn-sm touch-target">Copy key</button>
@@ -87,7 +87,7 @@
                class="input w-40 text-center tracking-widest text-lg">
       </div>
       <button type="submit" class="btn btn-primary">Enable two-factor authentication</button>
-      <p class="text-xs text-gray-600">Stuck? <a href="{% url 'help' %}" class="text-accent hover:text-accent-strong">Visit the help centre</a>.</p>
+      <p class="text-xs text-ink-subtle">Stuck? <a href="{% url 'help' %}" class="text-accent hover:text-accent-strong">Visit the help centre</a>.</p>
     </form>
   {% endif %}
 </div>

@@ -8,9 +8,9 @@ page's only primary (amber) button.{% endcomment %}
       {% include "components/icon.html" with name=spot.icon class="w-5 h-5 sm:w-6 sm:h-6" %}
     </span>
     <div class="min-w-0 flex-1">
-      <p class="text-[11px] font-semibold uppercase tracking-wider text-gray-500">{{ eyebrow }}</p>
+      <p class="text-xs font-semibold uppercase tracking-wider text-ink-subtle">{{ eyebrow }}</p>
       <h2 id="ob-spotlight" class="mt-0.5 text-base sm:text-lg font-semibold text-ink">{{ spot.title }}</h2>
-      <p class="text-sm text-gray-600 mt-0.5">{{ spot.desc }}</p>
+      <p class="text-sm text-ink-subtle mt-0.5">{{ spot.desc }}</p>
     </div>
   </div>
   {% if spot.url %}

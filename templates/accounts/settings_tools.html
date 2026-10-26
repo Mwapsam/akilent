@@ -2,13 +2,13 @@
 {% block settings_content %}
 <div class="card card-pad max-w-xl">
   <h2 class="font-semibold mb-1">Optional tools</h2>
-  <p class="text-sm text-gray-500 mb-4">
+  <p class="text-sm text-ink-subtle mb-4">
     Akilent is about your customer conversations. These add extra sections to
     it — turn one on if your business needs it, off if it doesn't. Nothing is
     deleted either way.
   </p>
   {% if not tools %}
-  <p class="text-sm text-gray-600">Your plan doesn't include any optional tools. <a href="{% url 'billing:plans' %}" class="text-accent underline">See plans</a>.</p>
+  <p class="text-sm text-ink-subtle">Your plan doesn't include any optional tools. <a href="{% url 'billing:plans' %}" class="text-accent underline">See plans</a>.</p>
   {% else %}
   <form method="post" class="space-y-4">
     {% csrf_token %}
@@ -17,7 +17,7 @@
       <input type="checkbox" name="{{ tool.feature }}" {% if tool.enabled %}checked{% endif %} class="mt-1">
       <span class="min-w-0">
         <span class="block font-medium text-ink">{{ tool.label }}</span>
-        <span class="block text-sm text-gray-500">{{ tool.hint }}</span>
+        <span class="block text-sm text-ink-subtle">{{ tool.hint }}</span>
       </span>
     </label>
     {% endfor %}

@@ -6,7 +6,7 @@
     <h2 id="media-title" class="cmp-section-title">Media</h2>
     <div class="flex items-center gap-2">
       <label for="media-type" class="cmp-hint">Format</label>
-      <select id="media-type" name="media_type" class="input !py-1.5 !text-sm" x-model="mediaType" @change="touched()">
+      <select id="media-type" name="media_type" class="input !py-1.5" x-model="mediaType" @change="touched()">
         {% for value, label in media_types %}
         <option value="{{ value }}">{{ label }}</option>
         {% endfor %}

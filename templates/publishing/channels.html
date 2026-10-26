@@ -46,17 +46,17 @@
           {% endif %}
         </div>
         {% if ig_connection %}
-        <p class="text-sm text-gray-500">Connected via Instagram Business Account.</p>
+        <p class="text-sm text-ink-subtle">Connected via Instagram Business Account.</p>
         {% if ig_connection.token_expired %}
-        <p class="text-xs text-amber-700 mt-1">Instagram stopped accepting the saved access. Reconnect Instagram to resume publishing.</p>
+        <p class="text-xs tone-amber-fg mt-1">Instagram stopped accepting the saved access. Reconnect Instagram to resume publishing.</p>
         {% elif not ig_publish_scope %}
-        <p class="text-xs text-gray-500 mt-1">This connection can't publish yet. You can plan and draft Instagram posts now; reconnect Instagram and allow publishing to post them.</p>
+        <p class="text-xs text-ink-subtle mt-1">This connection can't publish yet. You can plan and draft Instagram posts now; reconnect Instagram and allow publishing to post them.</p>
         {% endif %}
         {% else %}
-        <p class="text-sm text-gray-500">Connect Instagram to publish images, reels, and stories from Akilent.</p>
+        <p class="text-sm text-ink-subtle">Connect Instagram to publish images, reels, and stories from Akilent.</p>
         {% endif %}
         {% if not channel_on.instagram %}
-        <p class="text-xs text-amber-700 mt-1">Instagram is switched off on Akilent right now. Scheduled Instagram posts wait and go out once it's back on.</p>
+        <p class="text-xs tone-amber-fg mt-1">Instagram is switched off on Akilent right now. Scheduled Instagram posts wait and go out once it's back on.</p>
         {% endif %}
       </div>
     </div>
@@ -90,15 +90,15 @@
           </span>
           {% endif %}
         </div>
-        <p class="text-sm text-gray-500">Publish posts, photos, and videos to your Facebook Page.</p>
+        <p class="text-sm text-ink-subtle">Publish posts, photos, and videos to your Facebook Page.</p>
         {% if fb_connection and fb_connection.status == 'expired' %}
-        <p class="text-xs text-amber-700 mt-1">Facebook stopped accepting the saved access (for example after a password change or removed permission). Reconnect to resume publishing.</p>
+        <p class="text-xs tone-amber-fg mt-1">Facebook stopped accepting the saved access (for example after a password change or removed permission). Reconnect to resume publishing.</p>
         {% endif %}
         {% if fb_connection and fb_connection.page_name %}
-        <p class="text-xs text-gray-400 mt-1">Page: {{ fb_connection.page_name }}</p>
+        <p class="text-xs text-ink-subtle mt-1">Page: {{ fb_connection.page_name }}</p>
         {% endif %}
         {% if not channel_on.facebook %}
-        <p class="text-xs text-amber-700 mt-1">Facebook Page publishing is switched off on Akilent right now. Scheduled Facebook posts wait and go out once it's back on.</p>
+        <p class="text-xs tone-amber-fg mt-1">Facebook Page publishing is switched off on Akilent right now. Scheduled Facebook posts wait and go out once it's back on.</p>
         {% endif %}
       </div>
     </div>
@@ -106,7 +106,7 @@
       {% if fb_connection and fb_connection.status == 'active' %}
       <form method="post" action="{% url 'publishing:fb-disconnect' %}">
         {% csrf_token %}
-        <button type="submit" class="btn btn-ghost text-sm text-red-600 hover:tone-coral-bg"
+        <button type="submit" class="btn btn-danger-ghost text-sm"
                 data-confirm="Disconnect this Facebook Page?" data-confirm-danger data-confirm-label="Disconnect">Disconnect</button>
       </form>
       {% elif channel_on.facebook %}
@@ -118,7 +118,7 @@
   {# Review before publishing #}
   <div class="card card-pad">
     <h3 class="font-semibold text-ink mb-1">Review before publishing</h3>
-    <p class="text-sm text-gray-500">When on, an Owner or Admin must approve each post before it can be scheduled or published. Editing an approved post sends it back for review.</p>
+    <p class="text-sm text-ink-subtle">When on, an Owner or Admin must approve each post before it can be scheduled or published. Editing an approved post sends it back for review.</p>
     {% if is_admin %}
     <form method="post" action="{% url 'publishing:settings' %}" class="mt-3 flex flex-wrap items-center justify-between gap-3">
       {% csrf_token %}
@@ -146,9 +146,9 @@
             {{ post.caption|truncatechars:60|default:"(no caption)" }}
           </a>
           {% if post.error %}
-          <p class="text-xs text-red-700 mt-0.5 truncate">{{ post.error|truncatechars:100 }}</p>
+          <p class="text-xs tone-coral-fg mt-0.5 truncate">{{ post.error|truncatechars:100 }}</p>
           {% endif %}
-          <p class="text-xs text-gray-400">{{ post.platforms|join:", "|capfirst }} · {{ post.updated_at|date:"N j, H:i" }}</p>
+          <p class="text-xs text-ink-subtle">{{ post.platforms|join:", "|capfirst }} · {{ post.updated_at|date:"N j, H:i" }}</p>
         </div>
         <form method="post" action="{% url 'publishing:post-retry' post.pk %}" class="shrink-0">
           {% csrf_token %}

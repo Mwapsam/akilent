@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {# Messages render inline on this page, so the toast layer stays off. #}
 {% block toasts %}{% endblock %}
-{% block title %}Use a recovery code — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block title %}Use a recovery code — {{ site.app_name|default:"Akilent" }}{% endblock %}
 {% block content %}
 <div class="min-h-viewport flex items-center justify-center px-4 py-12">
   <div class="w-full max-w-sm">
@@ -10,7 +10,7 @@
         {% include "components/brand_mark.html" with class="w-12 h-12" %}
       </div>
       <h1 class="text-xl font-semibold text-ink">Use a recovery code</h1>
-      <p class="text-sm text-gray-600 mt-1">
+      <p class="text-sm text-ink-subtle mt-1">
         Enter one of the 16-character codes you saved when you turned on two-factor authentication.
       </p>
     </div>
@@ -35,7 +35,7 @@
                  placeholder="ABCD-EFGH-JKLM-NPQR"
                  aria-describedby="id_code_help"
                  class="input font-mono tracking-wider text-center text-lg">
-          <p id="id_code_help" class="text-xs text-gray-600 mt-2">
+          <p id="id_code_help" class="text-xs text-ink-subtle mt-2">
             Each code works once. Dashes and capitals don't matter.
             If you have run out of codes, contact support to reset two-factor authentication.
           </p>
@@ -44,7 +44,7 @@
       </form>
     </div>
 
-    <p class="text-center text-xs text-gray-600 mt-6">
+    <p class="text-center text-xs text-ink-subtle mt-6">
       <a href="{% url '2fa-verify' %}" class="text-accent hover:text-accent-strong">Use my authenticator app instead</a>
     </p>
   </div>

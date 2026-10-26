@@ -1026,14 +1026,23 @@
   function closeCrop(result) {
     var m = modal();
     if (!m) return;
+    if (m.classList.contains("hidden")) return; // already closed (Esc and a click together)
     m.classList.add("hidden");
     if (cropper) { cropper.destroy(); cropper = null; }
     var cb = cropCb;
     cropCb = null;
-    if (cb) cb(result);
-    var back = returnFocus && document.contains(returnFocus) ? returnFocus : document.getElementById("media-add");
-    if (back && back.focus) back.focus();
+    var opener = returnFocus;
     returnFocus = null;
+    // The shared dialog stack (app.js) lifts the page's inertness and hands focus back to
+    // whatever opened the cropper; if that is gone, "Add media" is the sensible place.
+    if (window.akDialog) window.akDialog.close(m);
+    if (!(opener && document.contains(opener))) {
+      var back = document.getElementById("media-add");
+      if (back && back.focus) back.focus();
+    }
+    // Only once the dialog has fully closed: with several images queued, the callback
+    // opens the next crop straight away, and it has to join the stack afresh.
+    if (cb) cb(result);
   }
 
   // opts.ratio: starting aspect ratio (NaN = free). opts.crossOrigin: the image is
@@ -1062,7 +1071,10 @@
     };
     img.src = src;
     m.classList.remove("hidden");
-    document.getElementById("ig-crop-panel").focus();
+    // Joins the shared dialog stack: the page behind goes inert, Esc (topmost dialog only)
+    // skips the crop, and focus starts inside.
+    if (window.akDialog) window.akDialog.open(m, { close: function () { closeCrop(null); } });
+    else document.getElementById("ig-crop-panel").focus();
   };
 
   document.addEventListener("DOMContentLoaded", function () {
@@ -1080,13 +1092,8 @@
       }
     });
 
-    // Esc skips the crop (uploads the original), the same as the Skip button.
-    document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape" && !m.classList.contains("hidden")) {
-        e.preventDefault();
-        closeCrop(null);
-      }
-    });
+    // Esc skips the crop (uploads the original), the same as the Skip button: handled by
+    // window.akDialog, which only lets the topmost dialog take it.
 
     document.getElementById("ig-crop-skip").addEventListener("click", function () { closeCrop(null); });
 

@@ -2,7 +2,7 @@
 {% block settings_content %}
 <div class="card card-pad max-w-xl">
   <h2 class="font-semibold mb-1">Opening hours</h2>
-  <p class="text-sm text-gray-500 mb-4">
+  <p class="text-sm text-ink-subtle mb-4">
     Tell Akilent when you're open. Automations use this to reply differently when
     you're closed. Leave every day unticked and you'll be treated as always open.
   </p>
@@ -21,7 +21,7 @@
     {% if can_edit %}
     <button class="btn btn-primary" type="submit">Save</button>
     {% else %}
-    <p class="text-sm text-gray-500">Only an owner or admin can change opening hours.</p>
+    <p class="text-sm text-ink-subtle">Only an owner or admin can change opening hours.</p>
     {% endif %}
   </form>
 </div>

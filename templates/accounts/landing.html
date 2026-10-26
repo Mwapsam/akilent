@@ -17,34 +17,34 @@
       /* Every value comes from docs/brand-colors.md. Roles (70/20/10):
          navy neutrals build the page; teal marks identity, success and icons;
          amber is reserved for actions (buttons) and the one reminder in the example. */
-      --ink:#0E1526;          /* gray-950 Night Ops Navy */
-      --ink-2:#161F35;        /* gray-900 */
-      --line:#26314A;         /* gray-800 */
-      --fg:#FAFBFC;           /* gray-50 */
-      --fg-mid:#DCE1E8;       /* gray-300 */
-      --fg-lo:#A8B2C4;        /* gray-400 (8.4:1 on navy) */
-      --band:#F3F5F7;         /* gray-100 Paper */
-      --card:#FFFFFF;
-      --card-soft:#FAFBFC;    /* gray-50 */
-      --card-line:#E8EDF3;    /* gray-200 */
-      --card-line-strong:#DCE1E8; /* gray-300 */
-      --band-fg:#12182B;      /* Ink */
-      --band-muted:#46516B;   /* gray-700 secondary text (8.1:1 on white) */
-      --band-soft:#657089;    /* gray-600 AA floor */
-      --tint:#F0F4FA;         /* brand-50 */
-      --signal:#1FAF9C;       /* teal-500: fills, icons on dark */
-      --signal-strong:#12766A;/* teal-700: teal text on light */
-      --signal-tint:#EDFAF7;  /* teal-50 */
-      --signal-soft:#D3F3EC;  /* teal-100 */
-      --signal-light:#74D4C4; /* teal-300: teal text on navy */
-      --cta:#FFB020;          /* amber-400 */
-      --cta-hover:#F5A312;    /* amber-500 */
-      --cta-fg:#12182B;       /* Ink, never white on amber */
-      --amber-soft:#FEEEC7;   /* amber-100 */
-      --amber-ink:#8C5508;    /* amber-800 */
-      --amber-light:#FFCA4D;  /* amber-300 */
-      --amber-deep:#452605;   /* amber-950 */
-      --amber-pale:#FDDE8A;   /* amber-200 */
+      --ink:var(--color-gray-950);          /* gray-950 Night Ops Navy */
+      --ink-2:var(--color-gray-900);        /* gray-900 */
+      --line:var(--color-gray-800);         /* gray-800 */
+      --fg:var(--color-gray-50);           /* gray-50 */
+      --fg-mid:var(--color-gray-300);       /* gray-300 */
+      --fg-lo:var(--color-gray-400);        /* gray-400 (8.4:1 on navy) */
+      --band:var(--color-gray-100);         /* gray-100 Paper */
+      --card:white;
+      --card-soft:var(--color-gray-50);    /* gray-50 */
+      --card-line:var(--color-gray-200);    /* gray-200 */
+      --card-line-strong:var(--color-gray-300); /* gray-300 */
+      --band-fg:var(--color-ink-fixed);      /* Ink */
+      --band-muted:var(--color-gray-700);   /* gray-700 secondary text (8.1:1 on white) */
+      --band-soft:var(--color-gray-600);    /* gray-600 AA floor */
+      --tint:var(--color-brand-50);         /* brand-50 */
+      --signal:var(--color-teal-500);       /* teal-500: fills, icons on dark */
+      --signal-strong:var(--color-teal-700);/* teal-700: teal text on light */
+      --signal-tint:var(--color-teal-50);  /* teal-50 */
+      --signal-soft:var(--color-teal-100);  /* teal-100 */
+      --signal-light:var(--color-teal-300); /* teal-300: teal text on navy */
+      --cta:var(--color-amber-400);          /* amber-400 */
+      --cta-hover:var(--color-amber-500);    /* amber-500 */
+      --cta-fg:var(--color-on-amber);       /* Ink, never white on amber */
+      --amber-soft:var(--color-amber-100);   /* amber-100 */
+      --amber-ink:var(--color-amber-800);    /* amber-800 */
+      --amber-light:var(--color-amber-300);  /* amber-300 */
+      --amber-deep:var(--color-amber-950);   /* amber-950 */
+      --amber-pale:var(--color-amber-200);   /* amber-200 */
       --radius-lg:16px; --radius-md:12px;
       --ease:cubic-bezier(.16,1,.3,1);
     }

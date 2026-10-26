@@ -4,7 +4,7 @@
 {% block settings_content %}
 <div class="card card-pad max-w-xl">
   <h2 class="font-semibold mb-1">Email sign-in codes</h2>
-  <p class="text-sm text-gray-600 mb-4">
+  <p class="text-sm text-ink-subtle mb-4">
     Get a six-digit code by email when you sign in. Codes expire after 10 minutes and work once.
     They are for accounts without an authenticator app or passkey.
   </p>
@@ -16,7 +16,7 @@
   {% endif %}
 
   {% if enrolled %}
-    <p class="text-sm mb-4">Status: <span class="font-medium text-green-600">on</span></p>
+    <p class="text-sm mb-4">Status: <span class="font-medium tone-teal-fg">on</span></p>
     <form method="post" class="space-y-3">
       {% csrf_token %}
       <input type="hidden" name="action" value="send_disable">
@@ -38,11 +38,11 @@
     </form>
   {% elif strong_factor %}
     <p class="text-sm mb-4">
-      Status: <span class="font-medium text-gray-600">off</span>.
+      Status: <span class="font-medium text-ink-subtle">off</span>.
       Your account already uses an authenticator app or passkey, so email codes are not offered.
     </p>
   {% else %}
-    <p class="text-sm mb-4">Status: <span class="font-medium text-gray-600">off</span></p>
+    <p class="text-sm mb-4">Status: <span class="font-medium text-ink-subtle">off</span></p>
     <form method="post" class="space-y-3">
       {% csrf_token %}
       <input type="hidden" name="action" value="send_enrol">

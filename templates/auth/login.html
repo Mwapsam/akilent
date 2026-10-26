@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Sign in — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block title %}Sign in — {{ site.app_name|default:"Akilent" }}{% endblock %}
 {% block content %}
 <div class="min-h-viewport flex items-center justify-center px-4 py-12">
   <div class="w-full max-w-sm">
@@ -7,8 +7,8 @@
       <div class="inline-flex mb-4">
         {% include "components/brand_mark.html" with class="w-12 h-12" %}
       </div>
-      <h1 class="text-xl font-semibold text-ink">{{ site.app_name|default:"Automator" }}</h1>
-      <p class="text-sm text-gray-500 mt-1">Sign in to continue</p>
+      <h1 class="text-xl font-semibold text-ink">{{ site.app_name|default:"Akilent" }}</h1>
+      <p class="text-sm text-ink-subtle mt-1">Sign in to continue</p>
     </div>
 
     <div class="card card-pad sm:!p-8">
@@ -42,7 +42,7 @@
       </form>
     </div>
 
-    <p class="text-center text-xs text-gray-500 mt-6">
+    <p class="text-center text-xs text-ink-subtle mt-6">
       New here? <a href="{% url 'signup' %}" class="text-accent hover:text-accent-strong">Create an account</a>
       &middot;
       <a href="{% url 'resend-verification' %}" class="text-accent hover:text-accent-strong">Resend confirmation link</a>

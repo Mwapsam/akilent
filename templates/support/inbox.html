@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load ui %}
-{% block title %}Support — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block title %}Support — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
 <div class="flex gap-4 h-full -mt-4 -mx-4 sm:-mx-6">
@@ -54,7 +54,7 @@
       </div>
     </header>
 
-    <div id="inbox-body"
+    <div id="inbox-body" data-auto-refresh
          hx-get="{{ request.get_full_path }}"
          hx-trigger="every 30s"
          hx-swap="innerHTML">

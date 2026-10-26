@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Settings — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block title %}Settings — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block page_header %}
 <div class="mb-6">
   <h1 class="text-2xl font-semibold tracking-tight">Settings</h1>
-  <p class="text-sm text-gray-500 mt-1">Manage your profile, business details, security and team.</p>
+  <p class="text-sm text-ink-subtle mt-1">Manage your profile, business details, security and team.</p>
 </div>
 {% endblock %}
 
@@ -13,39 +13,39 @@
   <nav class="flex gap-1 overflow-x-auto" aria-label="Settings">
     <a href="{% url 'settings-profile' %}"
        class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
-       {% if active_tab == 'profile' %}border-brand-600 text-accent-strong{% else %}border-transparent text-gray-500 hover:text-ink{% endif %}"
+       {% if active_tab == 'profile' %}border-brand-600 text-accent-strong{% else %}border-transparent text-ink-subtle hover:text-ink{% endif %}"
        {% if active_tab == 'profile' %}aria-current="page"{% endif %}>Profile</a>
     <a href="{% url 'settings-business' %}"
        class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
-       {% if active_tab == 'business' %}border-brand-600 text-accent-strong{% else %}border-transparent text-gray-500 hover:text-ink{% endif %}"
+       {% if active_tab == 'business' %}border-brand-600 text-accent-strong{% else %}border-transparent text-ink-subtle hover:text-ink{% endif %}"
        {% if active_tab == 'business' %}aria-current="page"{% endif %}>Business</a>
     <a href="{% url 'settings-security' %}"
        class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
-       {% if active_tab == 'security' %}border-brand-600 text-accent-strong{% else %}border-transparent text-gray-500 hover:text-ink{% endif %}"
+       {% if active_tab == 'security' %}border-brand-600 text-accent-strong{% else %}border-transparent text-ink-subtle hover:text-ink{% endif %}"
        {% if active_tab == 'security' %}aria-current="page"{% endif %}>Security</a>
     <a href="{% url 'settings-team' %}"
        class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
-       {% if active_tab == 'team' %}border-brand-600 text-accent-strong{% else %}border-transparent text-gray-500 hover:text-ink{% endif %}"
+       {% if active_tab == 'team' %}border-brand-600 text-accent-strong{% else %}border-transparent text-ink-subtle hover:text-ink{% endif %}"
        {% if active_tab == 'team' %}aria-current="page"{% endif %}>Team</a>
     <a href="{% url 'settings-hours' %}"
        class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
-       {% if active_tab == 'hours' %}border-brand-600 text-accent-strong{% else %}border-transparent text-gray-500 hover:text-ink{% endif %}"
+       {% if active_tab == 'hours' %}border-brand-600 text-accent-strong{% else %}border-transparent text-ink-subtle hover:text-ink{% endif %}"
        {% if active_tab == 'hours' %}aria-current="page"{% endif %}>Opening hours</a>
     <a href="{% url 'settings-ai' %}"
        class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
-       {% if active_tab == 'ai' %}border-brand-600 text-accent-strong{% else %}border-transparent text-gray-500 hover:text-ink{% endif %}"
+       {% if active_tab == 'ai' %}border-brand-600 text-accent-strong{% else %}border-transparent text-ink-subtle hover:text-ink{% endif %}"
        {% if active_tab == 'ai' %}aria-current="page"{% endif %}>AI</a>
     <a href="{% url 'settings-tools' %}"
        class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
-       {% if active_tab == 'tools' %}border-brand-600 text-accent-strong{% else %}border-transparent text-gray-500 hover:text-ink{% endif %}"
+       {% if active_tab == 'tools' %}border-brand-600 text-accent-strong{% else %}border-transparent text-ink-subtle hover:text-ink{% endif %}"
        {% if active_tab == 'tools' %}aria-current="page"{% endif %}>Optional tools</a>
     <a href="{% url 'settings-integrations' %}"
        class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
-       {% if active_tab == 'integrations' %}border-brand-600 text-accent-strong{% else %}border-transparent text-gray-500 hover:text-ink{% endif %}"
+       {% if active_tab == 'integrations' %}border-brand-600 text-accent-strong{% else %}border-transparent text-ink-subtle hover:text-ink{% endif %}"
        {% if active_tab == 'integrations' %}aria-current="page"{% endif %}>Integrations</a>
     <a href="{% url 'settings-api-keys' %}"
        class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
-       {% if active_tab == 'api_keys' %}border-brand-600 text-accent-strong{% else %}border-transparent text-gray-500 hover:text-ink{% endif %}"
+       {% if active_tab == 'api_keys' %}border-brand-600 text-accent-strong{% else %}border-transparent text-ink-subtle hover:text-ink{% endif %}"
        {% if active_tab == 'api_keys' %}aria-current="page"{% endif %}>API keys</a>
   </nav>
 </div>

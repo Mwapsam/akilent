@@ -4,7 +4,7 @@
   <div>
     <p class="text-sm"><a href="{% url 'settings-ai' %}" class="text-accent underline">AI settings</a></p>
     <h2 class="font-semibold mb-1">Knowledge base</h2>
-    <p class="text-sm text-gray-600">
+    <p class="text-sm text-ink-subtle">
       The questions your customers ask and your answers. AI answers from these, alongside your <a class="underline" href="{% url 'settings-ai' %}">business notes</a>.
       Anything imported or found on your website waits under <strong>Needs review</strong> until you approve it.
     </p>
@@ -13,7 +13,7 @@
   <div class="rounded-xl border border-border p-4 flex items-center justify-between gap-4">
     <div>
       <h3 class="font-semibold">Try a question</h3>
-      <p class="text-sm text-gray-600">Ask what a customer might ask and see how AI would respond.</p>
+      <p class="text-sm text-ink-subtle">Ask what a customer might ask and see how AI would respond.</p>
     </div>
     <a href="{% url 'settings-ai-playground' %}" class="btn btn-ghost btn-sm whitespace-nowrap">Open playground</a>
   </div>
@@ -29,13 +29,13 @@
       </form>
       {% endif %}
     </div>
-    <p class="text-xs text-gray-500">AI doesn't use these yet. Check each answer, fix anything that's wrong, then approve.</p>
+    <p class="text-xs text-ink-subtle">AI doesn't use these yet. Check each answer, fix anything that's wrong, then approve.</p>
     <ul class="divide-y divide-border">
       {% for entry in review %}
       <li class="py-3">
         <form method="post" action="{% url 'settings-ai-knowledge-edit' entry.pk %}" class="space-y-2">
           {% csrf_token %}
-          <p class="text-xs text-gray-500">{{ entry.get_origin_display }}{% if entry.source_url %} · <a class="underline" href="{{ entry.source_url }}" target="_blank" rel="noopener noreferrer">{{ entry.source_url|truncatechars:60 }}</a>{% endif %}</p>
+          <p class="text-xs text-ink-subtle">{{ entry.get_origin_display }}{% if entry.source_url %} · <a class="underline" href="{{ entry.source_url }}" target="_blank" rel="noopener noreferrer">{{ entry.source_url|truncatechars:60 }}</a>{% endif %}</p>
           <label class="label" for="rv-q-{{ entry.pk }}">Question</label>
           <input id="rv-q-{{ entry.pk }}" name="title" class="input" maxlength="200" value="{{ entry.title }}" {% if not can_edit %}disabled{% endif %} required>
           <label class="label" for="rv-a-{{ entry.pk }}">Answer</label>
@@ -64,8 +64,8 @@
         {% for entry in entries %}
         <tr>
           <td data-label="Question">{{ entry.title }}{% if not entry.is_active %} <span class="badge badge-neutral">Off</span>{% endif %}
-            {% if entry.origin != "manual" %}<span class="block text-xs text-gray-500">{{ entry.get_origin_display }}</span>{% endif %}</td>
-          <td data-label="Answer" class="text-gray-600">{{ entry.content|truncatechars:80 }}</td>
+            {% if entry.origin != "manual" %}<span class="block text-xs text-ink-subtle">{{ entry.get_origin_display }}</span>{% endif %}</td>
+          <td data-label="Answer" class="text-ink-subtle">{{ entry.content|truncatechars:80 }}</td>
           <td class="whitespace-nowrap">
             {% if can_edit %}
             <details class="inline-block">
@@ -137,7 +137,7 @@
         <label class="label" for="kb-paste">Paste your questions, with or without answers</label>
         <textarea id="kb-paste" name="text" class="textarea" rows="8" required
                   placeholder="How do I create an account?&#10;Sign up and confirm your email.&#10;&#10;Does it cost anything?&#10;No, joining is free."></textarea>
-        <p class="text-xs text-gray-500">Put each question on its own line with its answer underneath, and a blank line between questions. A list of questions on their own works too: AI drafts answers from what you've already told it, and you check them before they're used.</p>
+        <p class="text-xs text-ink-subtle">Put each question on its own line with its answer underneath, and a blank line between questions. A list of questions on their own works too: AI drafts answers from what you've already told it, and you check them before they're used.</p>
         <button class="btn btn-primary btn-sm">Import</button>
       </form>
       <form method="post" action="{% url 'settings-ai-knowledge-import' %}" enctype="multipart/form-data" class="flex flex-wrap items-end gap-2">
@@ -154,11 +154,11 @@
       {% csrf_token %}
       <label class="label" for="kb-url">Your website</label>
       <input id="kb-url" name="url" type="url" class="input" placeholder="https://yourbusiness.com" value="{{ website_hint }}" required>
-      <p class="text-xs text-gray-500">AI reads up to 10 pages of your site and suggests questions and answers from them. Nothing is used until you approve it.</p>
+      <p class="text-xs text-ink-subtle">AI reads up to 10 pages of your site and suggests questions and answers from them. Nothing is used until you approve it.</p>
       <button class="btn btn-primary btn-sm">Read my website</button>
     </form>
 
-    <p class="text-xs text-gray-500">You can also teach AI from the inbox: when your team answers a question AI handed over, choose <strong>Save as answer</strong>.</p>
+    <p class="text-xs text-ink-subtle">You can also teach AI from the inbox: when your team answers a question AI handed over, choose <strong>Save as answer</strong>.</p>
   </section>
   {% else %}
   <div class="alert alert-info">

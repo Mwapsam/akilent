@@ -376,3 +376,295 @@ Light-mode contrast (about 105 per viewport, mostly `text-gray-400/500` in page 
 - Checks now all pass: `ruff check .`, `ruff format --check .`, `mypy .` (620 files). `pytest apps/core` exits 0.
 - `docs/design/qa/` was added to `.gitignore` because screenshots are not committed.
 - New tracked-diff SHA-256 prefix: `a4ced581b4130025`. This replaces Entry 2's `5826da7900639f66` for review purposes.
+
+## Entry 3: Phase 1 (conversations / inbox), 2026-10-25
+
+Phase 0 acceptance: you committed it as `83f5262` and asked for the next phase, which this log takes as your acceptance sign-off for Phase 0. Real-device and screen-reader checks are still open for it.
+
+### Tested code
+
+| | |
+|---|---|
+| HEAD | `83f52625a5e3ba93184d822e3fb4145a5c833ecc` (Phase 0 committed by you; Phase 1 uncommitted) |
+| Tracked changes | 26 files, +845 −520. `git diff HEAD --binary -- . ':!docs/design/ui-quality-log.md'` SHA-256 `167d69c700763e83…` |
+| Untracked files (SHA-256 prefix) | `apps/conversations/tests/test_inbox_confidence.py` `ec5596dc…` · `tools/qa/inbox_qa.mjs` `11131806…` |
+
+### What changed
+
+| Area | Change | Files |
+|---|---|---|
+| Send outcomes (truthfulness) | A failed send used to remove the bubble and put the text back as if nothing had gone, even when the connection dropped mid-request or the server failed part-way. The message may already have reached the customer, so pressing Send again could send it twice. Sends now have three outcomes: *not sent* (a 4xx, a sign-in redirect, or offline before sending: the text goes back with the reason beside the box), *not confirmed* (network drop, 30s timeout, 5xx: the bubble stays with Check now / Put back in reply box / Dismiss, it survives a reload, and it is swapped for the real message when the thread shows it), and *sent*. Voice notes and files use the same rules. | `static/js/chat.js`, `_conversation_pane.html` |
+| Connection status | After 2 failed polls in a row the thread says "Not connected…" (or "You're offline…"). It clears on the next good poll, and `online` triggers one immediately. | `chat.js`, pane |
+| Automatic refreshes (shared JS) | Timed, load and SSE refreshes no longer raise toasts. Before, an unreachable server added an error toast every 8 seconds on the inbox, and since Phase 0 error toasts stay until dismissed. The region gets `data-stale` and `ak-refresh-failed` instead, and the inbox list shows one notice. This also applies to the other 5 polling regions. | `static/js/app.js`, `inbox.html` |
+| Two-pane inbox (**existing bug**) | Since `f2d710e` turned on htmx View Transitions, the swap runs *after* `htmx.ajax` resolves. `inbox_pane.js` read the empty pane, treated it as a failure, and did a full page load on every click in Chrome, losing the list beside the conversation. It now waits for the pane to settle. | `static/js/inbox_pane.js` |
+| Pane race safety | Clicking B then C opened B, because htmx queued C behind B on the shared source element. Now the pane is the source, an in-flight load is aborted first, and a late answer for anything but the latest click is dropped before it swaps. Verified with B's answer held back 1.5s. | `inbox_pane.js` |
+| Pane load failure | A conversation that fails to load (offline, timeout, 5xx) now shows the error state in the pane with Try again. Before, it navigated away, which offline meant the browser's error page. 403/404 still go to the full page, which explains them. | `inbox_pane.js`, `inbox.html` |
+| Details drawer | Below the column breakpoint the details panel now follows the dialog contract: `role="dialog"`, focus in and back, Esc for the topmost dialog only (it used a window-wide Esc), page behind inert, backdrop exempt so a tap closes it, and it is released if the window widens while it is open. | pane, `chat.js` |
+| Styles | The pane's 358-line inline `<style>` (re-sent with every conversation opened) moved to `assets/app.css`, unlayered as before. The Instagram palette now uses `.cv[data-channel="instagram"]`. Failure text uses `--tone-coral-fg`. | `assets/app.css`, pane |
+| Touch targets | On touch screens these are now 44px: the header's Back, Assign, More and Details buttons (were 36px), the composer's attach and saved-reply buttons (36px), and "Remind me tomorrow" / "Track as interested" (28px). The avatar hides while the pane is narrow, so the name keeps its width (118px at 360, was 108). | `assets/app.css` |
+| Tokens | Conversations drift went from 112 to **0** (86 grey-text, 40 hex in the moved style block). "Suggested next" on `components/next_action.html` was 3.30:1 in light and is now `text-ink-subtle`, `text-xs`. The whole-site baseline is down from 1,250 to 1,134. | 18 templates, `drift_baseline.json` |
+| Copy | The reply box placeholder follows the 24h window ("Window closed: send a template below" / "…a reply may not be delivered"), matching the banner. | pane |
+
+### Automated results
+
+| Command | Result |
+|---|---|
+| `poetry run ruff check .` / `ruff format --check .` / `mypy .` | Pass / 1,380 formatted / no issues in 620 files |
+| `poetry run pytest -n 6 --junitxml …` (full suite, nothing else running) | **4,654 tests: 0 failures, 0 errors, 25 skipped** (110s) |
+| Same, default `-n auto` while the dev server was up | 1 failure: `test_import_5000_contacts` at 68.1s against its 60s budget (the known timing test). It passes alone. |
+| New: `apps/conversations/tests/test_inbox_confidence.py` | 9 tests (markup contract for send outcomes, connection notice, drawer, list notice, pane error region, placeholder) |
+
+### Browser task verification (automated: `tools/qa/inbox_qa.mjs`, headless Chrome 155 with touch emulation; every POST intercepted, so nothing reached a customer)
+
+**26 of 26 pass:**
+- Sends: refused, server error is unconfirmed, unconfirmed survives a reload, it reconciles when the real message arrives, a network drop is unconfirmed, put back in reply box, offline keeps the text.
+- Thread: offline notice, reconnects, server unreachable, recovers.
+- Drawer: opens as a dialog, Esc closes and restores focus, backdrop closes.
+- Phone: layout at 390 and 360 (reply box on screen, no sideways scroll, 16px input, back link); Back returns to the list; the draft survives list → thread.
+- List: a failed refresh is quiet (0 toasts after 2 failed refreshes, 1 notice), and it recovers.
+- Pane: a plain click loads in place, a load failure shows in place, Try again loads it, the last click wins with B delayed, and wide details are a column, not a dialog.
+
+**Rendered contrast scan** (`QA_SCAN=1`, Phase 0 `ui_scan.js`). The forced states were an unconfirmed bubble, a failed bubble, a send error and the connection notice. Inbox at 390, thread at 390 and two-pane at 1280, light and dark: **0 contrast failures, 0 overflow**. Remaining "under 44px" items:
+- the reply textarea, which sits inside a 44px+ box
+- the "Overdue only" checkbox, whose label is the 75×36 target
+- desktop (fine pointer) nav links
+
+Screenshots are in `docs/design/qa/phase1/` (local only).
+
+### Backend gaps (need separate authorization)
+
+- **G1: inbox sends are not deduplicated.** `ReplyAction` already accepts `idempotency_key`, and WhatsApp and Instagram dedupe on it. But `conversations:detail` (`views.py`, action `reply`) doesn't pass one through, so a person who puts back an unconfirmed message and sends it again can send a duplicate. The UI therefore never offers a plain Retry and says "may or may not have been sent". The fix would be to forward a client key from the composer. It is small, but it changes a view, so it's left for you to authorize.
+
+### Decisions recorded
+
+- **M5, tablet (768–1023px):** the phone list↔thread layout stays. At 768, two panes would give about 380px each, narrower than a phone thread. The details panel is already a column only once the pane itself is wide enough. Revisit this on a real tablet.
+- **24h window closed:** the reply box stays usable. The backend decides: Instagram refuses with a clear reason (shown as *not sent*), and WhatsApp marks it Failed with Meta's reason. The banner and placeholder say so beforehand.
+
+### Observations (not fixed)
+
+- On a 1280×800 laptop with the "Suggested next" card, the connection notice and a send error all showing, the thread is about 100px tall. That comes from the existing split-height calculation; the card can be dismissed. Revisit if pilots report it.
+- `static/css/app.css` is served without a content hash in dev, so a browser can keep a stale copy (one QA run did). Production's static storage should be confirmed to hash file names.
+
+### Not verified yet
+
+- Real devices: iOS Safari keyboard (`--kb-inset` with the reply box), Android Back, safe areas.
+- Screen reader: announcements for the "Not confirmed" line, the connection notice and the drawer.
+- Live SSE (the dev server runs without it). The poll fallback is what was tested.
+
+### Temporary QA infrastructure added
+
+| Item | Remove with |
+|---|---|
+| 3 local conversations, "QA Phase1 Alpha/Bravo/Charlie" (contacts + 1 inbound message each, demo workspace, SMS, nothing sent) | Delete those contacts in Customers, or restore `../automator-db-backups/` |
+| Chrome profile `chrome-profile-p1` in the session scratchpad | Goes with the scratchpad |
+
+### Sign-offs
+
+| Gate | Status |
+|---|---|
+| Implementation | **Done** for the Phase 1 scope above. G1 is held as a backend gap. |
+| Verification | **Done** (automated + 26 browser checks + rendered scan). **Open:** real devices, screen reader (yours). |
+| Acceptance | **Pending your sign-off.** |
+
+### Entry 3 addendum: code review fixes (10 findings), 2026-10-25
+
+All 10 findings were valid. Each fix below has a browser check, except where noted.
+
+| # | Finding | Fix | Verified by |
+|---|---|---|---|
+| 1 | The pane's stale-answer guard dropped in-pane forms that post elsewhere (tags, snooze), so their re-render was lost. | Pane loads now carry an `X-Inbox-Pane-Load` header, and only those are subject to the guard. Keying on the event's element wasn't enough, because htmx fires swap events on the target, as the first attempt showed. | `pane.in-pane-form-swaps` (real tag POST) |
+| 2 | Any `load` trigger (and custom events on polled elements) was silenced, so the dashboard panels failed with nothing said. | Automatic means timed (the element's htmx `polling` flag, no event object) or `sse:…`, nothing else. | `load.one-off-failure-said` (dashboard 500 gives a toast); `list.refresh-failure-quiet` still passes |
+| 3 | An unknown media send mutated a raw object, so Alpine never re-rendered it. | Replaced through `splice` on the reactive array. | `media.unknown-renders` |
+| 4 | An unknown media bubble could never reconcile, because it only matched on text. | It pairs with the first outbound media message after it was attempted (±60s). | `media.unknown-reconciles` |
+| 5 | `closePane()` left an in-flight load able to land and push history. | `closePane` bumps the load counter and aborts. The guard also drops pane loads once the pane is closed. | `pane.close-drops-late-load` |
+| 6 | Restored unconfirmed sends were appended out of time order. | One `sortMessages()` is used on restore and on every poll. | `send.restored-in-time-order` |
+| 7 | The settle match used the exact URL string (absolute vs relative), so a load could stall 4s. | Compared by pathname, and only for pane loads. | Covered by the pane checks (no 4s stall) |
+| 8 | The silence flag lived on the element and could outlive a cancelled request. | The flag is on the request (`xhr._akAuto`), and the element-level marker is gone. | Code review (cancellation not reproducible headless) |
+| 9 | The offline check was duplicated in `postSend`, which left dead branches. | `postSend` no longer checks; each caller checks once, and the dead branches are removed. | `send.offline-kept` |
+| 10 | The pane retry patched the shared error state's markup from outside. | New region hook: `data-error-retry-event`. The pane listens for `inbox-pane-retry` and reloads through `openInPane` (spec §18). | `pane.retry-loads` |
+
+Results:
+- **Browser:** `tools/qa/inbox_qa.mjs` **32 of 32** (26 + 6 new).
+- **Tests:** `pytest apps/conversations apps/core` exits 0.
+- **Lint:** `ruff check` passes.
+- **Tree:** tracked diff (excluding this log) SHA-256 `f07348834fd83d77…`, 27 files, +972 −526. Untracked: `test_inbox_confidence.py` `7788f81f…`, `tools/qa/inbox_qa.mjs` `66de50ad…`.
+- **QA data:** a few `qa-tag-…` / `qa-dbg-tag` tags were added to the local QA contacts by these checks.
+
+### Entry 3 addendum 2: second code review (10 findings), 2026-10-25
+
+All 10 were valid. Finding 1 was a regression I had introduced.
+
+| # | Finding | Fix | Verified by |
+|---|---|---|---|
+| 1 | **Regression:** the follow-ups-due toast (an `X-Toast` on an SSE refresh) was suppressed by the automatic-refresh silencing. | Automatic refreshes silence only their *failures*. Server-sent `X-Toast` messages always show. | `auto.server-toast-still-shown`, `auto.push-failure-quiet` |
+| 2 | A row whose pane load failed couldn't be clicked again. | A click is ignored only when that conversation is already open *and loaded*. | `pane.failed-row-reclickable` |
+| 3 | A "Not confirmed" reply could be matched by an AI reply (or a teammate's) with the same words. | Never an AI message, and only messages created after the attempt (±60s). A teammate's identical words at the same moment remain ambiguous: **backend gap G2** below. | `send.ai-reply-not-matched` |
+| 4 | A file's caption was lost when the upload's outcome was unknown. | The caption stays on the bubble, "Put caption back in reply box" returns it, and it survives a reload (stored like a text reply). | `media.caption-kept-on-unknown`, `-survives-reload`, `-put-back` |
+| 5 | Automatic detection read htmx internals (`htmx-internal-data.polling`). | Explicit opt-in, `data-auto-refresh` (value: extra event names), added to the 7 polling/SSE elements. No htmx internals are read. Limitation, documented in the spec: `htmx.ajax()` sends no event, so code must not use an opted-in element as the source of a user request. | `auto.code-request-not-silenced`; list checks still pass |
+| 6 | The online refresh wasn't automatic: a failure toasted, and a success left the stale notice up. | `#inbox-body` lists `inbox-refresh` as one of its refresh events, so the online refresh (and the post-action refresh) clears the notice on success and stays quiet on failure. | `list.online-refresh-clears-notice` |
+| 7 | A failing form inside the pane (snooze, assign, tags) during a pane load was read as the load failing. | The pane's error listener counts only its own load (pane-load header + path). | `pane.form-error-doesnt-fail-load` |
+| 8 | Client-side exceptions in `apply()` showed as "Not connected". | Transport failures and client errors are now handled separately. A bad payload is logged to the console and doesn't count toward "Not connected". | `thread.client-bug-not-connection` |
+| 9 | Sends had their own failure rules, which disagreed with `SAVE_COPY` (a 5xx was "may have sent" in one and "didn't save" in the other). | One classifier: `window.akFailure` (`describe`, `maybeSaved`, `SAVE_COPY`), used by `chat.js`. Requests aren't atomic (no `ATOMIC_REQUESTS`), so a 500 can follow a committed change. `SAVE_COPY.server` now says "may or may not have saved", and 502/503/504 are a new `gateway` kind. The broken styleguide demo button for this toast (unescaped apostrophe) is fixed. | Send checks; full suite |
+| 10 | `PANE_HEADER` was duplicated as a literal. | It is built from the constant. | Pane checks |
+
+**Older bug found while verifying (not from the review):** `akilent.onPage` ran a hook immediately when a deferred script registered it and again on `DOMContentLoaded`, leaving **two live copies** of each page script. The two-pane inbox loaded every conversation twice, with the first load aborted, and the DNS stale re-check ran twice. Hooks now run immediately only once the start-up pass has happened. Separately, `openInPane` no longer turns a cancelled load into a full page load.
+
+**Backend gap G2:** human replies record no sender (`Message.metadata.sent_by` is set only for ai/automation/system). The feed therefore can't tell your send from a teammate's identical words, so an unconfirmed bubble can be cleared by a teammate's same-text message within a minute. Recording the sending user (and exposing it in the feed) would close this. It needs your authorization, like G1.
+
+Results:
+- **Browser:** `tools/qa/inbox_qa.mjs` **43 of 43** (32 + 11 new). The harness interceptor now handles empty bodies and custom response headers.
+- **Full suite:** `pytest -n 6`: **4,654 tests, 0 failures, 0 errors, 25 skipped**.
+- **Lint and types:** `ruff check`, `ruff format --check` and `mypy` (620 files) pass.
+- **Tree:** tracked diff (excluding this log) SHA-256 `e6cd3b1dd88397e6…`, 33 files, +1068 −540. Untracked: `test_inbox_confidence.py` `7788f81f…`, `tools/qa/inbox_qa.mjs` `a50693f9…`.
+
+### Entry 3 addendum 3: screen flicker (reported by you), 2026-10-25
+
+- **Cause.** With `htmx.config.globalViewTransitions` on (older code, from `f2d710e`), every htmx swap ran a whole-document View Transition. That included the inbox list's 8-second self-refresh, which swaps whenever the content changes (the waiting times tick over every minute), so the whole screen cross-faded every few seconds. Measured with `QA_FLICKER=1 tools/qa/inbox_qa.mjs`: one full-page transition per 20 seconds on the inbox list and in the two-pane view, with no layout shift. The Phase 1 pane fix made the two-pane inbox actually stay on screen, which made this visible.
+- **Fix** (`static/js/app.js`): `htmx:beforeTransition` is cancelled for anything but a boosted page navigation. Background refreshes, pane loads and form re-renders now swap in place without cross-fading the screen.
+- **Verified:** 0 view transitions and 0 layout shift on the inbox list and in a conversation, at 1280 and 390. Harness still 43/43. Page-to-page navigation keeps its transition by design; that wasn't measured in this run.
+
+## Entry 4: Phase 3 (accounts: sign-up, onboarding, settings, security), 2026-10-25
+
+You asked for "phase 3" after Phase 1. Phase 2 (publishing) is **skipped for now, not done**, and its R4 (composer fields under 16px) stays open. Phase 1 acceptance is taken from your instruction to move on. Its real-device and screen-reader checks are still open.
+
+### Tested code
+
+| | |
+|---|---|
+| HEAD | `83f5262` (Phase 1 and Phase 3 both uncommitted, so this diff covers both) |
+| Tracked changes | 115 files, +1477 −876. `git diff HEAD --binary -- . ':!docs/design/ui-quality-log.md'` SHA-256 `9ab2d74f184685f1…` |
+| Untracked (SHA-256 prefix) | `apps/accounts/tests/test_accounts_ui_quality.py` `f8833f33…` · `tools/qa/accounts_qa.mjs` `2c36ad89…` · `tools/qa/inbox_qa.mjs` `5899d2e4…` (QA_FLICKER mode added) · `apps/conversations/tests/test_inbox_confidence.py` `7788f81f…` |
+
+### What changed
+
+| Area | Change |
+|---|---|
+| Tokens / drift | Accounts + auth went from **164 to 0** findings: grey text to ink tokens, 10/11px labels to `text-xs`, and the landing page's `:root` palette now points at the app's colour tokens instead of repeating the hex values. The three third-party logo colours (Instagram, Facebook, HubSpot) on Integrations are a documented exception. The whole-site baseline is down from 1,134 to 970. |
+| Fixed ink | New `--color-ink-fixed` (#12182B, never flips with the theme). `--color-on-amber` points at it, and the landing page uses it for text on light bands. |
+| Status colours | Stock `text-green/red/amber-*` in accounts and auth (green-600 and amber-600 measure about 3.3:1 on white, and the red-500 required-field asterisk about 3.8:1) became new `tone-teal-fg` / `tone-amber-fg` / `tone-coral-fg` utilities, which are theme-aware. The integrations Disconnect buttons use `btn-danger-ghost`. |
+| Confirmation | Changing a member's role (Make admin / Make member) and revoking an invitation now ask first. Everything else destructive already did, and toggles and Sign out don't need to. |
+| Outcome said | A refused save whose view answers JSON `{"error": …}` now shows that reason ("The workspace owner can't be removed") instead of the generic "You don't have permission" (`static/js/app.js`, `jsonError`, 4xx only). |
+| Truthful copy | The sign-up toast said "We've emailed a link" at the moment the email was only queued (Celery). It now says "We're sending a link to verify your address." The email-confirmation pages keep their usual "we've sent" wording (delivery takes seconds). |
+| Brand fallback (B1, template part) | All 74 template fallbacks `default:"Automator"` became `"Akilent"`. |
+
+### Automated results
+
+| Command | Result |
+|---|---|
+| `pytest -n 6 --junitxml …` (full suite) | **4,659 tests: 0 failures, 0 errors, 25 skipped** |
+| `ruff check` / `ruff format --check` / `mypy .` | Pass / pass / no issues in 620 files |
+| New: `apps/accounts/tests/test_accounts_ui_quality.py` | 5 tests: confirmations, no stock status colours, landing on tokens, fixed ink, no "Automator" in templates |
+
+### Browser task verification (`tools/qa/accounts_qa.mjs`, headless Chrome 155)
+
+Safety: requests to any host but the local server were blocked, billing POSTs were faked, the dev server ran with `EMAIL_HOST=127.0.0.1 EMAIL_PORT=9` (no mail can leave), and the verification email is queued to a Celery queue nothing consumes.
+
+**12 of 12 pass** (the exit-gate tasks, all keyboard-only):
+- **Sign-up at 390:** channel picked with Space, plan (Trial) picked with Space, every field reached with Tab and typed, then submitted with Enter. Lands on the first setup step with the "account is ready" toast.
+- **Onboarding** loads at 390 with no sideways scroll.
+- **Two-factor in dark at 1280:**
+  - Skip link first (visible ring), then Esc closes the welcome tour.
+  - The QR code has alt text.
+  - The 6-digit code was computed from the shown key and submitted with Enter, which went to the recovery codes page.
+  - The security overview then says "Configured".
+- **Profile change:** a first-name edit saved with Enter, with the "Profile updated." toast, then restored.
+- **Focus was visible at every Tab stop** in all of the above (0 stops without a ring).
+- **Scan of 17 account screens:** 390 and 1280, light and dark, 68 page loads in all. **0 contrast failures, 0 overflow, 0 unlabelled fields, 0 fields under 16px on phones.**
+
+Screenshots are in `docs/design/qa/phase3/` (local only).
+
+### Backend gaps (need separate authorization)
+
+- **G3, welcome tour (R5):** dismissal lives only in the browser's `localStorage`, so the tour returns on every new browser or device. The existing "Not now" store only accepts known suggestion keys and expires after a set number of days. Remembering it per user needs a small model/view change.
+- **G4, product name (B1, server part):** `SiteSettings.app_name` defaults to "Automator" in the model and its migration. So do the Python fallbacks (`apps/accounts/settings_views.py`, `views.py`, `core/console/views.py`, `email/services/html_email.py`) and the SES "Source" tag. Your local database still holds "Automator", which is why the sidebar shows it. Production shows whatever is set in the console. Templates are fixed, but the rest is backend.
+
+### Not done in this phase
+
+- Settings forms were not moved onto `render_field`. They already have labels and 16px fields, and the scan found none unlabelled. A wholesale rewrite would be churn without a defect behind it.
+- Real-device and screen-reader checks (yours).
+
+### Temporary QA data added
+
+- **Throwaway accounts** `qa-signup-…@akilent-qa.invalid` (one per harness run, about 6) in the local database. Each has a workspace on the Trial plan, and some have two-factor on. Delete them in the console or Django admin, or restore `../automator-db-backups/`.
+- **The QA user's first name** was changed and restored by the test.
+
+### Sign-offs
+
+| Gate | Status |
+|---|---|
+| Implementation | **Done**. G3 and G4 are held as backend gaps. |
+| Verification | **Done** (full suite, 12/12 browser tasks, 68-load scan; inbox harness still 43/43). **Open:** real devices, screen reader. |
+| Acceptance | **Pending your sign-off.** |
+
+## Entry 5: Phase 2 (Content Studio) and the leftovers from Phases 0–3, 2026-10-25
+
+Scope, as you asked: Phase 2 plus what remained from earlier phases. **Phases 4–9 are not started.** A site-wide crawl was begun and stopped; its partial results aren't used. Billing's R1 stays with Phase 5.
+
+### Tested code
+
+| | |
+|---|---|
+| HEAD | `83f5262` (Phases 1, 2 and 3 all uncommitted, so this diff covers all three) |
+| Tracked changes | 147 files, +2557 −1140. `git diff HEAD --binary -- . ':!docs/design/ui-quality-log.md'` SHA-256 `33e4a549d844bdca…` |
+| Untracked (SHA-256 prefix) | `tools/qa/publishing_qa.mjs` `e1027f8e…` · `tools/qa/area_scan.mjs` `868098d7…` · `apps/publishing/tests/test_publishing_ui_quality.py` `d8e844f1…` · `tools/qa/inbox_qa.mjs` `5899d2e4…` · `tools/qa/accounts_qa.mjs` `2c36ad89…` · plus the Phase 1/3 test files listed in Entry 4 |
+
+### Phase 2: what changed
+
+| Area | Change |
+|---|---|
+| R4 (open since Phase 0) | Composer caption boxes are 16px on touch screens, and the media-type select no longer forces 14px. Every field on `/publishing/new/` at 360 is now ≥16px. |
+| Field sizing | 22 publishing fields had `text-sm`/`text-xs` overriding the shared field size (14px on phones). Those classes are removed, so the `.input` rules apply (16px on phones and touch screens, 14px from sm up). |
+| Labels | Five library filters had labels not tied to their fields, as did all fields on "Plan a post" and "Themes". All are now linked by `for`/`id`, and the plan form's platform checkboxes are a `fieldset` with a `legend`. |
+| Dialogs | The composer's publish/schedule confirm and the cropper join the shared dialog stack (`akDialog`): page inert, Esc for the topmost dialog only, focus in and back. The confirm had a window-wide Esc and reused the global confirm's `confirm-title` id; it now has its own. |
+| Truthful errors | Per-channel failure notes were developer phrases, one of them false. A provider outage said "will retry" but is saved as FAILED with no automatic retry. They're now plain and true: a timeout says "may already be live, check it on Instagram before trying again", and an outage says "had a problem on its side, try again later" (`publishing_filters.variant_error_message`). |
+| Empty states | The library told "No posts match your filters" even with no filter set. It now tells "No posts yet" (with "Create a post") from "No posts match these filters" (with "Clear filters"). The calendar, Overview and Planning empties point to the next step. |
+| Colour | Publishing drift went from 155 to 0. Brand logo tiles and composer chrome that must match the platforms are documented exceptions. The active sub-nav tab, Copy buttons and today's date used fixed brand navy (2.1–2.3:1 in dark) and now use `text-accent`. Stock red/amber became `btn-danger-ghost`/tone colours. The "link not found" page now uses classes instead of inline styles. |
+
+### Leftovers from earlier phases, fixed here
+
+| From | Defect | Fix |
+|---|---|---|
+| Phase 0 | `hx-confirm` fell back to the browser's own `confirm()` if clicked before the page finished starting. | It now blocks with "Still loading. Try again in a moment.", the same as `data-confirm`. |
+| Phase 0 | The email editor asked for a blank's name with the browser's `prompt()`. | The shared confirm dialog now takes an optional text field (`ask({ input })`, which resolves the text or null), and the editor uses it. |
+| Phase 0 (dark bridge) | Brand navy text (`text-brand-500…800`, about 2.1:1 on the dark canvas) wasn't covered by the dark-theme text bridge. | It now maps to `--color-accent` in dark, app-wide. |
+| Phase 0 (found by the Phase 2 harness) | Choosing "Stay on this page" in the unsaved-work guard left the loading bar stuck and the whole page dimmed for good. The bar started in `htmx:beforeRequest`, which the guard cancels, so `afterRequest` never came. | The bar now starts in `htmx:beforeSend` (only requests that actually go out). |
+| Phase 0 (found by the Phase 2 harness) | `#main { view-transition-name }` made the page a stacking context, so overlays written inside a page (the cropper, the composer confirm, and others) sat **under the sticky header**. | The name is only set while a page-to-page transition runs (`.ak-page-vt`, added in `htmx:beforeTransition` and removed when the transition finishes). |
+
+### Automated results
+
+| Command | Result |
+|---|---|
+| `pytest -n 6 --junitxml …` (full suite, alone) | **4,664 tests: 0 failures, 0 errors, 25 skipped** |
+| Same, while a browser harness ran against the dev server | 14 failures in unrelated areas (API quota, email codes, payments). They didn't reproduce when the suite ran alone, so they were caused by the concurrent load, not by the code. |
+| `ruff check` / `ruff format --check` / `mypy .` | Pass / pass / no issues in 620 files |
+| New: `apps/publishing/tests/test_publishing_ui_quality.py` | 5 tests (error wording, no false retry promise, failed channel on the post page, library empties) |
+
+### Browser verification
+
+- **`tools/qa/publishing_qa.mjs`: 12 of 12.**
+  - Composer at 360: edit/preview tabs, no sideways scroll, every field ≥16px.
+  - The unsaved-work guard asks; "stay" keeps the work and leaves the page usable.
+  - The publish confirm is on the dialog stack: focus on "Not yet", page inert, Esc closes it alone.
+  - The cropper is on the stack, fits a 360 screen and covers the header; Esc skips the crop.
+  - No native `confirm`/`prompt`/`alert` is called.
+  - A post shows per-channel status.
+  - A page-to-page navigation leaves no transition name behind.
+- **`tools/qa/area_scan.mjs /publishing/`: 12 pages × 360/1280 × light/dark: 0 issues** (contrast, overflow, clipped controls, unlabelled fields, phone fields under 16px).
+- **Earlier phases rerun** against the final code: inbox 43/43, accounts 12/12.
+
+### Not verified
+
+- A *real* failed publish: the local data has none. The rendering is covered by the new test, which uses a failed variant.
+- Real devices (touch dragging in the cropper, the iOS keyboard) and screen readers: yours.
+
+### QA data added
+
+One more throwaway `qa-signup-…@akilent-qa.invalid` account per accounts-harness run, about 9 in total now.
+
+### Sign-offs
+
+| Gate | Status |
+|---|---|
+| Implementation | **Done** (Phase 2 and the listed leftovers). |
+| Verification | **Done** (full suite, 12/12 + 12-page scan, earlier harnesses green). **Open:** real devices, screen readers. |
+| Acceptance | **Pending your sign-off.** |

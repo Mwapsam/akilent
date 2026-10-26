@@ -33,7 +33,7 @@ Retry-After: 42</code></pre>
 <p>
   Neither limit above applies to <a href="{% url 'docs-page' 'smtp' %}">SMTP relay</a> —
   the mail server accepts and delivers those messages directly, without
-  passing through {{ site.app_name|default:"Automator" }}'s application layer, so today they aren't counted
+  passing through {{ site.app_name|default:"Akilent" }}'s application layer, so today they aren't counted
   against your monthly volume cap or reflected in the dashboard's usage
   numbers. Treat SMTP relay as currently unmetered; this will change in a
   future update.

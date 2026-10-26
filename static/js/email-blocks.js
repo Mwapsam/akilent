@@ -601,12 +601,25 @@
         }
       },
 
+      // Asked in the app's own dialog (the shared confirm, with a text field), not the
+      // browser's prompt().
       newBlank: function (from) {
-        var raw = window.prompt("Name the blank, for example order_number (letters, numbers and _):", "");
-        if (!raw) return;
-        var name = raw.trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "");
-        if (!/^[a-z_][a-z0-9_]*$/.test(name)) { toast("danger", "Use letters, numbers and _ only, starting with a letter."); return; }
-        this.insertBlank(name, from);
+        var self = this;
+        var store = window.Alpine && Alpine.store("confirm");
+        // The page hasn't finished loading: say so, as hx-confirm does (app.js), rather
+        // than a menu item that silently does nothing.
+        if (!store) { toast("danger", "Still loading. Try again in a moment."); return; }
+        store.ask({
+          title: "Add a blank",
+          message: "A blank is filled in for each person, for example their order number.",
+          input: { label: "Name (letters, numbers and _)", placeholder: "order_number" },
+          confirmLabel: "Add blank",
+        }).then(function (raw) {
+          if (!raw) return;
+          var name = raw.trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "");
+          if (!/^[a-z_][a-z0-9_]*$/.test(name)) { toast("danger", "Use letters, numbers and _ only, starting with a letter."); return; }
+          self.insertBlank(name, from);
+        });
       },
 
       linkProblem: function (href) {

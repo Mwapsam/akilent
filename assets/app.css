@@ -1087,7 +1087,10 @@
   ::view-transition-new(root) {
     animation: none;
   }
-  #main { view-transition-name: main-content; }
+  /* Named only while a page-to-page transition runs (app.js adds .ak-page-vt). A permanent
+     view-transition-name makes #main a stacking context, which put every full-screen overlay
+     written inside a page (the cropper, the composer's confirm) under the sticky header. */
+  .ak-page-vt #main { view-transition-name: main-content; }
   ::view-transition-old(main-content) { animation: 150ms ease-out both akilent-fade-out; }
   ::view-transition-new(main-content) { animation: 150ms ease-in both akilent-fade-in; }
   @keyframes akilent-fade-out { to { opacity: 0; } }
@@ -1575,6 +1578,8 @@
     :where(:root:not([data-theme="light"])) :is(.text-gray-500, .text-gray-400) { color: var(--color-ink-subtle); }
     :where(:root:not([data-theme="light"])) :is(.text-red-600, .text-red-700, .text-red-800, .text-coral-600, .text-coral-700, .text-coral-800) { color: var(--tone-coral-fg); }
     :where(:root:not([data-theme="light"])) :is(.text-blue-600, .text-blue-700, .text-blue-800) { color: var(--tone-info-fg); }
+    /* Brand navy text (links, the current tab): ~2.1:1 on the dark canvas. */
+    :where(:root:not([data-theme="light"])) :is(.text-brand-500, .text-brand-600, .text-brand-700, .text-brand-800) { color: var(--color-accent); }
     :where(:root:not([data-theme="light"])) :is(.text-green-600, .text-green-700, .text-green-800, .text-teal-600, .text-teal-700, .text-teal-800) { color: var(--tone-teal-fg); }
     :where(:root:not([data-theme="light"])) :is(.text-amber-600, .text-amber-700, .text-amber-800) { color: var(--tone-amber-fg); }
   }
@@ -1583,6 +1588,7 @@
   :where(:root[data-theme="dark"]) :is(.text-gray-500, .text-gray-400) { color: var(--color-ink-subtle); }
   :where(:root[data-theme="dark"]) :is(.text-red-600, .text-red-700, .text-red-800, .text-coral-600, .text-coral-700, .text-coral-800) { color: var(--tone-coral-fg); }
   :where(:root[data-theme="dark"]) :is(.text-blue-600, .text-blue-700, .text-blue-800) { color: var(--tone-info-fg); }
+  :where(:root[data-theme="dark"]) :is(.text-brand-500, .text-brand-600, .text-brand-700, .text-brand-800) { color: var(--color-accent); }
   :where(:root[data-theme="dark"]) :is(.text-green-600, .text-green-700, .text-green-800, .text-teal-600, .text-teal-700, .text-teal-800) { color: var(--tone-teal-fg); }
   :where(:root[data-theme="dark"]) :is(.text-amber-600, .text-amber-700, .text-amber-800) { color: var(--tone-amber-fg); }
 

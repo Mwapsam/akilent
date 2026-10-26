@@ -13,7 +13,7 @@
   {% seo_meta %}
   {% google_analytics %}
 {% endif %}
-  <title>{% block title %}{{ seo.title|default:site.app_name|default:"Automator" }}{% endblock %}</title>
+  <title>{% block title %}{{ seo.title|default:site.app_name|default:"Akilent" }}{% endblock %}</title>
   <meta name="akilent-shell" content="{% block shell_name %}{% if user.is_authenticated %}app{% else %}public{% endif %}{% endblock %}">
 {% if not request.shell_swap %}
   {# Apply the saved theme before first paint — avoids a light/dark flash. #}
@@ -121,7 +121,7 @@
         {% include "components/brand_mark.html" with class="w-9 h-9" %}
         <span class="font-semibold text-ink hidden lg:inline"
               x-show="!$store.ui.sidebarCollapsed" x-cloak>
-          {% block sidebar_title %}{{ site.app_name|default:"Automator" }}{% endblock %}
+          {% block sidebar_title %}{{ site.app_name|default:"Akilent" }}{% endblock %}
         </span>
       </div>
 
@@ -173,7 +173,7 @@
         <div class="h-16 flex items-center justify-between px-4 border-b border-border">
           <span class="flex items-center gap-2 font-semibold">
             {% include "components/brand_mark.html" with class="w-8 h-8" %}
-            {{ site.app_name|default:"Automator" }}
+            {{ site.app_name|default:"Akilent" }}
           </span>
           <button type="button"
                   class="btn-ghost rounded-lg p-1.5"
@@ -420,7 +420,7 @@
   </div>
   {% endif %}
 {% if user.is_authenticated and REALTIME_SSE_ENABLED %}
-<div hidden aria-hidden="true" hx-get="/inbox/followups/badge/?toast=1" hx-trigger="sse:followup.due" hx-swap="none"></div>
+<div hidden aria-hidden="true" hx-get="/inbox/followups/badge/?toast=1" hx-trigger="sse:followup.due" hx-swap="none" data-auto-refresh></div>
 {% endif %}
 </body>
 </html>

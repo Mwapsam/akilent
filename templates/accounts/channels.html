@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Channels — {{ site.app_name|default:"Automator" }}{% endblock %}
+{% block title %}Channels — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
 
 <header class="mb-6">
   <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Channels</h1>
-  <p class="mt-1 text-sm text-gray-600">Connect and manage the channels Akilent uses to communicate with your customers.</p>
+  <p class="mt-1 text-sm text-ink-subtle">Connect and manage the channels Akilent uses to communicate with your customers.</p>
 </header>
 
 <div class="grid gap-4 sm:grid-cols-2">
@@ -14,12 +14,12 @@
   <div class="card p-5">
     <div class="flex items-start justify-between gap-3">
       <div class="flex items-center gap-3">
-        <span class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-canvas text-gray-500">
+        <span class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-canvas text-ink-subtle">
           {% include "components/icon.html" with name="mail" class="w-5 h-5" %}
         </span>
         <div>
           <p class="font-semibold text-ink">Email</p>
-          <p class="text-sm text-gray-600">Manage your sending domains and email configuration.</p>
+          <p class="text-sm text-ink-subtle">Manage your sending domains and email configuration.</p>
         </div>
       </div>
     </div>
@@ -38,12 +38,12 @@
   <div class="card p-5">
     <div class="flex items-start justify-between gap-3">
       <div class="flex items-center gap-3">
-        <span class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-canvas text-gray-500">
+        <span class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-canvas text-ink-subtle">
           {% include "components/icon.html" with name="message-circle" class="w-5 h-5" %}
         </span>
         <div>
           <p class="font-semibold text-ink">WhatsApp</p>
-          <p class="text-sm text-gray-600">Connect and manage your WhatsApp numbers.</p>
+          <p class="text-sm text-ink-subtle">Connect and manage your WhatsApp numbers.</p>
         </div>
       </div>
     </div>
@@ -62,12 +62,12 @@
   <div class="card p-5">
     <div class="flex items-start justify-between gap-3">
       <div class="flex items-center gap-3">
-        <span class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-canvas text-gray-500">
+        <span class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-canvas text-ink-subtle">
           {% include "components/icon.html" with name="instagram" class="w-5 h-5" %}
         </span>
         <div>
           <p class="font-semibold text-ink">Instagram</p>
-          <p class="text-sm text-gray-600">Connect your Instagram Business Account to receive messages and comments.</p>
+          <p class="text-sm text-ink-subtle">Connect your Instagram Business Account to receive messages and comments.</p>
         </div>
       </div>
     </div>

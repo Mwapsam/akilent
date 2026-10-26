@@ -59,7 +59,7 @@
       <p class="cmp-label">Pick one to use:</p>
       <template x-for="(opt, i) in captionOptions" :key="i">
         <button type="button" @click="selectOption(opt)"
-                class="w-full text-left p-3 rounded-xl border border-border hover:border-brand-400 transition-colors">
+                class="w-full text-left p-3 rounded-xl border border-border hover:border-accent transition-colors">
           <span class="block text-sm text-ink whitespace-pre-wrap" x-text="opt.caption.slice(0, 220) + (opt.caption.length > 220 ? '…' : '')"></span>
           <span class="block text-xs text-ink-subtle mt-1" x-text="(opt.hashtags || []).slice(0, 6).map(h => '#' + h).join(' ')"></span>
         </button>

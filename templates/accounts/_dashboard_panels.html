@@ -14,9 +14,9 @@ hx-trigger of its own, so it loads exactly once.
       {% include "components/icon.html" with name=next_recommended.icon class="w-5 h-5" %}
     </div>
     <div class="flex-1 min-w-0">
-      <p class="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Get more out of Akilent</p>
+      <p class="text-xs font-semibold uppercase tracking-wider text-ink-subtle">Get more out of Akilent</p>
       <p class="font-medium text-ink">{{ next_recommended.title }}</p>
-      <p class="text-sm text-gray-600 mt-0.5">{{ next_recommended.desc }}</p>
+      <p class="text-sm text-ink-subtle mt-0.5">{{ next_recommended.desc }}</p>
     </div>
     <div class="flex items-center gap-2 shrink-0">
       <a href="{{ next_recommended.url }}" class="btn btn-primary btn-sm">{{ next_recommended.cta }}</a>
@@ -40,13 +40,13 @@ hx-trigger of its own, so it loads exactly once.
         <ul class="divide-y divide-border">
           {% for s in upcoming_sends %}
           <li class="px-5 sm:px-6 py-3 flex items-start gap-3">
-            {% include "components/icon.html" with name="clock" class="w-4 h-4 text-gray-400 shrink-0 mt-0.5" %}
+            {% include "components/icon.html" with name="clock" class="w-4 h-4 text-ink-subtle shrink-0 mt-0.5" %}
             {% comment %}
               Stacks under sm: a fixed-width time column beside a truncating
               label does not fit a 360px screen.
             {% endcomment %}
             <div class="min-w-0 flex-1 sm:flex sm:items-center sm:gap-3">
-              <span class="block text-xs sm:text-sm text-gray-500 tabular-nums sm:w-40 sm:shrink-0">
+              <span class="block text-xs sm:text-sm text-ink-subtle tabular-nums sm:w-40 sm:shrink-0">
                 {{ s.when|date:"D M j, H:i" }}
               </span>
               <span class="block text-sm font-medium text-ink truncate sm:flex-1">{{ s.label }}</span>
@@ -74,15 +74,15 @@ hx-trigger of its own, so it loads exactly once.
         <ul class="space-y-2">
           {% for a in attention_items %}
           <li>
-            <a href="{{ a.url }}" class="flex items-start gap-2 text-sm text-gray-700 hover:text-ink">
-              {% include "components/icon.html" with name="alert" class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" %}
+            <a href="{{ a.url }}" class="flex items-start gap-2 text-sm text-ink-muted hover:text-ink">
+              {% include "components/icon.html" with name="alert" class="w-4 h-4 tone-amber-fg shrink-0 mt-0.5" %}
               <span>{{ a.text }}</span>
             </a>
           </li>
           {% endfor %}
         </ul>
       {% else %}
-        <p class="flex items-center gap-2 text-sm text-gray-500">
+        <p class="flex items-center gap-2 text-sm text-ink-subtle">
           {% include "components/icon.html" with name="check-circle" class="w-4 h-4 text-teal-500 shrink-0" %}
           All clear — nothing to configure.
         </p>
@@ -155,11 +155,11 @@ hx-trigger of its own, so it loads exactly once.
             {% for m in recent_sends %}
             <tr>
               <td data-label="Recipient" class="font-medium text-ink">{{ m.to_email }}</td>
-              <td data-label="Subject" class="text-gray-500">{{ m.subject|default:"—"|truncatechars:40 }}</td>
+              <td data-label="Subject" class="text-ink-subtle">{{ m.subject|default:"—"|truncatechars:40 }}</td>
               <td data-label="Status">
                 {% include "components/status.html" with state=m.status badge=True %}
               </td>
-              <td data-label="When" class="text-gray-400 text-right tabular-nums">{{ m.created_at|date:"M j, H:i" }}</td>
+              <td data-label="When" class="text-ink-subtle text-right tabular-nums">{{ m.created_at|date:"M j, H:i" }}</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -176,7 +176,7 @@ hx-trigger of its own, so it loads exactly once.
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h2 class="text-lg font-semibold text-ink">{{ subscription.plan.name }} plan</h2>
-        <p class="mt-1 text-sm text-gray-600">
+        <p class="mt-1 text-sm text-ink-subtle">
           {% if subscription.status == 'active' %}<span class="badge badge-success">Active</span>
           {% elif subscription.status == 'trialing' %}<span class="badge badge-info">Trialing</span>
           {% elif subscription.status == 'past_due' %}<span class="badge badge-warning">Past due</span>
@@ -189,8 +189,8 @@ hx-trigger of its own, so it loads exactly once.
     {% if email_quota and email_quota > 0 %}
     <div class="mt-4">
       <div class="flex items-end justify-between mb-1.5 text-sm">
-        <span class="text-gray-600" id="quota-label">Email usage this month</span>
-        <span class="text-gray-500 tabular-nums">{{ emails_used }} / {{ email_quota }} · {{ usage_pct }}%</span>
+        <span class="text-ink-subtle" id="quota-label">Email usage this month</span>
+        <span class="text-ink-subtle tabular-nums">{{ emails_used }} / {{ email_quota }} · {{ usage_pct }}%</span>
       </div>
       <div class="h-2 rounded-full bg-canvas overflow-hidden" role="progressbar"
            aria-labelledby="quota-label"
@@ -206,7 +206,7 @@ hx-trigger of its own, so it loads exactly once.
   <div class="card card-pad flex flex-wrap items-center justify-between gap-3">
     <div>
       <h2 class="text-lg font-semibold text-ink">No active plan</h2>
-      <p class="mt-1 text-sm text-gray-600">Choose a plan to raise your sending limits.</p>
+      <p class="mt-1 text-sm text-ink-subtle">Choose a plan to raise your sending limits.</p>
     </div>
     <a href="/billing/plans/" class="btn btn-primary btn-sm">Choose a plan</a>
   </div>

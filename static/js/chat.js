@@ -89,10 +89,15 @@ function registerChat() {
     // Why the last send didn't go, said next to the reply box (it stays until the next
     // send or a dismiss, so it can't be missed the way a toast can).
     sendError: '',
-    // 'ok' | 'lost': lost once LOST_AFTER polls in a row have failed.
+    // 'ok' | 'lost' | 'signedOut': lost once LOST_AFTER polls in a row have failed;
+    // signedOut when the server answered with the sign-in page instead.
     connection: 'ok',
     online: navigator.onLine,
     _pollFailures: 0,
+    // How far the server's clock is ahead of this browser's. Sends are stamped in server
+    // time, so matching them to the real message (and sorting) holds on a wrong PC clock.
+    _skew: cfg.serverNow ? new Date(cfg.serverNow).getTime() - Date.now() : 0,
+    serverTime() { return new Date(Date.now() + this._skew).toISOString(); },
 
     // "[Photo]" / "[Voice message]" placeholders say nothing once the media itself shows.
     showText(m) {
@@ -209,11 +214,12 @@ function registerChat() {
     // "Put back in reply box" on a send that was never confirmed: the person has read
     // that it may already have gone, and chooses to send it again.
     restoreUnknown(m) {
+      // A file can't be put back, only its caption; with none, there is nothing to do.
+      const text = m.mediaUnknown ? m.caption : m.body;
+      if (!text) return;
       this.messages = this.messages.filter((x) => x.id !== m.id);
       this.saveUnknown();
-      // A file can't be put back, only its caption.
-      const text = m.mediaUnknown ? m.caption : m.body;
-      if (text) this.draft = this.draft.trim() ? this.draft + '\n' + text : text;
+      this.draft = this.draft.trim() ? this.draft + '\n' + text : text;
       this.$nextTick(() => { this.grow(this.$refs.input); this.$refs.input.focus(); });
     },
     dismissUnknown(m) {
@@ -226,6 +232,7 @@ function registerChat() {
     },
     checkNow() { this.interval = BASE_INTERVAL; this.schedule(0); },
     connectionText() {
+      if (this.connection === 'signedOut') return "You've been signed out, so new messages won't show and replies won't send. Sign in again in another tab and this will catch up.";
       if (this.connection !== 'lost') return '';
       return this.online
         ? "Not connected. New messages and delivery ticks may be out of date. Reconnecting…"
@@ -305,6 +312,14 @@ function registerChat() {
           headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' },
         });
         if (!r.ok) throw new Error('HTTP ' + r.status);
+        // The session ended: the feed was redirected to the sign-in page. Retrying can't
+        // fix that, so it isn't a lost connection; keep checking slowly for a new sign-in.
+        if (r.redirected || !(r.headers.get('Content-Type') || '').includes('json')) {
+          this.connection = 'signedOut';
+          this.interval = MAX_INTERVAL;
+          this.schedule();
+          return;
+        }
         data = await r.json();
         this.interval = BASE_INTERVAL;
         this._pollFailures = 0;
@@ -517,7 +532,7 @@ function registerChat() {
         this.sendError = "You're offline, so " + (voice ? 'the voice note' : 'the file') + " wasn't sent.";
         return;
       }
-      const pending = { id: 'p' + Date.now(), direction: 'outbound', body: 'Sending ' + label + '…', ts: new Date().toISOString(), status: '', pending: true };
+      const pending = { id: 'p' + Date.now(), direction: 'outbound', body: 'Sending ' + label + '…', ts: this.serverTime(), status: '', pending: true };
       this.messages.push(pending);
       if (caption) this.draft = '';
       this.$nextTick(() => this.scrollBottom());
@@ -529,8 +544,8 @@ function registerChat() {
           this.interval = BASE_INTERVAL;
           this.schedule(300);
         } else if (out.kind === 'unknown') {
-          // The file can't be put back, so the bubble stays to say what is known.
-          // Not kept across a reload: it has no text to restore.
+          // The file can't be put back, so the bubble stays to say what is known, and is
+          // kept across a reload: it may not have gone. Only a caption can be put back.
           // Replaced through the reactive array (not by mutating the object pushed earlier,
           // which Alpine would not notice), so the bubble re-renders as Not confirmed.
           const i = this.messages.findIndex((m) => m.id === pending.id);
@@ -606,7 +621,7 @@ function registerChat() {
       const fd = new FormData(form);
       fd.set('body', body);
 
-      const pending = { id: 'p' + Date.now(), direction: 'outbound', body, ts: new Date().toISOString(), status: '', pending: true };
+      const pending = { id: 'p' + Date.now(), direction: 'outbound', body, ts: this.serverTime(), status: '', pending: true };
       this.messages.push(pending);
       this.draft = '';
       this.$nextTick(() => { this.grow(this.$refs.input); this.scrollBottom(); });

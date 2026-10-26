@@ -487,7 +487,8 @@ def signup(request):
                 if verification_sent:
                     messages.success(
                         request,
-                        "Your account is ready. We've emailed a link to verify your address.",
+                        # Queued, not yet delivered: say "sending", not "emailed".
+                        "Your account is ready. We're sending a link to verify your address.",
                     )
                 else:
                     messages.warning(

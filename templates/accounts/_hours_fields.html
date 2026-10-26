@@ -19,7 +19,7 @@
     </label>
     <label class="sr-only" for="{{ row.key }}-from">{{ row.label }} opens</label>
     <input id="{{ row.key }}-from" type="time" name="{{ row.key }}_from" value="{{ row.from }}" class="input w-32" {% if not can_edit %}disabled{% endif %}>
-    <span class="text-gray-400">to</span>
+    <span class="text-ink-subtle">to</span>
     <label class="sr-only" for="{{ row.key }}-to">{{ row.label }} closes</label>
     <input id="{{ row.key }}-to" type="time" name="{{ row.key }}_to" value="{{ row.to }}" class="input w-32" {% if not can_edit %}disabled{% endif %}>
   </div>

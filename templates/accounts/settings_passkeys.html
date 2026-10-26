@@ -5,7 +5,7 @@
 {% block settings_content %}
 <div class="card card-pad max-w-xl">
   <h2 class="font-semibold mb-1">Passkeys</h2>
-  <p class="text-sm text-gray-600 mb-4">
+  <p class="text-sm text-ink-subtle mb-4">
     Sign in with your phone's fingerprint, face or PIN, or with a security key.
     Works for people who don't use an authenticator app.
   </p>
@@ -23,9 +23,9 @@
           <div>
             <p class="text-sm font-medium text-ink">{{ passkey }}</p>
             {% if passkey.last_used_at %}
-              <p class="text-xs text-gray-600">Last used {{ passkey.last_used_at|date:"j M Y" }}</p>
+              <p class="text-xs text-ink-subtle">Last used {{ passkey.last_used_at|date:"j M Y" }}</p>
             {% else %}
-              <p class="text-xs text-gray-600">Not used yet</p>
+              <p class="text-xs text-ink-subtle">Not used yet</p>
             {% endif %}
           </div>
           <form method="post" action="{% url 'passkey-remove' passkey.pk %}" class="mt-3 space-y-2">
@@ -45,12 +45,12 @@
       {% endfor %}
     </ul>
   {% else %}
-    <p class="text-sm text-gray-600 mb-6">You have no passkeys yet.</p>
+    <p class="text-sm text-ink-subtle mb-6">You have no passkeys yet.</p>
   {% endif %}
 
   <div class="border-t border-border pt-6">
     <h3 class="font-medium text-ink mb-1">Add a passkey</h3>
-    <p class="text-sm text-gray-600 mb-4">
+    <p class="text-sm text-ink-subtle mb-4">
       Your device asks you to confirm with its fingerprint, face or PIN. Akilent doesn't ask you to sign in to your phone.
     </p>
     <form id="passkey-add-form" method="post" action="{% url 'settings-passkeys' %}" class="space-y-4">
@@ -92,9 +92,9 @@
       {% endif %}
       <div>
         <button type="button" id="passkey-add-here" class="btn btn-primary touch-target" hidden>Add a passkey</button>
-        <p class="text-xs text-gray-600 mt-2">To use your phone, pick it when your browser offers that option.</p>
+        <p class="text-xs text-ink-subtle mt-2">To use your phone, pick it when your browser offers that option.</p>
       </div>
-      <p id="passkey-add-error" class="text-sm text-red-600" role="alert" hidden></p>
+      <p id="passkey-add-error" class="text-sm tone-coral-fg" role="alert" hidden></p>
     </form>
   </div>
 </div>

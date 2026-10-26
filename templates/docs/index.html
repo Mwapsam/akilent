@@ -2,7 +2,7 @@
 {% block docs_content %}
 {% if "email" in enabled_channels %}
 <p>
-  {{ site.app_name|default:"Automator" }}'s Developer Platform lets you send transactional email four ways: a
+  {{ site.app_name|default:"Akilent" }}'s Developer Platform lets you send transactional email four ways: a
   versioned REST API, reusable templates, bulk campaigns, direct SMTP relay,
   and signed webhooks for delivery, open, and click events. All of it sits on
   top of the same domain verification and plan limits as the web dashboard.
@@ -16,7 +16,7 @@
 </ol>
 {% else %}
 <p>
-  {{ site.app_name|default:"Automator" }}'s Developer Platform is a versioned REST API
+  {{ site.app_name|default:"Akilent" }}'s Developer Platform is a versioned REST API
   authenticated with API keys (see <a href="{% url 'docs-page' 'authentication' %}">Authentication</a>).
   <a href="{% url 'docs-page' 'channels' %}">Channels</a> lists what each channel can do through it.
 </p>

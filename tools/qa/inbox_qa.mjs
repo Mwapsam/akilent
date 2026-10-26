@@ -86,7 +86,9 @@ ws.addEventListener("message", async (ev) => {
   const act = rule ? rule.act : (request.method === "POST" ? { status: 200, body: { ok: true } } : null);
   log.push(`${request.method} ${new URL(request.url).pathname} -> ${act ? (act.fail || act.status) : "pass"}`);
   try {
-    if (act && act.delay) { await sleep(act.delay); await send("Fetch.continueRequest", { requestId }); }
+    if (act && act.slowHtml) { await sleep(act.slowHtml); await send("Fetch.fulfillRequest", { requestId, responseCode: 200,
+      responseHeaders: [{ name: "Content-Type", value: "text/html" }], body: Buffer.from(act.html).toString("base64") }); }
+    else if (act && act.delay) { await sleep(act.delay); await send("Fetch.continueRequest", { requestId }); }
     else if (!act) await send("Fetch.continueRequest", { requestId });
     else if (act.fail) await send("Fetch.failRequest", { requestId, errorReason: act.fail });
     else await send("Fetch.fulfillRequest", { requestId, responseCode: act.status,
@@ -522,6 +524,64 @@ await sleep(10000);
 rules = [];
 st = await visible(".cv-conn");
 check("thread.client-bug-not-connection", st.length === 0, st);
+
+// ---- Review round 3 ----
+// S1. The page carries the server's clock, and a send from a browser whose clock is 2 minutes
+// fast is still matched to the real message (no duplicate stuck on Sending…).
+st = await chat("({ has: !!JSON.parse(document.getElementById('chat-config').textContent).serverNow, skew: Math.abs(c._skew) })");
+check("send.server-clock-known", st.has && st.skew < 10000, st);
+await chat("(c._skew = -120000, 0)");
+await typeAndSend("QA skewed clock reply");
+await sleep(600);
+await chat(`c.apply({ messages: [{ id: 99999996, direction: 'outbound', body: 'QA skewed clock reply', timestamp: new Date(Date.now() - 120000 + 1000).toISOString(), status: 'sent' }], statuses: {}, open: true })`);
+st = await chat("c.messages.filter(m => m.body === 'QA skewed clock reply').map(m => ({ pending: !!m.pending, unknown: !!m.unknown }))");
+check("send.fast-clock-reconciles", st.length === 1 && !st[0].pending && !st[0].unknown, st);
+await chat("(c._skew = 0, c.messages = c.messages.filter(m => m.id !== 99999996), 0)");
+
+// S2. A poll answered by the sign-in page says the user is signed out, not "Not connected",
+// and clears once the feed answers again.
+rules = [{ match: (r) => r.method === "GET" && new URL(r.url).pathname === fp, act: { status: 200, html: "<!doctype html><title>Sign in</title><form></form>" } }];
+await chat("c.checkNow()");
+await sleep(1500);
+st = await visible(".cv-conn");
+check("thread.signed-out-said", st.length === 1 && st[0].startsWith("You've been signed out"), st);
+rules = [];
+await chat("c.checkNow()");
+await sleep(1500);
+st = await visible(".cv-conn");
+check("thread.signed-in-again-clears", st.length === 0, st);
+
+// S3. A file with no caption whose outcome is unknown: nothing to put back, so the bubble stays.
+await chat(`(c.messages.push({ id: 'pvoice', direction: 'outbound', body: '[Voice message]', ts: c.serverTime(), status: 'unknown', unknown: true, mediaUnknown: true, caption: '' }), 0)`);
+await chat("c.restoreUnknown(c.messages.find(m => m.id === 'pvoice'))");
+st = { left: await chat("c.messages.filter(m => m.id === 'pvoice').length"), draft: await chat("c.draft") };
+check("media.no-caption-put-back-noop", st.left === 1 && st.draft === "", st);
+await chat("c.dismissUnknown(c.messages.find(m => m.id === 'pvoice'))");
+
+// S4. A form inside the pane answering after the person moved to another conversation never
+// replaces it: sent before the click, and sent while the next one was still loading.
+await viewport(1280, 800, false);
+await go("/inbox/?view=all", 1500);
+const sh = await evaluate("[...document.querySelectorAll('.inbox-row')].map(a => a.getAttribute('href'))");
+const paneId = () => evaluate("(() => { const e = document.querySelector('#conversation-pane-inner #chat-config'); return e ? JSON.parse(e.textContent).id : null; })()");
+await clickSel(`.inbox-row[href="${sh[0]}"]`); await sleep(1800);
+const idA = await paneId();
+rules = [{ match: (r) => r.method === "POST" && /\/tags/.test(new URL(r.url).pathname), act: { slowHtml: 1800, html: "<div data-title=\"QA stale A\" id=\"qa-stale\">stale A</div>" } }];
+await evaluate("document.getElementById('conversation-add-tag').value = 'qa-stale'");
+await evaluate("document.getElementById('conversation-add-tag').form.requestSubmit()");
+await sleep(100);
+await clickSel(`.inbox-row[href="${sh[1]}"]`);
+await sleep(3000);
+st = { path: await evaluate("location.pathname"), stale: await evaluate("!!document.getElementById('qa-stale')"), id: await paneId(), idA };
+check("pane.stale-form-before-click-dropped", st.path === sh[1] && !st.stale && st.id && st.id !== idA, st);
+// Sent while the next conversation is still loading (it was still showing on screen).
+rules.push({ match: (r) => r.method === "GET" && new URL(r.url).pathname === sh[2], act: { delay: 1200 } });
+await clickSel(`.inbox-row[href="${sh[2]}"]`); await sleep(100);
+await evaluate("document.getElementById('conversation-add-tag')?.form.requestSubmit()");
+await sleep(3500);
+rules = [];
+st = { path: await evaluate("location.pathname"), stale: await evaluate("!!document.getElementById('qa-stale')"), loaded: !!(await paneId()) };
+check("pane.stale-form-during-load-dropped", st.path === sh[2] && !st.stale && st.loaded, st);
 
 writeFileSync(join(outDir, "inbox_qa_results.json"), JSON.stringify({ results, log: log.slice(-80) }, null, 1));
 console.log(JSON.stringify({ pass: results.filter((r) => r.pass).length, fail: results.filter((r) => !r.pass).map((r) => r.id) }));
