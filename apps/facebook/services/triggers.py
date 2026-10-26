@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 def evaluate_triggers(thread: FacebookCommentThread, body: str, conn) -> bool:
     """Fire the first matching trigger for this root comment. True when one fired."""
-    from apps.instagram.services.triggers import first_matching_trigger
+    from apps.instagram.api import first_matching_trigger
 
     if not body or thread.trigger_fired_at is not None:
         return False
@@ -32,7 +32,7 @@ def evaluate_triggers(thread: FacebookCommentThread, body: str, conn) -> bool:
 def _fire_trigger(thread: FacebookCommentThread, trigger, conn) -> None:
     from apps.facebook.models.message import FacebookOutboundMessage
     from apps.facebook.services.outbound import enqueue_reply, send_outbound
-    from apps.instagram.models.trigger import CommentTrigger
+    from apps.instagram.api import CommentTrigger
 
     if not _claim_trigger(thread):
         return

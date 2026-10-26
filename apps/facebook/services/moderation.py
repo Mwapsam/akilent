@@ -1,6 +1,6 @@
 """Moderation for Facebook Page comments, with the account's shared moderation rules.
 
-Rule matching is shared with Instagram (``apps.instagram.services.moderation``); this
+Rule matching is shared with Instagram (``apps.instagram.api``); this
 module only applies the outcome on Facebook and writes the same immutable
 ModerationLog.
 """
@@ -10,14 +10,14 @@ from __future__ import annotations
 import logging
 
 from apps.facebook.models.comment import FacebookComment
-from apps.instagram.models.moderation import ModerationLog, ModerationRule
+from apps.instagram.api import ModerationLog, ModerationRule
 
 logger = logging.getLogger(__name__)
 
 
 def moderate_comment(comment: FacebookComment, conn) -> ModerationLog | None:
     """Apply the first matching rule's action and automation; log it. Once per comment."""
-    from apps.instagram.services.moderation import first_matching_rule
+    from apps.instagram.api import first_matching_rule
 
     if comment.moderation_logs.exists():
         return None  # a redelivered webhook must not act or notify twice

@@ -33,7 +33,7 @@ def subscribe_page(conn) -> bool:
 def on_page_connected(conn) -> None:
     """A Page was (re)connected: subscribe it, and give it the recommended rules."""
     subscribe_page(conn)
-    from apps.instagram.services.default_rules import add_default_moderation_rules
+    from apps.instagram.api import add_default_moderation_rules
 
     try:
         add_default_moderation_rules(
