@@ -1058,11 +1058,18 @@ def channels(request):
         except Exception:
             pass
 
+    facebook_state = "none"
+    if is_enabled("facebook"):
+        from apps.facebook.services.pages import page_state
+
+        facebook_state = page_state(account)[1]
+
     return render(
         request,
         "accounts/channels.html",
         {
             "account": account,
+            "facebook_state": facebook_state,
             "email_domains": email_domains,
             "email_connected": any(d.status == "verified" for d in email_domains),
             "whatsapp_numbers": numbers,

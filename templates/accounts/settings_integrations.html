@@ -79,6 +79,9 @@
       {% if fb_inbox_feature and fb_inbox == "reconnect" %}
       <a href="{% url 'publishing:fb-connect' %}" class="btn btn-secondary text-sm">Reconnect</a>
       {% endif %}
+      {% if fb_inbox_feature and "facebook" in enabled_channels %}
+      <a href="{% url 'facebook-page' %}" class="btn btn-secondary text-sm">Inbox and comment rules</a>
+      {% endif %}
       {% else %}
       <a href="{% url 'publishing:fb-connect' %}" class="btn btn-primary text-sm">Connect Facebook Page</a>
       {% endif %}

@@ -39,6 +39,8 @@ class ChannelDef:
     webhook_path: str = ""
     # Exact paths (under url_prefix) another channel also uses: path -> that channel.
     hub_paths: dict[str, str] = field(default_factory=dict)
+    # Prefixes (under url_prefix) another channel also uses: prefix -> that channel.
+    hub_prefixes: dict[str, str] = field(default_factory=dict)
     # Public REST API resources (the part after /api/<version>/) this channel owns.
     api_paths: tuple[str, ...] = ()
     # Further URL prefixes the channel's pages live under, gated the same way.
@@ -77,6 +79,8 @@ CHANNEL_REGISTRY: dict[str, ChannelDef] = {
         # Meta's deauthorize and data-deletion callbacks are compliance endpoints.
         public_paths=("deauthorize/", "data-deletion/"),
         webhook_path="webhook/",
+        # Comment rules cover Facebook Page comments too.
+        hub_prefixes={"rules/": "facebook"},
     ),
     # A Facebook Page: Messenger and Page comments in the inbox (facebook/), and Page
     # publishing from Content Studio (publishing/fb/).

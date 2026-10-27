@@ -5,6 +5,8 @@ Webhook:
   GET  — Meta hub.mode / hub.verify_token handshake
   POST — verify X-Hub-Signature-256, store each entry as its own event, enqueue it
 
+Page (/facebook/): the business's Facebook Page connection and its comment rules.
+
 Meta callbacks (Facebook Login settings of the Akilent app):
   /facebook/deauthorize/   — a person removed Akilent from their Facebook settings
   /facebook/data-deletion/ — a person asked Meta to delete their data
@@ -18,8 +20,10 @@ import secrets
 from functools import partial
 
 from django.conf import settings
+from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
 from django.http import HttpResponse, JsonResponse
+from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -31,6 +35,57 @@ from apps.facebook.models.webhook import FacebookWebhookEventLog
 from apps.facebook.tasks import process_facebook_event
 
 logger = logging.getLogger(__name__)
+
+
+@login_required
+def facebook_page(request):
+    """The connected Facebook Page: what it is used for, its inbox state, its rules."""
+    from apps.accounts.utils import get_current_account
+    from apps.billing import api as billing_api
+    from apps.core.utils import is_operator
+    from apps.facebook.services.pages import WEBHOOK_FIELDS, page_state
+    from apps.instagram.api import CommentTrigger, ModerationRule, RuleChannels
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+
+    conn, state = page_state(account)
+    inbox_feature = billing_api.usable(account, "facebook")
+    covering = RuleChannels.covering("facebook")
+    rule_count = (
+        ModerationRule.objects.filter(
+            account=account, is_active=True, channels__in=covering
+        ).count()
+        + CommentTrigger.objects.filter(
+            account=account, is_active=True, channels__in=covering
+        ).count()
+        if inbox_feature
+        else 0
+    )
+    operator = is_operator(request.user)
+    return render(
+        request,
+        "facebook/page.html",
+        {
+            "account": account,
+            "conn": conn,
+            "state": state,
+            "inbox_feature": inbox_feature,
+            "publishing_feature": billing_api.usable(account, "content_studio"),
+            "connect_allowed": inbox_feature
+            or billing_api.usable(account, "content_studio"),
+            "app_configured": bool(getattr(settings, "WHATSAPP_APP_ID", "")),
+            "rule_count": rule_count,
+            # The app-level webhook settings are for Akilent operators.
+            "show_webhook_setup": operator,
+            "webhook_url_hint": request.build_absolute_uri(reverse("facebook-webhook")),
+            "webhook_verify_token": (
+                getattr(settings, "FACEBOOK_VERIFY_TOKEN", "") if operator else ""
+            ),
+            "webhook_fields": WEBHOOK_FIELDS.replace(",", ", "),
+        },
+    )
 
 
 def _verify_signature(request) -> bool:

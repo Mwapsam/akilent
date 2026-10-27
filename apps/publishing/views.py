@@ -135,22 +135,41 @@ _TRANSITIONS = {
 # ---------------------------------------------------------------------------
 
 
+# Pages a Facebook connect can start from, and return to when it ends (URL names).
+_FB_RETURN_PAGES = ("settings-integrations", "facebook-page")
+_FB_RETURN_KEY = "fb_connect_return"
+
+
+def _fb_return_name(request) -> str:
+    name = request.session.get(_FB_RETURN_KEY)
+    return name if name in _FB_RETURN_PAGES else "settings-integrations"
+
+
+def _fb_return(request):
+    return redirect(_fb_return_name(request))
+
+
 @full_page_load
 @login_required
-@module_required("content_studio")
+@module_required("content_studio", "facebook")
 def fb_oauth_connect(request):
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
     if (
-        denied := _admin_required(request, account, "settings-integrations")
+        denied := _admin_required(request, account, _fb_return_name(request))
     ) is not None:
         return denied
+
+    if request.GET.get("next") in _FB_RETURN_PAGES:
+        request.session[_FB_RETURN_KEY] = request.GET["next"]
+    else:
+        request.session.pop(_FB_RETURN_KEY, None)
 
     app_id = getattr(settings, "WHATSAPP_APP_ID", "")
     if not app_id:
         messages.error(request, "Facebook App ID is not configured.")
-        return redirect("settings-integrations")
+        return _fb_return(request)
 
     state = secrets.token_urlsafe(32)
     conn, _ = FacebookPageConnection.objects.get_or_create(account=account)
@@ -169,13 +188,13 @@ def fb_oauth_connect(request):
 
 
 @login_required
-@module_required("content_studio")
+@module_required("content_studio", "facebook")
 def fb_oauth_callback(request):
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
     if (
-        denied := _admin_required(request, account, "settings-integrations")
+        denied := _admin_required(request, account, _fb_return_name(request))
     ) is not None:
         return denied
 
@@ -185,7 +204,7 @@ def fb_oauth_callback(request):
             request,
             f"Facebook connection failed: {request.GET.get('error_description', error)}",
         )
-        return redirect("settings-integrations")
+        return _fb_return(request)
 
     code = request.GET.get("code")
     state = request.GET.get("state")
@@ -194,18 +213,18 @@ def fb_oauth_callback(request):
 
     if not code:
         messages.error(request, "Invalid Facebook callback.")
-        return redirect("settings-integrations")
+        return _fb_return(request)
 
     try:
         conn = account.facebook_page_connection
     except FacebookPageConnection.DoesNotExist:
         messages.error(request, "No pending Facebook connection found.")
-        return redirect("settings-integrations")
+        return _fb_return(request)
 
     # A completed connect clears oauth_state to "", so an empty state must never match.
     if not state or conn.oauth_state != state:
         messages.error(request, "Invalid state parameter.")
-        return redirect("settings-integrations")
+        return _fb_return(request)
     state_age = timezone.now() - (conn.oauth_state_created_at or timezone.now())
     # Consume the state immediately so a callback URL can never be replayed.
     conn.oauth_state = ""
@@ -215,7 +234,7 @@ def fb_oauth_callback(request):
         messages.error(
             request, "The Facebook connection took too long. Please try again."
         )
-        return redirect("settings-integrations")
+        return _fb_return(request)
 
     app_id = getattr(settings, "WHATSAPP_APP_ID", "")
     app_secret = getattr(settings, "WHATSAPP_APP_SECRET", "")
@@ -237,13 +256,13 @@ def fb_oauth_callback(request):
         messages.error(
             request, "Facebook didn't respond as expected. Please try again."
         )
-        return redirect("settings-integrations")
+        return _fb_return(request)
     if "error" in token_data:
         messages.error(
             request,
             f"Facebook token exchange failed: {token_data['error'].get('message', '')}",
         )
-        return redirect("settings-integrations")
+        return _fb_return(request)
 
     # The code exchange yields a ~1-hour user token, and page tokens fetched with it expire
     # with it. Upgrade first so the stored page token does not expire.
@@ -253,17 +272,17 @@ def fb_oauth_callback(request):
         )
     except FacebookPublishError as exc:
         messages.error(request, f"Facebook token exchange failed: {exc}")
-        return redirect("settings-integrations")
+        return _fb_return(request)
 
     try:
         pages = list_pages(user_token)
     except FacebookPublishError as exc:
         messages.error(request, f"Could not fetch Facebook Pages: {exc}")
-        return redirect("settings-integrations")
+        return _fb_return(request)
 
     if not pages:
         messages.error(request, "No Facebook Pages found for this account.")
-        return redirect("settings-integrations")
+        return _fb_return(request)
 
     if len(pages) == 1:
         page = pages[0]
@@ -271,7 +290,7 @@ def fb_oauth_callback(request):
             conn, page["id"], page.get("name", ""), page["access_token"], user_token
         )
         messages.success(request, f"Connected to Facebook Page: {conn.page_name}")
-        return redirect("settings-integrations")
+        return _fb_return(request)
 
     # Several Pages: let the user choose instead of silently connecting the first one.
     # The user token is sealed before it is kept in the session.
@@ -305,14 +324,14 @@ def _activate_fb_page(
 
 @full_page_load
 @login_required
-@module_required("content_studio")
+@module_required("content_studio", "facebook")
 def fb_select_page(request):
     """Pick which Facebook Page to connect when the user manages more than one."""
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
     if (
-        denied := _admin_required(request, account, "settings-integrations")
+        denied := _admin_required(request, account, _fb_return_name(request))
     ) is not None:
         return denied
 
@@ -327,7 +346,7 @@ def fb_select_page(request):
         messages.error(
             request, "Page selection expired. Please connect Facebook again."
         )
-        return redirect("settings-integrations")
+        return _fb_return(request)
 
     if request.method == "POST":
         page_id = request.POST.get("page_id", "")
@@ -345,7 +364,7 @@ def fb_select_page(request):
         _activate_fb_page(conn, page_id, page["name"], page_token, user_token)
         request.session.pop(_FB_PAGE_CHOICES_KEY, None)
         messages.success(request, f"Connected to Facebook Page: {conn.page_name}")
-        return redirect("settings-integrations")
+        return _fb_return(request)
 
     return render(
         request,
@@ -361,7 +380,7 @@ def fb_oauth_disconnect(request):
     if account is None:
         return redirect("dashboard")
     if (
-        denied := _admin_required(request, account, "settings-integrations")
+        denied := _admin_required(request, account, _fb_return_name(request))
     ) is not None:
         return denied
 
@@ -375,6 +394,8 @@ def fb_oauth_disconnect(request):
         disconnect_page(conn, unsubscribe=True)
 
     messages.success(request, "Facebook Page disconnected.")
+    if request.POST.get("next") in _FB_RETURN_PAGES:
+        return redirect(request.POST["next"])
     return redirect("settings-integrations")
 
 

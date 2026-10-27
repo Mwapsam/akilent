@@ -40,7 +40,7 @@ Arrow Up/Down move through every link in the nav; groups are labelling only.{% e
 
   <div role="group" aria-label="Settings">
     <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Settings</p>
-    {% if enabled_channels %}{% include "components/_nav_item.html" with href="/channels/" label="Connections" icon="mail" match="channels email/domains whatsapp instagram" collapsible=collapsible %}{% endif %}
+    {% if enabled_channels %}{% include "components/_nav_item.html" with href="/channels/" label="Connections" icon="mail" match="channels email/domains whatsapp instagram facebook" collapsible=collapsible %}{% endif %}
     {% include "components/_nav_item.html" with href="/billing/plans/" label="Billing" icon="card" match="billing" collapsible=collapsible %}
     {% url 'settings-profile' as settings_url %}
     {% include "components/_nav_item.html" with href=settings_url label="Settings" icon="settings" match="settings" collapsible=collapsible %}

@@ -68,3 +68,19 @@ def inbox_status(conn) -> str:
     if conn.status == FacebookPageConnection.Status.EXPIRED or not conn.access_token:
         return "expired"
     return "ready" if conn.webhook_subscribed_at else "reconnect"
+
+
+def page_state(account):
+    """The account's Page connection (None when there is none) and its state: "none",
+    "ready", "reconnect" (the inbox needs the Messenger permissions) or "expired"."""
+    from apps.billing import api as billing_api
+    from apps.publishing.models import FacebookPageConnection
+
+    conn = FacebookPageConnection.objects.filter(account=account).first()
+    state = inbox_status(conn) if conn is not None and conn.page_id else "none"
+    if state == "none":
+        return None, "none"
+    # A Page used only for publishing needs no webhook subscription.
+    if state == "reconnect" and not billing_api.usable(account, "facebook"):
+        state = "ready"
+    return conn, state

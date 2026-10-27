@@ -1,0 +1,145 @@
+"""Managing the Facebook Page like the other channels: the Channels card, the Facebook
+page, connecting without Content Studio, and comment rules without Instagram."""
+
+from __future__ import annotations
+
+import pytest
+from django.test import override_settings
+
+from apps.billing.models import AccountFeatureOverride
+from apps.facebook.tests.helpers import make_page
+from apps.instagram.api import ModerationRule, RuleChannels
+
+pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture(autouse=True)
+def _fresh_channel_cache():
+    from apps.core.channels import invalidate_channel_cache
+
+    invalidate_channel_cache()
+    yield
+    invalidate_channel_cache()
+
+
+def test_channels_page_lists_facebook(client):
+    account, user, conn = make_page()
+    conn.webhook_subscribed_at = None
+    conn.save(update_fields=["webhook_subscribed_at"])
+    client.force_login(user)
+
+    html = client.get("/channels/").content.decode()
+
+    assert "Manage Facebook" in html
+    assert "Reconnect needed" in html
+
+
+def test_facebook_page_shows_the_page_and_its_rules(client):
+    account, user, conn = make_page()
+    ModerationRule.objects.create(
+        account=account,
+        name="Spam",
+        match_type=ModerationRule.MatchType.KEYWORD,
+        keywords="spam",
+        moderation_action="hide",
+        channels=RuleChannels.BOTH,
+    )
+    ModerationRule.objects.create(
+        account=account,
+        name="IG only",
+        match_type=ModerationRule.MatchType.KEYWORD,
+        keywords="x",
+        moderation_action="hide",
+        channels=RuleChannels.INSTAGRAM,
+    )
+    client.force_login(user)
+
+    html = client.get("/facebook/").content.decode()
+
+    assert "Test Page" in html and "Connected" in html
+    assert "1 rule covers Facebook comments." in html
+    assert "/instagram/rules/" in html
+
+
+def test_facebook_page_without_a_page_offers_to_connect(client):
+    account, user, conn = make_page()
+    conn.delete()
+    client.force_login(user)
+
+    html = client.get("/facebook/").content.decode()
+
+    assert "No Facebook Page connected" in html
+    assert "/publishing/fb/connect/?next=facebook-page" in html
+
+
+@override_settings(WHATSAPP_APP_ID="")
+def test_connect_needs_only_the_facebook_inbox_and_returns_to_the_facebook_page(
+    client,
+):
+    from apps.billing import api as billing_api
+
+    account, user, conn = make_page()
+    AccountFeatureOverride.objects.create(
+        account=account, key="content_studio", grant=False
+    )
+    assert not billing_api.usable(account, "content_studio")
+    client.force_login(user)
+
+    response = client.get("/publishing/fb/connect/?next=facebook-page")
+
+    # Not sent to the Content Studio locked page; the app id is missing here, so the
+    # flow ends at once, back where it began.
+    assert response.status_code == 302
+    assert response["Location"] == "/facebook/"
+
+
+def test_connect_ignores_an_unknown_next(client):
+    account, user, conn = make_page()
+    client.force_login(user)
+    session = client.session
+    session["fb_connect_return"] = "facebook-page"
+    session.save()
+
+    with override_settings(WHATSAPP_APP_ID=""):
+        response = client.get("/publishing/fb/connect/?next=https://evil.example/")
+
+    assert response["Location"] == "/settings/integrations/"
+
+
+def test_disconnect_returns_to_the_facebook_page(client, monkeypatch):
+    account, user, conn = make_page()
+    monkeypatch.setattr(
+        "apps.facebook.providers.meta.MetaFacebookProvider.unsubscribe_page",
+        lambda self: None,
+    )
+    client.force_login(user)
+
+    response = client.post("/publishing/fb/disconnect/", {"next": "facebook-page"})
+
+    assert response["Location"] == "/facebook/"
+
+
+def test_comment_rules_open_with_instagram_switched_off(client):
+    account, user, conn = make_page()
+    client.force_login(user)
+
+    with override_settings(INSTAGRAM_ENABLED=False):
+        from apps.core.channels import invalidate_channel_cache
+
+        invalidate_channel_cache()
+        assert client.get("/instagram/rules/").status_code == 200
+        # The rest of Instagram stays closed.
+        assert client.get("/instagram/accounts/").status_code == 404
+        with override_settings(FACEBOOK_ENABLED=False):
+            invalidate_channel_cache()
+            assert client.get("/instagram/rules/").status_code == 404
+
+
+def test_without_the_facebook_inbox_there_is_no_rules_card(client):
+    account, user, conn = make_page()
+    AccountFeatureOverride.objects.filter(account=account, key="facebook").delete()
+    client.force_login(user)
+
+    html = client.get("/facebook/").content.decode()
+
+    assert "Comment rules" not in html

@@ -391,6 +391,11 @@ class ChannelGateMiddleware:
                 break
             if ch.hub_paths.get(rest) in enabled:
                 break
+            if any(
+                rest.startswith(p) and other in enabled
+                for p, other in ch.hub_prefixes.items()
+            ):
+                break
             if ch.webhook_path and rest == ch.webhook_path:
                 if request.method == "GET":
                     break
