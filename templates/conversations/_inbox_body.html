@@ -68,14 +68,6 @@ said three times per row: the amber time, a badge, and the tab itself.{% endcomm
         <option value="{{ value }}" {% if value == channel %}selected{% endif %}>{{ label }}</option>
       {% endfor %}
     </select>
-    {% comment %}Combines with any tab above ("My" + overdue, "Unassigned" +
-    overdue) rather than being its own tab, since every tab can meaningfully
-    be narrowed to "...and it's overdue".{% endcomment %}
-    <label class="inbox-filter-toggle{% if overdue_only %} is-on{% endif %}">
-      <input type="checkbox" name="overdue" value="1" {% if overdue_only %}checked{% endif %} onchange="this.form.requestSubmit()"
-             :disabled="busy" />
-      <span class="sm:hidden">Overdue</span><span class="hidden sm:inline">Overdue only</span>
-    </label>
   </form>
 </div>
 
