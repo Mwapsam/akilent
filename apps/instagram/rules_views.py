@@ -189,8 +189,43 @@ def comment_rules(request):
             "missing_defaults": missing_default_rules(account),
             "has_account": _has_comment_channel(account),
             "both_channels": len(rule_channels(account)) == 2,
+            "instagram_only_count": _instagram_only_count(account),
         },
     )
+
+
+def _instagram_only_rules(account):
+    """Rules that skip Facebook comments, for a business that has the Facebook inbox."""
+    if "facebook" not in rule_channels(account):
+        return []
+    return [
+        model.objects.filter(account=account, channels=RuleChannels.INSTAGRAM)
+        for model in (CommentTrigger, ModerationRule)
+    ]
+
+
+def _instagram_only_count(account) -> int:
+    return sum(qs.count() for qs in _instagram_only_rules(account))
+
+
+@login_required
+@comment_rules_required
+@require_POST
+def comment_rules_extend(request):
+    """Make the Instagram-only rules answer Facebook Page comments too."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("instagram-comment-rules")
+    changed = sum(
+        qs.update(channels=RuleChannels.BOTH) for qs in _instagram_only_rules(account)
+    )
+    if changed:
+        messages.success(
+            request,
+            f"{changed} rule{'s' if changed != 1 else ''} now appl{'y' if changed != 1 else 'ies'} "
+            "to Facebook comments too.",
+        )
+    return redirect("instagram-comment-rules")
 
 
 def _has_comment_channel(account) -> bool:

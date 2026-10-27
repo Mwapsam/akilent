@@ -15,6 +15,16 @@
 </div>
 {% endif %}
 
+{% if instagram_only_count %}
+<div class="mb-6 card p-4 flex items-center justify-between gap-4 flex-wrap">
+  <p class="text-sm text-gray-600">{{ instagram_only_count }} rule{{ instagram_only_count|pluralize:" only applies,s only apply" }} to Instagram comments, so Facebook comments get no automatic reply or moderation from {{ instagram_only_count|pluralize:"it,them" }}.</p>
+  <form method="post" action="{% url 'instagram-comment-rules-extend' %}">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-primary btn-sm">Apply to Facebook too</button>
+  </form>
+</div>
+{% endif %}
+
 {% comment %} Automatic private replies (CommentTrigger) {% endcomment %}
 <section class="mb-8">
   <div class="flex items-center justify-between gap-4 flex-wrap mb-3">
@@ -27,7 +37,7 @@
   {% if triggers %}
   <ul class="space-y-3">
     {% for rule in triggers %}
-    {% include "instagram/_comment_rule_row.html" with kind="reply" rule=rule summary=rule.get_match_type_display detail=rule.reply_template badge=rule.get_reply_type_display show_channels=both_channels %}
+    {% include "instagram/_comment_rule_row.html" with kind="reply" rule=rule summary=rule.get_match_type_display detail=rule.reply_template badge=rule.get_reply_type_display show_channels=both_channels|default:instagram_only_count %}
     {% endfor %}
   </ul>
   {% else %}
@@ -55,7 +65,7 @@
   {% if moderation_rules %}
   <ul class="space-y-3">
     {% for rule in moderation_rules %}
-    {% include "instagram/_comment_rule_row.html" with kind="moderation" rule=rule summary=rule.get_match_type_display detail=rule.get_moderation_action_display show_channels=both_channels %}
+    {% include "instagram/_comment_rule_row.html" with kind="moderation" rule=rule summary=rule.get_match_type_display detail=rule.get_moderation_action_display show_channels=both_channels|default:instagram_only_count %}
     {% endfor %}
   </ul>
   {% else %}

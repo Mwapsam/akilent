@@ -144,3 +144,95 @@ def test_without_the_facebook_inbox_there_is_no_rules_card(client):
     html = client.get("/facebook/").content.decode()
 
     assert "Comment rules" not in html
+
+
+def test_diagnose_explains_an_instagram_only_rule():
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from apps.facebook.models.webhook import FacebookWebhookEventLog
+    from apps.facebook.tests.helpers import comment_payload
+    from apps.instagram.api import CommentTrigger
+
+    account, user, conn = make_page()
+    CommentTrigger.objects.create(
+        account=account,
+        name="Price",
+        match_type=CommentTrigger.MatchType.KEYWORD,
+        keywords="price",
+        reply_template="Hi!",
+        channels=RuleChannels.INSTAGRAM,
+    )
+    FacebookWebhookEventLog.objects.create(
+        account=account,
+        page_id=conn.page_id,
+        event_id="c1:add",
+        event_type=FacebookWebhookEventLog.EventType.COMMENT,
+        raw_payload=comment_payload(conn.page_id, "psid1", "What price?"),
+    )
+    out = StringIO()
+
+    call_command("facebook_diagnose", stdout=out)
+
+    text = out.getvalue()
+    assert "0 cover Facebook, 1 are Instagram-only" in text
+    assert "no active reply rule covering Facebook matches" in text
+
+
+def test_rules_page_offers_to_apply_instagram_only_rules_to_facebook(client):
+    from apps.instagram.api import CommentTrigger
+
+    account, user, conn = make_page()
+    trigger = CommentTrigger.objects.create(
+        account=account,
+        name="Price",
+        match_type=CommentTrigger.MatchType.KEYWORD,
+        keywords="price",
+        reply_template="Hi!",
+        channels=RuleChannels.INSTAGRAM,
+    )
+    client.force_login(user)
+
+    html = client.get("/instagram/rules/").content.decode()
+    assert "1 rule only applies to Instagram comments" in html
+
+    client.post("/instagram/rules/extend-to-facebook/")
+
+    trigger.refresh_from_db()
+    assert trigger.channels == RuleChannels.BOTH
+    assert (
+        "Apply to Facebook too" not in client.get("/instagram/rules/").content.decode()
+    )
+
+
+def test_an_extended_rule_sends_the_private_reply_automatically(client):
+    from unittest.mock import patch
+
+    from apps.facebook.models.message import FacebookOutboundMessage
+    from apps.facebook.tests.helpers import FakeGraph, comment_payload, post_webhook
+    from apps.instagram.api import CommentTrigger
+
+    account, user, conn = make_page()
+    CommentTrigger.objects.create(
+        account=account,
+        name="Price",
+        match_type=CommentTrigger.MatchType.KEYWORD,
+        keywords="price",
+        reply_template="Hi! Sending details now.",
+        channels=RuleChannels.INSTAGRAM,
+    )
+    client.force_login(user)
+    client.post("/instagram/rules/extend-to-facebook/")
+
+    graph = FakeGraph(recipient_psid="psid_dm")
+    with (
+        override_settings(WHATSAPP_APP_SECRET="fb-test-secret"),
+        patch("apps.facebook.providers.meta.requests.request", graph),
+    ):
+        post_webhook(client, comment_payload(conn.page_id, "user_1", "What price?"))
+
+    outbound = FacebookOutboundMessage.objects.get(
+        action_type=FacebookOutboundMessage.ActionType.PRIVATE_REPLY
+    )
+    assert outbound.status == FacebookOutboundMessage.Status.SENT
