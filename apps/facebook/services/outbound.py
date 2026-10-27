@@ -25,6 +25,12 @@ WINDOW_CLOSED_ERROR = (
     "Not sent: Messenger only allows replies within 24 hours of the customer's "
     "last message."
 )
+# A private reply opened the thread and the customer hasn't written back: Messenger
+# allows nothing more until they do (the Human Agent tag needs a customer message too).
+AWAITING_REPLY_ERROR = (
+    "Not sent: you've sent a private reply to their comment. Messenger lets you "
+    "write again once they reply."
+)
 HUMAN_WINDOW_CLOSED_ERROR = (
     "Not sent: it's more than 7 days since the customer's last message, so Messenger "
     "no longer allows a reply."
@@ -115,7 +121,9 @@ def send_outbound(outbound: FacebookOutboundMessage) -> bool:
             tag = True
         else:
             outbound.mark_failed(
-                HUMAN_WINDOW_CLOSED_ERROR
+                AWAITING_REPLY_ERROR
+                if window == "awaiting"
+                else HUMAN_WINDOW_CLOSED_ERROR
                 if outbound.human_agent
                 else WINDOW_CLOSED_ERROR,
                 terminal=True,
@@ -152,6 +160,14 @@ def send_outbound(outbound: FacebookOutboundMessage) -> bool:
 
     if result.success:
         recipient = getattr(result, "recipient_id", "")
+        if (
+            not recipient
+            and outbound.action_type == A.PRIVATE_REPLY
+            and result.provider_message_id
+        ):
+            # The commenter's Messenger thread must be keyed on their PSID, or their
+            # reply opens a second conversation the business can't answer from here.
+            recipient = provider.message_recipient(result.provider_message_id)
         if recipient and recipient != outbound.resolved_recipient_id:
             outbound.resolved_recipient_id = recipient
             FacebookOutboundMessage.objects.filter(pk=outbound.pk).update(
@@ -181,7 +197,8 @@ def send_outbound(outbound: FacebookOutboundMessage) -> bool:
 
 
 def dm_window(account_id: int, page_id: str, psid: str) -> str:
-    """ "open" (inside 24h), "human" (24h–7 days: a person's reply, tagged), or "closed".
+    """ "open" (inside 24h), "human" (24h–7 days: a person's reply, tagged), "closed",
+    or "awaiting" (the customer has never messaged the Page, e.g. only got a private reply).
 
     Measured from the customer's last message to this Page.
     """
@@ -194,8 +211,8 @@ def dm_window(account_id: int, page_id: str, psid: str) -> str:
         .order_by("-last_inbound_at")
         .first()
     )
-    if thread is None:
-        return "closed"
+    if thread is None or thread.last_inbound_at is None:
+        return "awaiting"
     if thread.window_is_open:
         return "open"
     if thread.human_agent_window_is_open:

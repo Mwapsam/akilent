@@ -219,6 +219,18 @@ class MetaFacebookProvider:
     def delete_comment(self, comment_id: str) -> tuple[bool, str]:
         return self._comment_call("delete", comment_id, {})
 
+    def message_recipient(self, message_id: str) -> str:
+        """The customer's PSID on a sent message, when Meta's send answer left it out."""
+        try:
+            data = self._request("get", message_id, params={"fields": "to"})
+        except Exception as exc:
+            logger.warning(
+                "Facebook message_recipient failed for %s: %s", message_id, exc
+            )
+            return ""
+        people = (data.get("to") or {}).get("data") or []
+        return str(people[0].get("id") or "") if people else ""
+
     def get_post(self, post_id: str) -> dict:
         """A post's permalink, text and picture, for the Comments view. Best effort."""
         try:

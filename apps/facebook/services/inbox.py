@@ -28,10 +28,13 @@ def _target(conversation):
 
 def check_window(fb_convo, *, human: bool) -> None:
     from apps.facebook.services.outbound import (
+        AWAITING_REPLY_ERROR,
         HUMAN_WINDOW_CLOSED_ERROR,
         WINDOW_CLOSED_ERROR,
     )
 
+    if fb_convo.last_inbound_at is None:
+        raise ActionError(AWAITING_REPLY_ERROR)
     if fb_convo.window_is_open:
         return
     if human and fb_convo.human_agent_window_is_open:

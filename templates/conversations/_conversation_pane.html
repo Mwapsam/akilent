@@ -294,7 +294,7 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
           <p class="flex-1">
             {% if approved_templates %}The 24-hour window is closed — send an approved template below.
             {% elif conversation.channel == "instagram" %}The 24-hour window is closed. Instagram won't deliver a reply until the customer messages again.
-            {% elif conversation.channel == "facebook" %}The reply window is closed. Messenger won't deliver a reply until the customer messages again.
+            {% elif conversation.channel == "facebook" %}{% with fb=conversation.facebook_conversation %}{% if fb and not fb.last_inbound_at %}You've sent a private reply to their comment. Messenger lets you write again once they reply — it will appear here.{% else %}The reply window is closed. Messenger won't deliver a reply until the customer messages again.{% endif %}{% endwith %}
             {% else %}The 24-hour window is closed. WhatsApp may reject a plain reply until the customer writes again.{% endif %}
           </p>
         </div>
