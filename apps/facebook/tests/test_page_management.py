@@ -61,6 +61,7 @@ def test_facebook_page_shows_the_page_and_its_rules(client):
     assert "/instagram/rules/" in html
 
 
+@override_settings(WHATSAPP_APP_ID="1234")
 def test_facebook_page_without_a_page_offers_to_connect(client):
     account, user, conn = make_page()
     conn.delete()
