@@ -56,7 +56,8 @@ already has Advanced Access and is not part of this submission.
    else.
 3. The pending submission contains exactly the fourteen permissions and two features above. Remove anything
    else: `instagram_content_publish`, `instagram_basic`, `instagram_manage_messages`,
-   `instagram_manage_comments`, `email`, `manage_app_solution`. (`public_profile` is granted
+   `instagram_manage_comments`, `email`, `manage_app_solution`, `pages_utility_messaging`
+   (Akilent sends no Messenger utility templates). (`public_profile` is granted
    by default with Facebook Login and needs no separate request.)
 4. App settings → Basic: privacy policy `https://akilent.com/privacy/`, terms
    `https://akilent.com/terms/`, data deletion `https://akilent.com/data-deletion/`,
@@ -126,7 +127,11 @@ private reply with the business's prepared message, which opens a DM conversatio
 inbox. Businesses can also choose to hide or delete comments that match their moderation
 rules (spam, abuse). Each comment gets at most one automatic private reply. When a business
 publishes a post from Content Studio with a "First comment" filled in, Akilent posts that
-comment from the business's account under its own new post.
+comment from the business's account under its own new post. In the **Comments** view
+(Inbox → Comments) a team member sees the comments on the business's posts and can reply
+publicly, send the commenter one private reply, comment on one of its own posts, and hide,
+unhide or delete a comment. Each moderation action is logged with who did it.
+(Screencast: video 3.)
 
 **instagram_business_content_publish**
 In Content Studio a team member writes a post (caption plus image or video), picks the
@@ -255,7 +260,7 @@ business's own team.
 ## Screencasts (one video per permission)
 
 Meta wants a separate video for each permission, uploaded in that permission's section of
-the form. Twelve videos, each 30–90 seconds.
+the form. Sixteen videos (fourteen permissions and two features), each 30–90 seconds.
 
 **Rules for every video**
 - English UI, normal speed, 1080p or better, no music. Add an on-screen caption naming the
@@ -297,8 +302,11 @@ from Content Studio a day early, so videos 5 and 10–12 have numbers to show.
 4. Show a moderation rule hiding a spam comment, and the comment hidden on the post.
 5. Content Studio → New post → Instagram channel → More options → "First comment" →
    Publish → show the first comment under the new post on account A's profile.
-6. Caption: "One private reply per comment, moderation the business sets up, and the
-   business's own first comment."
+6. **Inbox → Comments**: account B's comment is listed under the post. **Reply** → Public
+   reply → **Post reply**; then **Hide** and **Unhide** it. Show each change on the post in
+   Instagram.
+7. Caption: "Comments on the business's own posts: one private reply per comment, replies
+   and moderation the business chooses, and its own first comment."
 
 **4. `instagram_business_content_publish`** (`04-ig-publish.mp4`, about 60 s)
 1. Content Studio → **New post**: caption plus image → choose the Instagram account.
@@ -333,19 +341,32 @@ from Content Studio a day early, so videos 5 and 10–12 have numbers to show.
 3. Open the Facebook Page: the post is at the top.
 4. Caption: "The business publishes its own post to its Page."
 
-**9. `pages_manage_engagement`** (`09-fb-manage-engagement.mp4`, about 60 s)
+**9. `pages_manage_engagement`** (`09-fb-manage-engagement.mp4`, about 90 s)
 1. Content Studio → **New post** → choose the Facebook Page → **More options** → fill in
    "First comment" (e.g. "Order here: akilent.com/shop").
-2. **Publish**.
-3. Open the post on the Facebook Page: the first comment is under it, posted as the Page.
-4. Caption: "One first comment, written by the business, under the post Akilent just
-   published. We never comment elsewhere."
+2. **Publish**. Open the post on the Facebook Page: the first comment is under it, posted
+   as the Page.
+3. **Inbox → Comments**. Under that post, type in "Comment on this post as your business"
+   → **Comment**. Show it on the Page.
+4. On the test user's comment: **Reply** → Public reply → **Post reply**. Show the reply
+   on the Page, posted as the Page.
+5. **Hide** the comment, show it hidden on the Page, then **Unhide** it. **Delete** a second
+   (spam) comment → confirm → show it gone from the Page.
+6. Caption: "The business comments, replies and moderates only on its own Page's posts,
+   and every action is one a person chose or a rule the business set up. We never comment
+   elsewhere or like anything."
 
-**10. `pages_read_user_content`** (`10-fb-read-user-content.mp4`, about 45 s)
-1. On the Facebook Page, show the post published the day before and its comments.
-2. Content Studio → open that post → **Performance** → **Refresh numbers**.
-3. The comment count matches the Page. Point out that no comment text is shown.
-4. Caption: "We read only the comment total on the business's own post, never the comments."
+**10. `pages_read_user_content`** (`10-fb-read-user-content.mp4`, about 60 s)
+1. From the test Facebook user, comment "Do you deliver to Kitwe?" on the Page post
+   published the day before.
+2. **Inbox → Comments**: the comment appears under that post within a few seconds, with
+   the commenter's name.
+3. Show a comment rule acting on a comment (e.g. a spam rule that hid one): the comment is
+   marked as hidden by the rule.
+4. Content Studio → open that post → **Performance** → **Refresh numbers**. The comment
+   count matches the Page.
+5. Caption: "Comments on the business's own Page posts reach its team in Akilent, and
+   are shown only to that team."
 
 **11. `pages_read_engagement`** (`11-fb-read-engagement.mp4`, about 45 s)
 1. Content Studio → the same Facebook post → **Performance** → **Refresh numbers**.
@@ -362,7 +383,9 @@ from Content Studio a day early, so videos 5 and 10–12 have numbers to show.
 2. Reply from the inbox (text, then a photo); show both in Messenger.
 3. Comment "price?" on a Page post; show the private reply in Messenger and the new
    inbox conversation.
-4. Caption: "Page messages reach the business's inbox; replies follow Messenger's rules."
+4. **Inbox → Comments**: on another of the test user's comments, **Reply** → Private
+   message → **Send privately**; show it arriving in Messenger.
+5. Caption: "Page messages reach the business's inbox; replies follow Messenger's rules."
 
 **14. `pages_manage_metadata`** (`14-fb-manage-metadata.mp4`, about 45 s)
 1. Settings → Integrations → **Connect Facebook Page** → approve.
@@ -380,7 +403,7 @@ from Content Studio a day early, so videos 5 and 10–12 have numbers to show.
    customer record.
 2. Caption: "We show the team who wrote to the Page."
 
-Videos 10–12 can be recorded in one sitting from the same post. Export them as three files
+Videos 11–12 can be recorded in one sitting from the same post. Export them as two files
 with their own captions, since each permission's section needs its own upload.
 
 ## After approval

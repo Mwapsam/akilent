@@ -7,7 +7,7 @@
       <span class="inline-flex h-10 w-10 items-center justify-center rounded-full tone-neutral-bg">{% include "components/icon.html" with name="lock" class="w-5 h-5" %}</span>
       <div>
         <h1 class="text-xl font-semibold text-ink">{{ info.name }}</h1>
-        <p class="text-sm text-gray-500">{{ info.group }}</p>
+        <p class="text-sm text-ink-subtle">{{ info.group }}</p>
       </div>
     </div>
     <p class="text-gray-700">{{ info.pitch }}</p>
@@ -27,7 +27,7 @@
       <a href="/help/" class="btn btn-secondary">Contact us</a>
     {% endif %}
 
-    <p class="text-xs text-gray-500">{% if kept %}{{ kept }}{% else %}Anything you already made with it is kept.{% endif %}</p>
+    <p class="text-xs text-ink-subtle">{% if kept %}{{ kept }}{% else %}Anything you already made with it is kept.{% endif %}</p>
   </div>
 </div>
 {% endblock %}

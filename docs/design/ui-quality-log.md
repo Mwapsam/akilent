@@ -976,3 +976,100 @@ Delete them in the Django admin, or restore `../automator-db-backups/`. The dev 
 | Implementation | **Done.** G5–G7 are held as backend gaps. |
 | Verification | **Done**: full suite, 17/17 browser tasks, and the 48-load scan. **Open:** Meta sandbox, real devices, screen reader. |
 | Acceptance | **Pending your sign-off.** |
+
+## Entry 11: Phase 5 (billing), 2026-10-28
+
+Phase 4 was committed by you (`4e9468d`). You said "continue", which I took as the go-ahead for Phase 5. Phases 6–9 stay on hold until you say otherwise.
+
+### Tested code
+
+| | |
+|---|---|
+| HEAD | `35db79d` |
+| Tracked changes | 13 files, +304 −130. This includes `docs/ops/instagram-app-review.md`, which was already modified before this phase; it isn't mine. `git diff HEAD --binary -- . ':!docs/design/ui-quality-log.md'` SHA-256 `d334974cda07e571…` |
+| Untracked (SHA-256 prefix) | `apps/billing/tests/test_billing_ui_quality.py` `8c988254…` · `tools/qa/billing_qa.mjs` `bdd984de…` |
+
+### Defects found and fixed
+
+| # | Defect | Fix |
+|---|---|---|
+| 1 | **The plan cards didn't show what checkout charges.** The browser multiplied the monthly price and rounded it to whole units (`toFixed(0)`); checkout charges `pricing.price_for` to the cent. | Each card carries its exact price for every term, worked out on the server with `price_for` and the money formatter. Checked live: $19.00 / $54.15 / $193.80 / $342.00, as checkout would charge. |
+| 2 | **After a bank transfer was sent in, the page still said "Payment required" and offered "Complete payment"** and every plan's checkout. Paying again online would have paid twice. | While a transfer is in review, the page says when it was sent and its reference, that the plan switches on once it's confirmed, and "You don't need to pay again". The checkout buttons give way to "Bank transfer in review". An Incomplete subscription's badge reads "Payment in review". |
+| 3 | **A double click could start two checkouts or send a transfer twice.** The checkout links and pay links are plain links. The bank-transfer form is `hx-boost="false"`, so the shell's double-submit protection doesn't cover it, and the server keeps every submission (two review requests, two admin emails). | New shared `data-busy-link` / `data-busy-submit` (`app.js`): the first click marks the control busy (spinner, `aria-busy`), and later clicks or submits are ignored. `pageshow` resets them, so Back from the provider leaves the page usable. Checkout links are `hx-boost="false"`, since they leave for the provider. |
+| 4 | **The pending-payment page wasn't truthful at its edges:** | Each state is said as the record says it, while polling:<br>• **Pending:** "Confirming your payment".<br>• **Check failing:** "We can't check right now. We'll keep trying."<br>• **Failed or abandoned:** "didn't go through, you haven't been charged".<br>• **Requires action:** "needs another step".<br>• **After 2 minutes:** "Not confirmed yet… your plan switches on by itself once it does. Don't pay again".<br>• **Succeeded:** the page reloads, and the return view, which doesn't verify again for a succeeded payment, confirms and moves on.<br>• **Unknown reference:** "We couldn't find this payment", with nothing polled. |
+| | • it said "Confirming your payment" for a payment it couldn't find, and polled nothing | |
+| | • it ignored failed status checks | |
+| | • it stopped checking after 2 minutes without saying so | |
+| | • it sent any final state to the plans page without saying what happened | |
+| 5 | **R1, the plans page was 440px wide on a 360 phone.** The compare table widened the phone's layout even inside its scroll box (removing the table brings it back to 360). | Below md the compare table stacks: one card per feature, listing each plan (`.table--cards`, with each cell labelled by its plan). |
+| 6 | **The usage warning promised held messages are "not lost".** Campaign messages held by the plan limit are dropped after `WHATSAPP_CAMPAIGN_HOLD_MAX_HOURS` (Phase 4). | For WhatsApp message limits it now says "Campaign messages that wait more than N hours aren't sent", using the real setting (new `campaign_hold_hours` tag). Email and other held limits keep their wording. |
+
+### Other changes
+
+- The current-plan status is a badge (Active, Trialing, Incomplete, Past due, Expired, Cancelled), not coloured text that measured 3.3:1.
+- The term selector is the shared segmented control, with `aria-pressed`.
+- "Most popular" uses `.badge` instead of `bg-blue-600` and 10px text.
+- The card buttons are the standard `.btn` classes, not `bg-gray-900`/`bg-blue-600`.
+- The compare table says "Not included" to screen readers.
+- Billing drift went from **37 to 0** (whole site 611 → 574).
+
+### Automated results
+
+| Command | Result |
+|---|---|
+| `poetry run pytest` (full suite) | **5,054 passed, 25 skipped, 0 failures** |
+| `ruff check` / `ruff format` / `mypy` (changed files) | Pass / pass (one file reformatted) / no issues |
+| New: `test_billing_ui_quality.py` | 4 tests: card price equals checkout's for every term; a transfer in review isn't asked for again; an unknown payment isn't "confirming"; held campaign messages aren't promised forever |
+| Note | `test_phase4_load` (contact import, 5,000 rows, 60s budget) failed once on its own at 140s and passed in the full run. It's timing-dependent and doesn't touch billing. |
+
+### Browser verification (`tools/qa/billing_qa.mjs`, headless Chrome)
+
+No payment was made:
+- checkout was answered by the harness and never reached the server or a provider
+- every POST was intercepted, and other hosts were blocked
+- the only real write was a local manual checkout (a pending manual payment row)
+
+**Part A, 17 of 17 pass:**
+- the card price matches checkout for all four terms, and the selector's pressed state is correct
+- the plans page scans clean at 1280 in light and dark
+- the plans page at 360 has no sideways scroll and scans clean in light and dark
+- one click starts one checkout (two back-to-back clicks: busy after the first, one request)
+- busy is cleared on return
+- the pending page: confirming, check failure, failed, needs another step, stopped checking, not found (0 polls), and a clean scan at 360
+- the bank-transfer form sends once (two clicks plus a scripted `requestSubmit`: one POST)
+
+**Part B, 1 of 1 passes:** a transfer in review shows the note and reference, with no checkout links.
+
+Screenshots are in `docs/design/qa/phase5/` (local only).
+
+**Notes from running it:**
+- The QA Redis container had stopped with Docker Desktop. Logins then fail with a 500, which looks like a harness login failure. I started Docker Desktop and the container again.
+- A CDP mouse click only returns once the navigation it starts has finished, so the double-click checks run inside the page.
+
+### Backend gaps (need separate authorization)
+
+- **G8, bank-transfer submissions aren't deduplicated:** `manual_submit` creates a new `ManualPaymentRequest` (and admin email) on every POST for the same pending payment. The page now blocks a double click, but the server would still accept a repeat, for example a resubmit after Back.
+- **G9, a transfer with no reference goes back through checkout:** a submit without a reference (only possible without the browser's `required` check) redirects to checkout. Checkout abandons the open payment and creates a new one, and the uploaded proof is lost.
+
+### Not verified yet (yours)
+
+- A real provider payment through Flutterwave or the PayPal sandbox: success, decline, and a webhook arriving after the return.
+- A real bank-transfer review in the console.
+- Real devices and a screen reader.
+
+### QA data
+
+Created and removed in this phase:
+- the bank-transfer method was switched on, then off again
+- 9 local manual payments were created and deleted
+- one review request ("QA P5 TX-0001") was created and deleted
+
+The QA workspace's billing is as it was: on Trial, with no payments.
+
+### Sign-offs
+
+| Gate | Status |
+|---|---|
+| Implementation | **Done.** G8 and G9 are held as backend gaps. |
+| Verification | **Done**: full suite, 18/18 browser tasks. **Open:** a real provider payment, real devices, screen reader. |
+| Acceptance | **Pending your sign-off.** |

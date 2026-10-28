@@ -3,10 +3,7 @@
 {% block title %}Plans — {{ site.app_name|default:"Akilent" }}{% endblock %}
 {% block content %}
 
-<div class="mb-8">
-  <h1 class="text-2xl font-semibold text-ink">Plans &amp; billing</h1>
-  <p class="text-sm text-gray-400 mt-1">Pay monthly, quarterly or yearly · cancel anytime</p>
-</div>
+{% include "components/page_header.html" with title="Plans & billing" description="Pay monthly, quarterly or yearly · cancel anytime" %}
 
 {% if is_operator %}
 <p class="mb-6 text-sm text-gray-600">Operators manage packages, payment methods and bank transfers in the <a class="text-accent underline" href="{% url 'core:plans' %}">Operator console</a>.</p>
@@ -19,36 +16,34 @@
   <div class="bg-surface border border-border rounded-2xl p-6 mb-8">
     <div class="flex flex-wrap items-center justify-between gap-4">
       <div>
-        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Current plan</p>
-        <p class="text-lg font-semibold text-ink mt-1">
+        <p class="text-xs font-semibold text-ink-subtle uppercase tracking-wider">Current plan</p>
+        <p class="text-lg font-semibold text-ink mt-1 flex flex-wrap items-center gap-2">
           {{ subscription.plan.name }}
-          <span class="text-sm font-normal capitalize
-            {% if subscription.status == 'active' %}text-green-600
-            {% elif subscription.status == 'trialing' or subscription.status == 'incomplete' %}text-amber-600
-            {% elif subscription.status == 'expired' or subscription.status == 'past_due' %}text-red-600
-            {% else %}text-gray-500{% endif %}">· {{ subscription.get_status_display }}</span>
+          {% comment %}Subscription.status as stored; an incomplete one with a bank transfer in review says so.{% endcomment %}
+          {% if subscription.status == 'incomplete' and manual_pending %}<span class="badge badge-info">Payment in review</span>
+          {% else %}<span class="badge {% if subscription.status == 'active' %}badge-success{% elif subscription.status == 'trialing' %}badge-info{% elif subscription.status == 'incomplete' %}badge-warning{% elif subscription.status == 'expired' or subscription.status == 'past_due' %}badge-danger{% else %}badge-neutral{% endif %}">{{ subscription.get_status_display }}</span>{% endif %}
         </p>
         {% if subscription.is_trialing and subscription.trial_ends_at %}
-          <p class="text-xs text-gray-400 mt-1">Trial ends {{ subscription.trial_ends_at|date:"M j, Y" }}</p>
+          <p class="text-xs text-ink-subtle mt-1">Trial ends {{ subscription.trial_ends_at|date:"M j, Y" }}</p>
         {% elif subscription.cancel_at_period_end and subscription.current_period_end %}
-          <p class="text-xs text-amber-600 mt-1">Ends {{ subscription.current_period_end|date:"M j, Y" }} · won't renew</p>
+          <p class="text-xs tone-amber-fg mt-1">Ends {{ subscription.current_period_end|date:"M j, Y" }} · won't renew</p>
         {% elif subscription.status == 'past_due' %}
-          <p class="text-xs text-red-600 mt-1">Renewal not paid yet. Pay below to keep your features.</p>
+          <p class="text-xs tone-coral-fg mt-1">Renewal not paid yet. Pay below to keep your features.</p>
         {% elif subscription.current_period_end %}
-          <p class="text-xs text-gray-400 mt-1">Renews {{ subscription.current_period_end|date:"M j, Y" }}</p>
+          <p class="text-xs text-ink-subtle mt-1">Renews {{ subscription.current_period_end|date:"M j, Y" }}</p>
         {% endif %}
       </div>
       {% if credit.balance %}
       <div class="text-right">
-        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Account credit</p>
+        <p class="text-xs font-semibold text-ink-subtle uppercase tracking-wider">Account credit</p>
         <p class="text-lg font-semibold text-ink mt-1 tabular-nums">{{ credit.balance|money }}</p>
-        <p class="text-xs text-gray-400">Used before your card is charged{% if credit.expires_at %} · some expires {{ credit.expires_at|date:"M j, Y" }}{% endif %}</p>
+        <p class="text-xs text-ink-subtle">Used before your card is charged{% if credit.expires_at %} · some expires {{ credit.expires_at|date:"M j, Y" }}{% endif %}</p>
       </div>
       {% endif %}
     </div>
     {% comment %} Usage: one bar per limit with a cap; unlimited ones show the count only {% endcomment %}
     <div class="mt-5 pt-4 border-t border-border">
-      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Usage</p>
+      <p class="text-xs font-semibold text-ink-subtle uppercase tracking-wider mb-3">Usage</p>
       <ul class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
         {% for u in usage %}
         <li>
@@ -65,30 +60,36 @@
         {% endfor %}
       </ul>
     </div>
-    {% if subscription.status == 'incomplete' or subscription.status == 'past_due' or subscription.status == 'expired' %}
-      <div class="mt-4 pt-4 border-t border-border flex items-center justify-between gap-3">
-        <p class="text-xs text-amber-600">{% if subscription.status == 'incomplete' %}Payment required to activate this plan.{% else %}Pay to keep using {{ subscription.plan.name }}.{% endif %}</p>
+    {% if manual_pending and subscription.status != 'active' %}
+      {% comment %}A bank transfer is in review: asking for payment again here would invite paying twice.{% endcomment %}
+      <div class="mt-4 pt-4 border-t border-border">
+        <p class="text-sm text-ink">Your bank transfer for {{ manual_pending.plan.name }} was sent for review on {{ manual_pending.created_at|date:"M j, Y" }}{% if manual_pending.reference %} (reference <span class="font-mono break-all">{{ manual_pending.reference }}</span>){% endif %}.</p>
+        <p class="text-xs text-ink-subtle mt-1">Your plan switches on once the payment is confirmed. You don't need to pay again.</p>
+      </div>
+    {% elif subscription.status == 'incomplete' or subscription.status == 'past_due' or subscription.status == 'expired' %}
+      <div class="mt-4 pt-4 border-t border-border flex flex-wrap items-center justify-between gap-3">
+        <p class="text-xs tone-amber-fg">{% if subscription.status == 'incomplete' %}Payment required to activate this plan.{% else %}Pay to keep using {{ subscription.plan.name }}.{% endif %}</p>
         {% if subscription.status == 'incomplete' %}
         <a href="{% url 'billing:pay' %}" class="btn btn-primary btn-sm">Complete payment</a>
         {% elif subscription.recurring_id %}
         {% comment %} The provider retries the renewal; a second way to pay could pay it twice {% endcomment %}
-        <span class="text-xs text-gray-400">Your payment provider will retry automatically.</span>
+        <span class="text-xs text-ink-subtle">Your payment provider will retry automatically.</span>
         {% elif payments_enabled and payment_methods %}
         <a href="/billing/checkout/?plan={{ subscription.plan.slug }}&period={{ subscription.billing_period }}"
-           class="btn btn-primary btn-sm">Renew now</a>
+           class="btn btn-primary btn-sm" hx-boost="false" data-busy-link><span>Renew now</span></a>
         {% endif %}
       </div>
     {% elif subscription.status == 'active' and subscription.cancel_at_period_end %}
-      <div class="mt-4 pt-4 border-t border-border flex items-center justify-between gap-3">
-        <p class="text-xs text-gray-400">You've cancelled. You keep {{ subscription.plan.name }} until {{ subscription.current_period_end|date:"M j, Y" }}.</p>
+      <div class="mt-4 pt-4 border-t border-border flex flex-wrap items-center justify-between gap-3">
+        <p class="text-xs text-ink-subtle">You've cancelled. You keep {{ subscription.plan.name }} until {{ subscription.current_period_end|date:"M j, Y" }}.</p>
         <form method="post" action="{% url 'billing:resume' %}">
           {% csrf_token %}
           <button class="btn btn-secondary btn-sm" type="submit">Keep my plan</button>
         </form>
       </div>
     {% elif subscription.status == 'active' and subscription.plan.price_monthly > 0 %}
-      <div class="mt-4 pt-4 border-t border-border flex items-center justify-between gap-3">
-        <p class="text-xs text-gray-400">Billed {{ subscription.get_billing_period_display|lower }}. {{ renewal_note }}</p>
+      <div class="mt-4 pt-4 border-t border-border flex flex-wrap items-center justify-between gap-3">
+        <p class="text-xs text-ink-subtle">Billed {{ subscription.get_billing_period_display|lower }}. {{ renewal_note }}</p>
         <form method="post" action="{% url 'billing:cancel' %}" hx-confirm="Cancel your subscription? You keep your plan until the end of the period you paid for, and won't be charged again." hx-confirm-danger
               hx-post="{% url 'billing:cancel' %}" hx-swap="none">
           {% csrf_token %}
@@ -102,19 +103,14 @@
 <div x-data='{
        period: "monthly",
        pricing: {{ period_pricing_json|safe }},
-       priceFor(monthly) { return (monthly * this.pricing[this.period].months * this.pricing[this.period].multiplier).toFixed(0); },
      }'>
 
 {% comment %} Billing period selector {% endcomment %}
 <div class="mb-6 flex justify-center">
-  <div class="inline-flex rounded-xl border border-border bg-surface p-1 gap-1">
+  <div class="segmented flex-wrap justify-center" role="group" aria-label="Billing period">
     {% for value, label in billing_periods %}
-      <button type="button"
-              @click="period = '{{ value }}'"
-              :class="period === '{{ value }}' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-ink'"
-              class="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors">
-        {{ label }}
-      </button>
+      <button type="button" @click="period = '{{ value }}'" :aria-pressed="period === '{{ value }}' ? 'true' : 'false'"
+              aria-pressed="{% if value == 'monthly' %}true{% else %}false{% endif %}">{{ label }}</button>
     {% endfor %}
   </div>
 </div>
@@ -126,15 +122,13 @@
 {% comment %} Pricing grid {% endcomment %}
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
   {% for card in cards %}{% with plan=card.plan %}
-    <div class="bg-surface rounded-2xl border
-                {% if plan.slug == 'professional' %}border-blue-500 ring-2 ring-blue-500 relative mt-3{% else %}border-border{% endif %}
-                shadow-sm p-6 flex flex-col">
+    <div class="bg-surface rounded-2xl border relative
+                {% if plan.slug == 'professional' %}border-accent ring-2 ring-accent mt-3{% else %}border-border{% endif %}
+                shadow-card p-6 flex flex-col" x-data='{ prices: {{ card.prices_json }} }'>
 
       {% if plan.slug == 'professional' %}
-        <div class="absolute -top-3.5 inset-x-0 flex justify-center">
-          <span class="bg-blue-600 text-white text-[10px] font-semibold uppercase tracking-wider px-3 py-1 rounded-full">
-            Most Popular
-          </span>
+        <div class="absolute -top-3 inset-x-0 flex justify-center">
+          <span class="badge badge-info uppercase tracking-wider shadow-card">Most popular</span>
         </div>
       {% endif %}
 
@@ -143,25 +137,26 @@
         <p class="text-base font-semibold text-ink">
           {{ plan.name }}
         </p>
-        <div class="mt-1 flex items-end gap-1">
-          <span class="text-3xl font-bold text-ink">{% currency_symbol %}<span x-text="priceFor({{ plan.price_monthly|stringformat:'f' }})">{{ plan.price_monthly|floatformat:0 }}</span></span>
-          {% if plan.price_monthly > 0 %}<span class="text-sm text-gray-400 mb-0.5" x-text="pricing[period].label.toLowerCase()"></span>{% endif %}
+        {% comment %}Exactly what checkout charges for the chosen term (views.pricing_page, pricing.price_for).{% endcomment %}
+        <div class="mt-1 flex flex-wrap items-end gap-x-1">
+          <span class="text-3xl font-bold text-ink tabular-nums" x-text="prices[period]">{{ plan.price_monthly|money }}</span>
+          {% if plan.price_monthly > 0 %}<span class="text-sm text-ink-subtle mb-0.5" x-text="pricing[period].label.toLowerCase()">monthly</span>{% endif %}
         </div>
         {% if plan.slug == 'trial' %}
-          <p class="text-xs text-gray-400 mt-1">{{ plan.trial_days }}-day free trial</p>
+          <p class="text-xs text-ink-subtle mt-1">{{ plan.trial_days }}-day free trial</p>
         {% endif %}
       </div>
 
       {% comment %} Limits and features: billing_api.plan_card, the same source as signup and the landing page {% endcomment %}
       <ul class="space-y-2 text-sm text-gray-600 flex-1 mb-6">
         {% for line in card.limits %}
-        <li class="flex items-start gap-2">{% include "components/icon.html" with name="check" class="w-4 h-4 text-green-500 shrink-0 mt-0.5" %}{{ line }}</li>
+        <li class="flex items-start gap-2">{% include "components/icon.html" with name="check" class="w-4 h-4 text-teal-700 shrink-0 mt-0.5" %}{{ line }}</li>
         {% endfor %}
         {% for f in card.features %}
-        <li class="flex items-start gap-2">{% include "components/icon.html" with name="check" class="w-4 h-4 text-green-500 shrink-0 mt-0.5" %}{{ f.name }}</li>
+        <li class="flex items-start gap-2">{% include "components/icon.html" with name="check" class="w-4 h-4 text-teal-700 shrink-0 mt-0.5" %}{{ f.name }}</li>
         {% endfor %}
         {% for soon in card.coming_soon %}
-        <li class="flex items-start gap-2 text-gray-400"><span class="w-4 shrink-0 text-center" aria-hidden="true">○</span>{{ soon.name }} <span class="badge badge-neutral">Coming soon</span></li>
+        <li class="flex items-start gap-2 text-ink-subtle"><span class="w-4 shrink-0 text-center" aria-hidden="true">○</span>{{ soon.name }} <span class="badge badge-neutral">Coming soon</span></li>
         {% endfor %}
       </ul>
 
@@ -171,29 +166,33 @@
           Current plan
         </span>
       {% elif plan.slug == 'trial' %}
-        <span class="block w-full text-center tone-neutral-bg text-gray-400 text-sm font-medium py-2.5 rounded-xl cursor-default">
+        <span class="block w-full text-center tone-neutral-bg text-ink-subtle text-sm font-medium py-2.5 rounded-xl cursor-default">
           Auto-applied on signup
         </span>
       {% elif not payments_enabled or not payment_methods %}
-        <span class="block w-full text-center tone-neutral-bg text-gray-400 text-sm font-medium py-2.5 rounded-xl cursor-default">
+        <span class="block w-full text-center tone-neutral-bg text-ink-subtle text-sm font-medium py-2.5 rounded-xl cursor-default">
           Billing currently unavailable
         </span>
+      {% elif manual_pending %}
+        <span class="block w-full text-center tone-neutral-bg text-ink-subtle text-sm font-medium py-2.5 rounded-xl cursor-default">
+          Bank transfer in review
+        </span>
       {% elif payment_methods|length == 1 %}
+        {% comment %}hx-boost="false": checkout leaves for the provider. data-busy-link: one click starts one checkout.{% endcomment %}
         <a :href="'/billing/checkout/?plan={{ plan.slug }}&method={{ payment_methods.0.code }}&period=' + period"
-           class="block w-full text-center
-                  {% if plan.slug == 'professional' %}bg-blue-600 hover:bg-blue-700{% else %}bg-gray-900 hover:bg-gray-800{% endif %}
-                  text-white text-sm font-medium py-2.5 rounded-xl transition-colors">
-          {% if subscription and subscription.plan.price_monthly < plan.price_monthly %}Upgrade to {{ plan.name }}{% else %}Choose {{ plan.name }}{% endif %}
+           href="/billing/checkout/?plan={{ plan.slug }}&method={{ payment_methods.0.code }}&period=monthly"
+           hx-boost="false" data-busy-link
+           class="btn {% if plan.slug == 'professional' %}btn-primary{% else %}btn-secondary{% endif %} btn-block">
+          <span>{% if subscription and subscription.plan.price_monthly < plan.price_monthly %}Upgrade to {{ plan.name }}{% else %}Choose {{ plan.name }}{% endif %}</span>
         </a>
       {% else %}
         <div class="space-y-2">
           {% for method in payment_methods %}
             <a :href="'/billing/checkout/?plan={{ plan.slug }}&method={{ method.code }}&period=' + period"
-               class="block w-full text-center
-                      {% if forloop.first %}{% if plan.slug == 'professional' %}bg-blue-600 hover:bg-blue-700{% else %}bg-gray-900 hover:bg-gray-800{% endif %} text-white
-                      {% else %}bg-surface border border-border hover:bg-surface-muted text-gray-700{% endif %}
-                      text-sm font-medium py-2.5 rounded-xl transition-colors">
-              {{ method.name }}
+               href="/billing/checkout/?plan={{ plan.slug }}&method={{ method.code }}&period=monthly"
+               hx-boost="false" data-busy-link
+               class="btn {% if forloop.first and plan.slug == 'professional' %}btn-primary{% else %}btn-secondary{% endif %} btn-block">
+              <span>{{ method.name }}</span>
             </a>
           {% endfor %}
         </div>
@@ -218,15 +217,17 @@
 {% if compare_rows %}
 <section class="mt-6" aria-labelledby="h-compare">
   <h2 id="h-compare" class="font-semibold text-ink mb-3">Compare plans</h2>
+  {% comment %}.table--cards: below md each feature is a card listing every plan. A wide table in a
+  scroll box still widened a phone's page to 440px (R1).{% endcomment %}
   <div class="table-wrap">
-    <table class="table">
+    <table class="table table--cards">
       <thead><tr><th>Feature</th>{% for card in cards %}<th class="text-center">{{ card.plan.name }}</th>{% endfor %}</tr></thead>
       <tbody>
         {% for row in compare_rows %}
         <tr>
-          <td><span class="text-ink">{{ row.feature.name }}</span><span class="block text-xs text-gray-500">{{ row.feature.pitch }}</span></td>
-          {% for included in row.cells %}
-          <td class="text-center">{% if included %}{% include "components/icon.html" with name="check" class="w-4 h-4 text-green-600 inline" %}<span class="sr-only">Included</span>{% else %}<span class="text-gray-300" aria-label="Not included">—</span>{% endif %}</td>
+          <td><span class="text-ink">{{ row.feature.name }}</span><span class="block text-xs text-ink-subtle">{{ row.feature.pitch }}</span></td>
+          {% for plan_name, included in row.labelled %}
+          <td class="md:text-center" data-label="{{ plan_name }}">{% if included %}{% include "components/icon.html" with name="check" class="w-4 h-4 text-teal-700 inline" %}<span class="sr-only">Included</span>{% else %}<span class="text-ink-subtle" aria-hidden="true">—</span><span class="sr-only">Not included</span>{% endif %}</td>
           {% endfor %}
         </tr>
         {% endfor %}
@@ -236,8 +237,8 @@
 </section>
 {% endif %}
 
-<p class="text-center text-xs text-gray-400 mt-10">
-  Need WhatsApp + email at higher volume? <a href="/dashboard/" class="text-blue-600">Contact us from your dashboard.</a>
+<p class="text-center text-xs text-ink-subtle mt-10">
+  Need WhatsApp + email at higher volume? <a href="/dashboard/" class="text-accent hover:text-accent-strong underline">Contact us from your dashboard.</a>
 </p>
 
 {% endblock %}

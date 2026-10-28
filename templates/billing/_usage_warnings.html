@@ -1,5 +1,7 @@
 {% comment %}Limits at 80% or more this period (billing_api.usage_warnings). Shared by the dashboard
-and the billing page. Pass usage_warnings.{% endcomment %}
+and the billing page. Pass usage_warnings. Held WhatsApp campaign messages are dropped after
+WHATSAPP_CAMPAIGN_HOLD_MAX_HOURS, so the copy doesn't promise they're never lost.{% endcomment %}
+{% load billing_money %}
 {% for w in usage_warnings %}
 <div class="alert {% if w.percent >= 100 %}alert-danger{% else %}alert-warning{% endif %}" role="status">
   {% include "components/icon.html" with name="alert" %}
@@ -7,7 +9,7 @@ and the billing page. Pass usage_warnings.{% endcomment %}
     {% if w.percent >= 100 %}
     <p class="font-medium">You've used all {{ w.limit }} {{ w.unit }} your plan includes ({{ w.name|lower }}).</p>
     {% if w.over_limit == "hold" %}
-    <p class="mt-0.5">Anything more is held, not sent and not lost, until it resets on {{ w.resets|date:"j M" }}. <a href="{% url 'billing:plans' %}" class="font-medium underline">Upgrade</a> to send more.</p>
+    <p class="mt-0.5">Anything more waits, not sent, until it resets on {{ w.resets|date:"j M" }}.{% if w.key == 'whatsapp_marketing_msgs' or w.key == 'whatsapp_utility_msgs' %}{% campaign_hold_hours as hold %} Campaign messages that wait more than {{ hold }} hours aren't sent.{% endif %} <a href="{% url 'billing:plans' %}" class="font-medium underline">Upgrade</a> to send more.</p>
     {% else %}
     <p class="mt-0.5">Nothing is blocked — this is a heads-up, not a limit on your customers. It resets on {{ w.resets|date:"j M" }}. <a href="{% url 'billing:plans' %}" class="font-medium underline">Upgrade</a> if you'd like more.</p>
     {% endif %}

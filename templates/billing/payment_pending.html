@@ -1,22 +1,88 @@
 {% extends "base.html" %}
 {% block title %}Confirming payment — {{ site.app_name|default:"Akilent" }}{% endblock %}
 {% block content %}
-
-<div class="max-w-md mx-auto text-center py-16"
-     {% if payment %}x-data="{ status: '{{ payment.status }}' }"
-     x-init="const poll = setInterval(async () => {
-       const r = await fetch('{% url 'billing:payment-status' payment.reference %}', {headers: {'Accept': 'application/json'}});
-       if (!r.ok) return;
-       status = (await r.json()).status;
-       if (status !== 'pending') { clearInterval(poll); window.location = '/billing/plans/'; }
-     }, 3000); setTimeout(() => clearInterval(poll), 120000)"{% endif %}>
-  <h1 class="text-2xl font-semibold text-ink mb-2">Confirming your payment</h1>
-  <p class="text-sm text-gray-400 mb-6">
-    We're waiting for the payment provider to confirm. This usually takes a few seconds, and this
-    page updates by itself. If you were charged and nothing changes, contact support{% if payment %}
-    with reference <code class="text-xs">{{ payment.reference }}</code>{% endif %}.
-  </p>
-  <a href="/billing/plans/" class="btn btn-primary btn-sm">Back to plans</a>
+{% comment %}billing.views.payment_return, when the provider hasn't confirmed yet. Polls
+billing:payment-status and says what the payment record says (BillingPayment.status):
+- succeeded: reload; the return view then shows the confirmation and moves on (it doesn't
+  verify again for a payment that has already succeeded).
+- failed / abandoned / requires_action: said here. Not a reload: that would ask the provider
+  to verify again.
+- still pending after two minutes: polling stops and the page says what happens next.
+With no payment found (an unknown or someone else's reference) nothing is polled.{% endcomment %}
+<div class="max-w-md mx-auto py-12">
+  {% if payment %}
+  <div class="card card-pad text-center space-y-4"
+       x-data="{
+         status: '{{ payment.status|escapejs }}',
+         gaveUp: false,
+         unreachable: false,
+         _poll: null,
+         _stop: null,
+         init() {
+           if (this.status !== 'pending') return this.settle();
+           this._poll = setInterval(() => this.check(), 3000);
+           this._stop = setTimeout(() => { clearInterval(this._poll); this.gaveUp = true; }, 120000);
+         },
+         destroy() { clearInterval(this._poll); clearTimeout(this._stop); },
+         async check() {
+           try {
+             const r = await fetch('{% url 'billing:payment-status' payment.reference %}', { headers: { 'Accept': 'application/json' } });
+             if (!r.ok) throw new Error(r.status);
+             this.unreachable = false;
+             this.status = (await r.json()).status;
+             if (this.status !== 'pending') this.settle();
+           } catch (e) { this.unreachable = true; }
+         },
+         settle() {
+           clearInterval(this._poll); clearTimeout(this._stop);
+           if (this.status === 'succeeded') window.location.reload();
+         },
+       }">
+    <div aria-live="polite" class="space-y-2">
+      <template x-if="status === 'pending' && !gaveUp">
+        <div class="space-y-2">
+          <span class="inline-flex h-10 w-10 items-center justify-center rounded-full tone-info" aria-hidden="true">
+            <span class="w-5 h-5 rounded-full border-2 border-current border-r-transparent animate-spin"></span>
+          </span>
+          <h1 class="text-xl font-semibold text-ink">Confirming your payment</h1>
+          <p class="text-sm text-gray-600">We're waiting for the payment provider to confirm it. This usually takes a few seconds, and this page updates by itself.</p>
+        </div>
+      </template>
+      <template x-if="status === 'pending' && gaveUp">
+        <div class="space-y-2">
+          <h1 class="text-xl font-semibold text-ink">Not confirmed yet</h1>
+          <p class="text-sm text-gray-600">The payment provider hasn't confirmed it yet. You can leave this page: your plan switches on by itself once it does. Don't pay again in the meantime.</p>
+        </div>
+      </template>
+      <template x-if="status === 'succeeded'">
+        <div class="space-y-2">
+          <h1 class="text-xl font-semibold text-ink">Payment confirmed</h1>
+          <p class="text-sm text-gray-600">Taking you on…</p>
+        </div>
+      </template>
+      <template x-if="status === 'failed' || status === 'abandoned'">
+        <div class="space-y-2">
+          <h1 class="text-xl font-semibold text-ink">The payment didn't go through</h1>
+          <p class="text-sm text-gray-600">You haven't been charged. You can try again from Plans.</p>
+        </div>
+      </template>
+      <template x-if="status === 'requires_action'">
+        <div class="space-y-2">
+          <h1 class="text-xl font-semibold text-ink">The payment needs another step</h1>
+          <p class="text-sm text-gray-600">The payment provider asked for more before it can take the payment. Start it again from Plans.</p>
+        </div>
+      </template>
+      <p x-show="unreachable && status === 'pending'" x-cloak class="text-sm tone-amber-fg">We can't check right now. We'll keep trying.</p>
+    </div>
+    <p class="text-xs text-ink-subtle">If you were charged and your plan doesn't switch on within a day, contact support with reference <code class="font-mono break-all">{{ payment.reference }}</code>.</p>
+    <a href="{% url 'billing:plans' %}" class="btn btn-secondary btn-sm">Back to plans</a>
+  </div>
+  {% else %}
+  <div class="card card-pad text-center space-y-3">
+    <h1 class="text-xl font-semibold text-ink">We couldn't find this payment</h1>
+    <p class="text-sm text-gray-600">There's no payment on your account matching this link. If you were charged, contact support and we'll sort it out.</p>
+    <a href="{% url 'billing:plans' %}" class="btn btn-secondary btn-sm">Back to plans</a>
+  </div>
+  {% endif %}
 </div>
-
 {% endblock %}

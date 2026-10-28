@@ -1,8 +1,6 @@
 {
   "automation::gray-text": 101,
   "automation::px-text": 1,
-  "billing::gray-text": 35,
-  "billing::px-text": 2,
   "commerce::gray-text": 14,
   "contacts::gray-text": 86,
   "crm::gray-text": 19,

@@ -5,10 +5,10 @@
 {% block content %}
 <div class="max-w-lg mx-auto">
   <div class="mb-6">
-    <h1 class="text-2xl font-semibold text-ink">Pay by bank transfer</h1>
-    <p class="text-sm text-gray-400 mt-1">{{ plan.name }} · amount to transfer <span class="font-semibold text-ink">{{ payment.amount_due|money:payment.currency }}</span></p>
+    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Pay by bank transfer</h1>
+    <p class="text-sm text-ink-subtle mt-1">{{ plan.name }} · amount to transfer <span class="font-semibold text-ink">{{ payment.amount_due|money:payment.currency }}</span></p>
     {% if payment.credit_applied or payment.unused_time_value %}
-      <p class="text-xs text-gray-400 mt-1">{{ payment.gross_amount|money:payment.currency }}{% if payment.unused_time_value %}, less unused time on your current plan{% endif %}{% if payment.credit_applied %}, less {{ payment.credit_applied|money:payment.currency }} account credit{% endif %}.</p>
+      <p class="text-xs text-ink-subtle mt-1">{{ payment.gross_amount|money:payment.currency }}{% if payment.unused_time_value %}, less unused time on your current plan{% endif %}{% if payment.credit_applied %}, less {{ payment.credit_applied|money:payment.currency }} account credit{% endif %}.</p>
     {% endif %}
   </div>
 
@@ -17,13 +17,13 @@
     {% if instructions %}
       <p class="text-sm text-gray-600 whitespace-pre-line">{{ instructions }}</p>
     {% else %}
-      <p class="text-sm text-gray-400">Contact support for bank transfer details.</p>
+      <p class="text-sm text-ink-subtle">Contact support for bank transfer details.</p>
     {% endif %}
   </div>
 
   <div class="card card-pad">
     <h2 class="font-semibold mb-4">Submit your payment reference</h2>
-    <form method="post" action="{% url 'billing:manual-submit' %}" enctype="multipart/form-data" hx-boost="false" class="space-y-4">
+    <form method="post" action="{% url 'billing:manual-submit' %}" enctype="multipart/form-data" hx-boost="false" data-busy-submit class="space-y-4">
       {% csrf_token %}
       <input type="hidden" name="payment" value="{{ payment.reference }}">
       {% include "components/form_field.html" with name="reference" label="Transaction reference / sender name" required=True %}
@@ -32,7 +32,8 @@
         <input id="id_proof" name="proof" type="file"
                class="block text-sm text-gray-600 file:mr-3 file:btn file:btn-secondary file:btn-sm file:border-0">
       </div>
-      <button class="btn btn-primary w-full" type="submit">Submit for review</button>
+      {% comment %}data-busy-submit: a second click doesn't send it again (the server keeps every submission).{% endcomment %}
+      <button class="btn btn-primary w-full" type="submit"><span>Submit for review</span></button>
       <p class="help text-center">An admin will review and activate your plan once payment is confirmed.</p>
     </form>
   </div>

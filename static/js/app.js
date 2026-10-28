@@ -535,6 +535,54 @@
     });
   });
 
+  // --- One-shot navigations -------------------------------------------------
+  // A link or a plain (non-htmx) form that starts something on the server and leaves the
+  // page, such as checkout, which creates a payment and goes to the provider. The first
+  // click or submit marks it busy and any further one is ignored, so a double click
+  // doesn't start it twice. Back from the provider can restore this page from the
+  // browser's cache, still busy: pageshow puts it back.
+  //   <a data-busy-link class="btn …"><span>Pay</span></a>
+  //   <form data-busy-submit …><button type="submit" class="btn …"><span>Submit</span></button></form>
+  function markBusy(btn) {
+    btn.setAttribute("aria-busy", "true");
+    if (!btn.querySelector(":scope > .btn-spinner")) {
+      const s = document.createElement("span");
+      s.className = "btn-spinner";
+      s.setAttribute("aria-hidden", "true");
+      btn.prepend(s);
+    }
+  }
+  document.addEventListener("click", function (e) {
+    const a = e.target.closest("a[data-busy-link]");
+    if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    if (a.getAttribute("aria-busy") === "true") { e.preventDefault(); return; }
+    markBusy(a);
+  });
+  document.addEventListener("submit", function (e) {
+    const form = e.target.closest("form[data-busy-submit]");
+    if (!form) return;
+    if (form.dataset.submitting === "1") { e.preventDefault(); return; }
+    if (e.defaultPrevented) return;
+    form.dataset.submitting = "1";
+    form.querySelectorAll("[type=submit]").forEach(function (b) { markBusy(b); b.disabled = true; });
+  });
+  window.addEventListener("pageshow", function () {
+    document.querySelectorAll("a[data-busy-link][aria-busy=true]").forEach(function (a) {
+      a.removeAttribute("aria-busy");
+      const s = a.querySelector(":scope > .btn-spinner");
+      if (s) s.remove();
+    });
+    document.querySelectorAll("form[data-busy-submit][data-submitting]").forEach(function (f) {
+      delete f.dataset.submitting;
+      f.querySelectorAll("[type=submit]").forEach(function (b) {
+        b.disabled = false;
+        b.removeAttribute("aria-busy");
+        const s = b.querySelector(":scope > .btn-spinner");
+        if (s) s.remove();
+      });
+    });
+  });
+
   // --- Copy to clipboard -------------------------------------------------
   // Any .copy-btn copies the .copy-value text in its .copy-row.
   function copyText(text, btn) {
