@@ -284,6 +284,8 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
 .lp-float.remind { left: -1.5rem; bottom: -1.75rem; }
 .lp-float.remind .lp-tile { background: var(--lp-amber-tint); color: var(--lp-amber-ink); }
 .lp-float.order { right: -1rem; top: -1.75rem; }
+.lp-float.approve { right: -1rem; top: -1.75rem; }
+.lp-float.approve .lp-tile { background: var(--lp-teal-tint); color: var(--lp-teal-ink); }
 /* The cards overlap only the window's edges: the order card its title bar, the reminder an empty
    strip at the bottom. They never cover content; the caption clears the reminder. */
 @media (min-width: 640px) {
@@ -333,7 +335,7 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
 .lp-journey::before { content: ""; position: absolute; top: 0; bottom: 0; left: calc(var(--lp-node) / 2); width: 1px; background: var(--lp-line-2); }
 .lp-step { position: relative; display: grid; gap: 1.75rem; align-items: center; counter-increment: step;
   grid-template-columns: minmax(0, 1fr); padding-left: calc(var(--lp-node) + 1rem); }
-@media (max-width: 639px) { .lp-journey { --lp-node: 2.5rem; } .lp-step-art { padding: 1rem .75rem; } }
+@media (max-width: 639px) { .lp-journey { --lp-node: 2.5rem; } .lp-step-art, .lp-stage-panel { padding: 1rem .75rem; } }
 .lp-step::after { content: ""; position: absolute; left: calc(var(--lp-node) / 2); width: 1px; top: calc(-1 * var(--lp-jgap));
   height: calc(var(--lp-jgap) + var(--lp-node) / 2); transform-origin: top; background: linear-gradient(180deg, transparent, var(--lp-teal-on-navy)); }
 .lp-step:first-child::after { top: 0; height: calc(var(--lp-node) / 2); }
@@ -355,15 +357,16 @@ html.js .lp-step.in::after { transform: scaleY(1); }
 .lp-step-tags { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .25rem; }
 .lp-step-tags span { padding: .3125rem .75rem; border-radius: 999px; font-size: .8125rem; font-weight: 500; color: var(--lp-on-navy-mid);
   border: 1px solid var(--lp-line-2); background: color-mix(in srgb, var(--lp-white) 4%, transparent); }
-/* Each picture stands on a stage: a soft glow, a faint dot grid and a hairline frame. */
-.lp-step-art { position: relative; isolation: isolate; width: 100%; padding: clamp(1.25rem, 3.5vw, 2.75rem) clamp(1rem, 3vw, 2.5rem);
+/* Each picture stands on a stage: a soft glow, a faint dot grid and a hairline frame. Shared with
+   Content Studio, which uses the .light version on its white band. */
+.lp-step-art, .lp-stage-panel { position: relative; isolation: isolate; width: 100%; padding: clamp(1.25rem, 3.5vw, 2.75rem) clamp(1rem, 3vw, 2.5rem);
   border-radius: var(--lp-r-xl); border: 1px solid var(--lp-line);
   background:
     radial-gradient(60% 55% at 50% 45%, color-mix(in srgb, var(--color-teal-400) 16%, transparent), transparent 70%),
     radial-gradient(color-mix(in srgb, var(--lp-white) 9%, transparent) 1px, transparent 1.5px) 0 0 / 18px 18px,
     linear-gradient(180deg, color-mix(in srgb, var(--lp-white) 4%, transparent), color-mix(in srgb, var(--lp-white) 1%, transparent)); }
 .lp-step-art .lp-art { max-width: 28rem; margin-inline: auto; }
-.lp-step-art .lp-window { border: 1px solid transparent;
+.lp-step-art .lp-window, .lp-stage-panel .lp-window { border: 1px solid transparent;
   background: linear-gradient(180deg, var(--lp-white) 55%, var(--color-gray-50)) padding-box,
     linear-gradient(150deg, color-mix(in srgb, var(--color-teal-300) 60%, transparent),
       color-mix(in srgb, var(--lp-white) 15%, transparent) 45%, color-mix(in srgb, var(--color-brand-400) 50%, transparent)) border-box; }
@@ -428,8 +431,29 @@ html.js .lp-step.in::after { transform: scaleY(1); }
 .lp-results-note { font-size: .75rem; color: var(--lp-ink-3); }
 
 /* --- Content Studio ------------------------------------------------------ */
-.lp-split { display: grid; gap: 3.5rem; align-items: center; }
-@media (min-width: 1024px) { .lp-split { grid-template-columns: 1fr 1.05fr; gap: 5rem; } }
+/* Content Studio: copy and feature cards on the left, the composer on a light stage on the right. */
+.lp-studio { display: grid; grid-template-columns: minmax(0, 1fr); gap: 3rem; align-items: center; }
+@media (min-width: 1024px) { .lp-studio { grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: clamp(3rem, 5vw, 5rem); } }
+.lp-studio-copy .lp-lead { max-width: 34rem; }
+.lp-sfeats { list-style: none; margin: 2.25rem 0 0; padding: 0; display: grid; gap: .75rem; }
+@media (min-width: 560px) { .lp-sfeats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.lp-sfeat { display: grid; gap: .5rem; align-content: start; padding: 1.125rem 1.25rem; border-radius: var(--lp-r-md);
+  border: 1px solid var(--lp-rule); background: var(--lp-white); box-shadow: var(--lp-shadow-1); }
+.lp-sfeat .lp-tile { width: 2.25rem; height: 2.25rem; border-radius: 10px; margin-bottom: .25rem; }
+.lp-sfeat .lp-h3 { font-size: 1rem; }
+.lp-sfeat .lp-small { color: var(--lp-ink-2); font-size: .875rem; line-height: 1.55; }
+/* The measure card backs the headline: full width and tinted. */
+.lp-sfeat.measure { grid-column: 1 / -1; grid-template-columns: auto 1fr; column-gap: 1rem; align-items: start;
+  background: linear-gradient(135deg, var(--lp-teal-tint), var(--lp-brand-tint)); border-color: var(--color-teal-200); }
+.lp-sfeat.measure .lp-tile { grid-row: span 2; margin: 0; background: var(--lp-white); }
+.lp-stage-panel.light { border-color: var(--lp-rule);
+  background:
+    radial-gradient(60% 55% at 55% 40%, color-mix(in srgb, var(--color-teal-300) 22%, transparent), transparent 70%),
+    radial-gradient(50% 45% at 20% 85%, color-mix(in srgb, var(--color-brand-300) 18%, transparent), transparent 70%),
+    radial-gradient(color-mix(in srgb, var(--lp-ink) 9%, transparent) 1px, transparent 1.5px) 0 0 / 18px 18px,
+    var(--lp-paper); }
+.lp-stage-panel.light .lp-art-cap { color: var(--lp-ink-3); }
+.lp-composer-art { max-width: 30rem; margin-inline: auto; }
 .lp-ticks { list-style: none; margin: 2rem 0 0; padding: 0; display: grid; gap: 1rem; }
 .lp-ticks li { position: relative; padding-left: 2.25rem; }
 /* A tinted disc (::before) with a tick drawn by a mask in the token colour (::after). */
@@ -449,11 +473,25 @@ html.js .lp-step.in::after { transform: scaleY(1); }
   color: var(--lp-ink-3); border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .lp-tabs span.on { color: var(--lp-ink); border-bottom-color: var(--lp-ink); }
 .lp-tabs svg { width: .875rem; height: .875rem; }
+.lp-versions { margin-left: auto; align-self: center; padding: .1875rem .5rem; border-radius: 999px; font-style: normal; font-size: .6875rem;
+  font-weight: 600; color: var(--lp-teal-ink); background: var(--lp-teal-tint); }
 .lp-compose-body { display: grid; gap: 1rem; padding: 1.125rem; }
 @media (min-width: 560px) { .lp-compose-body { grid-template-columns: 7.5rem 1fr; } }
-.lp-thumb { aspect-ratio: 1; border-radius: 12px; background: linear-gradient(160deg, var(--color-teal-100), var(--color-brand-100)); position: relative; overflow: hidden; }
-.lp-thumb::after { content: ""; position: absolute; left: 50%; bottom: -8%; width: 46%; aspect-ratio: 3 / 4.3; transform: translateX(-50%);
-  background: var(--lp-white); clip-path: polygon(32% 0, 68% 0, 72% 14%, 64% 24%, 100% 100%, 0 100%, 36% 24%, 28% 14%); }
+/* The post image: the same treatment as the journey's post. */
+.lp-thumb { aspect-ratio: 1; border-radius: 12px; position: relative; overflow: hidden; max-width: 9rem;
+  background: radial-gradient(120% 90% at 30% 20%, var(--color-amber-100), transparent 60%),
+              linear-gradient(160deg, var(--color-teal-100) 0%, var(--color-brand-100) 100%); }
+.lp-thumb .dress { position: absolute; left: 50%; bottom: -8%; width: 46%; aspect-ratio: 3 / 4.3; transform: translateX(-50%);
+  background: linear-gradient(180deg, var(--lp-white), var(--color-gray-100)); clip-path: polygon(32% 0, 68% 0, 72% 14%, 64% 24%, 100% 100%, 0 100%, 36% 24%, 28% 14%);
+  box-shadow: 0 20px 40px -10px color-mix(in srgb, var(--color-gray-950) 25%, transparent); }
+/* Each channel's own time; the dots double as the calendar's legend. */
+.lp-times { display: grid; gap: .375rem; padding: 0 1.125rem 1rem; }
+.lp-times div { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .5rem; padding: .5rem .75rem;
+  border-radius: 10px; background: var(--color-gray-50); border: 1px solid var(--lp-rule); font-size: .8125rem; color: var(--lp-ink-2); }
+.lp-times b { font-weight: 650; color: var(--lp-ink); font-variant-numeric: tabular-nums; }
+.lp-times i, .lp-week div i { width: .5rem; height: .5rem; border-radius: 999px; }
+.lp-times i.ig { background: var(--color-coral-400); }
+.lp-times i.fb { background: var(--color-brand-400); }
 .lp-caption { display: grid; gap: .5rem; font-size: .875rem; line-height: 1.55; color: var(--lp-ink); }
 .lp-caption .ai { display: inline-flex; align-items: center; gap: .375rem; font-size: .75rem; font-weight: 600; color: var(--color-brand-600); }
 .lp-caption .ai svg { width: .8125rem; height: .8125rem; }
@@ -466,7 +504,7 @@ html.js .lp-step.in::after { transform: scaleY(1); }
 .lp-week div { display: grid; gap: .25rem; justify-items: center; padding: .5rem .25rem; border-radius: 10px; background: var(--color-gray-50);
   font-size: .6875rem; color: var(--lp-ink-3); font-variant-numeric: tabular-nums; }
 .lp-week div b { font-size: .8125rem; color: var(--lp-ink); font-weight: 650; }
-.lp-week div i { width: .4375rem; height: .4375rem; border-radius: 999px; background: transparent; }
+.lp-week div i { background: transparent; }
 .lp-week div i.ig { background: var(--color-coral-400); }
 .lp-week div i.fb { background: var(--color-brand-400); }
 .lp-week div.on { background: var(--lp-teal-tint); box-shadow: inset 0 0 0 1px var(--color-teal-200); }

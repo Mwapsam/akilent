@@ -194,3 +194,37 @@ def test_the_journey_follows_the_channels(client, settings, plans, on, steps, ab
         assert 'aria-label="Illustration' in body, name
     # The step map in the heading links to exactly the steps shown.
     assert re.findall(r'href="#step-([a-z]+)"', journey) == steps
+
+
+def _studio(html):
+    return html.split('<section id="content-studio"', 1)[1].split("</section>", 1)[0]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "on, measure, absent",
+    [
+        (("whatsapp", "instagram", "facebook"), "post-chat-link post-results", []),
+        (("instagram", "facebook"), "post-metrics", ["WhatsApp", "chat link"]),
+        (("instagram",), "post-metrics", ["WhatsApp", "Facebook", "2 versions"]),
+        (("facebook",), "post-metrics", ["WhatsApp", "Instagram", "2 versions"]),
+    ],
+)
+def test_content_studio_backs_its_headline_and_follows_the_channels(
+    client, settings, plans, on, measure, absent
+):
+    """The measure card backs "measurable results" (post results with the WhatsApp chat
+    link, else reach and engagement), and the composer names only channels that are on."""
+    _only(settings, *on)
+    studio = _studio(_html(client))
+    card = studio.split('class="lp-sfeat measure"', 1)[1].split("</li>", 1)[0]
+    assert f'data-claim="{measure}"' in card
+    for word in absent:
+        assert word not in studio, word
+    if "instagram" in on and "facebook" in on:
+        assert "2 versions" in studio
+    # One time per channel that's on.
+    assert len(re.findall(r'<div><i class="(ig|fb)"></i>', studio)) == len(
+        {"instagram", "facebook"} & set(on)
+    )
+    assert 'aria-label="Illustration' in studio

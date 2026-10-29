@@ -1260,3 +1260,30 @@ The faint outline numerals from the plan were dropped: they collided with the st
 - Landing tests pass. `ruff`: clean. Drift: 574.
 - Browser: 26/26 with WhatsApp on (a 2px overflow at 360 was found and fixed: the step column now shrinks) and 26/26 with it off.
 - Checked by eye at 1440 in both setups, and at 390.
+
+### Content Studio refinement (same day)
+
+**Before:**
+- a flat white composer on a white band
+- a four-item tick list
+- a "measurable results" headline with nothing in the section to back it when WhatsApp is off
+- a picture that showed one time for every channel
+
+**Now:**
+- **Cards:** four feature cards in a 2×2 grid, plus a full-width tinted "measure" card. It shows post results through the WhatsApp chat link, or each post's reach and engagement without WhatsApp (`post-metrics`).
+- **Composer:** stands on a light stage (the shared `.lp-stage-panel`).
+- **Composer details:**
+  - a "2 versions" counter
+  - a real post thumbnail
+  - a time row for each live channel (whose dots double as the calendar legend)
+  - an "Approved by Ruth" card on the title-bar corner
+
+**Channel fixes found by the new test:**
+- The first card named both Instagram and the Facebook Page even with only one on. With one channel on, it now says "Publish to Instagram" / "Publish to your Page" (`instagram-publishing` / `facebook-publishing`).
+- "One post, every channel" was renamed to "One post, a version for each", because "every channel" is a banned phrase (`test_inbox_is_not_claimed_for_channels_that_do_not_arrive_there`).
+
+**Results:**
+- New test `test_content_studio_backs_its_headline_and_follows_the_channels` covers four setups.
+- Landing tests pass. `ruff`: clean. Drift: 574.
+- Browser: 26/26 with WhatsApp on and 26/26 with it off. A 2px overflow at 360 was found and fixed: the studio column now shrinks.
+- Checked by eye at 1440 and 390.

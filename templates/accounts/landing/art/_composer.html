@@ -1,34 +1,45 @@
 {% comment %}Illustration (Content Studio): one post with a version per channel that is on
-(publishing.composer), an AI caption draft, a time per channel, the optional approval step and
-the week's plan on the calendar. Sample post.{% endcomment %}
-<figure class="lp-art" data-art="composer" data-claim-exempt>
-  <div role="img" aria-label="Illustration: the Content Studio composer with one post, a version for each channel, an AI-drafted caption, a scheduled time per channel, approval before publishing, and the week's posts on a calendar.">
+(publishing.composer), an AI caption draft, its own time per channel (post-scheduling), the
+optional owner approval (post-review) and the week's plan on the calendar. Only channels that
+are on appear in the tabs, the times and the legend. Sample post.{% endcomment %}
+<figure class="lp-art lp-composer-art" data-art="composer" data-claim-exempt>
+  <div role="img" aria-label="Illustration: the Content Studio composer with one post, {% if ch.instagram == 'live' and ch.facebook == 'live' %}a version for Instagram and one for the Facebook Page, each scheduled for its own time{% else %}a version for {% if ch.instagram == 'live' %}Instagram{% else %}the Facebook Page{% endif %} with its scheduled time{% endif %}, an AI-drafted caption, approval by the owner before publishing, and the week's posts on a calendar.">
     <div class="lp-window lp-composer" aria-hidden="true">
       <div class="lp-bar"><i></i><i></i><i></i><b>New post</b></div>
       <div class="lp-tabs">
         {% if ch.instagram == "live" %}<span class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/></svg>Instagram</span>{% endif %}
         {% if ch.facebook == "live" %}<span{% if ch.instagram != "live" %} class="on"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>Facebook Page</span>{% endif %}
+        {% if ch.instagram == "live" and ch.facebook == "live" %}<em class="lp-versions">2 versions</em>{% endif %}
       </div>
       <div class="lp-compose-body">
-        <div class="lp-thumb"></div>
+        <div class="lp-thumb"><span class="dress"></span></div>
         <div class="lp-caption">
           <span class="ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.8L20 10.7l-6.1 1.9L12 18.5l-1.9-5.9L4 10.7l6.1-1.9z"/></svg>Drafted by AI from your notes</span>
           <span>Summer is here. Our linen dress is breathable, made locally and in stock from S to XL.</span>
-          <span class="lp-chip lp-chip-ink lp-start">Thu 18:00</span>
         </div>
+      </div>
+      <div class="lp-times">
+        {% if ch.instagram == "live" %}<div><i class="ig"></i><span>Instagram</span><b>Thu 18:00</b></div>{% endif %}
+        {% if ch.facebook == "live" %}<div><i class="fb"></i><span>Facebook Page</span><b>{% if ch.instagram == "live" %}Fri 09:00{% else %}Thu 18:00{% endif %}</b></div>{% endif %}
       </div>
       <div class="lp-week">
         <div><span>Mon</span><b>3</b><i></i></div>
         <div><span>Tue</span><b>4</b><i class="{% if ch.instagram == 'live' %}ig{% else %}fb{% endif %}"></i></div>
         <div><span>Wed</span><b>5</b><i></i></div>
         <div class="on"><span>Thu</span><b>6</b><i class="{% if ch.instagram == 'live' %}ig{% else %}fb{% endif %}"></i></div>
-        <div><span>Fri</span><b>7</b><i></i></div>
-        <div><span>Sat</span><b>8</b><i class="{% if ch.facebook == 'live' %}fb{% else %}ig{% endif %}"></i></div>
+        <div><span>Fri</span><b>7</b><i class="{% if ch.facebook == 'live' %}fb{% else %}ig{% endif %}"></i></div>
+        <div><span>Sat</span><b>8</b><i></i></div>
         <div><span>Sun</span><b>9</b><i></i></div>
       </div>
       <div class="lp-compose-foot">
         <span class="lp-toggle"><i></i>Owner approves before it publishes</span>
         <span class="lp-chip lp-chip-teal">Scheduled</span>
+      </div>
+    </div>
+    <div class="lp-floats" aria-hidden="true">
+      <div class="lp-float approve">
+        <span class="lp-tile"><svg class="lp-ico" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>
+        <span><strong>Approved by Ruth</strong><em>Owner · ready to publish</em></span>
       </div>
     </div>
   </div>
