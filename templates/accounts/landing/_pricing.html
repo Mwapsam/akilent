@@ -1,0 +1,46 @@
+{% comment %}
+  Pricing. Cards come from billing_api.plan_card for the channels offered, so what's shown is
+  what each plan gives. Each card links to /signup/?plan=.
+{% endcomment %}
+<section id="pricing" class="lp-light lp-section" aria-labelledby="pricing-title">
+  <div class="lp-wrap">
+    <div class="lp-head section-head center lp-reveal">
+      <p class="lp-eyebrow eyebrow">Pricing</p>
+      <h2 id="pricing-title" class="lp-h2">Simple monthly plans</h2>
+      <p class="lp-body lp-muted">Start with a free trial. Choose a plan when you're ready.</p>
+    </div>
+    <div class="plans {% if cards|length >= 4 %}n4{% else %}n3{% endif %}">
+      {% for card in cards %}{% with plan=card.plan %}
+        <div class="lp-plan{% if plan.slug == 'professional' %} featured{% endif %} lp-reveal{% if forloop.counter0 >= 3 %} d3{% elif forloop.counter0 %} d{{ forloop.counter0 }}{% endif %}">
+          {% if plan.slug == 'professional' %}<span class="lp-plan-badge">Most popular</span>{% endif %}
+          <h3 class="lp-h3">{{ plan.name }}</h3>
+          <p class="lp-price">
+            {% if plan.price_monthly > 0 %}
+              <b>${{ plan.price_monthly|floatformat:0 }}</b><span class="lp-muted">per month</span>
+            {% else %}
+              <b>Free</b>{% if plan.trial_days %}<span class="lp-muted">for {{ plan.trial_days }} days</span>{% endif %}
+            {% endif %}
+          </p>
+          <ul class="lp-limits">
+            {% for line in card.limits %}<li>{{ line }}</li>{% endfor %}
+          </ul>
+          {% if card.features or card.coming_soon %}
+          <ul class="lp-feats">
+            {% for f in card.features %}
+              <li><svg class="lp-ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>{{ f.name }}</li>
+            {% endfor %}
+            {% for soon in card.coming_soon %}
+              <li class="soon"><svg class="lp-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg><span>{{ soon.name }} <span class="lp-soon-tag">Coming soon</span></span></li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+          <div class="lp-grow"></div>
+          <a href="/signup/?plan={{ plan.slug }}" class="lp-btn {% if plan.slug == 'professional' %}lp-btn-primary{% else %}lp-btn-outline{% endif %}">
+            {% if plan.price_monthly > 0 %}Choose {{ plan.name }}{% elif plan.trial_days %}Start free trial{% else %}Get started free{% endif %}
+          </a>
+          <p class="lp-plan-foot" data-claim="{% if plan.price_monthly > 0 %}cancel{% else %}trial{% endif %}">{% if plan.price_monthly > 0 %}Billed monthly · Cancel anytime{% else %}No card required{% endif %}</p>
+        </div>
+      {% endwith %}{% endfor %}
+    </div>
+  </div>
+</section>

@@ -780,9 +780,6 @@ def landing(request):
             "trial_days": trial_days,
             "ch": marketing_channels(),
             "testimonials": list(Testimonial.shown()),
-            "coming_soon": [
-                f for f in billing_api.coming_soon_features() if f.is_active
-            ],
         },
     )
     # RFC 8288 / RFC 9727 §3 — advertise machine-readable APIs for agent discovery.

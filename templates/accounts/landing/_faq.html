@@ -1,0 +1,50 @@
+{% comment %} FAQ. Each answer must match what the product does today. {% endcomment %}
+<section id="faq" class="{% if testimonials %}lp-light{% else %}lp-paper{% endif %} lp-section" aria-labelledby="faq-title">
+  <div class="lp-wrap lp-faq-grid">
+    <div class="lp-head section-head lp-reveal">
+      <p class="lp-eyebrow eyebrow">Questions</p>
+      <h2 id="faq-title" class="lp-h2">Frequently asked questions</h2>
+      <p class="lp-body lp-muted">More questions? Visit the <a href="{% url 'help' %}" class="lp-link">help centre</a>{% if site.support_email %} or email <a href="mailto:{{ site.support_email }}" class="lp-link">{{ site.support_email }}</a>{% endif %}.</p>
+    </div>
+    <div class="faq lp-reveal d1">
+      <details data-claim="inbox{% if ch.instagram == 'live' %} instagram-dms{% endif %} email-sending{% if ch.facebook %} facebook-inbox facebook-publishing{% endif %}">
+        <summary>Which channels can I use?<span class="pm" aria-hidden="true"></span></summary>
+        <p>{% if ch.whatsapp == "live" %}WhatsApp{% if ch.instagram == "live" %} and Instagram{% endif %} messages arrive in your shared inbox. {% endif %}{% if ch.email == "live" %}Email is for sending messages and campaigns from your own domain; replies don't come into the inbox. {% endif %}{% if ch.facebook == "live" %}Messages to your Facebook Page arrive there too, and you can publish posts to your Page. {% endif %}</p>
+      </details>
+      {% if ch.facebook %}
+      <details data-claim="facebook-inbox facebook-comments">
+        <summary>Do Facebook messages come into the inbox?<span class="pm" aria-hidden="true"></span></summary>
+        <p>Yes. Messages sent to your Facebook Page arrive in your shared inbox, and comments on your Page's posts can be answered in public, replied to privately or hidden, automatically or by hand.</p>
+      </details>
+      {% endif %}
+      {% if ch.results %}
+      <details data-claim="post-results attribution">
+        <summary>How do you know which post brought a sale?<span class="pm" aria-hidden="true"></span></summary>
+        <p>Each post can carry its own WhatsApp chat link. When a customer comes through that link, or through a reply to a comment on the post, the chat is linked to the post, and so are the leads and orders that follow. Customers who found you another way aren't counted, so the real total can be higher.</p>
+      </details>
+      {% endif %}
+      {% if ch.whatsapp == "live" %}
+      <details data-claim="own-number">
+        <summary>Do I need to sign up for the WhatsApp Business API myself?<span class="pm" aria-hidden="true"></span></summary>
+        <p>No. During setup you connect your business number through Meta's guided sign-in, and {{ app }} handles the rest. The number you connect is used through {{ app }} rather than the WhatsApp Business app.</p>
+      </details>
+      <details data-claim="inbox assign roles">
+        <summary>Can my team share one number?<span class="pm" aria-hidden="true"></span></summary>
+        <p>Yes. Everyone works from the same inbox, and you can assign each conversation to a teammate so customers aren't answered twice or missed.</p>
+      </details>
+      <details data-claim="ai">
+        <summary>Does AI send messages automatically?<span class="pm" aria-hidden="true"></span></summary>
+        <p>Not unless you allow it. AI is off until you switch it on, and then it suggests replies for your team to review and send. You can choose to let it answer a few simple questions, such as your opening hours, on its own. Every reply it sends is marked and logged.</p>
+      </details>
+      {% endif %}
+      <details data-claim="cancel">
+        <summary>Can I cancel anytime?<span class="pm" aria-hidden="true"></span></summary>
+        <p>Yes. Plans are billed monthly, and an owner or admin can cancel from the Billing page at any time.</p>
+      </details>
+      <details data-claim="trial-end">
+        <summary>What happens after the trial?<span class="pm" aria-hidden="true"></span></summary>
+        <p>Nothing is deleted. Your customers, conversations and settings stay in your account. Choose a plan to keep sending messages and using your plan's features.</p>
+      </details>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,39 @@
+{% comment %}
+  Illustration (hero, when WhatsApp is off): one customer's record with the last message sent on
+  a channel that is on (email from the business's own address, else an Instagram or Facebook
+  Page reply, else none), an order with a payment link and a follow-up reminder for the team.
+  No channel that isn't on is shown. Sample names and amounts.
+{% endcomment %}
+{% if ch.email == "live" %}{% firstof "an email sent from the business's own address" as sent %}{% firstof "Email from orders@yourshop.com" as sent_label %}
+{% elif ch.instagram == "live" %}{% firstof "an Instagram DM reply" as sent %}{% firstof "Instagram DM" as sent_label %}
+{% elif ch.facebook == "live" %}{% firstof "a Facebook Page message reply" as sent %}{% firstof "Facebook Page message" as sent_label %}
+{% endif %}
+<figure class="lp-art lp-hero-art" data-art="customer" data-claim-exempt>
+  <div role="img" aria-label="Illustration: a customer record showing {% if sent %}{{ sent }}, {% endif %}an order with a payment link, and a follow-up reminder for the team.">
+    <div class="lp-window" aria-hidden="true">
+      <div class="lp-bar"><i></i><i></i><i></i><b>Customer</b></div>
+      <div class="lp-order-top">
+        <span class="who"><span class="lp-av t">TM</span><span><strong>Thandi Mwale</strong><em>{% if ch.email == "live" %}thandi@example.com{% else %}Customer since March{% endif %}</em></span></span>
+        <span class="lp-chip lp-chip-brand">Interested</span>
+      </div>
+      {% if sent %}
+      <div class="lp-thread">
+        <span class="lp-sys">{{ sent_label }}</span>
+        <div class="lp-bub out">Your order is ready for collection. Here's your link to pay.<small>Sent 09:14</small></div>
+      </div>
+      {% endif %}
+      <div class="lp-order-lines">
+        <div><span>Linen summer dress · M</span><span>K450</span></div>
+        <div><span>Total</span><span>K450</span></div>
+      </div>
+      <div class="lp-order-foot"><span>Payment link sent</span><span class="lp-chip lp-chip-amber">Awaiting payment</span></div>
+    </div>
+    <div class="lp-floats" aria-hidden="true">
+      <div class="lp-float remind">
+        <span class="lp-tile"><svg class="lp-ico" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M5 3 2 6M22 6l-3-3"/></svg></span>
+        <span><strong>Follow up tomorrow, 09:00</strong><em>A reminder for your team</em></span>
+      </div>
+    </div>
+  </div>
+  <figcaption class="lp-art-cap">Illustration of a customer record in {{ app }}.</figcaption>
+</figure>

@@ -1,0 +1,43 @@
+{% comment %}
+  Hero. Primary angle: lost enquiries (docs/marketing/messaging.md §1). The sentence under the
+  headline names only channels offered to new customers (ch.* is "live"). The picture is an
+  illustration of real behaviour (art/_inbox.html), labelled as one; without WhatsApp it shows
+  the customer-record version (art/_customer.html). Badge, lead and art only name channels that are on.
+{% endcomment %}
+<section id="hero" class="lp-hero lp-navy" aria-labelledby="hero-title">
+  <div class="lp-aurora" aria-hidden="true"><span></span></div>
+  <div class="lp-grid-bg" aria-hidden="true"></div>
+  <div class="lp-wrap lp-hero-grid">
+    <div class="lp-hero-copy">
+      {% if ch.whatsapp or ch.instagram or ch.facebook %}
+      <span class="lp-badge" data-claim="lost-enquiries"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg></i>For businesses that sell through chats</span>
+      {% endif %}
+      <h1 id="hero-title" class="lp-display" data-claim="lost-enquiries">Stop losing customers <span class="lp-grad">in your inbox.</span></h1>
+      {% if ch.whatsapp == "live" %}
+        <p class="lp-lead lp-mid" data-claim="inbox{% if ch.instagram == 'live' %} instagram-dms{% endif %} follow-ups payments{% if ch.content == 'live' %} content-studio{% endif %}">{% if ch.instagram == "live" %}WhatsApp and Instagram messages{% else %}Your WhatsApp conversations{% endif %} in one shared inbox, follow-up reminders that don't depend on memory, and payment links when customers are ready to buy.{% if ch.content == "live" %} Plan and publish your posts from the same place.{% endif %}</p>
+      {% elif ch.instagram == "live" or ch.facebook == "live" %}
+        <p class="lp-lead lp-mid" data-claim="{% if ch.instagram == 'live' %}instagram-dms{% endif %}{% if ch.facebook == 'live' %} facebook-inbox{% endif %} follow-ups payments{% if ch.content == 'live' %} content-studio{% endif %}">{% if ch.instagram == "live" and ch.facebook == "live" %}Instagram DMs and Facebook Page messages{% elif ch.instagram == "live" %}Your Instagram DMs{% else %}Your Facebook Page messages{% endif %} in one shared inbox, follow-up reminders that don't depend on memory, and payment links when customers are ready to buy.{% if ch.content == "live" %} Plan and publish your posts from the same place.{% endif %}</p>
+      {% elif ch.email == "live" %}
+        <p class="lp-lead lp-mid" data-claim="email-sending follow-ups customers payments">Email your customers from your own address, and keep follow-up reminders, customer records and payment links in one place.</p>
+      {% else %}
+        <p class="lp-lead lp-mid" data-claim="follow-ups customers payments">Follow-up reminders, customer records and payment links, kept together in one place.</p>
+      {% endif %}
+      <div class="lp-ctas" id="hero-ctas">
+        <a href="/signup/" class="lp-btn lp-btn-primary">Start free trial<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+        <a href="#how-it-works" class="lp-btn lp-btn-ghost">See how it works</a>
+      </div>
+      {% if trial_days %}
+      <p class="lp-note" data-claim="trial">
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>{{ trial_days }}-day free trial</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>No card required</span>
+      </p>
+      {% endif %}
+    </div>
+
+    {% if ch.whatsapp == "live" %}
+      {% include "accounts/landing/art/_inbox.html" %}
+    {% else %}
+      {% include "accounts/landing/art/_customer.html" %}
+    {% endif %}
+  </div>
+</section>

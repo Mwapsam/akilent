@@ -1,0 +1,17 @@
+{% comment %} Proof: only real, permissioned testimonials (Operator Console → Testimonials). {% endcomment %}
+<section id="proof" class="lp-paper lp-section" aria-labelledby="proof-title">
+  <div class="lp-wrap">
+    <div class="lp-head section-head center lp-reveal">
+      <p class="lp-eyebrow eyebrow">From businesses using {{ app }}</p>
+      <h2 id="proof-title" class="lp-h2">In their words</h2>
+    </div>
+    <div class="lp-quotes">
+      {% for t in testimonials %}
+      <figure class="lp-card lp-quote lp-reveal">
+        <blockquote>“{{ t.quote }}”</blockquote>
+        <figcaption class="lp-small lp-muted"><strong>{{ t.person_name }}</strong>{% if t.business_name %}, {{ t.business_name }}{% endif %}</figcaption>
+      </figure>
+      {% endfor %}
+    </div>
+  </div>
+</section>

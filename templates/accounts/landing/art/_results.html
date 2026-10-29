@@ -1,0 +1,22 @@
+{% comment %}Illustration (journey, Measure): a post's results, counted from its chat link and
+comment replies only (publishing.results.results_for), so the figures are lower bounds. No figures:
+the bars show the card's shape, not a result anyone achieved (messaging.md §6).{% endcomment %}
+<figure class="lp-art" data-art="results" data-claim-exempt>
+  <div role="img" aria-label="Illustration: a post's results card showing link clicks, chats, leads, orders and paid revenue, counted from the post's chat link and comment replies.">
+    <div class="lp-window" aria-hidden="true">
+      <div class="lp-bar"><i></i><i></i><i></i><b>Post results</b></div>
+      <div class="lp-results">
+        <div class="lp-results-head"><strong>Linen summer dress</strong><span class="lp-chip lp-chip-ink">{% if ch.instagram == "live" %}Instagram{% else %}Facebook Page{% endif %}</span></div>
+        <div class="lp-funnel">
+          <div><span>Link clicks</span><i class="w1"></i></div>
+          <div><span>Chats</span><i class="w2"></i></div>
+          <div><span>Leads</span><i class="w3"></i></div>
+          <div><span>Orders</span><i class="w4"></i></div>
+          <div><span>Paid revenue</span><i class="w5"></i></div>
+        </div>
+        <span class="lp-results-note">Counted from this post's chat link and comment replies only.</span>
+      </div>
+    </div>
+  </div>
+  <figcaption class="lp-art-cap">Illustration of a post's results.</figcaption>
+</figure>

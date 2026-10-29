@@ -54,7 +54,8 @@ def test_every_channel_that_is_on_is_sold_by_its_features(client, meta_open):
     for step in ("Attract", "Engage", "Convert", "Measure"):
         assert step in html
     assert "See which post brought the sale" in html
-    assert "img/marketing/post-results.webp" in html
+    # The illustrated post results (redesign, 2026-10-29).
+    assert 'data-art="results"' in html
     assert 'id="content-studio"' in html
 
 
@@ -97,12 +98,17 @@ def test_proof_shows_only_published_permissioned_testimonials(client):
     assert "Unpublished words" not in html
 
 
-def test_coming_soon_lists_only_active_entries(client):
-    assert 'id="coming-soon"' not in _html(client)
-    ComingSoonFeature.objects.create(name="Website chat", is_active=True)
-    ComingSoonFeature.objects.create(name="Hidden thing", is_active=False)
+def test_no_coming_soon_strip_and_inactive_entries_never_show(client):
+    """The redesign dropped the page-wide "Coming soon" strip (owner's call, 2026-10-29).
+    Unreleased features still appear as "Coming soon" inside the plan cards they belong to."""
+    trial = Plan.objects.get(slug=Plan.TRIAL)
+    for name, active in (("Website chat", True), ("Hidden thing", False)):
+        ComingSoonFeature.objects.create(name=name, is_active=active).plans.add(trial)
     html = _html(client)
-    assert "Website chat" in html and "Hidden thing" not in html
+    assert 'id="coming-soon"' not in html
+    assert "Hidden thing" not in html
+    pricing = html.split('<section id="pricing"', 1)[1].split("</section>", 1)[0]
+    assert "Website chat" in pricing and "Coming soon" in pricing
 
 
 def test_use_case_pages_follow_the_channels(client, settings):

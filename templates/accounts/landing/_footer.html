@@ -1,0 +1,44 @@
+{% load static %}
+<footer class="lp-footer lp-navy">
+  <div class="lp-wrap lp-footer-grid">
+    <div>
+      <a href="/" class="lp-brand"><img src="{% static 'img/brand/icon-color-on-dark.svg' %}" alt="" width="24" height="24">{{ app }}</a>
+      <p class="lp-small lp-mid lp-mt">Customer conversations, follow-ups{% if ch.content == "live" %}, posts{% endif %} and payments for small businesses.</p>
+      <p class="lp-small lp-lo lp-mt">
+        {% if site.support_email %}<a href="mailto:{{ site.support_email }}">{{ site.support_email }}</a><br>{% endif %}
+        Lusaka, Zambia
+      </p>
+    </div>
+    <nav aria-label="Product">
+      <h2>Product</h2>
+      <ul>
+        <li><a href="#channels">Channels</a></li>
+        {% if ch.content %}<li><a href="#content-studio">Content Studio</a></li>{% endif %}
+        <li><a href="#how-it-works">How it works</a></li>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="{% url 'help' %}">Help</a></li>
+        <li><a href="{% url 'docs' %}">Documentation</a></li>
+      </ul>
+    </nav>
+    {% if ch.whatsapp == "live" or ch.content == "live" %}
+    <nav aria-label="Use cases">
+      <h2>Use cases</h2>
+      <ul>
+        {% if ch.whatsapp == "live" %}<li><a href="{% url 'use-case' 'missed-enquiries' %}">Missed enquiries</a></li>
+        <li><a href="{% url 'use-case' 'shared-inbox' %}">Shared inbox</a></li>{% endif %}
+        {% if ch.content == "live" %}<li><a href="{% url 'use-case' 'content-studio' %}">Content Studio</a></li>{% endif %}
+      </ul>
+    </nav>
+    {% endif %}
+    <nav aria-label="Legal">
+      <h2>Legal</h2>
+      <ul>
+        <li><a href="{% url 'privacy' %}">Privacy</a></li>
+        <li><a href="{% url 'terms' %}">Terms</a></li>
+        <li><a href="{% url 'data-deletion' %}">Data deletion</a></li>
+      </ul>
+    </nav>
+  </div>
+  <div class="lp-wrap lp-footer-base"><span>© {% now "Y" %} {{ app }}</span><a href="#main" class="lp-to-top">Back to top ↑</a></div>
+</footer>

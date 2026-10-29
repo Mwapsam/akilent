@@ -1,0 +1,17 @@
+{% comment %} Content Studio: the secondary angle (social media that sells). Only when a publishing channel is on. {% endcomment %}
+<section id="content-studio" class="lp-light lp-section" aria-labelledby="studio-title">
+  <div class="lp-wrap lp-split">
+    <div class="lp-reveal">
+      <p class="lp-eyebrow eyebrow">Content Studio</p>
+      <h2 id="studio-title" class="lp-h2 lp-mt" data-claim="social-results">Turn your social media activity into measurable results</h2>
+      <ul class="lp-ticks lp-body lp-muted">
+        <li data-claim="content-studio">Write a post once, with its own version for Instagram and for your Facebook Page.</li>
+        <li data-claim="content-planning">Plan posts by content pillar and campaign on a calendar.</li>
+        <li data-claim="ai-captions">AI can draft a caption for each channel from your notes.</li>
+        <li data-claim="post-scheduling post-review">Schedule each channel for its own time, and have an owner approve posts first if you want.</li>
+        {% if ch.whatsapp == "live" %}<li data-claim="post-chat-link post-results">Add a WhatsApp chat link and see the chats, leads and paid orders each post brought in.</li>{% endif %}
+      </ul>
+    </div>
+    <div class="lp-reveal d1">{% include "accounts/landing/art/_composer.html" %}</div>
+  </div>
+</section>

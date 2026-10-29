@@ -1073,3 +1073,123 @@ The QA workspace's billing is as it was: on Trial, with no payments.
 | Implementation | **Done.** G8 and G9 are held as backend gaps. |
 | Verification | **Done**: full suite, 18/18 browser tasks. **Open:** a real provider payment, real devices, screen reader. |
 | Acceptance | **Pending your sign-off.** |
+
+## Entry 12: Landing page redesign, 2026-10-29
+
+You asked for the landing page to be redone: premium, responsive and elegant. You chose:
+- **Direction:** refined dark navy.
+- **Copy:** the same registered claims, restructured.
+- **Pictures:** illustrated product mock-ups, not screenshots.
+- **Sections:** keep the developer section, drop the "Coming soon" strip, and add no new sections.
+
+### Tested code
+
+| | |
+|---|---|
+| HEAD | `fcccef6` (Phase 5 committed by you) |
+| Tracked changes | 5 files, +76 −951. `git diff HEAD --binary -- . ':!docs/design/ui-quality-log.md'` SHA-256 `78b6a73163ca8e85…` |
+| Untracked | `static/css/landing.css`, `templates/accounts/landing/` (12 sections and 8 illustrations), `apps/accounts/tests/test_landing_redesign.py`, `tools/qa/landing_qa.mjs`. Combined SHA-256 `1f8f2367d7a0288a…` |
+
+### What changed
+
+- **Structure:**
+  - `landing.html` is now a short shell (header, includes, footer, about 2KB of script).
+  - Each section is a partial in `templates/accounts/landing/`.
+  - The 360-line inline `<style>` became `static/css/landing.css`. It uses `app.css` tokens only (no raw colour values), with `lp-` classes so nothing collides with the app's components.
+- **Look:**
+  - Display type: h1 is 40px on phones and 72px on desktop.
+  - Soft aurora glow and grid behind the hero.
+  - Pill navigation that turns solid on scroll.
+  - Teal identity accents, and amber kept for the one primary action.
+  - Sections fade and rise in once; none of this happens under reduced motion, and everything is visible without JavaScript.
+- **Hero:**
+  - Copy on the left and an illustrated inbox on the right: a customer's question, the assigned teammate's reply, an "Order · Payment link sent" card and a "Follow up tomorrow" reminder.
+  - Stacked on phones.
+  - With WhatsApp off it shows a customer record with an email and an order instead, and never mentions WhatsApp.
+- **The journey:** each step now has its own illustration.
+  - **Attract:** the post with its chat link.
+  - **Engage:** the closed-hours auto-reply, then the teammate's reply.
+  - **Convert:** the interested customer, the order and the payment link.
+  - **Measure:** post results as bars with no figures, plus the lower-bound note.
+- **Content Studio:** an illustrated composer showing the version per channel, an AI-drafted caption, the time per channel, the week calendar and owner approval.
+- **Features:** a bento grid with a small illustration in each tile: a keyword auto-reply, a workflow (new lead → wait 1 day → follow-up, all real step types), and Business Health bars. Two balanced rows, with no half-empty tile.
+- **Unchanged in substance:**
+  - trust (now glass cards)
+  - pricing: same plan data and wording, with a gradient border on the featured plan
+  - FAQ: two columns, `+`/`−` toggles, plain `<details>`
+  - developers, the final CTA (now a rounded navy panel) and the footer
+- **Truthfulness:**
+  - Every illustration is a `<figure>` with `role="img"`, a full description and a visible "Illustration of…" caption.
+  - Sample text inside is `aria-hidden`, and channel badges follow the channels that are on.
+  - Results show no numbers, because a sample figure would read as a result we can't prove (messaging.md §6).
+  - Copy uses the existing claim register only.
+  - **Fixed along the way:** the Instagram card said "DMs arrive in the same inbox as WhatsApp" even when WhatsApp was off.
+- **Removed:**
+  - the "Coming soon" strip (still shown inside plan cards)
+  - the screenshots from the landing page (`img/marketing/` stays for the use-case pages)
+  - the now-unused `coming_soon` query in `landing()`
+
+### Automated results
+
+| Command | Result |
+|---|---|
+| Landing tests: `test_landing`, `test_landing_claims`, `test_landing_redesign` (new), `test_landing_journey`, `test_accounts_ui_quality` | All pass. The claim register passes with WhatsApp on and off, and Meta open and closed. |
+| `poetry run pytest` (full suite) | **5,078 passed, 25 skipped.** 4 failed: 3 landing-journey tests that expected the old screenshot and the dropped strip (updated, now passing), and the known timing-dependent `test_phase4_load`. |
+| `ruff` / drift | Clean. The drift total is unchanged at 574, and `templates/accounts` stays at 0. |
+
+### Browser verification (`tools/qa/landing_qa.mjs`, headless Chrome, logged out, other hosts blocked)
+
+**26 of 26 pass with WhatsApp on, and 26 of 26 with WhatsApp off.**
+- **Widths:** 360×740, 390×844, 844×390 (phone landscape), 768×1024, 1024×768, 1280×800 and 1440×900. At each width:
+  - no sideways scroll
+  - 0 contrast failures
+  - no targets under 24px, apart from links inside sentences (WCAG 2.5.8 inline exception)
+- **Keyboard:** the skip link comes first and shows; the menu opens with Enter, Esc closes it and focus returns; FAQ opens with Enter, with a visible focus ring.
+- **Reduced motion:** nothing hidden, nothing animating.
+- **No JavaScript:** every section visible.
+
+**Found by looking at the screenshots and fixed:**
+- the hero cards covered the WhatsApp chip and the caption
+- a half-empty Talk tile in the bento
+- double spacing between the developer section and the final CTA
+- phone cards drifting off-screen, because the desktop offsets outranked the phone reset
+
+Screenshots, top of page and full length at every width, are in `docs/design/qa/landing/` (local only).
+
+**Environment note:** Docker Desktop's engine was unresponsive (errors since yesterday's start), so the QA Redis couldn't run. I didn't force-restart Docker, because that would stop your other containers. The landing checks ran against the dev server with a scratch settings file (in-memory cache, database sessions) that lives outside the repo.
+
+### Not verified yet (yours)
+
+- A real phone: iOS Safari and Android Chrome, including the safe-area header.
+- A screen reader pass over the illustrations' descriptions.
+
+### Sign-offs
+
+| Gate | Status |
+|---|---|
+| Implementation | **Done** |
+| Verification | **Done**: tests and 26/26 browser checks, in both channel set-ups. **Open:** real phone, screen reader. |
+| Acceptance | **Pending your review of the page** (`/` on the dev server, or the screenshots). |
+
+### Review fixes (same day)
+
+A code review raised nine findings. All nine were confirmed and fixed:
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | The hero illustration without WhatsApp always showed an email, even with email off | `art/_customer.html` shows the last message on a channel that's on (email, else Instagram DM, else Facebook Page message, else none); the description follows |
+| 2 | The hero badge "For businesses that sell through chats" carried no claim and showed for email-only | Shown only when a chat channel is on, tagged `data-claim="lost-enquiries"`. The lead under the h1 now also has Instagram/Facebook-only and no-channel versions, so it never names email when email is off |
+| 3 | Two channels on gave a three-column grid with an empty column | Columns follow the card count (`:has()`): one card centred, two in pairs, three or four on one row at 1100px |
+| 4 | The mobile menu reused the app's `.nav-link` (dashboard hover and focus styles leaked in) | `.lp-mlink`; the page-wide `.lp` focus ring applies |
+| 5 | Raw `rgb()` colours in `landing.css` and a hard-coded `theme-color` | 34 values are now `color-mix()` of app tokens. The palette test bans `rgb()`/`hsl()` and pins `theme-color` to `--color-gray-950` |
+| 6 | The coming-soon test no longer checked the plan cards | It attaches an active entry to a plan and asserts it appears in `#pricing` |
+| 7 | Help had gone from the desktop header | Back in the primary nav. Links no longer wrap; the full nav starts at 1080px (it wrapped at 960 with six links) |
+| 8 | Sections hidden under `html.js` could stay invisible if the script failed, or in print | The `js` class is set by the script, at the same moment the reveal observer starts, and first. Print shows everything. The hero art's entrance no longer depends on the class |
+| 9 | Pricing reveal delays past `d3` did nothing | Capped at `d3` |
+
+**Results:**
+- Landing tests: 58 passed (new: hero channel matrix ×4, badge claim, classes and motion).
+- `ruff`: clean. Drift: unchanged at 574.
+- Browser: 26/26 with WhatsApp on, and 26/26 with WhatsApp and email off. The header was also checked by eye at 960, 1024 and 1080.
+
+**Not changed (pre-existing, flagged):** the developer section's email API list and code sample show even when email is off. The old page did the same.

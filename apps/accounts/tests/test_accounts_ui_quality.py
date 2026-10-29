@@ -34,9 +34,19 @@ def test_status_words_use_tone_tokens_not_stock_colours():
 
 
 def test_the_landing_palette_points_at_the_app_tokens():
-    style = _read("accounts/landing.html").split("<style>", 1)[1].split("</style>")[0]
-    assert not re.search(r"#[0-9A-Fa-f]{6}\b", style)
-    assert "var(--color-ink-fixed)" in style
+    """The landing page's design lives in static/css/landing.css, on the app's tokens."""
+    css = (settings.BASE_DIR / "static" / "css" / "landing.css").read_text(
+        encoding="utf-8"
+    )
+    assert not re.search(r"#[0-9A-Fa-f]{3,8}\b", css)
+    assert not re.search(r"\b(rgba?|hsla?)\(", css)
+    assert "var(--color-ink-fixed)" in css
+    html = _read("accounts/landing.html")
+    assert "<style" not in html
+    # The browser-chrome colour can't be a var(), so it must equal the navy canvas token.
+    app_css = (settings.BASE_DIR / "assets" / "app.css").read_text(encoding="utf-8")
+    navy = re.search(r"--color-gray-950:\s*(#[0-9A-Fa-f]{6});", app_css).group(1)
+    assert f'name="theme-color" content="{navy}"' in html
 
 
 def test_fixed_ink_backs_text_on_amber():

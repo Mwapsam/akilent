@@ -1,0 +1,54 @@
+{% comment %} Channels: what each one does here, and what it doesn't. Only channels that are on. {% endcomment %}
+<section id="channels" class="lp-light lp-section" aria-labelledby="channels-title">
+  <div class="lp-wrap">
+    <div class="lp-head section-head center lp-reveal">
+      <p class="lp-eyebrow eyebrow">Channels</p>
+      <h2 id="channels-title" class="lp-h2">Meet customers where they already are</h2>
+      <p class="lp-body lp-muted">Each channel does a specific job in {{ app }}. Here's exactly what that is.</p>
+    </div>
+    <div class="lp-channels">
+      {% if ch.whatsapp %}
+      <article class="lp-card lp-channel lp-reveal">
+        <div class="lp-channel-head">
+          <span class="lp-tile"><svg class="lp-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg></span>
+          {% include "accounts/_landing_status.html" with state=ch.whatsapp %}
+        </div>
+        <h3 class="lp-h3">WhatsApp</h3>
+        <p class="lp-small" data-claim="inbox auto-replies campaigns">Customer chats arrive in one shared inbox. Auto-replies, follow-ups, and campaigns to approved lists.</p>
+        <p class="lp-channel-note" data-claim="own-number">Uses your own business number, connected through Meta's guided setup.</p>
+      </article>
+      {% endif %}
+      {% if ch.instagram %}
+      <article class="lp-card lp-channel lp-reveal d1">
+        <div class="lp-channel-head">
+          <span class="lp-tile"><svg class="lp-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".6"/></svg></span>
+          {% include "accounts/_landing_status.html" with state=ch.instagram %}
+        </div>
+        <h3 class="lp-h3">Instagram</h3>
+        <p class="lp-small" data-claim="instagram-dms instagram-comments instagram-publishing">DMs arrive in your shared inbox{% if ch.whatsapp == "live" %}, alongside WhatsApp{% endif %}. Comment rules can answer comments for you, and Content Studio publishes your posts.</p>
+      </article>
+      {% endif %}
+      {% if ch.facebook %}
+      <article class="lp-card lp-channel lp-reveal d2">
+        <div class="lp-channel-head">
+          <span class="lp-tile"><svg class="lp-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg></span>
+          {% include "accounts/_landing_status.html" with state=ch.facebook %}
+        </div>
+        <h3 class="lp-h3">Facebook Page</h3>
+        <p class="lp-small" data-claim="facebook-inbox facebook-comments facebook-publishing">Messages to your Page arrive in the same inbox. Comment rules can answer comments for you, and Content Studio publishes your posts.</p>
+      </article>
+      {% endif %}
+      {% if ch.email %}
+      <article class="lp-card lp-channel lp-reveal d3">
+        <div class="lp-channel-head">
+          <span class="lp-tile"><svg class="lp-ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>
+          {% include "accounts/_landing_status.html" with state=ch.email %}
+        </div>
+        <h3 class="lp-h3">Email</h3>
+        <p class="lp-small" data-claim="email-sending campaigns">Send email, templates and campaigns from your own domain.</p>
+        <p class="lp-channel-note" data-claim="email-sending">Replies to your emails don't come into the inbox.</p>
+      </article>
+      {% endif %}
+    </div>
+  </div>
+</section>
