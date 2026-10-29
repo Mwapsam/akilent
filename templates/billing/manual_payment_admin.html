@@ -1,4 +1,5 @@
 {% extends "email/base_email.html" %}
+{% load billing_money %}
 {% block title %}New bank transfer to review — {{ account }}{% endblock %}
 {% block content %}
   <h1 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#12182B;">Bank transfer submitted</h1>
@@ -16,7 +17,7 @@
     <tr>
       <td style="padding:14px 16px;border-bottom:1px solid #E8EDF3;">
         <span style="font-size:12px;color:#657089;display:block;margin-bottom:2px;">Plan</span>
-        <span style="font-size:14px;font-weight:600;color:#12182B;">{{ plan.name }} &mdash; ${{ plan.price_monthly }}/mo</span>
+        <span style="font-size:14px;font-weight:600;color:#12182B;">{{ plan.name }} &mdash; {{ plan.price_monthly|money }}/mo</span>
       </td>
     </tr>
     <tr>

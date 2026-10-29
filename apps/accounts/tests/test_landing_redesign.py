@@ -6,6 +6,7 @@ are switched on. The design lives in static/css/landing.css.
 """
 
 import re
+from decimal import Decimal
 
 import pytest
 
@@ -22,6 +23,10 @@ def _html(client):
     resp = client.get("/")
     assert resp.status_code == 200
     return resp.content.decode()
+
+
+def _pricing(html):
+    return html.split('<section id="pricing"', 1)[1].split("</section>", 1)[0]
 
 
 def _figures(html):
@@ -121,3 +126,25 @@ def test_the_design_is_its_own_stylesheet(client, plans):
     assert "css/landing.css" in html
     assert "<style" not in html
     assert 'class="lp"' in html
+
+
+@pytest.mark.django_db
+def test_plan_prices_are_exact_not_rounded(client, settings, plans):
+    """$11.90 used to show as $12 (floatformat:0). Prices match the billing Plans page."""
+    settings.BILLING_CURRENCY = "USD"
+    for slug, price in (("starter", "11.9"), ("growth", "25.9")):
+        Plan.objects.create(slug=slug, name=slug.title(), price_monthly=Decimal(price))
+    Plan.objects.filter(slug=Plan.PROFESSIONAL).update(price_monthly=Decimal("49.9"))
+    pricing = _pricing(_html(client))
+    for shown in ("$11.90", "$25.90", "$49.90"):
+        assert shown in pricing, shown
+    for rounded in ("$12<", "$26<", "$50<"):
+        assert rounded not in pricing, rounded
+
+
+@pytest.mark.django_db
+def test_plan_prices_follow_the_billing_currency(client, settings, plans):
+    """Plans are priced in BILLING_CURRENCY, so the page never shows them as dollars."""
+    settings.BILLING_CURRENCY = "ZMW"
+    pricing = _pricing(_html(client))
+    assert "K49.00" in pricing and "$" not in pricing

@@ -1,7 +1,10 @@
 {% comment %}
   Pricing. Cards come from billing_api.plan_card for the channels offered, so what's shown is
   what each plan gives. Each card links to /signup/?plan=.
+  Prices go through billing's money filter, as on the Plans page: exact, and in the billing
+  currency the plans are priced in (BILLING_CURRENCY), not a hard-coded "$".
 {% endcomment %}
+{% load billing_money %}
 <section id="pricing" class="lp-light lp-section" aria-labelledby="pricing-title">
   <div class="lp-wrap">
     <div class="lp-head section-head center lp-reveal">
@@ -16,7 +19,7 @@
           <h3 class="lp-h3">{{ plan.name }}</h3>
           <p class="lp-price">
             {% if plan.price_monthly > 0 %}
-              <b>${{ plan.price_monthly|floatformat:0 }}</b><span class="lp-muted">per month</span>
+              <b>{{ plan.price_monthly|money }}</b><span class="lp-muted">per month</span>
             {% else %}
               <b>Free</b>{% if plan.trial_days %}<span class="lp-muted">for {{ plan.trial_days }} days</span>{% endif %}
             {% endif %}

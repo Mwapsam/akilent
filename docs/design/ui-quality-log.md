@@ -1193,3 +1193,42 @@ A code review raised nine findings. All nine were confirmed and fixed:
 - Browser: 26/26 with WhatsApp on, and 26/26 with WhatsApp and email off. The header was also checked by eye at 960, 1024 and 1080.
 
 **Not changed (pre-existing, flagged):** the developer section's email API list and code sample show even when email is off. The old page did the same.
+
+### Hero refinement and exact prices (same day)
+
+You said the hero felt off. Six causes, all fixed in `landing.css` (hero block), `_hero.html` unchanged in copy:
+- **Alignment:** the window is now level with the copy (the figure's top margin balances the caption).
+- **Columns:** `minmax(0,1fr) minmax(0,1.1fr)`, with a wider gap.
+- **Headline:** "in your inbox." is its own line, so "in" is never stranded.
+- **Floating cards:** they overlap only empty window edges (order top-right, reminder bottom-left over a spacer) and never cover content.
+- **Depth:** a soft token backlight and a gradient ring around the window.
+- **Phones:** left-aligned copy and full-width stacked buttons.
+- **Inbox list:** now follows the window's width (container query), so the two-pane inbox no longer squeezes at 1024px.
+
+**Prices:** the landing cards rounded prices (`floatformat:0`: $11.90 showed as $12). They now use billing's `money` filter, the same as the Plans page. New test: `test_plan_prices_are_exact_not_rounded`.
+
+**Results:**
+- Landing and billing tests pass.
+- Browser: 26/26 with WhatsApp on, and 26/26 with it off.
+- Hero checked by eye at 390, 1024, 1280 and 1440.
+
+### Second review (same day): 10 findings
+
+**Fixed:**
+- **Price test:** pins `BILLING_CURRENCY=USD` and reuses the `plans` fixture. `Decimal` is imported at the top. New test: prices follow the billing currency (ZMW shows `K49.00`, never `$`).
+- **Trust grid:** the 2-column layout (an edit made outside this session) kept. An odd last card spans the row, so 3 or 5 cards never leave one stranded. The duplicate 1024px rule is removed.
+- **Headline gradient:** `width: fit-content`, so the gradient spans the words (centred on tablet).
+- **Reminder card:** no wrapping; the empty strip is 3.25rem against a reach of about 2.3rem.
+- **Inbox list:** the container threshold is now 35rem, so stacked 560–639px phones show the thread alone. Hiding the list on small laptops is deliberate.
+- **Order card:** overhang reduced to 1rem, inside the narrowest desktop gutter (2rem).
+- **Bank-transfer review email:** the fallback templates (`.html`/`.txt`) use `money`.
+
+**Kept, with reasons:**
+- **The landing page follows `BILLING_CURRENCY`:** plans are priced in it (`apps/billing/money.py`), so the old literal `$` was the bug. Whole numbers in a zero-decimal currency are correct.
+- **`manage/plan_costs.html` and `manage/business.html`:** price sits beside Akilent's own costs and margin, which are worked out in dollars. Switching only the price's currency would make the margin row mix currencies.
+
+**Open (yours):** the bank-transfer email's stored `SystemEmailTemplate` row (seeded by `apps/email/migrations/0015`) still says `${{ plan.price_monthly }}`. It's used ahead of the fixed files. Edit it in Manage, or authorize a data migration.
+
+**Results:**
+- Landing, billing, email and core tests pass. `ruff`: clean. Drift: 574.
+- Browser: 26/26 (WhatsApp off).

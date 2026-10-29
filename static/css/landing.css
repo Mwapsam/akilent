@@ -179,11 +179,16 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
 
 /* --- Hero ---------------------------------------------------------------- */
 .lp-hero { position: relative; overflow: hidden; margin-top: -4.25rem; padding-top: 4.25rem; }
-.lp-hero-grid { position: relative; display: grid; gap: 3.5rem; align-items: center;
-  padding-block: clamp(3.5rem, 8vw, 6.5rem) clamp(4rem, 9vw, 7rem); }
-@media (min-width: 1024px) { .lp-hero-grid { grid-template-columns: 1.02fr 1fr; gap: 4rem; } }
+.lp-hero-grid { position: relative; display: grid; gap: 3.5rem; align-items: center; padding-block: clamp(3.5rem, 8vw, 6.5rem); }
+@media (min-width: 1024px) { .lp-hero-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: clamp(3rem, 6vw, 6rem); } }
 .lp-hero-copy { display: grid; gap: 1.5rem; justify-items: start; max-width: 38rem; }
 .lp-hero-copy .lp-lead { max-width: 34rem; }
+/* One spacing step tighter around the badge and the trial note, so the copy reads as one unit. */
+.lp-hero-copy .lp-badge { margin-bottom: -.25rem; }
+.lp-hero-copy .lp-note { margin-top: -.5rem; }
+/* The teal phrase is its own line, so the headline never strands "in"; fit-content keeps the
+   gradient the width of the words, so both ends of it show. */
+.lp-display .lp-grad { display: block; width: fit-content; }
 .lp-badge { display: inline-flex; align-items: center; gap: .5rem; padding: .375rem .875rem .375rem .5rem; border-radius: 999px;
   border: 1px solid var(--lp-line-2); background: color-mix(in srgb, var(--lp-white) 4%, transparent); color: var(--lp-on-navy-mid); font-size: .875rem; font-weight: 500; }
 .lp-badge i { display: inline-flex; width: 1.375rem; height: 1.375rem; border-radius: 999px; align-items: center; justify-content: center;
@@ -194,9 +199,14 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
 .lp-note span { display: inline-flex; align-items: center; gap: .375rem; }
 .lp-note svg { width: 1rem; height: 1rem; color: var(--lp-teal-on-navy); }
 .lp-chans { display: flex; flex-wrap: wrap; gap: .5rem; }
-@media (max-width: 1023px) {
+@media (min-width: 640px) and (max-width: 1023px) {
   .lp-hero-copy { justify-items: center; text-align: center; margin-inline: auto; }
+  .lp-display .lp-grad { margin-inline: auto; }
   .lp-ctas, .lp-note, .lp-chans { justify-content: center; }
+}
+/* Phones: left-aligned copy (long centred lines are tiring) and full-width, stacked buttons. */
+@media (max-width: 639px) {
+  .lp-hero .lp-ctas { display: grid; width: 100%; }
 }
 
 /* --- Illustrations: shared frame ---------------------------------------- */
@@ -235,11 +245,24 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
 .lp-sys::before, .lp-sys::after { content: ""; width: 1.5rem; height: 1px; background: var(--lp-rule-2); }
 
 /* --- Hero art: the inbox at work ----------------------------------------- */
-.lp-hero-art { position: relative; width: 100%; max-width: 36rem; margin-inline: auto; }
+/* Aligned by the window, not the figure: the top margin balances the caption below, so the
+   window's centre meets the copy's centre. A soft backlight and a gradient ring give it depth. */
+.lp-hero-art { position: relative; isolation: isolate; width: 100%; max-width: 36rem; margin-inline: auto; }
+@media (min-width: 1024px) { .lp-hero-art { justify-self: end; margin: 3.5rem 0 0; } }
+.lp-hero-art::before { content: ""; position: absolute; z-index: -1; inset: 6% -8% 14% -8%; border-radius: 50%; filter: blur(48px);
+  pointer-events: none; background: radial-gradient(closest-side, color-mix(in srgb, var(--color-teal-400) 28%, transparent),
+  color-mix(in srgb, var(--color-brand-500) 22%, transparent) 60%, transparent); }
+.lp-hero .lp-window { border: 1px solid transparent;
+  background: linear-gradient(180deg, var(--lp-white) 55%, var(--color-gray-50)) padding-box,
+    linear-gradient(150deg, color-mix(in srgb, var(--color-teal-300) 70%, transparent),
+      color-mix(in srgb, var(--lp-white) 20%, transparent) 45%, color-mix(in srgb, var(--color-brand-400) 60%, transparent)) border-box; }
+/* The conversation list shows only when the window is wide enough for two panes and a thread
+   of at least ~23rem (from about 1280px beside the copy; on tablets when stacked). Narrower
+   windows, including small laptops, show the conversation alone rather than squeeze it. */
+.lp-hero-art .lp-window { container-type: inline-size; }
 .lp-inbox { display: grid; grid-template-columns: 1fr; }
-@media (min-width: 640px) { .lp-inbox { grid-template-columns: 11.5rem 1fr; } }
 .lp-inbox-list { display: none; border-right: 1px solid var(--lp-rule); background: var(--color-gray-50); }
-@media (min-width: 640px) { .lp-inbox-list { display: block; } }
+@container (min-width: 35rem) { .lp-inbox { grid-template-columns: 11.5rem 1fr; } .lp-inbox-list { display: block; } }
 .lp-row { display: flex; gap: .625rem; align-items: center; padding: .75rem .875rem; border-bottom: 1px solid var(--lp-rule); font-size: .8125rem; }
 .lp-row.on { background: var(--lp-white); box-shadow: inset 3px 0 0 var(--lp-teal); }
 .lp-row span { display: block; min-width: 0; }
@@ -252,16 +275,23 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
 .lp-convo-head strong { display: block; font-size: .9375rem; font-weight: 650; }
 .lp-convo-head em { display: block; font-style: normal; font-size: .75rem; color: var(--lp-ink-3); }
 .lp-float { position: absolute; z-index: 2; display: flex; align-items: center; gap: .75rem; padding: .75rem .9375rem; border-radius: var(--lp-r-md);
-  background: var(--lp-white); color: var(--lp-ink); border: 1px solid var(--lp-rule); box-shadow: var(--lp-shadow-3); font-size: .8125rem; }
+  background: var(--lp-white); color: var(--lp-ink); border: 1px solid var(--lp-rule); box-shadow: var(--lp-shadow-3); font-size: .8125rem;
+  white-space: nowrap; }
 .lp-float strong { display: block; font-size: .875rem; font-weight: 650; }
 .lp-float em { display: block; font-style: normal; color: var(--lp-ink-3); }
 .lp-float .lp-tile { width: 2.25rem; height: 2.25rem; border-radius: 10px; }
 .lp-hero-art > [role="img"] { position: relative; }
-.lp-float.remind { left: -1.25rem; bottom: -2.75rem; }
+.lp-float.remind { left: -1.5rem; bottom: -1.75rem; }
 .lp-float.remind .lp-tile { background: var(--lp-amber-tint); color: var(--lp-amber-ink); }
-.lp-float.order { right: -1.25rem; bottom: -2.75rem; }
-/* The two cards sit on the window's bottom edge; the caption clears them. */
-@media (min-width: 640px) { .lp-hero-art .lp-art-cap { margin-top: 4rem; } }
+.lp-float.order { right: -1rem; top: -1.75rem; }
+/* The cards overlap only the window's edges: the order card its title bar, the reminder an empty
+   strip at the bottom. They never cover content; the caption clears the reminder. */
+@media (min-width: 640px) {
+  /* The reminder is about 4rem tall (two lines, no wrapping) and hangs 1.75rem below the window,
+     so it reaches about 2.3rem in; the strip is 3.25rem. Both are in rem, so text zoom keeps the gap. */
+  .lp-hero-art .lp-window::after { content: ""; display: block; height: 3.25rem; }
+  .lp-hero-art .lp-art-cap { margin-top: 2.75rem; }
+}
 @media (max-width: 639px) {
   .lp-float, .lp-float.remind, .lp-float.order { position: relative; left: auto; right: auto; top: auto; bottom: auto; margin-top: .75rem; box-shadow: var(--lp-shadow-2); }
   .lp-hero-art .lp-floats { display: grid; gap: 0; }
@@ -436,7 +466,8 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
 /* --- Trust --------------------------------------------------------------- */
 .lp-trust { display: grid; gap: 1rem; margin-top: 3.5rem; grid-template-columns: 1fr; }
 @media (min-width: 640px) { .lp-trust { grid-template-columns: repeat(2, 1fr); } }
-@media (min-width: 1024px) { .lp-trust { grid-template-columns: repeat(3, 1fr); } }
+/* 3 to 5 cards, depending on the channels: an odd last card takes the whole row. */
+@media (min-width: 640px) { .lp-trust > div:last-child:nth-child(odd) { grid-column: 1 / -1; } }
 .lp-trust > div { display: flex; gap: 1rem; align-items: flex-start; padding: 1.75rem; border-radius: var(--lp-r-lg);
   border: 1px solid var(--lp-line); background: linear-gradient(180deg, color-mix(in srgb, var(--lp-white) 4.5%, transparent), color-mix(in srgb, var(--lp-white) 1.5%, transparent)); }
 .lp-trust .lp-h3 { font-size: 1.0625rem; }
