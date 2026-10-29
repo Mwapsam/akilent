@@ -148,3 +148,49 @@ def test_plan_prices_follow_the_billing_currency(client, settings, plans):
     settings.BILLING_CURRENCY = "ZMW"
     pricing = _pricing(_html(client))
     assert "K49.00" in pricing and "$" not in pricing
+
+
+def _journey(html):
+    return html.split('<section id="how-it-works"', 1)[1].split("</section>", 1)[0]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "on, steps, absent",
+    [
+        (
+            ("whatsapp", "instagram", "facebook", "email"),
+            ["attract", "engage", "convert", "measure"],
+            [],
+        ),
+        (
+            ("instagram", "facebook", "email"),
+            ["attract", "engage", "convert", "measure"],
+            ["WhatsApp", "chat link"],
+        ),
+        (
+            ("facebook",),
+            ["attract", "engage", "convert", "measure"],
+            ["WhatsApp", "Instagram"],
+        ),
+        (
+            ("email",),
+            ["reach", "convert", "measure"],
+            ["WhatsApp", "Instagram", "Facebook"],
+        ),
+        ((), ["convert", "measure"], ["WhatsApp", "Instagram", "Facebook", "email"]),
+    ],
+)
+def test_the_journey_follows_the_channels(client, settings, plans, on, steps, absent):
+    """One illustrated timeline in every setup: the right steps, in order, and only channels
+    that are on. Numbers come from a CSS counter, so a hidden step leaves no gap."""
+    _only(settings, *on)
+    journey = _journey(_html(client))
+    shown = re.findall(r'<li class="lp-step[^"]*" id="step-([a-z]+)"', journey)
+    assert shown == steps
+    for word in absent:
+        assert word not in journey, word
+    for name, body in _figures(journey):
+        assert 'aria-label="Illustration' in body, name
+    # The step map in the heading links to exactly the steps shown.
+    assert re.findall(r'href="#step-([a-z]+)"', journey) == steps

@@ -1,79 +1,103 @@
 {% comment %}
-  How it works: one customer's journey (messaging.md §3), each step with an illustration of the
-  real screen. Shown with WhatsApp, which the post's chat link opens; without it, the
-  email version of how it works.
+  How it works: one customer's journey (messaging.md §3) as a timeline, each step with an
+  illustration of the real screen. The steps follow the channels that are on, and a CSS counter
+  numbers them 1…n (landing.css: .lp-journey), so a hidden step never leaves a gap:
+  - Attract: with Content Studio (a post with its WhatsApp chat link, or comment rules without WhatsApp);
+  - Engage: when a chat channel is on (the shared inbox); Reach instead when only email is;
+  - Convert: always;
+  - Measure: post results with WhatsApp's chat link, post metrics with Content Studio alone,
+    else Business Health.
+  The tag row under each step repeats the step's own claims in short.
 {% endcomment %}
+{% with chat=ch.whatsapp|default:ch.instagram|default:ch.facebook %}
 <section id="how-it-works" class="lp-navy lp-section" aria-labelledby="how-title">
   <div class="lp-wrap">
-    {% if ch.whatsapp == "live" %}
     <div class="lp-head section-head center lp-reveal">
       <p class="lp-eyebrow eyebrow">How it works</p>
-      <h2 id="how-title" class="lp-h2">{% if ch.results %}From a post to a paid order, in one place{% else %}From a message to a paid order, in one place{% endif %}</h2>
+      <h2 id="how-title" class="lp-h2">{% if ch.content %}From a post to a paid order, in one place{% elif chat %}From a message to a paid order, in one place{% else %}From first contact to a paid order, without the gaps{% endif %}</h2>
       <p class="lp-body lp-mid">One customer's journey through {{ app }}.</p>
+      <nav class="lp-journey-map" aria-label="Steps">
+        {% if ch.content %}<a href="#step-attract">Attract</a><span aria-hidden="true"></span>{% endif %}
+        {% if chat %}<a href="#step-engage">Engage</a>{% elif ch.email %}<a href="#step-reach">Reach</a>{% endif %}{% if chat or ch.email %}<span aria-hidden="true"></span>{% endif %}
+        <a href="#step-convert">Convert</a><span aria-hidden="true"></span>
+        <a href="#step-measure">Measure</a>
+      </nav>
     </div>
+
     <ol class="lp-journey">
-      {% if ch.results %}
-      <li class="lp-step lp-reveal">
+      {% if ch.content %}
+      <li class="lp-step lp-reveal" id="step-attract">
         <div class="lp-step-copy">
-          <p class="lp-step-num" data-claim-exempt><b aria-hidden="true">1</b>Attract</p>
+          <p class="lp-step-num" data-claim-exempt><b aria-hidden="true"></b>Attract</p>
           <h3 class="lp-h3">A customer sees your post</h3>
+          {% if ch.results %}
           <p class="lp-body lp-mid" data-claim="content-studio post-chat-link">You publish a product post from Content Studio with a WhatsApp chat link in it.</p>
+          <div class="lp-step-tags" data-claim="content-studio post-chat-link"><span>Content Studio</span><span>Chat link</span></div>
+          {% else %}
+          <p class="lp-body lp-mid" data-claim="content-studio{% if ch.instagram == 'live' %} instagram-comments{% endif %}{% if ch.facebook == 'live' %} facebook-comments{% endif %}">You publish a product post from Content Studio, and comment rules reply to the comments it gets.</p>
+          <div class="lp-step-tags" data-claim="content-studio{% if ch.instagram == 'live' %} instagram-comments{% endif %}{% if ch.facebook == 'live' %} facebook-comments{% endif %}"><span>Content Studio</span><span>Comment rules</span></div>
+          {% endif %}
         </div>
         <div class="lp-step-art">{% include "accounts/landing/art/_post.html" %}</div>
       </li>
       {% endif %}
-      <li class="lp-step lp-reveal">
+
+      {% if chat %}
+      <li class="lp-step lp-reveal" id="step-engage">
         <div class="lp-step-copy">
-          <p class="lp-step-num" data-claim-exempt><b aria-hidden="true">{% if ch.results %}2{% else %}1{% endif %}</b>Engage</p>
+          <p class="lp-step-num" data-claim-exempt><b aria-hidden="true"></b>Engage</p>
           <h3 class="lp-h3">The chat lands in your shared inbox</h3>
-          <p class="lp-body lp-mid" data-claim="inbox{% if ch.instagram == 'live' %} instagram-dms{% endif %} assign auto-replies">They message you on WhatsApp{% if ch.instagram == "live" %} or Instagram{% endif %}. Your team answers from one inbox, and auto-replies cover you when you're closed.</p>
+          <p class="lp-body lp-mid" data-claim="{% if ch.whatsapp == 'live' %}inbox{% endif %}{% if ch.instagram == 'live' %} instagram-dms{% endif %}{% if ch.facebook == 'live' %} facebook-inbox{% endif %} assign auto-replies">They message you on {% if ch.whatsapp == "live" %}WhatsApp{% if ch.instagram == "live" and ch.facebook == "live" %}, Instagram or your Facebook Page{% elif ch.instagram == "live" %} or Instagram{% elif ch.facebook == "live" %} or your Facebook Page{% endif %}{% elif ch.instagram == "live" %}Instagram{% if ch.facebook == "live" %} or your Facebook Page{% endif %}{% else %}your Facebook Page{% endif %}. Your team answers from one inbox, and auto-replies cover you when you're closed.</p>
+          <div class="lp-step-tags" data-claim="assign auto-replies"><span>Shared inbox</span><span>Assignment</span><span>Auto-replies</span></div>
         </div>
         <div class="lp-step-art">{% include "accounts/landing/art/_thread.html" %}</div>
       </li>
-      <li class="lp-step lp-reveal">
+      {% elif ch.email %}
+      <li class="lp-step lp-reveal" id="step-reach">
         <div class="lp-step-copy">
-          <p class="lp-step-num" data-claim-exempt><b aria-hidden="true">{% if ch.results %}3{% else %}2{% endif %}</b>Convert</p>
+          <p class="lp-step-num" data-claim-exempt><b aria-hidden="true"></b>Reach</p>
+          <h3 class="lp-h3">Reach your customers by email</h3>
+          <p class="lp-body lp-mid" data-claim="email-sending customers campaigns">Send emails and campaigns from your own address, and keep each customer's details and history together.</p>
+          <div class="lp-step-tags" data-claim="email-sending campaigns"><span>Your own domain</span><span>Campaigns</span></div>
+        </div>
+        <div class="lp-step-art">{% include "accounts/landing/art/_customer.html" %}</div>
+      </li>
+      {% endif %}
+
+      <li class="lp-step lp-reveal" id="step-convert">
+        <div class="lp-step-copy">
+          <p class="lp-step-num" data-claim-exempt><b aria-hidden="true"></b>Convert</p>
           <h3 class="lp-h3">Interest becomes an order</h3>
           <p class="lp-body lp-mid" data-claim="interested follow-ups payments">When someone asks about buying, they're tracked as interested. Set a follow-up, record the order and send a link to pay online.</p>
+          <div class="lp-step-tags" data-claim="interested follow-ups payments"><span>Interested customers</span><span>Follow-ups</span><span>Payment links</span></div>
         </div>
         <div class="lp-step-art">{% include "accounts/landing/art/_order.html" %}</div>
       </li>
-      <li class="lp-step lp-reveal">
+
+      <li class="lp-step lp-reveal" id="step-measure">
         <div class="lp-step-copy">
-          <p class="lp-step-num" data-claim-exempt><b aria-hidden="true">{% if ch.results %}4{% else %}3{% endif %}</b>Measure</p>
+          <p class="lp-step-num" data-claim-exempt><b aria-hidden="true"></b>Measure</p>
           {% if ch.results %}
           <h3 class="lp-h3">See which post brought the sale</h3>
           <p class="lp-body lp-mid" data-claim="post-results attribution">Each post shows the clicks, chats, leads, orders and paid revenue that came through its chat link or comment replies. Nothing is guessed, so these are lower bounds.</p>
+          <div class="lp-step-tags" data-claim="post-results attribution"><span>Post results</span><span>Lower bounds, never estimates</span></div>
+          {% elif ch.content %}
+          <h3 class="lp-h3">See how each post performs</h3>
+          <p class="lp-body lp-mid" data-claim="post-metrics">See each post's reach and engagement from {% if ch.instagram == "live" and ch.facebook == "live" %}Instagram and Facebook{% elif ch.instagram == "live" %}Instagram{% else %}your Facebook Page{% endif %}.</p>
+          <div class="lp-step-tags" data-claim="post-metrics"><span>Reach</span><span>Engagement</span></div>
           {% else %}
           <h3 class="lp-h3">See what your conversations turned into</h3>
           <p class="lp-body lp-mid" data-claim="insights">Replies, follow-ups and sales, week by week.</p>
+          <div class="lp-step-tags" data-claim="insights"><span>Business Health</span></div>
           {% endif %}
         </div>
-        <div class="lp-step-art">{% if ch.results %}{% include "accounts/landing/art/_results.html" %}{% else %}{% include "accounts/landing/art/_health.html" %}{% endif %}</div>
+        <div class="lp-step-art">
+          {% if ch.results %}{% include "accounts/landing/art/_results.html" %}
+          {% elif ch.content %}{% include "accounts/landing/art/_health.html" with metrics=True %}
+          {% else %}{% include "accounts/landing/art/_health.html" %}{% endif %}
+        </div>
       </li>
     </ol>
-    {% else %}
-    <div class="lp-head section-head center lp-reveal">
-      <p class="lp-eyebrow eyebrow">How it works</p>
-      <h2 id="how-title" class="lp-h2">From message to action, without the gaps</h2>
-    </div>
-    <ol class="lp-steps-email">
-      <li class="lp-glass lp-reveal">
-        <p class="lp-step-num" data-claim-exempt><b aria-hidden="true">1</b>Connect</p>
-        <h3 class="lp-h3">Connect your domain</h3>
-        <p class="lp-body lp-mid" data-claim="email-sending roles">Connect your business email domain with a step-by-step guide and invite your team, so emails come from your own address.</p>
-      </li>
-      <li class="lp-glass lp-reveal d1">
-        <p class="lp-step-num" data-claim-exempt><b aria-hidden="true">2</b>Reach</p>
-        <h3 class="lp-h3">Reach your customers</h3>
-        <p class="lp-body lp-mid" data-claim="email-sending customers campaigns">Send emails and campaigns from your own address, and keep each customer's details and history together.</p>
-      </li>
-      <li class="lp-glass lp-reveal d2">
-        <p class="lp-step-num" data-claim-exempt><b aria-hidden="true">3</b>Get paid</p>
-        <h3 class="lp-h3">Follow up and get paid</h3>
-        <p class="lp-body lp-mid" data-claim="follow-ups interested payments">Get reminded when a customer needs a follow-up, keep track of who's interested in buying, and send a payment link when they're ready.</p>
-      </li>
-    </ol>
-    {% endif %}
   </div>
 </section>
+{% endwith %}

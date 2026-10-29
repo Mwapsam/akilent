@@ -1,13 +1,14 @@
 {% comment %}Illustration (journey, Measure, without post results): Business Health's weekly view of
-replies, follow-ups and sales (conversations.reporting.proof). Sample shape, not a result.{% endcomment %}
+replies, follow-ups and sales (conversations.reporting.proof). With ``metrics`` it's a post's reach
+and engagement instead (publishing.metrics_collector). Sample shape, not a result.{% endcomment %}
 <figure class="lp-art" data-art="health" data-claim-exempt>
-  <div role="img" aria-label="Illustration: a weekly chart of what conversations turned into.">
+  <div role="img" aria-label="Illustration: {% if metrics %}a chart of a post's reach and engagement.{% else %}a weekly chart of what conversations turned into.{% endif %}">
     <div class="lp-window" aria-hidden="true">
-      <div class="lp-bar"><i></i><i></i><i></i><b>Business Health</b></div>
+      <div class="lp-bar"><i></i><i></i><i></i><b>{% if metrics %}Post performance{% else %}Business Health{% endif %}</b></div>
       <div class="lp-results">
-        <div class="lp-results-head"><strong>Conversations this month</strong><span class="lp-chip lp-chip-teal">By week</span></div>
+        <div class="lp-results-head"><strong>{% if metrics %}Linen summer dress{% else %}Conversations this month{% endif %}</strong><span class="lp-chip lp-chip-teal">{% if metrics %}By day{% else %}By week{% endif %}</span></div>
         <div class="lp-bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-        <span class="lp-results-note">Replies, follow-ups and sales, week by week.</span>
+        <span class="lp-results-note">{% if metrics %}Reach and engagement, from {% if ch.instagram == "live" %}Instagram{% else %}your Facebook Page{% endif %}.{% else %}Replies, follow-ups and sales, week by week.{% endif %}</span>
       </div>
     </div>
   </div>

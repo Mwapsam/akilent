@@ -1232,3 +1232,31 @@ You said the hero felt off. Six causes, all fixed in `landing.css` (hero block),
 **Results:**
 - Landing, billing, email and core tests pass. `ruff`: clean. Drift: 574.
 - Browser: 26/26 (WhatsApp off).
+
+### "How it works" redesign (same day)
+
+**Before:**
+- **WhatsApp off:** three small email-only glass cards ("Connect your domain"), even with Instagram and Facebook on.
+- **WhatsApp on:** four rows that weren't connected to each other, with a WhatsApp badge always in the Engage picture.
+
+**Now:** one illustrated timeline in every channel setup.
+- **The rail:** a line runs down the middle on desktop (on the left on phones), and its teal segments fill as each step appears.
+- **Step numbers:** discs on the rail, numbered 1…n by a CSS counter.
+- **Feature tags** under each step.
+- **Pictures:** each stands on a stage (glow, dot grid, hairline frame) with the hero's gradient ring.
+- **Step map:** the heading links to each step.
+
+**Steps follow the channels:**
+- **Attract:** Content Studio, with a WhatsApp chat link, or comment rules without WhatsApp.
+- **Engage:** names only the chat channels that are on; the badge shows the first one.
+- **Reach:** when only email is on (reuses the customer-record picture).
+- **Convert.**
+- **Measure:** post results, post performance (`post-metrics`) or Business Health.
+
+The faint outline numerals from the plan were dropped: they collided with the step labels, and the disc on the rail already carries the number.
+
+**Results:**
+- New test `test_the_journey_follows_the_channels` covers five setups: steps in order, no channel that's off named, illustrations labelled, step map matches.
+- Landing tests pass. `ruff`: clean. Drift: 574.
+- Browser: 26/26 with WhatsApp on (a 2px overflow at 360 was found and fixed: the step column now shrinks) and 26/26 with it off.
+- Checked by eye at 1440 in both setups, and at 390.

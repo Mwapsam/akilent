@@ -248,8 +248,8 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
 /* Aligned by the window, not the figure: the top margin balances the caption below, so the
    window's centre meets the copy's centre. A soft backlight and a gradient ring give it depth. */
 .lp-hero-art { position: relative; isolation: isolate; width: 100%; max-width: 36rem; margin-inline: auto; }
-@media (min-width: 1024px) { .lp-hero-art { justify-self: end; margin: 3.5rem 0 0; } }
-.lp-hero-art::before { content: ""; position: absolute; z-index: -1; inset: 6% -8% 14% -8%; border-radius: 50%; filter: blur(48px);
+@media (min-width: 1024px) { .lp-hero .lp-hero-art { justify-self: end; margin: 3.5rem 0 0; } }
+.lp-hero .lp-hero-art::before { content: ""; position: absolute; z-index: -1; inset: 6% -8% 14% -8%; border-radius: 50%; filter: blur(48px);
   pointer-events: none; background: radial-gradient(closest-side, color-mix(in srgb, var(--color-teal-400) 28%, transparent),
   color-mix(in srgb, var(--color-brand-500) 22%, transparent) 60%, transparent); }
 .lp-hero .lp-window { border: 1px solid transparent;
@@ -280,7 +280,7 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
 .lp-float strong { display: block; font-size: .875rem; font-weight: 650; }
 .lp-float em { display: block; font-style: normal; color: var(--lp-ink-3); }
 .lp-float .lp-tile { width: 2.25rem; height: 2.25rem; border-radius: 10px; }
-.lp-hero-art > [role="img"] { position: relative; }
+.lp-art > [role="img"] { position: relative; }
 .lp-float.remind { left: -1.5rem; bottom: -1.75rem; }
 .lp-float.remind .lp-tile { background: var(--lp-amber-tint); color: var(--lp-amber-ink); }
 .lp-float.order { right: -1rem; top: -1.75rem; }
@@ -316,25 +316,73 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
 .status-tag { padding: .1875rem .625rem; border-radius: 999px; font-size: .75rem; font-weight: 600; white-space: nowrap; }
 .status-live { background: var(--lp-teal-tint); color: var(--lp-teal-ink); }
 
-/* --- Journey ------------------------------------------------------------- */
-.lp-journey { position: relative; list-style: none; margin: 4.5rem 0 0; padding: 0; display: grid; gap: clamp(4rem, 9vw, 7rem); }
-.lp-step { display: grid; gap: 2rem; align-items: center; }
-@media (min-width: 960px) {
-  .lp-step { grid-template-columns: 5fr 6fr; gap: 5rem; }
-  .lp-step:nth-child(even) { grid-template-columns: 6fr 5fr; }
-  .lp-step:nth-child(even) .lp-step-copy { order: 2; }
-}
+/* --- Journey -------------------------------------------------------------
+   A timeline: a rail runs through the step numbers and fills teal as each step reveals; the copy
+   and the picture alternate sides around it on desktop, and sit to its right on phones. Numbers
+   are a CSS counter, so they stay 1…n whichever steps the channels show. */
+.lp-journey-map { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .5rem .75rem; margin-top: .5rem; }
+.lp-journey-map a { padding: .375rem .875rem; border-radius: 999px; border: 1px solid var(--lp-line-2); color: var(--lp-on-navy-mid);
+  font-size: .875rem; font-weight: 500; text-decoration: none; background: color-mix(in srgb, var(--lp-white) 3%, transparent);
+  transition: color .2s ease, border-color .2s ease; }
+.lp-journey-map a:hover { color: var(--lp-on-navy); border-color: var(--lp-on-navy-lo); }
+.lp-journey-map span { width: 1.25rem; height: 1px; background: var(--lp-line-2); }
+@media (max-width: 639px) { .lp-journey-map span { display: none; } }
+.lp-journey { --lp-jgap: clamp(3.5rem, 7vw, 6rem); --lp-node: 3rem; position: relative; list-style: none; margin: 4.5rem 0 0; padding: 0;
+  display: grid; gap: var(--lp-jgap); counter-reset: step; }
+/* The rail: the base line, then a teal segment per step (to its number) that grows in as it reveals. */
+.lp-journey::before { content: ""; position: absolute; top: 0; bottom: 0; left: calc(var(--lp-node) / 2); width: 1px; background: var(--lp-line-2); }
+.lp-step { position: relative; display: grid; gap: 1.75rem; align-items: center; counter-increment: step;
+  grid-template-columns: minmax(0, 1fr); padding-left: calc(var(--lp-node) + 1rem); }
+@media (max-width: 639px) { .lp-journey { --lp-node: 2.5rem; } .lp-step-art { padding: 1rem .75rem; } }
+.lp-step::after { content: ""; position: absolute; left: calc(var(--lp-node) / 2); width: 1px; top: calc(-1 * var(--lp-jgap));
+  height: calc(var(--lp-jgap) + var(--lp-node) / 2); transform-origin: top; background: linear-gradient(180deg, transparent, var(--lp-teal-on-navy)); }
+.lp-step:first-child::after { top: 0; height: calc(var(--lp-node) / 2); }
+/* The rail ends at the last number: a strip of the section's navy covers the line below it. */
+.lp-step:last-child::before { content: ""; position: absolute; left: calc(var(--lp-node) / 2); top: var(--lp-node); bottom: 0; width: 3px;
+  transform: translateX(-1px); background: var(--lp-navy); }
+html.js .lp-step::after { transform: scaleY(0); transition: transform 1s var(--lp-ease) .2s; }
+html.js .lp-step.in::after { transform: scaleY(1); }
 .lp-step-copy { display: grid; gap: .875rem; align-content: start; max-width: 30rem; }
 .lp-step-num { display: inline-flex; align-items: center; gap: .75rem; margin: 0; font-size: .8125rem; font-weight: 600;
   letter-spacing: .08em; text-transform: uppercase; color: var(--lp-teal-on-navy); }
-.lp-step-num b { display: inline-flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; border-radius: 999px;
-  font-size: .9375rem; letter-spacing: 0; color: var(--lp-navy); background: var(--lp-teal-on-navy); box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-teal-300) 12%, transparent); }
-.lp-step-copy .lp-h3 { font-size: clamp(1.375rem, 2.4vw, 1.75rem); letter-spacing: -0.02em; }
-.lp-step-art { width: 100%; max-width: 32rem; justify-self: center; }
-.lp-steps-email { list-style: none; margin: 3.5rem 0 0; padding: 0; display: grid; gap: 1rem; }
-@media (min-width: 768px) { .lp-steps-email { grid-template-columns: repeat(3, 1fr); } }
-.lp-glass { border-radius: var(--lp-r-lg); padding: 1.75rem; background: linear-gradient(180deg, color-mix(in srgb, var(--lp-white) 5%, transparent), color-mix(in srgb, var(--lp-white) 2%, transparent));
-  border: 1px solid var(--lp-line); display: grid; gap: .75rem; align-content: start; }
+/* The number disc sits on the rail: the copy isn't positioned, so it's placed against the step. */
+.lp-step-num b { position: absolute; z-index: 1; left: 0; top: 0; display: inline-flex; align-items: center; justify-content: center;
+  width: var(--lp-node); height: var(--lp-node); border-radius: 999px; font-size: 1rem; letter-spacing: 0; font-variant-numeric: tabular-nums;
+  color: var(--lp-navy); background: var(--lp-teal-on-navy);
+  box-shadow: 0 0 0 6px var(--lp-navy), 0 0 0 7px color-mix(in srgb, var(--color-teal-300) 35%, transparent), 0 0 28px color-mix(in srgb, var(--color-teal-300) 35%, transparent); }
+.lp-step-num b::before { content: counter(step); }
+.lp-step-copy .lp-h3 { font-size: clamp(1.5rem, 2.6vw, 2rem); line-height: 1.15; letter-spacing: -0.025em; text-wrap: balance; }
+.lp-step-tags { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .25rem; }
+.lp-step-tags span { padding: .3125rem .75rem; border-radius: 999px; font-size: .8125rem; font-weight: 500; color: var(--lp-on-navy-mid);
+  border: 1px solid var(--lp-line-2); background: color-mix(in srgb, var(--lp-white) 4%, transparent); }
+/* Each picture stands on a stage: a soft glow, a faint dot grid and a hairline frame. */
+.lp-step-art { position: relative; isolation: isolate; width: 100%; padding: clamp(1.25rem, 3.5vw, 2.75rem) clamp(1rem, 3vw, 2.5rem);
+  border-radius: var(--lp-r-xl); border: 1px solid var(--lp-line);
+  background:
+    radial-gradient(60% 55% at 50% 45%, color-mix(in srgb, var(--color-teal-400) 16%, transparent), transparent 70%),
+    radial-gradient(color-mix(in srgb, var(--lp-white) 9%, transparent) 1px, transparent 1.5px) 0 0 / 18px 18px,
+    linear-gradient(180deg, color-mix(in srgb, var(--lp-white) 4%, transparent), color-mix(in srgb, var(--lp-white) 1%, transparent)); }
+.lp-step-art .lp-art { max-width: 28rem; margin-inline: auto; }
+.lp-step-art .lp-window { border: 1px solid transparent;
+  background: linear-gradient(180deg, var(--lp-white) 55%, var(--color-gray-50)) padding-box,
+    linear-gradient(150deg, color-mix(in srgb, var(--color-teal-300) 60%, transparent),
+      color-mix(in srgb, var(--lp-white) 15%, transparent) 45%, color-mix(in srgb, var(--color-brand-400) 50%, transparent)) border-box; }
+@media (min-width: 960px) {
+  /* Desktop: the rail runs down the middle; copy and picture alternate around it. */
+  .lp-journey::before { left: 50%; }
+  .lp-step { padding-left: 0; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: calc(var(--lp-node) + 6rem); }
+  .lp-step::after { left: 50%; height: calc(var(--lp-jgap) + 50%); }
+  .lp-step:first-child::after { height: 50%; }
+  .lp-step:last-child::before { left: 50%; top: 50%; }
+  .lp-step-num b { left: 50%; top: 50%; transform: translate(-50%, -50%); }
+  .lp-step:nth-child(odd) .lp-step-copy { justify-self: end; }
+  .lp-step:nth-child(even) .lp-step-copy { order: 2; }
+}
+/* Post comment replies (Attract without a chat link) */
+.lp-comment { display: flex; gap: .5rem; align-items: flex-start; font-size: .8125rem; line-height: 1.45; color: var(--lp-ink-2); }
+.lp-comment strong { color: var(--lp-ink); font-weight: 650; margin-right: .25rem; }
+.lp-comment em { display: block; margin-top: .125rem; font-style: normal; font-size: .6875rem; font-weight: 600; color: var(--lp-teal-ink); }
+.lp-comment.reply { margin-left: 1.5rem; }
 
 /* Post art */
 .lp-post { max-width: 21rem; margin-inline: auto; }
@@ -573,6 +621,7 @@ html.js .lp-reveal.d1 { transition-delay: .08s; } html.js .lp-reveal.d2 { transi
   html:has(.lp) { scroll-behavior: auto; }
   .lp *, .lp *::before, .lp *::after { transition: none !important; animation: none !important; }
   html.js .lp-reveal { opacity: 1; transform: none; }
+  html.js .lp-step::after { transform: none; }
 }
 @media print { html.js .lp-reveal { opacity: 1; transform: none; } .lp * { animation: none !important; } }
 
