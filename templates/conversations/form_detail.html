@@ -40,11 +40,14 @@
 
 {{ builder|json_script:"form-builder-data" }}
 
-<div x-data="formBuilder()" x-init="init()" class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+<div x-data="formBuilder()" class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
   <div class="space-y-4 min-w-0">
     <div class="flex items-center justify-between">
       <h2 class="font-semibold text-ink">Questions</h2>
-      <span class="text-xs" :class="saveState === 'error' ? 'text-red-700' : 'text-ink-subtle'" x-text="saveLabel()" aria-live="polite"></span>
+      <span class="inline-flex items-center gap-2" role="status" aria-live="polite">
+        <span class="text-xs" :class="saveState === 'error' ? 'text-red-700' : 'text-ink-subtle'" x-text="saveLabel()"></span>
+        <button type="button" class="btn btn-secondary btn-xs" x-show="saveState === 'error'" x-cloak @click="save()">Try again</button>
+      </span>
     </div>
     <ul class="text-xs text-red-700 space-y-0.5" x-show="problems.length" x-cloak>
       <template x-for="p in problems" :key="p"><li x-text="'• ' + p"></li></template>
@@ -92,8 +95,8 @@
             <input class="input input-sm w-full mt-0.5" x-model="q.helper" @input="changed()" maxlength="80" placeholder="e.g. A rough figure is fine" />
           </label>
           <div class="flex flex-wrap gap-4 text-xs">
-            <label class="inline-flex items-center gap-1.5"><input type="checkbox" x-model="q.required" @change="changed()" /> They must answer</label>
-            <label class="inline-flex items-center gap-1.5" x-show="i > 0"><input type="checkbox" x-model="q.page_break" @change="changed()" /> Start a new page here</label>
+            <label class="inline-flex items-center gap-1.5 min-h-6"><input type="checkbox" x-model="q.required" @change="changed()" /> They must answer</label>
+            <label class="inline-flex items-center gap-1.5 min-h-6" x-show="i > 0"><input type="checkbox" x-model="q.page_break" @change="changed()" /> Start a new page here</label>
           </div>
         </li>
       </template>
@@ -198,7 +201,7 @@
 <section class="mt-8">
   <div class="flex items-center justify-between mb-2">
     <h2 class="font-semibold text-ink">Latest answers</h2>
-    <a href="{% url 'conversations:form_responses' form.pk %}" class="text-sm text-accent hover:underline">See all</a>
+    <a href="{% url 'conversations:form_responses' form.pk %}" class="inline-flex items-center min-h-6 text-sm text-accent hover:underline">See all</a>
   </div>
   {% if recent %}
   <ul class="card divide-y divide-border">
@@ -226,12 +229,25 @@ function formBuilder() {
     problems: [],
     page: 0,
     saveState: "saved",
+    saveError: "",
     _timer: null,
+    _offDirty: null,
+    _onOnline: null,
+    _saving: false,
     init() {
       this.data = JSON.parse(document.getElementById("form-builder-data").textContent);
       this.questions = (this.data.questions || []).map((q) => this.prepare(q));
       this.copy = { ...this.data.copy };
-      window.addEventListener("beforeunload", (e) => { if (this.saveState === "dirty") { e.preventDefault(); e.returnValue = ""; } });
+      // Anything not yet on the server holds every way out: the boosted sidebar and leaving the
+      // page (app.js, akDirty: one shared beforeunload for all editors).
+      if (window.akDirty) this._offDirty = window.akDirty.register(this.$el, () => this._saving || this.saveState !== "saved");
+      this._onOnline = () => { if (this.saveState === "error" && !this._saving) this.save(); };
+      window.addEventListener("online", this._onOnline);
+    },
+    destroy() {
+      if (this._offDirty) this._offDirty();
+      window.removeEventListener("online", this._onOnline);
+      clearTimeout(this._timer);
     },
     prepare(q) {
       return { _id: ++seq, key: q.key || "", label: q.label || "", field_type: q.field_type || "text",
@@ -266,7 +282,7 @@ function formBuilder() {
       return pages;
     },
     saveLabel() {
-      return { saved: "Saved", dirty: "Unsaved changes…", saving: "Saving…", error: "Couldn't save. Check your connection." }[this.saveState];
+      return { saved: "Saved", dirty: "Unsaved changes…", saving: "Saving…", error: this.saveError }[this.saveState];
     },
     changed() {
       this.saveState = "dirty";
@@ -274,26 +290,48 @@ function formBuilder() {
       this._timer = setTimeout(() => this.save(), 1200);
     },
     async save() {
+      clearTimeout(this._timer);
+      // One save at a time: each sends the whole form, so an older one landing last would win.
+      // (Not saveState: an edit during a save sets it back to "dirty".)
+      if (this._saving) { this._timer = setTimeout(() => this.save(), 400); return; }
+      this._saving = true;
       this.saveState = "saving";
+      // The questions as sent, so the keys the server gives back land on the right ones even
+      // if questions are added, removed or moved while this save is on its way.
+      const sent = this.questions.slice(0, 50);
       const body = {
-        questions: this.questions.map(({ _id, ...q }) => ({ ...q, options: q.options.filter((o) => o.trim()) })),
+        questions: sent.map(({ _id, ...q }) => ({ ...q, options: q.options.filter((o) => o.trim()) })),
         copy: this.copy,
       };
       try {
         const r = await fetch("{% url 'conversations:form_save' form.pk %}", {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X-CSRFToken": (document.cookie.match(/(^|;\s*)csrftoken=([^;]+)/) || [])[2] || "" },
+          headers: { "Content-Type": "application/json", "X-CSRFToken": window.akCsrf() },
           body: JSON.stringify(body),
         });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error || "save failed");
-        // Keep what's on screen; just learn the keys the server gave new questions.
-        (data.questions || []).forEach((q, i) => { if (this.questions[i] && !this.questions[i].key) this.questions[i].key = q.key; });
+        let data = {};
+        try { data = await r.json(); } catch (_) { /* an HTML error page */ }
+        if (!r.ok) { this.failed(r.status, data); return; }
+        // The server keeps only questions with words (views._clean_questions), in order: its
+        // list lines up with those. Only a question still on screen and still without a key
+        // learns one.
+        const kept = sent.filter((q) => (q.label || "").trim());
+        (data.questions || []).forEach((q, i) => {
+          const local = kept[i];
+          if (local && !local.key && this.questions.includes(local)) local.key = q.key;
+        });
         this.problems = [...(data.problems || []), ...(data.flow_problems || [])];
         this.saveState = this.saveState === "saving" ? "saved" : this.saveState;
       } catch (e) {
-        this.saveState = "error";
+        this.failed(0, {});
+      } finally {
+        this._saving = false;
       }
+    },
+    // Each save sends the whole form, so trying again is always safe; the edits stay on screen.
+    failed(status, data) {
+      this.saveError = window.akFailure.draftSaveMessage(status, data);
+      this.saveState = "error";
     },
   };
 }

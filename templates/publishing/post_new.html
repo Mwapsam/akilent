@@ -11,7 +11,7 @@
 
 {% block content %}
 {{ editor_data|json_script:"post-editor-data" }}
-<div class="composer" x-data="composer()" x-init="init()">
+<div class="composer" x-data="composer()">
 
   {% include "publishing/composer/_header.html" %}
 

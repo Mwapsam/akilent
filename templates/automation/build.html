@@ -35,7 +35,7 @@
   <div>
     <label class="label" for="b-location">Where are you?</label>
     <input id="b-location" name="location" class="input" maxlength="300" value="{{ profile.location|default:'' }}" placeholder="e.g. Plot 12, Cairo Road, Lusaka (opposite the post office)">
-    <p class="text-xs text-gray-500 mt-1">Used to answer “where are you?” automatically.</p>
+    <p class="text-xs text-ink-subtle mt-1">Used to answer “where are you?” automatically.</p>
   </div>
   <fieldset x-data="{ delivers: '{% if profile.delivers %}yes{% elif profile.delivers is False %}no{% endif %}' }">
     <legend class="label">Do you deliver?</legend>
@@ -56,12 +56,12 @@
     <input name="payment_other" class="input mt-2" maxlength="120" value="{{ profile.payment_other|default:'' }}" placeholder="Anything else, e.g. Zamtel Kwacha">
   </fieldset>
   <div>
-    <label class="label" for="b-web">Website <span class="font-normal text-gray-400">· Optional</span></label>
+    <label class="label" for="b-web">Website <span class="font-normal text-ink-subtle">· Optional</span></label>
     <input id="b-web" name="website" class="input" maxlength="300" value="{{ profile.website|default:'' }}" placeholder="example.com">
   </div>
   <details class="rounded-xl border border-border p-4" open>
     <summary class="font-medium text-ink cursor-pointer">Opening hours</summary>
-    <p class="text-xs text-gray-500 mt-1 mb-3">Used to reply when you're closed and to answer “are you open?”.</p>
+    <p class="text-xs text-ink-subtle mt-1 mb-3">Used to reply when you're closed and to answer “are you open?”.</p>
     <label class="flex items-center gap-2 text-sm mb-3"><input type="checkbox" name="set_hours" checked> Save these opening hours</label>
     <div class="space-y-4">{% include "accounts/_hours_fields.html" %}</div>
   </details>
@@ -87,7 +87,7 @@
     <p class="text-sm text-gray-600 mt-0.5">WhatsApp doesn't share the labels from the WhatsApp Business app, so Akilent starts with these, based on your answers. Automations add them as customers ask:</p>
     <p class="mt-2 flex flex-wrap gap-1.5">{% for tag in starter_tags %}<span class="badge badge-neutral">{{ tag }}</span>{% endfor %}</p>
   </div>
-  <div class="rounded-xl border border-dashed border-border p-4 text-sm text-gray-500">
+  <div class="rounded-xl border border-dashed border-border p-4 text-sm text-ink-subtle">
     <p class="font-medium text-gray-600">Your WhatsApp catalog</p>
     <p class="mt-0.5">Coming later: products and prices from your WhatsApp catalog, so AI can answer from them.</p>
   </div>
@@ -140,7 +140,7 @@
           <span x-show="!busy">Draft it</span><span x-show="busy" x-cloak>Drafting…</span>
         </button>
         <p class="text-sm text-red-700" x-show="error" x-text="error" role="alert"></p>
-        <p class="text-xs text-gray-500">AI only picks what you want; Akilent builds it and shows you before anything is saved.</p>
+        <p class="text-xs text-ink-subtle">AI only picks what you want; Akilent builds it and shows you before anything is saved.</p>
       </div>
     </div>
     {% if template_url %}
@@ -153,7 +153,7 @@
           <span x-show="!busy">Draft it</span><span x-show="busy" x-cloak>Drafting…</span>
         </button>
         <p class="text-sm text-red-700" x-show="error" x-text="error" role="alert"></p>
-        <p class="text-xs text-gray-500">You'll check it on the template page, then submit it to WhatsApp for approval.</p>
+        <p class="text-xs text-ink-subtle">You'll check it on the template page, then submit it to WhatsApp for approval.</p>
       </div>
     </div>
     {% endif %}

@@ -4,7 +4,7 @@
 {% block content %}
 <header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
   <div class="min-w-0">
-    <nav class="mb-1 flex items-center gap-1.5 text-xs text-gray-500" aria-label="Breadcrumb">
+    <nav class="mb-1 flex items-center gap-1.5 text-xs text-ink-subtle" aria-label="Breadcrumb">
       <a href="/automations/" class="hover:text-ink">Automations</a>
       <span aria-hidden="true">/</span><span class="text-ink">{{ wf.name }}</span>
     </nav>
@@ -13,7 +13,7 @@
       {% if wf.status == "published" %}<span class="badge badge-success">On · v{{ wf.version }}</span>
       {% elif wf.status == "paused" %}<span class="badge badge-neutral">Paused · v{{ wf.version }}</span>
       {% elif wf.status == "archived" %}<span class="badge badge-neutral">Archived</span>
-      {% else %}<span class="badge badge-warning">Draft</span>{% endif %}
+      {% else %}<span class="badge badge-neutral">Draft · off</span>{% endif %}
       <span class="badge badge-warning" x-data x-show="$store.wfChanges.pending" x-cloak
             title="Customers still get the published version until you publish these changes">Unpublished changes</span>
     </p>
@@ -27,11 +27,11 @@
           hx-boost="false" data-confirm="Discard your unpublished changes? The automation keeps running as it is." data-confirm-label="Discard">{% csrf_token %}
       <button class="btn btn-ghost btn-sm">Discard changes</button>
     </form>
-    <form method="post" action="/automations/{{ wf.slug }}/publish/" x-data x-show="$store.wfChanges.pending" x-cloak hx-boost="false">{% csrf_token %}
+    <form method="post" action="/automations/{{ wf.slug }}/publish/" x-data x-show="$store.wfChanges.pending" x-cloak hx-boost="false" data-wf-publish data-busy-submit>{% csrf_token %}
       <button class="btn btn-primary btn-sm">Publish changes</button>
     </form>
     {% else %}
-    <form method="post" action="/automations/{{ wf.slug }}/publish/" hx-boost="false">{% csrf_token %}
+    <form method="post" action="/automations/{{ wf.slug }}/publish/" hx-boost="false" data-wf-publish data-busy-submit>{% csrf_token %}
       <button class="btn btn-primary btn-sm">Turn on</button>
     </form>
     {% endif %}
@@ -51,7 +51,7 @@
     Alpine.store("wfChanges", { pending: {{ has_changes|yesno:"true,false" }} });
   });
 </script>
-<div x-data="workflowEditor()" x-init="init()">
+<div x-data="workflowEditor()">
   <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
     <div class="tabs">
       <button class="tab" :class="tab === 'visual' && 'tab-active'" @click="tab = 'visual'">Steps</button>
@@ -59,12 +59,13 @@
       <button class="tab" x-show="advanced" :class="tab === 'code' && 'tab-active'" @click="syncToCode(); tab = 'code'">Code</button>
     </div>
     <div class="flex items-center gap-3">
-      <label class="text-xs inline-flex items-center gap-1.5 text-gray-500">
+      <label class="text-xs inline-flex items-center gap-1.5 min-h-6 text-ink-subtle">
         <input type="checkbox" x-model="advanced" @change="!advanced && tab === 'code' && (tab = 'visual')" /> Advanced
       </label>
       <span class="text-xs font-medium" :class="blockingErrors().length ? 'text-red-600' : 'text-teal-700'"
             x-text="blockingErrors().length ? blockingErrors().length + ' issue' + (blockingErrors().length === 1 ? '' : 's') : 'Valid'"></span>
-      <span class="text-xs text-gray-400" x-show="saved" x-transition>Saved</span>
+      <span class="text-xs text-ink-subtle" role="status" aria-live="polite"
+            x-text="busy ? 'Saving…' : (saved ? 'Saved' : (dirty && !saveError ? 'Unsaved changes' : ''))"></span>
       <button class="btn btn-secondary btn-sm" @click="openTest()">Test it</button>
       <button class="btn btn-primary btn-sm" @click="save()" :disabled="busy">Save</button>
     </div>
@@ -94,7 +95,7 @@
           <p class="field-error" x-show="triggerFieldError('trigger.type')" x-text="triggerFieldError('trigger.type')"></p>
         </label>
         <label class="text-sm" x-show="advanced && isMessageTrigger()" x-cloak>
-          <span class="text-gray-600">Priority <span class="text-gray-400">(lower answers first)</span></span>
+          <span class="text-gray-600">Priority <span class="text-ink-subtle">(lower answers first)</span></span>
           <input type="number" min="1" max="999" class="input mt-1 w-24" x-model.number="priority" />
         </label>
         <label class="text-sm" x-show="definition.trigger.type === 'conversation.form_completed'" x-cloak>
@@ -121,7 +122,7 @@
               <p class="font-medium text-ink" x-text="'Would catch ' + coverage.result.caught + ' of ' + coverage.result.total + ' messages' + (coverage.result.ai ? ' (some written by AI to test it)' : '')"></p>
               <ul class="space-y-0.5">
                 <template x-for="r in coverage.result.rows" :key="r.text">
-                  <li :class="r.caught ? 'text-teal-700' : 'text-gray-500'">
+                  <li :class="r.caught ? 'text-teal-700' : 'text-ink-subtle'">
                     <span x-text="(r.caught ? '✓ ' : '✗ ') + r.text"></span>
                     <span class="text-amber-700" x-show="r.caught && r.also.length" x-text="' · also answered by ' + r.also.join(', ')"></span>
                   </li>
@@ -143,7 +144,7 @@
       {# Keyword filter: only for triggers that carry the customer's message. #}
       <div class="mt-3 grid gap-3 sm:grid-cols-3" x-show="isMessageTrigger()" x-cloak>
         <label class="text-sm sm:col-span-2">
-          <span class="text-gray-600">Only when the message has these words <span class="text-gray-400">(separate with commas; leave empty for every message)</span></span>
+          <span class="text-gray-600">Only when the message has these words <span class="text-ink-subtle">(separate with commas; leave empty for every message)</span></span>
           <input class="input mt-1" x-model="keywordDraft" @input="applyKeywords()" placeholder="price, pricing, cost"
                  :class="triggerFieldError('trigger.match') && 'input-error'" />
           <p class="field-error" x-show="triggerFieldError('trigger.match')" x-text="triggerFieldError('trigger.match')"></p>
@@ -160,7 +161,7 @@
           <span class="text-gray-600">Don't answer the same customer again for</span>
           <div class="flex items-center gap-2 mt-1">
             <input type="number" min="0" class="input w-24" :value="cooldownMinutes()" @input="setCooldown($event.target.value)" />
-            <span class="text-gray-500">minutes</span>
+            <span class="text-ink-subtle">minutes</span>
           </div>
           <p class="field-error" x-show="triggerFieldError('trigger.cooldown_minutes')" x-text="triggerFieldError('trigger.cooldown_minutes')"></p>
         </label>
@@ -180,7 +181,7 @@
       <div class="space-y-3">
         <template x-for="(step, i) in definition.steps" :key="step.id + ':' + i">
           <div class="relative" :id="'step-' + step.id">
-            <span class="absolute -left-8 top-3 w-6 h-6 rounded-full bg-white border border-border flex items-center justify-center text-[11px] font-medium text-gray-500"
+            <span class="absolute -left-8 top-3 w-6 h-6 rounded-full bg-surface border border-border flex items-center justify-center text-xs font-medium text-ink-subtle"
                   x-text="i + 1"></span>
             <div class="card card-pad border-l-4 transition-shadow"
                  :class="[(stepTypeMeta[step.type] || {}).border || 'border-l-gray-300', highlighted === step.id && 'ring-2 ring-brand-400']">
@@ -191,12 +192,12 @@
                          x-html="(stepTypeMeta[step.type] || {}).icon || ''"></svg>
                     <span x-text="typeLabel(step.type)"></span>
                   </span>
-                  <span class="text-xs text-gray-500 truncate max-w-[16rem]" x-text="stepSummary(step)"></span>
-                  <label class="text-xs text-gray-400 inline-flex items-center gap-1" x-show="advanced" x-cloak>id
+                  <span class="text-xs text-ink-subtle truncate max-w-[16rem]" x-text="stepSummary(step)"></span>
+                  <label class="text-xs text-ink-subtle inline-flex items-center gap-1" x-show="advanced" x-cloak>id
                     <input class="input input-sm w-28" :value="step.id" @change="renameStep(step, $event.target.value)" />
                   </label>
                 </div>
-                <div class="flex items-center gap-1">
+                <div class="flex flex-wrap items-center gap-1">
                   <button class="btn btn-ghost btn-xs" @click="move(i, -1)" :disabled="i === 0" aria-label="Move up">↑</button>
                   <button class="btn btn-ghost btn-xs" @click="move(i, 1)" :disabled="i === definition.steps.length - 1" aria-label="Move down">↓</button>
                   <button class="btn btn-ghost btn-xs" @click="openPalette('replace', i)">Change</button>
@@ -225,14 +226,14 @@
 
                 <div x-show="step._mode === 'template'" class="grid gap-2 sm:grid-cols-2 mb-2">
                   <template x-if="!emailTemplates.length">
-                    <p class="text-xs text-gray-400 col-span-2">No email templates yet — create one under Templates first, or switch to "Write a message".</p>
+                    <p class="text-xs text-ink-subtle col-span-2">No email templates yet — create one under Templates first, or switch to "Write a message".</p>
                   </template>
                   <template x-for="t in emailTemplates" :key="t.slug">
                     <button type="button" class="card card-pad text-left border-2 transition-colors"
                             :class="step.template === t.slug ? 'border-brand-500' : 'border-border'"
                             @click="step.template = t.slug">
                       <span class="text-xs font-medium block" x-text="t.name"></span>
-                      <span class="text-xs text-gray-500 block truncate" x-text="t.subject || '(no subject)'"></span>
+                      <span class="text-xs text-ink-subtle block truncate" x-text="t.subject || '(no subject)'"></span>
                     </button>
                   </template>
                 </div>
@@ -275,7 +276,7 @@
                   </select>
                   <span class="field-error" x-show="fieldError(step.id, 'template')" x-text="fieldError(step.id, 'template')"></span>
                   <template x-if="!whatsappTemplates.length">
-                    <span class="text-xs text-gray-400 block mt-1">No WhatsApp templates yet — add one under WhatsApp Templates first.</span>
+                    <span class="text-xs text-ink-subtle block mt-1">No WhatsApp templates yet — add one under WhatsApp Templates first.</span>
                   </template>
                   <template x-if="whatsappSelected(step) && !whatsappSelected(step).approved">
                     <span class="text-xs text-amber-700 block mt-1">Not yet approved by Meta — sends will be rejected until it's approved.</span>
@@ -296,13 +297,13 @@
                 <label class="text-xs" x-show="step.send_at">Timezone
                   <input class="input input-sm w-full mt-0.5" x-model="step.send_at_tz" placeholder="Africa/Lusaka" />
                 </label>
-                <label class="text-xs flex items-center gap-2 sm:col-span-2">
+                <label class="text-xs flex items-center gap-2 min-h-6 sm:col-span-2">
                   <input type="checkbox" x-model="step.auto_create_contact" />
                   Auto-create a WhatsApp contact if none exists (does not opt them in — consent rules still apply)
                 </label>
                 <div x-show="whatsappSelected(step) && (whatsappSelected(step).variables || []).length"
                      class="sm:col-span-2 grid gap-1.5 mt-1 border-t border-border pt-2">
-                  <p class="text-xs text-gray-500">Template variables</p>
+                  <p class="text-xs text-ink-subtle">Template variables</p>
                   <template x-for="v in (whatsappSelected(step) || {}).variables || []" :key="v">
                     <label class="text-xs flex items-center gap-2">
                       <span x-text="v" class="w-28 shrink-0 font-mono truncate" :title="v"></span>
@@ -345,7 +346,7 @@
                             :class="fieldError(step.id, 'text') && 'input-error'"></textarea>
                   <span class="field-error" x-show="fieldError(step.id, 'text')" x-text="fieldError(step.id, 'text')"></span>
                 </label>
-                <p class="text-xs text-gray-400">{first_name} becomes the customer's name. Sent as a normal message, which works because they just wrote to you.</p>
+                <p class="text-xs text-ink-subtle">{first_name} becomes the customer's name. Sent as a normal message, which works because they just wrote to you.</p>
                 <div class="wa-preview" x-show="(step.text || '').trim()" aria-label="Preview">
                   <div class="wa-bubble" x-text="previewText(step.text)"></div>
                 </div>
@@ -383,7 +384,7 @@
                   <textarea class="textarea w-full mt-0.5" rows="2" x-model="step.text" maxlength="1024"
                             placeholder="What do you need, {first_name}?"></textarea>
                 </label>
-                <div class="text-xs">Buttons <span class="text-gray-400">(up to 3, labels up to 20 characters)</span></div>
+                <div class="text-xs">Buttons <span class="text-ink-subtle">(up to 3, labels up to 20 characters)</span></div>
                 <template x-for="(b, bi) in (step.buttons || [])" :key="bi">
                   <div class="flex items-center gap-2">
                     <input class="input input-sm flex-1" x-model="b.title" maxlength="20" placeholder="Button label" />
@@ -393,7 +394,7 @@
                 <button type="button" class="btn btn-ghost btn-xs" x-show="(step.buttons || []).length < 3"
                         @click="step.buttons.push({ title: '' })">+ Add button</button>
                 <span class="field-error block" x-show="fieldError(step.id, 'buttons')" x-text="fieldError(step.id, 'buttons')"></span>
-                <p class="text-xs text-gray-400">Customers can tap these within 24 hours of writing to you. Use a “Wait for reply” step next to act on their choice.</p>
+                <p class="text-xs text-ink-subtle">Customers can tap these within 24 hours of writing to you. Use a “Wait for reply” step next to act on their choice.</p>
                 <div class="wa-preview" x-show="(step.text || '').trim()" aria-label="Preview">
                   <div class="wa-bubble" x-text="previewText(step.text)"></div>
                   <template x-for="(b, bi) in (step.buttons || []).filter((b) => (b.title || '').trim())" :key="bi">
@@ -413,10 +414,10 @@
                 <label class="text-xs block">Question
                   <textarea class="textarea w-full mt-0.5" rows="2" x-model="step.text" maxlength="1024" placeholder="Which product are you interested in?"></textarea>
                 </label>
-                <label class="text-xs block">Button that opens the list <span class="text-gray-400">(up to 20 characters)</span>
+                <label class="text-xs block">Button that opens the list <span class="text-ink-subtle">(up to 20 characters)</span>
                   <input class="input input-sm w-full mt-0.5" x-model="step.button" maxlength="20" placeholder="See products" />
                 </label>
-                <div class="text-xs">Choices <span class="text-gray-400">(up to 10)</span></div>
+                <div class="text-xs">Choices <span class="text-ink-subtle">(up to 10)</span></div>
                 <template x-for="(r, ri) in (step.rows || [])" :key="ri">
                   <div class="flex items-center gap-2">
                     <input class="input input-sm w-1/3" x-model="r.title" maxlength="24" placeholder="Choice" />
@@ -441,12 +442,12 @@
 
               {# ---- wait_for_reply ---- #}
               <div class="space-y-2" x-show="step.type === 'wait_for_reply'">
-                <p class="text-xs text-gray-500">Wait for the customer to answer, then go to the step that matches what they chose.</p>
-                <div class="text-xs">When they choose… <span class="text-gray-400">(type the button or choice name)</span></div>
+                <p class="text-xs text-ink-subtle">Wait for the customer to answer, then go to the step that matches what they chose.</p>
+                <div class="text-xs">When they choose… <span class="text-ink-subtle">(type the button or choice name)</span></div>
                 <template x-for="(route, ri) in (step._routes || [])" :key="ri">
                   <div class="flex items-center gap-2">
                     <input class="input input-sm flex-1" x-model="route.key" @input="syncRoutes(step)" list="choice-names" placeholder="Prices" />
-                    <span class="text-gray-400 text-xs">→</span>
+                    <span class="text-ink-subtle text-xs">→</span>
                     <select class="select select-sm flex-1" x-model="route.target" @change="syncRoutes(step)">
                       <option value="">— go to step —</option>
                       <template x-for="opt in stepOptions(step)" :key="opt.value"><option :value="opt.value" x-text="opt.label"></option></template>
@@ -481,8 +482,8 @@
 
               {# ---- create_lead ---- #}
               <div class="space-y-2" x-show="step.type === 'create_lead'">
-                <p class="text-xs text-gray-500">Start tracking this customer as interested. If they already are, nothing is duplicated.</p>
-                <label class="text-xs block">Where they came from <span class="text-gray-400">(optional)</span>
+                <p class="text-xs text-ink-subtle">Start tracking this customer as interested. If they already are, nothing is duplicated.</p>
+                <label class="text-xs block">Where they came from <span class="text-ink-subtle">(optional)</span>
                   <input class="input input-sm w-full mt-0.5" x-model="step.source" maxlength="50" placeholder="automation" />
                 </label>
                 <label class="text-xs block">Next step
@@ -515,12 +516,12 @@
 
               {# ---- assign_conversation ---- #}
               <div class="space-y-2" x-show="step.type === 'assign_conversation'">
-                <label class="text-xs block">Give the conversation to <span class="text-gray-400">(a teammate's email, or leave empty for whoever is least busy)</span>
+                <label class="text-xs block">Give the conversation to <span class="text-ink-subtle">(a teammate's email, or leave empty for whoever is least busy)</span>
                   <input class="input input-sm w-full mt-0.5" x-model="step.to" placeholder="least busy teammate"
                          :class="fieldError(step.id, 'to') && 'input-error'" />
                   <span class="field-error" x-show="fieldError(step.id, 'to')" x-text="fieldError(step.id, 'to')"></span>
                 </label>
-                <p class="text-xs text-gray-400">A conversation that already has someone looking after it is left with them.</p>
+                <p class="text-xs text-ink-subtle">A conversation that already has someone looking after it is left with them.</p>
                 <label class="text-xs block">Next step
                   <select class="select select-sm w-full mt-0.5" x-model="step.next">
                     <option value="">End the automation here</option>
@@ -543,7 +544,7 @@
                             :class="fieldError(step.id, 'text') && 'input-error'"></textarea>
                   <span class="field-error" x-show="fieldError(step.id, 'text')" x-text="fieldError(step.id, 'text')"></span>
                 </label>
-                <p class="text-xs text-gray-400">Sent as an email with a link to the conversation. {contact} becomes the customer's name and {first_name} their first name.</p>
+                <p class="text-xs text-ink-subtle">Sent as an email with a link to the conversation. {contact} becomes the customer's name and {first_name} their first name.</p>
                 <label class="text-xs block">Next step
                   <select class="select select-sm w-full mt-0.5" x-model="step.next">
                     <option value="">End the automation here</option>
@@ -711,7 +712,7 @@
 
               {# ---- ai_classify ---- #}
               <div class="space-y-2" x-show="step.type === 'ai_classify'">
-                <p class="text-xs text-gray-500">Sorts the customer's message into one of your labels, then goes that label's way. Words you list for a label are checked first, without AI. If it isn't sure, or AI is off, it goes your “not sure” way.</p>
+                <p class="text-xs text-ink-subtle">Sorts the customer's message into one of your labels, then goes that label's way. Words you list for a label are checked first, without AI. If it isn't sure, or AI is off, it goes your “not sure” way.</p>
                 <template x-for="(item, li) in (step.labels || [])" :key="li">
                   <div class="rounded-lg border border-border p-2 space-y-1.5">
                     <div class="flex gap-2">
@@ -750,7 +751,7 @@
 
               {# ---- ai_extract ---- #}
               <div class="space-y-2" x-show="step.type === 'ai_extract'">
-                <p class="text-xs text-gray-500">Picks details out of the customer's message. Each one is checked (a real email, a real date…) before it's saved. If one is missing, or AI is off, it goes your “missing” way.</p>
+                <p class="text-xs text-ink-subtle">Picks details out of the customer's message. Each one is checked (a real email, a real date…) before it's saved. If one is missing, or AI is off, it goes your “missing” way.</p>
                 <template x-for="(f, fi) in (step.fields || [])" :key="fi">
                   <div class="grid gap-2 sm:grid-cols-[1fr_8rem_1fr_auto] items-end">
                     <label class="text-xs">Detail
@@ -794,7 +795,7 @@
 
               {# ---- ai_answer ---- #}
               <div class="space-y-2" x-show="step.type === 'ai_answer'">
-                <p class="text-xs text-gray-500">Replies using only your notes, hours, answers and catalogue, with the same checks as automatic replies (topics you allowed, how sure it must be, no facts it can't back up). If any check fails, it hands over instead.</p>
+                <p class="text-xs text-ink-subtle">Replies using only your notes, hours, answers and catalogue, with the same checks as automatic replies (topics you allowed, how sure it must be, no facts it can't back up). If any check fails, it hands over instead.</p>
                 <div class="grid gap-2 sm:grid-cols-2">
                   <label class="text-xs">After it answers →
                     <select class="select select-sm w-full mt-0.5" x-model="step.next">
@@ -810,12 +811,12 @@
                     <span class="field-error" x-show="fieldError(step.id, 'on_handoff')" x-text="fieldError(step.id, 'on_handoff')"></span>
                   </label>
                 </div>
-                <p class="text-xs text-gray-400">Tip: on the hand-over path, send a short holding reply and add a follow-up for your team.</p>
+                <p class="text-xs text-ink-subtle">Tip: on the hand-over path, send a short holding reply and add a follow-up for your team.</p>
               </div>
 
               {# ---- start_form ---- #}
               <div class="space-y-2" x-show="step.type === 'start_form'">
-                <p class="text-xs text-gray-500">Sends the form (a native WhatsApp form, or one question per message elsewhere) and waits until they finish it.</p>
+                <p class="text-xs text-ink-subtle">Sends the form (a native WhatsApp form, or one question per message elsewhere) and waits until they finish it.</p>
                 <div class="grid gap-2 sm:grid-cols-3">
                   <label class="text-xs sm:col-span-2">Form
                     <select class="select select-sm w-full mt-0.5" x-model="step.form" :class="fieldError(step.id, 'form') && 'input-error'">
@@ -846,12 +847,12 @@
                     </select>
                   </label>
                 </div>
-                <p class="text-xs text-gray-400">Later steps can use their answers, e.g. {form_answers.budget}.</p>
+                <p class="text-xs text-ink-subtle">Later steps can use their answers, e.g. {form_answers.budget}.</p>
               </div>
 
               {# ---- create_followup ---- #}
               <div class="space-y-2" x-show="step.type === 'create_followup'">
-                <p class="text-xs text-gray-500">Adds a reminder to your team's follow-up list. Nothing is sent to the customer.</p>
+                <p class="text-xs text-ink-subtle">Adds a reminder to your team's follow-up list. Nothing is sent to the customer.</p>
                 <div class="grid gap-2 sm:grid-cols-3">
                   <label class="text-xs">Remind in (hours)
                     <input type="number" min="0.25" max="1440" step="0.25" class="input input-sm w-full mt-0.5" x-model.number="step.due_in_hours"
@@ -878,7 +879,7 @@
 
               {# ---- lookup_product ---- #}
               <div class="space-y-2" x-show="step.type === 'lookup_product'">
-                <p class="text-xs text-gray-500">Finds the product the customer is asking about in your catalogue. The match's name and price can be used in later replies as {product.name} and {product.price}.</p>
+                <p class="text-xs text-ink-subtle">Finds the product the customer is asking about in your catalogue. The match's name and price can be used in later replies as {product.name} and {product.price}.</p>
                 <div class="grid gap-2 sm:grid-cols-2">
                   <template x-for="out in [['on_found', 'Found it'], ['on_ambiguous', 'Several match'], ['on_not_found', 'Not found'], ['on_no_price', 'Found, but no price'], ['on_error', 'Something went wrong']]" :key="out[0]">
                     <label class="text-xs"><span x-text="out[1] + ' →'"></span>
@@ -932,7 +933,7 @@
                 </label>
               </div>
 
-              <p class="text-xs text-gray-400" x-show="step.type === 'stop' || step.type === 'exit'">The automation ends here.</p>
+              <p class="text-xs text-ink-subtle" x-show="step.type === 'stop' || step.type === 'exit'">The automation ends here.</p>
 
               {# ---- where this step can go next, at a glance ---- #}
               <div class="mt-3 flex flex-wrap gap-1.5 border-t border-border pt-2" x-show="lanes(step).length > 1" x-cloak>
@@ -948,7 +949,7 @@
               </div>
             </div>
             <div class="relative h-0">
-              <button type="button" class="absolute -left-[2.15rem] -bottom-[0.95rem] w-5 h-5 rounded-full bg-white border border-border text-gray-500 text-xs leading-none hover:border-brand-500 hover:text-brand-600 z-10"
+              <button type="button" class="absolute -left-[2.275rem] -bottom-[1.075rem] w-6 h-6 rounded-full bg-surface border border-border text-ink-subtle text-xs leading-none hover:border-brand-500 hover:text-brand-600 z-10"
                       @click="openPalette('insert', i)" :aria-label="'Add a step after step ' + (i + 1)" title="Add a step here">+</button>
             </div>
           </div>
@@ -967,7 +968,7 @@
       <header class="card-pad border-b border-border flex items-start justify-between gap-3">
         <div>
           <h2 class="text-sm font-semibold text-ink">Test it</h2>
-          <p class="text-xs text-gray-500">Plays your current steps. Nothing is sent and no record changes.</p>
+          <p class="text-xs text-ink-subtle">Plays your current steps. Nothing is sent and no record changes.</p>
         </div>
         <button type="button" class="btn btn-ghost btn-xs" @click="test.open = false" aria-label="Close">✕</button>
       </header>
@@ -985,7 +986,7 @@
         <button type="button" class="btn btn-primary btn-sm" x-show="!isMessageTrigger()" @click="startTest()">Run it</button>
       </div>
       <div class="flex-1 overflow-y-auto card-pad space-y-2 bg-surface-muted" aria-live="polite">
-        <p class="text-xs text-gray-400" x-show="!test.result">Send a message to see what happens.</p>
+        <p class="text-xs text-ink-subtle" x-show="!test.result">Send a message to see what happens.</p>
         <template x-if="test.result && test.result.why_not">
           <p class="alert alert-warning text-sm" x-text="test.result.why_not"></p>
         </template>
@@ -1004,7 +1005,7 @@
         </template>
       </div>
       <footer class="card-pad border-t border-border space-y-2" x-show="test.result && test.result.waiting">
-        <p class="text-xs text-gray-500">It's waiting for the customer's answer.</p>
+        <p class="text-xs text-ink-subtle">It's waiting for the customer's answer.</p>
         <div class="flex flex-wrap gap-1.5" x-show="test.result && test.result.waiting && test.result.waiting.options && test.result.waiting.options.length">
           <template x-for="o in (test.result && test.result.waiting ? test.result.waiting.options : [])" :key="o">
             <button type="button" class="btn btn-secondary btn-xs" @click="answerTest(o)" x-text="o"></button>
@@ -1030,7 +1031,7 @@
       <div class="card-pad space-y-4">
         <template x-for="group in paletteGroups()" :key="group.name">
           <section>
-            <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5" x-text="group.name"></h3>
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-ink-subtle mb-1.5" x-text="group.name"></h3>
             <div class="grid gap-2 sm:grid-cols-2">
               <template x-for="item in group.items" :key="item.type">
                 <button type="button" class="text-left rounded-xl border border-border p-3 transition-colors"
@@ -1042,13 +1043,13 @@
                          x-html="(stepTypeMeta[item.type] || {}).icon || ''"></svg>
                     <span x-text="item.label"></span>
                   </span>
-                  <span class="block text-xs text-gray-500 mt-0.5" x-text="item.available ? item.description : item.reason"></span>
+                  <span class="block text-xs text-ink-subtle mt-0.5" x-text="item.available ? item.description : item.reason"></span>
                 </button>
               </template>
             </div>
           </section>
         </template>
-        <p class="text-xs text-gray-400" x-show="!advanced">Turn on <span class="font-medium">Advanced</span> above for webhooks, product look-ups and other technical steps.</p>
+        <p class="text-xs text-ink-subtle" x-show="!advanced">Turn on <span class="font-medium">Advanced</span> above for webhooks, product look-ups and other technical steps.</p>
       </div>
     </div>
   </div>
@@ -1058,13 +1059,13 @@
 
   {# ---- Map: the same steps as a tree of where each one leads ---- #}
   <div x-show="tab === 'map'" x-cloak class="card card-pad overflow-x-auto">
-    <p class="text-xs text-gray-500 mb-3">Each step and where it leads. Click a step to edit it.</p>
+    <p class="text-xs text-ink-subtle mb-3">Each step and where it leads. Click a step to edit it.</p>
     <div class="text-sm">
       <div class="font-medium text-ink mb-2" x-text="'When ' + triggerLabel()"></div>
       <ul class="wf-map">
         <template x-for="node in mapRows()" :key="node.key">
           <li :style="'padding-left:' + (node.depth * 1.25) + 'rem'" class="py-0.5">
-            <span class="text-xs text-gray-400" x-show="node.via" x-text="node.via + ' →'"></span>
+            <span class="text-xs text-ink-subtle" x-show="node.via" x-text="node.via + ' →'"></span>
             <template x-if="node.step">
               <button type="button" class="hover:underline text-left" @click="jumpToStep(node.step.id)">
                 <span class="badge" :class="(stepTypeMeta[node.step.type] || {}).chip || 'badge-neutral'" x-text="node.number + '. ' + typeLabel(node.step.type)"></span>
@@ -1072,7 +1073,7 @@
               </button>
             </template>
             <template x-if="!node.step">
-              <span class="text-xs" :class="node.missing ? 'text-red-600' : 'text-gray-400'" x-text="node.missing ? 'missing step ' + node.missing : (node.seen ? 'back to step ' + node.seen : 'end')"></span>
+              <span class="text-xs" :class="node.missing ? 'text-red-600' : 'text-ink-subtle'" x-text="node.missing ? 'missing step ' + node.missing : (node.seen ? 'back to step ' + node.seen : 'end')"></span>
             </template>
           </li>
         </template>
@@ -1084,7 +1085,7 @@
   <div x-show="tab === 'code'" x-cloak>
     <textarea class="textarea font-mono text-xs w-full h-96" x-model="codeText"
               @blur="syncFromCode()"></textarea>
-    <p class="text-xs text-gray-400 mt-1" x-text="codeError || 'Edits apply when you click away, then Save.'"
+    <p class="text-xs text-ink-subtle mt-1" x-text="codeError || 'Edits apply when you click away, then Save.'"
        :class="codeError ? 'text-red-600' : ''"></p>
   </div>
 </div>
@@ -1131,6 +1132,14 @@ function workflowEditor() {
     dirty: false,
     _validateTimer: null,
     _saveTimer: null,
+    _savedTimer: null,
+    _sent: "",
+    _inflight: "",
+    _saving: null,
+    _publishing: false,
+    _offDirty: null,
+    _onOnline: null,
+    _onPublish: null,
     errors: {{ validation_errors|safe }},
     emailTemplates: {{ email_templates_json|safe }},
     whatsappTemplates: {{ whatsapp_templates_json|safe }},
@@ -1209,17 +1218,67 @@ function workflowEditor() {
       this.loadKeywords();
       this.syncToCode();
       this.validateNow();
+      // What the server already has: a watcher firing with nothing new to save isn't an edit.
+      this._sent = this.payload();
       // Every change is checked as you go and saved a moment later. Saving never changes what
       // customers get on a live automation: edits wait as "unpublished changes".
       this.$watch("definition", () => this.changed(), { deep: true });
       this.$watch("priority", () => this.changed());
-      window.addEventListener("beforeunload", (e) => {
-        if (this.dirty) { e.preventDefault(); e.returnValue = ""; }
-      });
-      // In-app navigation (the boosted sidebar) never fires beforeunload (app.js, akDirty).
-      if (window.akDirty) window.akDirty.register(this.$el, () => this.dirty);
+      // Unsaved or still-saving work holds every way out: the boosted sidebar and leaving the
+      // page (app.js, akDirty: one shared beforeunload, so none is added here).
+      if (window.akDirty) this._offDirty = window.akDirty.register(this.$el, () => this.dirty || !!this._saving);
+      // A save that failed for want of a connection is tried again when it comes back.
+      this._onOnline = () => { if (this.dirty && !this._saving) this.save({ quiet: true }); };
+      window.addEventListener("online", this._onOnline);
+      // Publish / Turn on publish the draft the server holds, so edits still on their way are
+      // saved first; a failed save stops the publish and says why.
+      this._onPublish = async (e) => {
+        const form = e.target.closest && e.target.closest("form[data-wf-publish]");
+        if (!form) return;
+        // Our own resubmit, after the save below: let it through.
+        if (form.dataset.wfSaved === "1") { delete form.dataset.wfSaved; return; }
+        // A second click while the first is still saving changes nothing.
+        if (this._publishing) { e.preventDefault(); e.stopImmediatePropagation(); return; }
+        if (!this.dirty && !this._saving && this.tab !== "code") return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const btn = form.querySelector("button");
+        this._publishing = true;
+        if (btn) btn.setAttribute("aria-busy", "true");
+        try {
+          if (this._saving) await this._saving;
+          if (this.dirty || this.tab === "code") await this.save({ quiet: true });
+        } finally {
+          this._publishing = false;
+          if (btn) btn.removeAttribute("aria-busy");
+        }
+        // The save says why it stopped (saveError), so a publish that doesn't go is explained.
+        if (this.dirty || this.saveError || this.codeError) return;
+        form.dataset.wfSaved = "1";
+        form.requestSubmit();
+      };
+      document.addEventListener("submit", this._onPublish, true);
+    },
+    destroy() {
+      if (this._offDirty) this._offDirty();
+      window.removeEventListener("online", this._onOnline);
+      document.removeEventListener("submit", this._onPublish, true);
+      clearTimeout(this._saveTimer);
+      clearTimeout(this._validateTimer);
+      clearTimeout(this._savedTimer);
+    },
+    // The draft as a save sends it, to tell a real edit from a watcher re-firing over the same
+    // content (the Code tab replaces the whole definition when it's read back in).
+    payload() {
+      return JSON.stringify({ definition: this.cleanDefinition(), priority: this.priority });
     },
     changed() {
+      // Nothing new: what's on screen is already saved, or is what the save in flight carries.
+      const now = this.payload();
+      if (now === (this._inflight || this._sent)) {
+        if (!this._inflight) this.dirty = false;
+        return;
+      }
       this.dirty = true;
       clearTimeout(this._validateTimer);
       this._validateTimer = setTimeout(() => this.validateNow(), 500);
@@ -1686,33 +1745,54 @@ function workflowEditor() {
         this.codeError = "";
       } catch (e) { this.codeError = "Invalid JSON: " + e.message; }
     },
-    async save(opts = {}) {
-      if (this.tab === "code") this.syncFromCode();
-      if (this.codeError) return;
+    // One save at a time: each sends the whole draft, so an older one landing last would win.
+    // Returns the save in flight, so Publish can wait for it.
+    save(opts = {}) {
+      if (this.tab === "code") {
+        this.syncFromCode();
+        if (this.codeError) {
+          this.saveError = "Couldn't save: the code has a mistake. " + this.codeError;
+          return Promise.resolve();
+        }
+      }
       clearTimeout(this._saveTimer);
+      if (this._saving) {
+        this._saveTimer = setTimeout(() => this.save(opts), 400);
+        return this._saving;
+      }
+      this._saving = this.send(opts).finally(() => { this._saving = null; });
+      return this._saving;
+    },
+    async send(opts) {
+      // Edits made while this save is on its way stay unsaved (and guarded) afterwards.
+      const body = this.payload();
+      this._inflight = body;
       this.busy = true;
       try {
         const r = await fetch("/automations/{{ wf.slug }}/save/", {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X-CSRFToken": this.csrf() },
-          body: JSON.stringify({ definition: this.cleanDefinition(), priority: this.priority }),
+          headers: { "Content-Type": "application/json", "X-CSRFToken": window.akCsrf() },
+          body: body,
         });
-        const data = await r.json();
+        let data = {};
+        try { data = await r.json(); } catch (_) { /* an HTML error page */ }
+        if (!r.ok) { this.saveError = window.akFailure.draftSaveMessage(r.status, data); return; }
+        this._sent = body;
         this.errors = data.errors || [];
-        this.saveError = r.ok ? "" : (data.error || "Couldn't save. Try again.");
-        if (!r.ok) return;
-        this.dirty = false;
+        this.saveError = "";
+        this.dirty = this.payload() !== body;
         Alpine.store("wfChanges").pending = !!data.has_changes;
-        this.saved = true;
-        setTimeout(() => (this.saved = false), 2000);
+        this.saved = !this.dirty;
+        clearTimeout(this._savedTimer);
+        this._savedTimer = setTimeout(() => (this.saved = false), 2000);
         if (!opts.quiet) this.syncToCode();
       } catch (e) {
-        this.saveError = "You're offline. Your changes will be saved when you reconnect.";
-      } finally { this.busy = false; }
+        // Saving sends the whole draft, so trying again is always safe; a live automation is
+        // never changed by a save (edits wait as unpublished changes).
+        this.saveError = window.akFailure.draftSaveMessage(0, {});
+      } finally { this.busy = false; this._inflight = ""; }
     },
-    csrf() {
-      return (document.cookie.match(/(^|;\s*)csrftoken=([^;]+)/) || [])[2] || "";
-    },
+    csrf() { return window.akCsrf(); },
   };
 }
 </script>

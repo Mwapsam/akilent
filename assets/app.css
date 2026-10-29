@@ -1690,8 +1690,10 @@
   .wa-bubble { @apply rounded-2xl rounded-tl-sm px-3 py-2 text-sm whitespace-pre-wrap shadow-card;
     background-color: var(--color-surface); color: var(--color-ink); max-width: 100%; }
   .wa-button { @apply rounded-xl px-3 py-1.5 text-sm font-medium text-center w-full;
-    background-color: var(--color-surface); color: var(--color-brand-600); border: 1px solid var(--color-border); }
+    background-color: var(--color-surface); color: var(--color-accent); border: 1px solid var(--color-border); }
   .wf-map li { border-left: 1px dashed var(--color-border); margin-left: 0.25rem; }
+  /* Breadcrumb links are small text: at least 24px tall to tap (WCAG 2.5.8), same line height. */
+  nav[aria-label="Breadcrumb"] a { display: inline-flex; align-items: center; min-height: 1.5rem; }
 }
 
 /* ---------------------------------------------------------------------------

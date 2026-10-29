@@ -4,7 +4,7 @@
 {% block content %}
 <header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
   <div class="min-w-0">
-    <nav class="mb-1 flex items-center gap-1.5 text-xs text-gray-500" aria-label="Breadcrumb">
+    <nav class="mb-1 flex items-center gap-1.5 text-xs text-ink-subtle" aria-label="Breadcrumb">
       <a href="{% url 'automation:list' %}" class="hover:text-ink">Automations</a>
       <span aria-hidden="true">/</span>
       <a href="{% url 'automation:runs' wf.slug %}" class="hover:text-ink">{{ wf.name }}</a>
@@ -46,12 +46,12 @@
     <span class="mt-1 w-2.5 h-2.5 rounded-full shrink-0 {% if item.ok %}bg-teal-500{% else %}bg-red-500{% endif %}" aria-hidden="true"></span>
     <div class="min-w-0 flex-1">
       <p class="text-sm text-ink"><span class="font-medium">{{ item.label }}</span> · {{ item.text }}</p>
-      <p class="text-xs text-gray-500">{{ item.at|date:"j M, H:i" }}</p>
+      <p class="text-xs text-ink-subtle">{{ item.at|date:"j M, H:i" }}</p>
       {% if item.ai_labels %}
       <form method="post" action="{% url 'automation:run-action' run.public_id 'correct' %}" hx-boost="false" class="mt-1 flex flex-wrap items-center gap-2 text-xs">
         {% csrf_token %}
         <input type="hidden" name="step_run" value="{{ item.step_run_id }}">
-        <label for="correct-{{ item.step_run_id }}" class="text-gray-500">Should have been</label>
+        <label for="correct-{{ item.step_run_id }}" class="text-ink-subtle">Should have been</label>
         <select id="correct-{{ item.step_run_id }}" name="label" class="select select-sm">
           {% for l in item.ai_labels %}<option value="{{ l }}" {% if l == item.ai_label %}selected{% endif %}>{{ l }}</option>{% endfor %}
         </select>
@@ -59,7 +59,7 @@
       </form>
       {% endif %}
       {% if item.error %}
-      <details class="mt-1 text-xs text-gray-500">
+      <details class="mt-1 text-xs text-ink-subtle">
         <summary class="cursor-pointer">Technical details</summary>
         <p class="mt-1 font-mono break-words">{{ item.error }}</p>
       </details>
@@ -67,7 +67,7 @@
     </div>
   </li>
   {% empty %}
-  <li class="text-sm text-gray-500">Nothing has happened yet.</li>
+  <li class="text-sm text-ink-subtle">Nothing has happened yet.</li>
   {% endfor %}
   {% if run.status == "waiting" %}
   <li class="flex items-start gap-3">

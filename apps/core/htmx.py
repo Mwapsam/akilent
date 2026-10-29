@@ -132,7 +132,17 @@ class ShellMiddleware:
 
     @staticmethod
     def _reload(request):
-        """Load this page for real. A POST that already ran is not repeated: refresh instead."""
+        """Load this page for real. A POST that already ran is not repeated: refresh instead.
+
+        The page this request rendered is thrown away, so any flash message it showed was never
+        seen: put it back for the real load. Typical case: a boosted form posts, redirects, and
+        the page it lands on ships its own scripts. The "Saved" toast used to vanish there.
+        """
+        storage = getattr(request, "_messages", None)
+        if storage is not None:
+            # MessageMiddleware (outside this one) stores what wasn't shown when it sees the
+            # response; unseen messages are simply kept for the next request.
+            storage.used = False
         if request.method == "GET":
             return _hx_redirect(request.get_full_path())
         from django.http import HttpResponse

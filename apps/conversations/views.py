@@ -1719,6 +1719,8 @@ def form_responses(request, pk):
     status = request.GET.get("status", "")
     if status in FormResponse.Status.values:
         rows = rows.filter(status=status)
+    else:
+        status = ""  # an unknown filter shows everything, and the page says so
     keys = [q["key"] for q in form.questions]
 
     def cell(value):

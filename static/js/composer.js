@@ -80,8 +80,12 @@
       _saveTimer: null,
       _localTimer: null,
       _readyTimer: null,
+      _offDirty: null,
+      _onOnline: null,
+      _onOffline: null,
       _readinessSeq: 0,
       _undoTimer: null,
+      _genPoll: null,
       // ── Server state ──────────────────────────────────────────────────────
       d: d,
       urls: d.urls || {},
@@ -182,26 +186,33 @@
         if (this.selectedPlatforms.length) this.checkReadiness();
         // In-app navigation (the boosted sidebar) never fires beforeunload; this makes
         // it ask before throwing away work the server doesn't have (app.js, akDirty).
+        // The same check covers leaving the page for real (one shared beforeunload in app.js).
         if (window.akDirty) {
-          window.akDirty.register(this.$el, function () {
+          this._offDirty = window.akDirty.register(this.$el, function () {
             return !self.submitting && (self.dirty || self.saving || self.uploadsPending());
           });
         }
-
-        window.addEventListener("online", function () {
+        // Removed in destroy(): a composer left behind must never autosave work its user
+        // chose to discard ("Leave without saving") when the connection comes back.
+        this._onOnline = function () {
           if (self.dirty && self.autosaveEnabled) self.autosave();
-        });
-        window.addEventListener("offline", function () {
+        };
+        this._onOffline = function () {
           if (self.autosaveEnabled && self.dirty) self.saveState = "offline";
-        });
-        // Leaving with work the server doesn't have yet.
-        window.addEventListener("beforeunload", function (e) {
-          if (self.submitting) return;
-          if (self.dirty || self.saving || self.uploadsPending()) {
-            e.preventDefault();
-            e.returnValue = "";
-          }
-        });
+        };
+        window.addEventListener("online", this._onOnline);
+        window.addEventListener("offline", this._onOffline);
+      },
+
+      destroy: function () {
+        if (this._offDirty) this._offDirty();
+        window.removeEventListener("online", this._onOnline);
+        window.removeEventListener("offline", this._onOffline);
+        clearTimeout(this._saveTimer);
+        clearTimeout(this._localTimer);
+        clearTimeout(this._readyTimer);
+        clearTimeout(this._undoTimer);
+        clearInterval(this._genPoll);
       },
 
       // Every edit lands here: by the form's input/change events, or called directly by
@@ -688,7 +699,8 @@
           return;
         }
         var attempts = 0;
-        var poll = setInterval(async function () {
+        clearInterval(this._genPoll);
+        var poll = this._genPoll = setInterval(async function () {
           attempts++;
           if (attempts > 40) {
             clearInterval(poll);

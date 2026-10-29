@@ -42,6 +42,10 @@
 </div>
 {% include "components/pagination.html" with page=page %}
 {% else %}
+  {% if status %}
+  {% include "components/empty_state.html" with icon="list" title="No answers match" message="No customer's answers are in this group yet." action_label="Show all answers" action_url="?" %}
+  {% else %}
   {% include "components/empty_state.html" with icon="list" title="No answers here yet" message="Answers show up as soon as a customer starts the form." %}
+  {% endif %}
 {% endif %}
 {% endblock %}

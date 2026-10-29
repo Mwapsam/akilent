@@ -7,5 +7,5 @@
     {% if i.fix %}<a href="{{ i.fix.url }}" class="text-xs underline text-accent">{{ i.fix.label }}</a>{% endif %}
   </li>
   {% endfor %}
-  {% if r.ready %}<li class="text-xs text-gray-500">Ready to run. No customer has triggered it yet, and that's fine.</li>{% endif %}
+  {% if r.ready %}<li class="text-xs text-ink-subtle">Ready to run. No customer has triggered it yet, and that's fine.</li>{% endif %}
 </ul>

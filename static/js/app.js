@@ -807,7 +807,27 @@
     client: "This didn't go through. Check the form and try again.",
   };
   // One source of truth for "did it go through" (static/js/chat.js uses it for sends).
-  window.akFailure = { describe: describeFailure, maybeSaved: MAYBE_SAVED, SAVE_COPY: SAVE_COPY };
+  // Editors' autosave sends the whole draft, so sending it again is always safe: unlike
+  // SAVE_COPY (one-off actions, where a retry could repeat something), every outcome keeps the
+  // edits on the page and says how they'll get saved.
+  const DRAFT_SAVE_COPY = {
+    offline: "You're offline. Your changes are still here and will save when you're back online.",
+    forbidden: "You don't have permission to change this.",
+    gone: "This no longer exists. It may have been deleted.",
+    conflict: "Someone else changed this first. Reload to see the latest.",
+    busy: "Too many saves at once. Wait a few seconds, then try again.",
+    other: "Couldn't save. Your changes are still here. Try again.",
+  };
+  function draftSaveMessage(status, data) {
+    const kind = describeFailure({ status: status || 0 }).kind;
+    if (kind === "client" && data && data.error) return "Couldn't save: " + data.error + ".";
+    return DRAFT_SAVE_COPY[kind] || DRAFT_SAVE_COPY.other;
+  }
+  window.akFailure = { describe: describeFailure, maybeSaved: MAYBE_SAVED, SAVE_COPY: SAVE_COPY, draftSaveMessage: draftSaveMessage };
+  // The CSRF token for a fetch() POST.
+  window.akCsrf = function () {
+    return (document.cookie.match(/(^|;\s*)csrftoken=([^;]+)/) || [])[2] || "";
+  };
   function showRegionError(region, detail, failure) {
     const tpl = document.getElementById("ak-error-state");
     if (!tpl) return false;

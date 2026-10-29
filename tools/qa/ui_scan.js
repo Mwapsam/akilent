@@ -142,8 +142,12 @@
     const small = [];
     document.querySelectorAll("a[href], button, input:not([type=hidden]), select, textarea, [role=button], [tabindex]:not([tabindex='-1'])").forEach((el) => {
       if (!visible(el)) return;
-      if (el.closest("p, li") && el.tagName === "A" && !el.className) return; // inline text links are exempt
-      const r = el.getBoundingClientRect();
+      // WCAG 2.5.8's inline exception: a link or button set inside a sentence (rendered inline
+      // in a text run) is sized by the text around it.
+      if (el.closest("p, li") && (el.tagName === "A" || el.tagName === "BUTTON") && getComputedStyle(el).display === "inline") return;
+      // A checkbox or radio inside its label: the label is what you tap.
+      const box = (el.matches("input[type=checkbox], input[type=radio]") && el.closest("label")) || el;
+      const r = box.getBoundingClientRect();
       if (r.width <= 1 || r.height <= 1) return; // visually hidden until focused (skip links)
       if (r.width < 44 || r.height < 44) small.push({ el: label(el), w: Math.round(r.width), h: Math.round(r.height), belowAA: r.width < 24 || r.height < 24 });
     });

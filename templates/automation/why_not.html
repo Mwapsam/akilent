@@ -3,7 +3,7 @@
 
 {% block content %}
 <header class="mb-6">
-  <nav class="mb-1 flex items-center gap-1.5 text-xs text-gray-500" aria-label="Breadcrumb">
+  <nav class="mb-1 flex items-center gap-1.5 text-xs text-ink-subtle" aria-label="Breadcrumb">
     <a href="{% url 'automation:list' %}" class="hover:text-ink">Automations</a>
     <span aria-hidden="true">/</span><span class="text-ink">Why didn't it reply?</span>
   </nav>
@@ -15,8 +15,8 @@
   {% include "components/empty_state.html" with icon="chat" title="No customer messages yet" message="Once a customer messages you on WhatsApp, you can see here what your automations did with it." %}
 {% else %}
 <section class="rounded-xl border border-border p-4 mb-6">
-  <p class="text-xs text-gray-500">Checking the latest message from</p>
-  <p class="font-medium text-ink">{{ contact.full_name|default:contact.phone|default:contact.email }} <span class="text-gray-400 font-normal">· {{ message.timestamp|date:"j M, H:i" }}</span></p>
+  <p class="text-xs text-ink-subtle">Checking the latest message from</p>
+  <p class="font-medium text-ink">{{ contact.full_name|default:contact.phone|default:contact.email }} <span class="text-ink-subtle font-normal">· {{ message.timestamp|date:"j M, H:i" }}</span></p>
   <p class="mt-1 text-sm text-gray-700">“{{ message.body|truncatechars:200 }}”</p>
   <form method="get" class="mt-3 flex flex-wrap items-center gap-2">
     <label class="sr-only" for="why-conversation">Check a different conversation</label>
@@ -55,7 +55,7 @@
           {% else %}<span class="badge badge-neutral ml-1">Didn't reply</span>{% endif %}
         </p>
         <p class="mt-1 text-sm text-gray-700">{{ v.headline }}</p>
-        {% if v.detail %}<p class="mt-1 text-sm text-gray-500">{{ v.detail }}</p>{% endif %}
+        {% if v.detail %}<p class="mt-1 text-sm text-ink-subtle">{{ v.detail }}</p>{% endif %}
       </div>
       {% if v.fix %}<a href="{{ v.fix.url }}" class="btn btn-secondary btn-sm">{{ v.fix.label }}</a>{% endif %}
     </div>

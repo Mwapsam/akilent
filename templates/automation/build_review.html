@@ -3,10 +3,10 @@
 
 {% block content %}
 <div class="max-w-2xl space-y-5">
-  <a href="{% url 'build:home' %}?step=3" class="text-sm text-gray-500 underline">Back to Build</a>
+  <a href="{% url 'build:home' %}?step=3" class="text-sm text-ink-subtle underline">Back to Build</a>
   {% if built %}
   <header>
-    <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Automation draft</p>
+    <p class="text-xs font-semibold uppercase tracking-wide text-ink-subtle">Automation draft</p>
     <h1 class="text-2xl font-semibold tracking-tight text-ink">{{ built.name }}</h1>
     <p class="text-sm text-gray-600">Review it before turning it on. Nothing has been saved yet.</p>
   </header>
@@ -57,17 +57,17 @@
     <div>
       <label class="label" for="r-reply">Reply</label>
       <textarea id="r-reply" name="reply_text" class="textarea" rows="4" maxlength="1000">{{ built.reply_text }}</textarea>
-      <p class="text-xs text-gray-500 mt-1">{% verbatim %}{first_name}{% endverbatim %} becomes the customer's name. {% verbatim %}{location}, {opening_hours}, {payment_methods}{% endverbatim %} use your answers from step 1.</p>
+      <p class="text-xs text-ink-subtle mt-1">{% verbatim %}{first_name}{% endverbatim %} becomes the customer's name. {% verbatim %}{location}, {opening_hours}, {payment_methods}{% endverbatim %} use your answers from step 1.</p>
     </div>
     {% endif %}
     {% if built.editable.keywords %}
     <div>
       <label class="label" for="r-words">Starts when the message mentions</label>
       <input id="r-words" name="keywords" class="input" value="{{ keywords_text }}">
-      <p class="text-xs text-gray-500 mt-1">Separate with commas. Whole words, any capitals.</p>
+      <p class="text-xs text-ink-subtle mt-1">Separate with commas. Whole words, any capitals.</p>
     </div>
     <div>
-      <label class="label" for="r-tag">Tag customers <span class="font-normal text-gray-400">· Optional</span></label>
+      <label class="label" for="r-tag">Tag customers <span class="font-normal text-ink-subtle">· Optional</span></label>
       <input id="r-tag" name="tag" class="input max-w-xs" value="{{ built.tag }}">
     </div>
     {% endif %}

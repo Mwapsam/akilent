@@ -1287,3 +1287,107 @@ The faint outline numerals from the plan were dropped: they collided with the st
 - Landing tests pass. `ruff`: clean. Drift: 574.
 - Browser: 26/26 with WhatsApp on and 26/26 with it off. A 2px overflow at 360 was found and fixed: the studio column now shrinks.
 - Checked by eye at 1440 and 390.
+
+---
+
+## Entry 13: Phase 6, automations and forms (2026-10-29)
+
+You said to continue with the remaining phases. This is Phase 6. The exit-gate tasks:
+- edit a workflow
+- pause and resume
+- leave with unsaved edits (and be warned)
+- a failed save keeps the edits
+
+### Tested code
+
+| | |
+|---|---|
+| HEAD | `6992545` |
+| Tracked changes | 19 files, +272 −156. `git diff HEAD --binary -- . ':!docs/design/ui-quality-log.md'` SHA-256 `bd4af18add166a8e…` |
+| Untracked | `apps/automation/tests/test_automation_ui_quality.py`, `tools/qa/automation_qa.mjs`. Combined SHA-256 `f61592e8732174be…` |
+
+### Defects found and fixed
+
+| # | Sev | Defect | Fix |
+|---|---|---|---|
+| D1 | High | **Flash messages were lost after many saves app-wide.** A boosted form posts and redirects, and htmx fetches the next page. If that page ships its own scripts, the shell throws the render away and loads the page for real. The render had already used up the message, so "QA P6 Tag helper is on." and similar confirmations never showed. | `ShellMiddleware._reload` (`apps/core/htmx.py`) marks the discarded page's messages unseen, so Django keeps them for the real load. An end-to-end test fails without the fix and passes with it. |
+| D2 | High | **The workflow editor, form builder and post composer ran `init()` twice.** `x-init="init()"` came on top of Alpine's own call, so every edit started two saves. Each boosted visit also left window listeners behind. The composer's stale `online` listener could autosave a draft its user had chosen to discard. | `x-init` removed. `destroy()` removes the listeners. The editors' own `beforeunload` handlers are gone, because the shared `akDirty` guard covers leaving. A test guards against `x-init="init()"` anywhere. |
+| D3 | High | **Publish / Turn on published the server's draft while an edit was still waiting for autosave**, and the browser asked "Leave site?". | Publish saves pending edits first and stops with the reason if that save fails. |
+| D4 | Med | **Editor save:** every failure that threw (including an HTML 500) read "You're offline. Your changes will be saved when you reconnect", and nothing saved on reconnect. An edit made during a save was marked saved. A save in flight didn't count as unsaved work. | Failures are classified with `akFailure` and keep the edits ("Click Save to try again"). Saves retry when the connection comes back. A revision counter keeps later edits dirty. Status reads "Saving… / Saved / Unsaved changes". |
+| D5 | Med | **Form builder:** only guarded closing the tab (in-app navigation dropped unsaved questions). Two saves could overlap, so an older version could land last. Any failure read "Check your connection", with no retry. | Uses the shared guard. One save at a time. Classified failures with a Try again button and a retry on reconnect. |
+| D6 | Med | **Statuses:** the stats page called a paused automation "Draft". The list didn't show edits waiting on a live automation. Drafts had a warning badge and no next step. | Each `Workflow.Status` has its own label. "Unpublished changes" with "Review changes". "Draft · off" with "Finish and turn on". Form status shows as a badge. |
+| D7 | Low | **Filtered empty lists said nothing existed** ("Nobody here yet" on the Failed tab). | "No customers match" / "No answers match", with a way back to all. |
+| D8 | Low | **Dark-mode contrast:** the step number used `bg-white` (3.3:1), and the WhatsApp preview button used fixed brand-600 (2.05:1). | Surface and accent tokens. |
+| D9 | Low | **Targets under 24px:** breadcrumbs (app-wide), "More options" / "Remove", the "+" step button, checkbox labels. Plus a 58px sideways scroll at 390 from the step toolbar. | Breadcrumb links get a 24px minimum in `app.css`. `min-h-6` on the rest. The toolbar wraps. |
+
+**Drift:** `templates/automation` 102 → 0 (`text-gray-400/500` → `text-ink-subtle`, `text-[11px]` → `text-xs`). Total 574 → 472, and the baseline was lowered.
+
+**Scanner change (`tools/qa/ui_scan.js`):** two exemptions, both following WCAG 2.5.8:
+- a link or button rendered inline inside a sentence (the inline exception)
+- a checkbox inside its label, which is measured by the label
+
+### Automated results
+
+| Command | Result |
+|---|---|
+| `poetry run pytest` (full suite) | **5,109 passed, 25 skipped, 0 failed.** |
+| `test_automation_ui_quality.py` (new) | 10 pass: status labels, the stats page when paused, filtered empty state, Publish saves first, single `init()` everywhere, composer listeners released, the message surviving the full load. |
+| `ruff check`, `ruff format`, drift | Clean. Drift 472. |
+
+### Browser verification
+
+**`tools/qa/automation_qa.mjs`: 25 of 25.** Headless Chrome, signed in as the QA user (dark theme). Save, publish and form-save posts are answered by the harness. Pause and resume ran for real on the seeded `qa-p6` workflow.
+- **Scans:** list, editor, runs, filtered runs, stats, forms list and form builder at 1280 and 390. No sideways scroll, no contrast failures, no targets under 24px.
+- **Editor:**
+  - one edit makes one save
+  - an in-app navigation with unsaved edits asks first, and "Stay" keeps them
+  - an HTML 500 keeps the edits and says so (not "offline")
+  - offline says so, then saves by itself when the connection returns
+  - an edit made during a save stays unsaved
+  - Publish with a pending edit saves first, then publishes, with no browser prompt
+- **List:** Pause then Turn on, with each badge matching the backend and "…is on." shown.
+- **Form builder:** one save per edit; a failed save shows "Couldn't save. Your changes are still here." with Try again; leaving asks first.
+
+**Regression:** `tools/qa/publishing_qa.mjs` 21/21 after the composer change.
+
+Screenshots are in `docs/design/qa/phase6/` (local only).
+
+### Backend gaps
+
+None new. The save endpoints store the whole draft, so a retry is safe and no deduplication is needed. G5–G9 still need your authorization.
+
+### Sign-offs
+
+| Gate | Status |
+|---|---|
+| Implementation | **Done** |
+| Verification | **Done**: tests and 25/25 in the browser. **Open:** a screen-reader pass on the save status, and a real phone. |
+| Acceptance | **Pending your review** |
+
+### Review fixes (same day): 8 findings
+
+A code review raised eight findings. All eight were confirmed and fixed.
+
+**Fixed:**
+1. **Code tab (High):** Save read the code back in, the watcher counted that as an edit, and "unsaved" never cleared. Autosave then repeated every 2.5s, and Publish did nothing. Now:
+   - Dirtiness is based on content. An edit counts only if the draft differs from what was last saved or is in flight.
+   - Publish lets its own resubmit through. On the Code tab it used to loop.
+2. **Form builder, overlapping saves (High):** the one-save guard read `saveState`, which an edit during a save resets to "dirty". It now has its own in-flight flag.
+3. **Form builder, question keys (High):** keys from the server were copied on by position. The server drops blank questions, so a blank question, or one added during a save, could take another question's key. Keys now map to the questions sent that the server keeps, and only onto ones still on screen without a key.
+4. **Publish with broken code:** Publish stopped silently. It now says "Couldn't save: the code has a mistake…".
+5. **Publish waiting:** Publish polled `busy` every 100ms. It now awaits the save in flight; a second click while waiting does nothing, and the button shows busy.
+6. **Duplicated wording:** two hand-written failure-wording tables and two copies of the CSRF regex. Both now use `akFailure.draftSaveMessage` and `window.akCsrf` in `app.js`.
+7. **Unknown answer filter:** `?status=bogus` claimed "No answers match". The view now treats an unknown filter as All.
+8. **Composer timers:** a composer you'd left kept its caption poll and undo timer running. `destroy()` now clears them.
+
+**Results:**
+- Tests: automation, conversations, core and publishing pass, including three new unit tests.
+- Browser: `automation_qa.mjs` **30/30**, with five new checks:
+  - Code-tab save settles with one save
+  - Code-tab publish saves then publishes
+  - broken code stops Publish and says why
+  - one form save in flight
+  - keys land on the right question
+- `publishing_qa.mjs` 21/21.
+
+A harness flaw was also found and fixed: evaluating `save()` waited for its promise, so the timing check started too late.

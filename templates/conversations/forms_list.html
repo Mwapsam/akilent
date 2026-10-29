@@ -17,7 +17,7 @@
           {% for form in forms %}
           <tr>
             <td data-label="Form">{{ form.name }}</td>
-            <td data-label="Status">{{ form.get_status_display }}</td>
+            <td data-label="Status"><span class="badge {% if form.status == 'published' %}badge-success{% else %}badge-neutral{% endif %}">{{ form.get_status_display }}</span></td>
             <td data-label="Questions" class="text-ink-subtle">{{ form.questions|length }}</td>
             <td data-label="Finished" class="text-ink-subtle">{% if form.sent %}{{ form.done }} of {{ form.sent }}{% else %}—{% endif %}</td>
             <td><a href="{% url 'conversations:form_detail' form.pk %}" class="btn btn-ghost btn-sm">Manage</a></td>
