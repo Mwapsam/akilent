@@ -525,8 +525,8 @@ def plans(request):
     labels = {key: label for key, label, _ in CHANNEL_CHOICES}
     for plan in plans_list:
         sold = billing_api.plan_channel_keys(plan, matrix.get(plan.pk, set()))
-        plan.channel_keys = sold
-        plan.channel_labels = [labels[k] for k, _, _ in CHANNEL_CHOICES if k in sold]
+        plan.channel_keys = sold  # type: ignore[attr-defined]
+        plan.channel_labels = [labels[k] for k, _, _ in CHANNEL_CHOICES if k in sold]  # type: ignore[attr-defined]
     return render(
         request,
         "manage/plans.html",
