@@ -39,7 +39,6 @@ def trial(db, settings):
         name="Trial",
         price_monthly=0,
         trial_days=14,
-        service_type=Plan.SERVICE_BOTH,
     )
 
 
@@ -113,9 +112,7 @@ def test_fresh_token_endpoint_lets_a_restored_page_submit(trial):
 
 @pytest.mark.django_db
 def test_resent_paid_signup_resumes_at_checkout(trial):
-    Plan.objects.create(
-        slug=Plan.STARTER, name="Starter", price_monthly=19, service_type="email"
-    )
+    Plan.objects.create(slug=Plan.STARTER, name="Starter", price_monthly=19)
     c = Client(enforce_csrf_checks=True)
     data = _signup_data(_token(c.get("/signup/")))
     data.update(selected_channels=["email"], plan=Plan.STARTER)

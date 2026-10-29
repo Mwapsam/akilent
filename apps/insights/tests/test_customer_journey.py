@@ -39,9 +39,7 @@ def user_account():
     from django.contrib.auth.models import User
 
     user = User.objects.create_user("j@example.com", "j@example.com", "pw")
-    account = Account.objects.create(
-        company_name="Journey Co", selected_services="whatsapp"
-    )
+    account = Account.objects.create(company_name="Journey Co")
     Membership.objects.create(user=user, account=account, role=Membership.Role.OWNER)
     return user, account
 

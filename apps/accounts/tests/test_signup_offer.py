@@ -8,6 +8,7 @@ from django.contrib.auth.models import User
 
 from apps.accounts.forms import plan_channels, signup_offer
 from apps.accounts.models import Account
+from apps.billing import api as billing_api
 from apps.billing.models import Plan
 from apps.core import channels as ch
 
@@ -30,14 +31,9 @@ def plans(db):
         name="Trial",
         price_monthly=0,
         trial_days=14,
-        service_type=Plan.SERVICE_BOTH,
-    )
-    starter = Plan.objects.create(
-        slug=Plan.STARTER,
-        name="Starter",
-        price_monthly=19,
-        service_type=Plan.SERVICE_EMAIL,
-    )
+    )  # a new plan sells every channel
+    starter = Plan.objects.create(slug=Plan.STARTER, name="Starter", price_monthly=19)
+    billing_api.set_plan_channels(starter, ["email"])
     return trial, starter
 
 
@@ -76,13 +72,16 @@ def _open(*keys):
     site.save()
 
 
-def test_plan_channels():
-    plan = Plan(service_type=Plan.SERVICE_BOTH)
+def test_plan_channels_come_from_channel_features_alone():
+    plan = Plan()
     every = {"whatsapp", "instagram", "facebook", "email"}
-    assert plan_channels(plan, every, set()) == {"email", "whatsapp"}
-    assert plan_channels(plan, every, {"instagram", "content_studio"}) == every
-    assert plan_channels(plan, {"whatsapp"}, {"instagram"}) == {"whatsapp"}
-    assert plan_channels(Plan(service_type=Plan.SERVICE_EMAIL), set(), set()) == set()
+    channel_keys = {"whatsapp", "instagram", "facebook", "email_sending"}
+    assert plan_channels(plan, every, set()) == set()
+    assert plan_channels(plan, every, channel_keys) == every
+    assert plan_channels(plan, every, {"instagram"}) == {"instagram"}
+    # Content Studio is a tool across channels, not a channel.
+    assert plan_channels(plan, every, {"content_studio"}) == set()
+    assert plan_channels(plan, {"whatsapp"}, channel_keys) == {"whatsapp"}
 
 
 @pytest.mark.django_db
@@ -100,7 +99,8 @@ def test_both_plan_gives_only_whatsapp_when_email_is_off(plans, settings):
 def test_channel_without_a_plan_is_not_offered(db, settings):
     settings.EMAIL_ENABLED = True
     settings.WHATSAPP_ENABLED = True
-    Plan.objects.create(slug="e", name="E", service_type=Plan.SERVICE_EMAIL)
+    plan = Plan.objects.create(slug="e", name="E")
+    billing_api.set_plan_channels(plan, ["email"])
     _, choices = signup_offer()
     assert [v for v, _, _ in choices] == ["email"]
 
@@ -108,7 +108,7 @@ def test_channel_without_a_plan_is_not_offered(db, settings):
 @pytest.mark.django_db
 def test_restricted_channels_are_not_offered(plans, settings):
     """Instagram and Facebook stay out of signup until Meta App Review passes, even
-    though every plan here has Content Studio and one has Instagram."""
+    though the trial plan sells them."""
     from apps.billing.models import PlanFeature
 
     settings.EMAIL_ENABLED = True
@@ -148,8 +148,6 @@ def test_signup_stores_the_channels_picked(client, plans, settings):
     assert resp.status_code == 302, resp.content[:2000]
     account = Account.objects.get(company_name="New Co")
     assert account.selected_channels == ["facebook", "instagram"]
-    # The plan's service type is still recorded for billing.
-    assert account.selected_services == Account.Services.BOTH
     # Onboarding sets up what was picked, starting with Instagram.
     assert resp.url == "/instagram/accounts/"
 
@@ -158,7 +156,7 @@ def test_signup_stores_the_channels_picked(client, plans, settings):
 def test_a_package_that_misses_a_picked_channel_is_rejected(client, plans, settings):
     settings.EMAIL_ENABLED = True
     settings.WHATSAPP_ENABLED = True
-    # Starter is email-only, so it doesn't give WhatsApp.
+    # Starter sells only Email, so it doesn't give WhatsApp.
     resp = client.post(
         SIGNUP_URL,
         _payload(selected_channels=["email", "whatsapp"], plan=Plan.STARTER),
@@ -196,9 +194,6 @@ def test_links_preselect_channels(client, plans, settings):
     cfg = _wizard_config(client.get(SIGNUP_URL + "?channels=whatsapp,email"))
     assert cfg["preselect"]["channels"] == ["whatsapp", "email"]
     assert cfg["preselect"]["startStep"] == 1
-    # The older ?services= links still work.
-    cfg = _wizard_config(client.get(SIGNUP_URL + "?services=both"))
-    assert sorted(cfg["preselect"]["channels"]) == ["email", "whatsapp"]
     # A channel that isn't offered is dropped.
     cfg = _wizard_config(client.get(SIGNUP_URL + "?channels=instagram"))
     assert cfg["preselect"]["channels"] == [] and cfg["preselect"]["startStep"] == 0
@@ -213,8 +208,6 @@ def test_signup_with_email_off_succeeds_on_the_trial(client, plans, settings):
     # Straight to the channel that's on, not to a checklist that's on hold.
     assert resp.url == "/whatsapp/numbers/"
     account = Account.objects.get(company_name="New Co")
-    # The plan's service type, for billing; the channels are what was picked.
-    assert account.selected_services == Account.Services.BOTH
     assert account.selected_channels == ["whatsapp"]
     assert account.subscription.plan.slug == Plan.TRIAL
 
@@ -350,8 +343,8 @@ def test_landing_and_wizard_describe_a_plan_the_same_way(client, db, settings):
         slug=Plan.PROFESSIONAL,
         name="Professional",
         price_monthly=49,
-        service_type=Plan.SERVICE_WHATSAPP,
     )
+    billing_api.set_plan_channels(plan, ["whatsapp"])
     PlanFeature.objects.get_or_create(plan=plan, key="email_campaigns")
     PlanFeature.objects.get_or_create(plan=plan, key="whatsapp_campaigns")
     card = client.get("/").context["cards"][0]

@@ -29,7 +29,6 @@ def make_account(slug=None):
     account = Account.objects.create(
         company_name=f"Test Co {slug}",
         slug=slug,
-        selected_services="instagram",
     )
     Membership.objects.create(user=user, account=account, role=Membership.Role.OWNER)
     return account, user

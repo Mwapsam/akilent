@@ -11,15 +11,19 @@ logger = logging.getLogger(__name__)
 @receiver(post_save, sender="billing.Plan")
 def seed_new_plan_features(sender, instance, created, raw=False, **kwargs):
     """A new plan starts the way migration 0020 set up existing ones: its old capability columns
-    plus the module features that were never tied to a plan. The operator then adjusts it in the
-    feature matrix. Goes away with the old columns."""
+    plus the module features that were never tied to a plan, and every channel, so no channel is
+    the default. The operator then adjusts it in the feature matrix."""
     if not created or raw:
         return
-    from apps.billing.features import LEGACY_FLAGS, MODULE_FEATURES
+    from apps.billing.features import CHANNEL_FEATURES, LEGACY_FLAGS, MODULE_FEATURES
     from apps.billing.models import PlanFeature
 
     keys = {key for flag, key in LEGACY_FLAGS.items() if getattr(instance, flag, False)}
-    keys |= MODULE_FEATURES
+    keys |= MODULE_FEATURES | CHANNEL_FEATURES
+    if (
+        not instance.email_apis
+    ):  # created without email sending: no Email channel either
+        keys.discard(LEGACY_FLAGS["email_apis"])
     PlanFeature.objects.bulk_create(
         [PlanFeature(plan=instance, key=k) for k in sorted(keys)], ignore_conflicts=True
     )

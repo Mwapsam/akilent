@@ -22,7 +22,6 @@ def _make_account(company="Acme"):
     user = User.objects.create_user("owner", "owner@example.com", "Sup3r-secret-pw")
     acc = Account.objects.create(
         company_name=company,
-        selected_services=Account.Services.EMAIL,
         onboarding_state=Account.Onboarding.ACCOUNT_CREATED,
         email_verified=True,
     )

@@ -11,11 +11,6 @@ from apps.accounts.fields import EncryptedTextField
 
 
 class Account(models.Model):
-    class Services(models.TextChoices):
-        EMAIL = "email", "Email"
-        WHATSAPP = "whatsapp", "WhatsApp"
-        BOTH = "both", "Email & WhatsApp"
-
     class Onboarding(models.TextChoices):
         # service_selection / plan_selection / account_information happen in the
         # browser wizard before anything is persisted; the first state we store
@@ -38,10 +33,6 @@ class Account(models.Model):
     # (apps.core.console.data.delete_due_accounts). Reactivating clears it.
     scheduled_deletion_at = models.DateTimeField(null=True, blank=True)
 
-    # The service type of the plan bought at signup (billing; see Plan.service_type).
-    selected_services = models.CharField(
-        max_length=10, choices=Services.choices, default=Services.EMAIL
-    )
     # The channels the business chose at signup (keys from apps.core.channels), which
     # decide the channel setup onboarding asks for. Always a subset of what the plan gives.
     selected_channels = models.JSONField(default=list, blank=True)

@@ -34,7 +34,6 @@ def trial_plan(db):
         name="Trial",
         price_monthly=0,
         trial_days=14,
-        service_type=Plan.SERVICE_BOTH,
     )
 
 
@@ -44,7 +43,6 @@ def paid_plan(db):
         slug=Plan.STARTER,
         name="Starter",
         price_monthly=19,
-        service_type=Plan.SERVICE_EMAIL,
         trial_days=0,
     )
 
@@ -57,7 +55,6 @@ def paid_plan_with_long_trial(db):
         slug=Plan.STARTER,
         name="Starter",
         price_monthly=19,
-        service_type=Plan.SERVICE_EMAIL,
         trial_days=365,
     )
 

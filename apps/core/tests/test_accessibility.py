@@ -36,7 +36,6 @@ def member(db):
     user = User.objects.create_user("owner", "owner@example.com", "Sup3r-secret-pw")
     account = Account.objects.create(
         company_name="Acme",
-        selected_services=Account.Services.EMAIL,
         onboarding_state=Account.Onboarding.ACCOUNT_CREATED,
         email_verified=True,
     )

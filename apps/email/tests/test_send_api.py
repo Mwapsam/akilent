@@ -112,10 +112,13 @@ def test_send_rejects_unverified_domain(client, account, api_key):
 
 
 @pytest.mark.django_db
-def test_send_rejects_when_plan_lacks_email_apis(
+def test_send_rejects_when_plan_lacks_the_email_channel(
     client, account, verified_domain, api_key
 ):
-    _subscribe(account, email_apis=False)
+    from apps.billing import api as billing_api
+
+    sub = _subscribe(account)
+    billing_api.set_plan_channels(sub.plan, ["whatsapp", "instagram", "facebook"])
     resp = client.post(
         SEND_URL,
         data=json.dumps(_payload()),

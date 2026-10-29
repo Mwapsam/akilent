@@ -92,7 +92,6 @@ def pricing_page(request):
             "account": account,
             "subscription": subscription,
             "current_plan_slug": current_plan_slug,
-            "plan_service_type_choices": Plan.SERVICE_TYPE_CHOICES,
             "usage": [
                 u
                 for u in billing_api.usage_report(account)
@@ -161,12 +160,8 @@ def _plan_form_fields(post):
         price = Decimal(post.get("price_monthly") or "0")
     except InvalidOperation:
         price = Decimal("0")
-    service_type = post.get("service_type") or Plan.SERVICE_EMAIL
-    if service_type not in dict(Plan.SERVICE_TYPE_CHOICES):
-        service_type = Plan.SERVICE_EMAIL
     return {
         "name": (post.get("name") or "").strip(),
-        "service_type": service_type,
         "price_monthly": price,
         # Limits are set in /manage/plans/limits/ (PlanLimit), features in /manage/plans/features/.
         "trial_days": _int("trial_days"),
@@ -194,6 +189,7 @@ def plan_create(request):
     with transaction.atomic():
         plan = Plan.objects.create(slug=slug, **fields)
         audit(request, "plan.create", target=slug)
+        _save_plan_channels(request, plan)
         reasons = _loss_check(request, plan)
         if reasons:
             plan.is_active = False
@@ -207,6 +203,28 @@ def plan_create(request):
         return redirect("core:plans")
     messages.success(request, f"Package '{fields['name']}' created.")
     return redirect("core:plans")
+
+
+def _save_plan_channels(request, plan) -> None:
+    """The form's channel checkboxes (``channels``) decide which channels the plan sells; each
+    change is audited the way the feature matrix audits it."""
+    from apps.billing import api as billing_api
+
+    changed = billing_api.set_plan_channels(plan, request.POST.getlist("channels"))
+    for action, keys, old in (
+        ("plan.feature.add", changed["added"], False),
+        ("plan.feature.remove", changed["removed"], True),
+    ):
+        for key in keys:
+            audit(
+                request,
+                action,
+                target=f"{plan.slug}:{key}",
+                plan=plan.slug,
+                key=key,
+                old=old,
+                new=not old,
+            )
 
 
 def _loss_check(request, plan, **changes) -> list:
@@ -240,8 +258,10 @@ def plan_edit(request, pk):
         return redirect("core:plans")
     for k, v in fields.items():
         setattr(plan, k, v)
-    plan.save()
-    audit(request, "plan.edit", target=plan.slug)
+    with transaction.atomic():
+        plan.save()
+        audit(request, "plan.edit", target=plan.slug)
+        _save_plan_channels(request, plan)
     messages.success(request, f"Package '{plan.name}' updated.")
     return redirect("core:plans")
 

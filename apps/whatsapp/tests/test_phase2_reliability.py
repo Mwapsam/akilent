@@ -32,7 +32,6 @@ def _make_account(slug):
     account = Account.objects.create(
         company_name="Reliability Corp",
         slug=slug,
-        selected_services="whatsapp",
     )
     Membership.objects.create(user=user, account=account, role=Membership.Role.OWNER)
     return account, user

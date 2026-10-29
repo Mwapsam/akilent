@@ -356,6 +356,38 @@ def apply_plan_features(wanted: dict) -> list[dict]:
     return changes
 
 
+def plan_channel_keys(plan: Plan, features=None) -> frozenset[str]:
+    """The channels ``plan`` sells, whether or not they're on right now. ``features`` is the
+    plan's feature keys when the caller already has them (e.g. from ``plan_feature_matrix``)."""
+    from apps.core.channels import CHANNEL_FEATURE
+
+    if features is None:
+        features = set(
+            PlanFeature.objects.filter(plan=plan).values_list("key", flat=True)
+        )
+    return frozenset(ch for ch, key in CHANNEL_FEATURE.items() if key in features)
+
+
+@transaction.atomic
+def set_plan_channels(plan: Plan, channels) -> dict:
+    """Make ``plan`` sell exactly ``channels`` (channel keys), through their channel features.
+    Returns ``{"added": [...], "removed": [...]}`` feature keys, for the audit log."""
+    from apps.core.channels import CHANNEL_FEATURE
+
+    want = {CHANNEL_FEATURE[ch] for ch in channels if ch in CHANNEL_FEATURE}
+    have = set(
+        PlanFeature.objects.filter(
+            plan=plan, key__in=CHANNEL_FEATURE.values()
+        ).values_list("key", flat=True)
+    )
+    added, removed = sorted(want - have), sorted(have - want)
+    PlanFeature.objects.bulk_create(
+        [PlanFeature(plan=plan, key=k) for k in added], ignore_conflicts=True
+    )
+    PlanFeature.objects.filter(plan=plan, key__in=removed).delete()
+    return {"added": added, "removed": removed}
+
+
 # ---- limits and usage (see apps.billing.metering for the reservation contract) ------------------
 
 
@@ -498,9 +530,10 @@ def _limit_line(value: int, unit: str) -> str:
 
 
 # (limit key, pricing label, shown even when unlimited). Others show only if capped.
+# Conversations (every channel) first, then each channel's own limits in channel order.
 _PRICING_LIMITS = (
-    ("whatsapp_numbers", "WhatsApp numbers", True),
     ("conversations_month", "conversations/mo", True),
+    ("whatsapp_numbers", "WhatsApp numbers", True),
     ("whatsapp_marketing_msgs", "WhatsApp marketing messages/mo", False),
     ("whatsapp_utility_msgs", "WhatsApp utility messages/mo", False),
     ("verification_codes_month", "verification codes/mo", False),
@@ -514,19 +547,35 @@ _PRICING_LIMITS = (
 
 
 def plan_card(plan: Plan, *, channels=None) -> dict:
-    """What a pricing card says about ``plan``: its limits, the features it includes in catalog
-    order, and coming-soon teasers. The pricing page, signup wizard and landing page all use it,
-    so what's advertised is what the plan gives. ``channels`` defaults to the ones offered
-    to the public (on, and not restricted while Meta reviews the app)."""
+    """What a pricing card says about ``plan``: the channels it sells, its limits, the other
+    features it includes in catalog order, and coming-soon teasers. The pricing page, signup
+    wizard and landing page all use it, so what's advertised is what the plan gives.
+    ``channels`` defaults to the ones offered to the public (on, and not restricted while Meta
+    reviews the app).
+
+    Every channel is listed the same way, on one line that comes first in ``limits``; channel
+    features are left out of ``features`` so they aren't listed twice."""
     from apps.billing.models import PlanLimit
-    from apps.core.channels import feature_visible, limit_visible, public_channels
+    from apps.core.channels import (
+        CHANNEL_FEATURE,
+        feature_visible,
+        limit_visible,
+        public_channels,
+    )
 
     if channels is None:
         channels = public_channels()
 
     keys = set(PlanFeature.objects.filter(plan=plan).values_list("key", flat=True))
     values = dict(PlanLimit.objects.filter(plan=plan).values_list("key", "value"))
-    limits = []
+    sellable = {f.key: f for f in catalog.matrix_features()}
+    sold = [
+        ch
+        for ch, key in CHANNEL_FEATURE.items()
+        if ch in channels and key in keys and key in sellable
+    ]
+    channel_names = [sellable[CHANNEL_FEATURE[ch]].name for ch in sold]
+    limits = [f"Channels: {' · '.join(channel_names)}"] if channel_names else []
     for key, label, always in _PRICING_LIMITS:
         if not limit_visible(key, channels):
             continue
@@ -538,10 +587,14 @@ def plan_card(plan: Plan, *, channels=None) -> dict:
     included = [
         f
         for f in catalog.matrix_features()
-        if f.key in keys and feature_visible(f.key, channels)
+        if f.key in keys
+        and f.key not in catalog.CHANNEL_FEATURES
+        and feature_visible(f.key, channels)
     ]
     return {
         "plan": plan,
+        "channels": sold,
+        "channel_names": channel_names,
         "limits": limits,
         "features": included,
         "feature_names": [f.name for f in included],

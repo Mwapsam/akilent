@@ -42,7 +42,6 @@ def trial_plan(db):
         name="Trial",
         price_monthly=0,
         trial_days=14,
-        service_type=Plan.SERVICE_BOTH,
     )
 
 

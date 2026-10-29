@@ -51,7 +51,7 @@ def _channel_plan(account) -> tuple[frozenset, frozenset, tuple[str, ...]]:
     """The one place that decides what happens to each channel the business chose.
 
     The choice is ``account.selected_channels`` (picked at signup), never inferred from
-    the plan. An account from before channels were stored falls back to its service.
+    the plan.
 
     Returns ``(enabled channels, chosen channels to set up, chosen channels paused)``.
     A chosen channel that is on is set up. One the admin switched off, or whose state
@@ -59,14 +59,11 @@ def _channel_plan(account) -> tuple[frozenset, frozenset, tuple[str, ...]]:
     being skipped. One this server isn't set up for at all (its env flag is off) is
     dropped, since waiting on it would hold onboarding open forever.
     """
-    from apps.accounts.forms import SERVICE_CHANNELS
     from apps.core.channels import available_channels
 
     enabled = enabled_channels()
     available = available_channels()
-    chosen = set(account.selected_channels or []) or SERVICE_CHANNELS.get(
-        account.selected_services, set()
-    )
+    chosen = set(account.selected_channels or [])
     ordered = [ch for ch in SETUP_ORDER if ch in chosen and ch in available]
     setup = frozenset(ch for ch in ordered if ch in enabled)
     paused = tuple(ch for ch in ordered if channel_state(ch) != "enabled")

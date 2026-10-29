@@ -17,9 +17,7 @@ def _make_account(slug, company="Test Corp"):
     user = User.objects.create_user(
         username=f"{slug}@x.com", email=f"{slug}@x.com", password="x"
     )
-    account = Account.objects.create(
-        company_name=company, slug=slug, selected_services="whatsapp"
-    )
+    account = Account.objects.create(company_name=company, slug=slug)
     Membership.objects.create(user=user, account=account, role=Membership.Role.OWNER)
     return account, user
 

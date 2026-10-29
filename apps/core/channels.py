@@ -100,6 +100,15 @@ CHANNEL_REGISTRY: dict[str, ChannelDef] = {
 # Channels restricted until Meta approves the app's permissions (see restricted_channels).
 META_REVIEW_CHANNELS = ("facebook", "instagram")
 
+# Channel -> the billing feature a plan includes to sell it. Every channel is sold the same way:
+# a plan gives the channels whose feature it includes, and may include several.
+CHANNEL_FEATURE: dict[str, str] = {
+    "whatsapp": "whatsapp",
+    "instagram": "instagram",
+    "facebook": "facebook",
+    "email": "email_sending",
+}
+
 # Billing feature keys -> the channel they belong to.
 FEATURE_CHANNEL_DEPS: dict[str, str] = {
     "whatsapp": "whatsapp",
@@ -118,9 +127,8 @@ FEATURE_ANY_CHANNEL_DEPS: dict[str, tuple[str, ...]] = {
     "content_studio": ("instagram", "facebook"),
 }
 
-# Billing limit keys -> the channel they belong to.
+# Billing limit keys -> the channel they belong to. Conversations count on every channel.
 LIMIT_CHANNEL_DEPS: dict[str, str] = {
-    "conversations_month": "whatsapp",
     "whatsapp_numbers": "whatsapp",
     "whatsapp_marketing_msgs": "whatsapp",
     "whatsapp_utility_msgs": "whatsapp",

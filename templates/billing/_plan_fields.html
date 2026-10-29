@@ -1,13 +1,16 @@
 {% comment %}Shared Plan form fields for the admin create/edit modals.
-`plan` may be undefined (create) → fields fall back to sensible defaults.{% endcomment %}
-<label class="block text-sm mb-3">
-  <span class="text-gray-600">Services covered</span>
-  <select name="service_type" class="mt-1 block w-full rounded border-border-strong text-sm">
-    {% for value, label in plan_service_type_choices %}
-      <option value="{{ value }}" {% if plan.service_type == value or not plan and value == "email" %}selected{% endif %}>{{ label }}</option>
+`plan` may be undefined (create) → fields fall back to sensible defaults.
+Channels: every channel is sold the same way; a new package starts with all of them.{% endcomment %}
+<fieldset class="mb-3">
+  <legend class="text-sm text-gray-600">Channels</legend>
+  <div class="mt-1 flex flex-wrap gap-x-4 gap-y-2">
+    {% for key, label in channel_choices %}
+    <label class="flex items-center gap-2 text-sm">
+      <input type="checkbox" name="channels" value="{{ key }}" class="rounded border-border-strong" {% if not plan or key in plan.channel_keys %}checked{% endif %}> {{ label }}
+    </label>
     {% endfor %}
-  </select>
-</label>
+  </div>
+</fieldset>
 <div class="grid sm:grid-cols-2 gap-3">
   {% include "components/form_field.html" with name="name" label="Name" value=plan.name required=True %}
   {% include "components/form_field.html" with name="price_monthly" label="Price /mo (USD)" type="number" value=plan.price_monthly|default:0 %}

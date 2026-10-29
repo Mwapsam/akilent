@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from apps.core.channels import CHANNEL_FEATURE
+
 # access_mode
 CORE = "core"  # every business has it; never in the plan matrix, can't be granted or removed
 PLAN = (
@@ -33,6 +35,7 @@ INTERNAL = "internal"  # platform-only: never in the matrix, on pricing, or over
 DEPRECATED = "deprecated"  # retired: never entitled or shown; the key is never reused
 
 GROUPS = (
+    "Channels",
     "Communication",
     "Customer management",
     "Automation",
@@ -67,13 +70,6 @@ FEATURES: tuple[Feature, ...] = (
         CORE,
     ),
     Feature(
-        "whatsapp",
-        "WhatsApp",
-        "Connect your number, chat with customers and send approved templates.",
-        "Communication",
-        CORE,
-    ),
-    Feature(
         "customers",
         "Customers",
         "One record per customer, built from every conversation.",
@@ -102,25 +98,38 @@ FEATURES: tuple[Feature, ...] = (
         CORE,
     ),
     # --- sold through plans ---
+    # Channels (apps.core.channels.CHANNEL_FEATURE): a plan sells each channel the same way.
     Feature(
-        "whatsapp_campaigns",
-        "WhatsApp campaigns",
-        "Send an approved WhatsApp message to a list of customers at once.",
-        "Communication",
+        "whatsapp",
+        "WhatsApp",
+        "Connect your number, chat with customers and send approved templates.",
+        "Channels",
     ),
     Feature(
         "instagram",
         "Instagram",
         "Connect your Instagram account: DMs in the inbox, comment auto-replies.",
-        "Communication",
+        "Channels",
         nav_paths=("/instagram/",),
     ),
     Feature(
         "facebook",
-        "Facebook inbox",
+        "Facebook Page",
         "Facebook Page messages in the inbox, comment auto-replies and moderation.",
-        "Communication",
+        "Channels",
         nav_paths=("/facebook/",),
+    ),
+    Feature(
+        "email_sending",
+        "Email",
+        "Send email from your own domain, by API or SMTP.",
+        "Channels",
+    ),
+    Feature(
+        "whatsapp_campaigns",
+        "WhatsApp campaigns",
+        "Send an approved WhatsApp message to a list of customers at once.",
+        "Communication",
     ),
     Feature(
         "content_studio",
@@ -165,12 +174,6 @@ FEATURES: tuple[Feature, ...] = (
         nav_paths=("/orders/",),
     ),
     Feature(
-        "email_sending",
-        "Email sending",
-        "Send email from your own domain, by API or SMTP.",
-        "Email",
-    ),
-    Feature(
         "email_templates",
         "Email templates",
         "Reusable email designs, with AI help to write them.",
@@ -192,7 +195,7 @@ FEATURES: tuple[Feature, ...] = (
         "insights",
         "Detailed insights",
         "Detailed reports on how your messages perform.",
-        "Email",
+        "Customer management",
     ),
     Feature(
         "webhooks",
@@ -270,6 +273,11 @@ MODULE_FEATURES = frozenset(
         "orders",
     }
 )
+
+# The channel features. Every channel is treated the same: a new plan starts with all of them
+# and the operator unticks what it doesn't sell; a business with no plan has none of them
+# unless an operator grants one.
+CHANNEL_FEATURES = frozenset(CHANNEL_FEATURE.values())
 
 
 def get(key: str) -> Feature:

@@ -28,7 +28,6 @@ def _make_account(slug="load-test-acct"):
     account = Account.objects.create(
         company_name="Load Test Corp",
         slug=slug,
-        selected_services="whatsapp",
     )
     Membership.objects.create(user=user, account=account, role=Membership.Role.OWNER)
     return account, user

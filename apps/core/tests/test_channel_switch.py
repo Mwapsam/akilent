@@ -170,10 +170,13 @@ def test_webhook_and_tracking_paths_still_reachable_when_disabled(
 @pytest.mark.django_db
 def test_signup_offers_only_enabled_channels(all_wired, operator):
     from apps.accounts.forms import signup_offer
+    from apps.billing import api as billing_api
     from apps.billing.models import Plan
 
-    Plan.objects.create(slug="e", name="E", service_type=Plan.SERVICE_EMAIL)
-    Plan.objects.create(slug="b", name="B", service_type=Plan.SERVICE_BOTH)
+    billing_api.set_plan_channels(Plan.objects.create(slug="e", name="E"), ["email"])
+    billing_api.set_plan_channels(
+        Plan.objects.create(slug="b", name="B"), ["email", "whatsapp"]
+    )
     ch.set_channel_enabled("email", False, request=_fake_request(user=operator))
     _, choices = signup_offer()
     # The email plan has nothing left to give; the "both" plan gives only WhatsApp for now.

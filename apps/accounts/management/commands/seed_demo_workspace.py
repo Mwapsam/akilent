@@ -114,7 +114,6 @@ class Command(BaseCommand):
         account = Account.objects.create(
             company_name=DEMO_NAME,
             slug=DEMO_SLUG,
-            selected_services=Account.Services.BOTH,
             selected_channels=["email", "facebook", "instagram", "whatsapp"],
             onboarding_state=Account.Onboarding.COMPLETED,
             industry="Retail",

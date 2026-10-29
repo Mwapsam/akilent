@@ -288,7 +288,7 @@ def _plan_feature_bullets(plan, channels) -> list:
 def _build_signup_wizard_config(request, *, form_data=None, errors=None):
     from django.middleware.csrf import get_token
 
-    from apps.accounts.forms import SERVICE_CHANNELS, signup_offer
+    from apps.accounts.forms import signup_offer
     from apps.billing.models import Plan, Subscription
     from apps.billing.money import SYMBOLS, ZERO_DECIMAL, billing_currency
     from apps.billing.pricing import period_options, price_for
@@ -328,10 +328,10 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
         period = Subscription.MONTHLY
     if not picks and not plan_slug:
         req_plan = request.GET.get("plan", "").strip()
-        # ?channels=whatsapp,instagram, or the older ?services=both.
+        # ?channels=whatsapp,instagram
         req_channels = [
             c.strip() for c in request.GET.get("channels", "").split(",") if c.strip()
-        ] or sorted(SERVICE_CHANNELS.get(request.GET.get("services", "").strip(), ()))
+        ]
         req_channels = [c for c in req_channels if c in offered_keys]
         matched = (
             next((p for p in plans if p["slug"] == req_plan), None)
@@ -423,13 +423,13 @@ def signup(request):
                     user.is_active = True
                     user.save()
 
-                    chosen = form.chosen_plan
-                    assert chosen is not None  # clean() set it for a valid form
+                    assert (
+                        form.chosen_plan is not None
+                    )  # clean() set it for a valid form
                     account = Account.objects.create(
                         company_name=cd["company_name"],
-                        # The plan's service type, for billing. Onboarding follows the
-                        # channels they picked, which clean() checked the plan gives.
-                        selected_services=chosen.service_type,
+                        # Onboarding follows the channels they picked, which clean()
+                        # checked the plan gives.
                         selected_channels=sorted(cd["selected_channels"]),
                         onboarding_state=Account.Onboarding.ACCOUNT_CREATED,
                         billing_email=cd["email"],
@@ -438,8 +438,8 @@ def signup(request):
                     Membership.objects.create(
                         user=user, account=account, role=Membership.Role.OWNER
                     )
-                    # The Plan the form checked, so the subscription and
-                    # selected_services can't come from two different lookups.
+                    # The Plan the form checked, so the subscription and the channels
+                    # can't come from two different lookups.
                     _apply_selected_plan(
                         account, form.chosen_plan, cd["billing_period"]
                     )

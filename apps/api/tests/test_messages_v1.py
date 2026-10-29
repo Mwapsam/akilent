@@ -110,8 +110,13 @@ def test_unverified_domain_returns_403(client, account, api_key):
 
 
 @pytest.mark.django_db
-def test_plan_without_email_apis_returns_403(client, account, verified_domain, api_key):
-    _subscribe(account, email_apis=False)
+def test_plan_without_the_email_channel_returns_403(
+    client, account, verified_domain, api_key
+):
+    from apps.billing import api as billing_api
+
+    sub = _subscribe(account)
+    billing_api.set_plan_channels(sub.plan, ["whatsapp", "instagram", "facebook"])
     resp = _post(client, api_key.raw_key)
     assert resp.status_code == 403
 

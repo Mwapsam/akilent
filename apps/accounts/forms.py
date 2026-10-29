@@ -13,13 +13,6 @@ from apps.accounts.models import Account, Invitation
 if TYPE_CHECKING:
     from apps.billing.models import Plan
 
-# Channels each plan service type covers (Plan.service_type / Account.selected_services).
-SERVICE_CHANNELS: dict[str, set[str]] = {
-    Account.Services.EMAIL.value: {"email"},
-    Account.Services.WHATSAPP.value: {"whatsapp"},
-    Account.Services.BOTH.value: {"email", "whatsapp"},
-}
-
 # The channels a business can pick at signup, in display order, with what each one does
 # here (docs/marketing/messaging.md, section 2).
 CHANNEL_CHOICES: tuple[tuple[str, str, str], ...] = (
@@ -37,18 +30,13 @@ CHANNEL_CHOICES: tuple[tuple[str, str, str], ...] = (
 def plan_channels(plan, channels, features=None) -> frozenset[str]:
     """The channels ``plan`` gives while only ``channels`` are on offer.
 
-    WhatsApp and Email come from the plan's service type, Instagram from its
-    ``instagram`` feature and Facebook (Page publishing) from ``content_studio``.
-    ``features`` is the plan's feature keys when the caller already has them.
+    Every channel works the same way: the plan gives it when it includes the channel's
+    feature (``billing_api.plan_channel_keys``). ``features`` is the plan's feature keys
+    when the caller already has them.
     """
-    if features is None:
-        features = set(plan.features.values_list("key", flat=True))
-    given = set(SERVICE_CHANNELS.get(plan.service_type, set()))
-    if "instagram" in features:
-        given.add("instagram")
-    if "content_studio" in features:
-        given.add("facebook")
-    return frozenset(given & set(channels))
+    from apps.billing import api as billing_api
+
+    return billing_api.plan_channel_keys(plan, features) & frozenset(channels)
 
 
 def signup_offer() -> tuple[

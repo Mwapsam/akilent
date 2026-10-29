@@ -7,6 +7,7 @@ from django.utils.http import urlsafe_base64_encode
 
 from apps.accounts.models import Account, Membership
 from apps.accounts.tokens import email_verification_token
+from apps.billing import api as billing_api
 from apps.billing.models import Plan, Subscription
 
 SIGNUP_URL = "/signup/"
@@ -41,7 +42,6 @@ def trial_plan(db):
         name="Trial",
         price_monthly=0,
         trial_days=14,
-        service_type=Plan.SERVICE_BOTH,
     )
 
 
@@ -50,22 +50,18 @@ def email_plan(db):
     # $0: these fixtures exercise onboarding routing/login/verification, not
     # billing — kept free so signup completes without a Stripe checkout
     # redirect. See test_signup_billing.py for paid-plan behavior.
-    return Plan.objects.create(
-        slug=Plan.STARTER,
-        name="Starter",
-        price_monthly=0,
-        service_type=Plan.SERVICE_EMAIL,
-    )
+    plan = Plan.objects.create(slug=Plan.STARTER, name="Starter", price_monthly=0)
+    billing_api.set_plan_channels(plan, ["email"])
+    return plan
 
 
 @pytest.fixture
 def whatsapp_plan(db):
-    return Plan.objects.create(
-        slug=Plan.PROFESSIONAL,
-        name="Professional",
-        price_monthly=0,
-        service_type=Plan.SERVICE_WHATSAPP,
+    plan = Plan.objects.create(
+        slug=Plan.PROFESSIONAL, name="Professional", price_monthly=0
     )
+    billing_api.set_plan_channels(plan, ["whatsapp"])
+    return plan
 
 
 @pytest.mark.django_db
@@ -82,7 +78,7 @@ def test_signup_creates_active_account_and_sends_verification(
     assert (user.first_name, user.last_name) == ("Ada", "Lovelace")
 
     account = Account.objects.get(company_name="New Co")
-    assert account.selected_services == Account.Services.EMAIL
+    assert account.selected_channels == ["email"]
     assert account.onboarding_state == Account.Onboarding.DOMAIN_SETUP
     assert account.email_verified is False
     assert account.city == "Lusaka" and account.country == "Zambia"

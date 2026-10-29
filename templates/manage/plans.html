@@ -34,14 +34,14 @@
 
 <div class="table-wrap mb-8">
   <table class="table table--cards">
-    <thead><tr><th>Package</th><th>Price / month</th><th>Service</th><th class="text-right">Actions</th></tr></thead>
+    <thead><tr><th>Package</th><th>Price / month</th><th>Channels</th><th class="text-right">Actions</th></tr></thead>
     <tbody>
       {% for plan in plans %}
       <tr x-data="{ edit: false }">
         <td data-label="Package"><span class="font-medium text-ink">{{ plan.name }}</span> <code class="text-xs">{{ plan.slug }}</code>
           {% if not plan.is_active %}<span class="badge badge-neutral">Hidden</span>{% endif %}</td>
         <td data-label="Price / month">{{ plan.price_monthly|money }}</td>
-        <td data-label="Service">{{ plan.get_service_type_display }}</td>
+        <td data-label="Channels">{{ plan.channel_labels|join:", "|default:"None" }}</td>
         <td data-label="Actions" class="text-right">
           <div class="flex items-center justify-end gap-1">
             <button type="button" class="btn btn-ghost btn-sm" @click="edit = true">Edit</button>

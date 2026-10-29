@@ -24,11 +24,10 @@ def _fresh_channel_cache(settings):
     ch.invalidate_channel_cache()
 
 
-def _account(channels, services=Account.Services.BOTH):
+def _account(channels):
     user = User.objects.create_user("o@example.com", "o@example.com", "pw")
     acc = Account.objects.create(
         company_name="Acme",
-        selected_services=services,
         selected_channels=channels,
         onboarding_state=Account.Onboarding.ACCOUNT_CREATED,
         email_verified=True,
@@ -97,9 +96,9 @@ def test_a_switched_off_pick_is_paused_not_dropped():
     assert "connect_facebook" not in _required(acc)
 
 
-def test_an_account_from_before_channels_were_stored_uses_its_service():
-    acc = _account([], services=Account.Services.EMAIL)
-    assert _required(acc) == ["account", "verify_email", "domain", "verify"]
+def test_an_account_with_no_channels_sets_none_up():
+    acc = _account([])
+    assert _required(acc) == ["account", "verify_email"]
 
 
 def test_restricted_instagram_is_not_recommended(monkeypatch):

@@ -128,17 +128,13 @@ class TeamEndpointIsolationTest(TestCase):
 
         self.client = Client()
         self.owner = _make_user("owner@a.com")
-        self.account_a = Account.objects.create(
-            company_name="A Corp", slug="a-corp", selected_services="whatsapp"
-        )
+        self.account_a = Account.objects.create(company_name="A Corp", slug="a-corp")
         Membership.objects.create(
             user=self.owner, account=self.account_a, role=Membership.Role.OWNER
         )
 
         self.other_user = _make_user("other@b.com")
-        self.account_b = Account.objects.create(
-            company_name="B Corp", slug="b-corp", selected_services="whatsapp"
-        )
+        self.account_b = Account.objects.create(company_name="B Corp", slug="b-corp")
         Membership.objects.create(
             user=self.other_user, account=self.account_b, role=Membership.Role.OWNER
         )

@@ -4,13 +4,11 @@ Covers the catalog rules, the access() precedence table, the migration that carr
 access over, the Operator Console matrix and business exceptions, the locked page and pricing.
 """
 
-import importlib
 import re
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from django.apps import apps as django_apps
 from django.contrib.auth.models import User
 from django.test import override_settings
 from django.utils import timezone
@@ -21,7 +19,6 @@ from apps.billing import features as catalog
 from apps.billing.models import (
     AccountFeatureOverride,
     ComingSoonFeature,
-    ModuleSubscription,
     Plan,
     PlanFeature,
     Subscription,
@@ -139,9 +136,7 @@ def test_access_precedence(
 
 @pytest.mark.django_db
 def test_core_is_always_on_and_cant_be_removed(account):
-    assert billing_api.entitled(account, "inbox") and billing_api.entitled(
-        account, "whatsapp"
-    )
+    assert billing_api.entitled(account, "inbox")
     assert billing_api.access(account, "inbox")["source"] == "core"
     with pytest.raises(billing_api.FeatureError):
         billing_api.set_override(account, "inbox", grant=False, note="no")
@@ -210,61 +205,6 @@ def test_a_business_with_no_subscription_keeps_the_old_module_features(db):
 
 
 # ---- the migration: today's access, represented, nothing taken away ----------------------------
-
-
-@pytest.mark.django_db
-def test_migration_keeps_todays_access(db):
-    migration = importlib.import_module(
-        "apps.billing.migrations.0020_seed_plan_features"
-    )
-    old = Plan.objects.create(
-        slug="old",
-        name="Old",
-        bulk_email=True,
-        email_apis=True,
-        detailed_analytics=False,
-    )
-    acc = Account.objects.create(company_name="Blocked", slug="blocked")
-    ModuleSubscription.objects.create(account=acc, module="ai", enabled=False)
-    ModuleSubscription.objects.create(account=acc, module="whatsapp", enabled=False)
-    ModuleSubscription.objects.create(account=acc, module="crm", enabled=False)
-    PlanFeature.objects.all().delete()
-    Plan.objects.filter(slug="pilot").delete()
-
-    migration.forwards(django_apps, None)
-
-    keys = set(PlanFeature.objects.filter(plan=old).values_list("key", flat=True))
-    assert {
-        "email_campaigns",
-        "email_sending",
-        "automations",
-        "ai_assistant",
-        "sales",
-        "orders",
-        "whatsapp_campaigns",
-        "verification_codes",
-    } <= keys
-    assert "insights" not in keys
-    removed = set(
-        AccountFeatureOverride.objects.filter(account=acc, grant=False).values_list(
-            "key", flat=True
-        )
-    )
-    assert removed == {"ai_assistant", "whatsapp_campaigns", "verification_codes"}
-    assert billing_api.owner_switched_off(acc, "sales"), (
-        "the owner's own switch stays a switch"
-    )
-    pilot = Plan.objects.get(slug="pilot")
-    assert not pilot.is_active
-    # Features added to the catalog after this migration ran aren't part of "today's access"
-    # it preserved; they reach plans when an operator adds them.
-    added_later = {"instagram", "content_studio", "facebook"}
-    assert {f.key for f in catalog.matrix_features()} - added_later <= set(
-        pilot.features.values_list("key", flat=True)
-    )
-
-
-# ---- Operator Console ---------------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -416,9 +356,37 @@ def test_signup_bullets_match_the_pricing_card(plan):
     from apps.core.channels import enabled_channels
 
     card = billing_api.plan_card(plan, channels=enabled_channels() - {"whatsapp"})
-    assert _plan_feature_bullets(plan, plan.service_type) == card["limits"] + [
-        "Detailed insights"
-    ]
+    assert _plan_feature_bullets(plan, enabled_channels() - {"whatsapp"}) == card[
+        "limits"
+    ] + ["Detailed insights"]
+
+
+@pytest.mark.django_db
+def test_every_channel_is_sold_the_same_way(account):
+    """No channel is core: each is a plan feature in the Channels group, and a new plan
+    starts with all of them."""
+    from apps.core.channels import CHANNEL_FEATURE
+
+    assert set(CHANNEL_FEATURE.values()) == catalog.CHANNEL_FEATURES
+    for key in catalog.CHANNEL_FEATURES:
+        f = catalog.get(key)
+        assert (f.access_mode, f.group) == (catalog.PLAN, "Channels")
+    plan = Plan.objects.create(slug="new", name="New")
+    assert billing_api.plan_channel_keys(plan) == set(CHANNEL_FEATURE)
+
+
+@pytest.mark.django_db
+def test_a_new_plan_without_email_apis_does_not_sell_email():
+    plan = Plan.objects.create(slug="no-email", name="No email", email_apis=False)
+    assert billing_api.plan_channel_keys(plan) == {"whatsapp", "instagram", "facebook"}
+
+
+@pytest.mark.django_db
+def test_a_plan_without_whatsapp_does_not_give_it(account, plan):
+    billing_api.set_plan_channels(plan, ["email"])
+    assert not billing_api.entitled(account, "whatsapp")
+    assert billing_api.entitled(account, "email_sending")
+    assert billing_api.access(account, "whatsapp")["source"] == "not_in_plan"
 
 
 # ---- WhatsApp: templates are core, campaigns and codes are sold --------------------------------

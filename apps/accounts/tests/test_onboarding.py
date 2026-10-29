@@ -6,12 +6,17 @@ from apps.accounts import onboarding as ob
 from apps.accounts.models import Account, Invitation, Membership
 from apps.email.models import EmailApiKey, EmailDomain
 
+# The channels an account picked at signup.
+EMAIL = ["email"]
+WHATSAPP = ["whatsapp"]
+BOTH = ["email", "whatsapp"]
 
-def _make_account(services=Account.Services.EMAIL, *, verified_email=True):
+
+def _make_account(channels=EMAIL, *, verified_email=True):
     user = User.objects.create_user("owner", "owner@example.com", "Sup3r-secret-pw")
     acc = Account.objects.create(
         company_name="Acme",
-        selected_services=services,
+        selected_channels=channels,
         onboarding_state=Account.Onboarding.ACCOUNT_CREATED,
         email_verified=verified_email,
     )
@@ -63,7 +68,7 @@ def test_unverified_email_is_the_first_gap(db):
 @pytest.mark.django_db
 def test_whatsapp_only_account_skips_email_steps(db, settings):
     settings.WHATSAPP_ENABLED = True
-    acc = _make_account(Account.Services.WHATSAPP)
+    acc = _make_account(WHATSAPP)
     keys = _keys(acc)
     assert _keys(acc, essentials_only=True) == ["account", "verify_email", "whatsapp"]
     assert not {"domain", "verify", "use", "email_template"} & set(keys)
@@ -72,7 +77,7 @@ def test_whatsapp_only_account_skips_email_steps(db, settings):
 @pytest.mark.django_db
 def test_both_account_has_whatsapp_and_email_steps(db, settings):
     settings.WHATSAPP_ENABLED = True
-    acc = _make_account(Account.Services.BOTH)
+    acc = _make_account(BOTH)
     assert _keys(acc, essentials_only=True) == [
         "account",
         "verify_email",
@@ -254,8 +259,8 @@ def test_every_step_link_opens_for_a_fully_entitled_business(
     settings.WHATSAPP_ENABLED = True
     settings.INSTAGRAM_ENABLED = True
     monkeypatch.setattr("apps.ai.providers.is_configured", lambda: True)
-    acc = _make_account(Account.Services.BOTH)
-    plan = Plan.objects.create(slug="all", name="All", service_type=Plan.SERVICE_BOTH)
+    acc = _make_account(BOTH)
+    plan = Plan.objects.create(slug="all", name="All")
     PlanFeature.objects.bulk_create(
         [PlanFeature(plan=plan, key=f.key) for f in FEATURES], ignore_conflicts=True
     )
@@ -350,7 +355,7 @@ def test_channel_the_server_is_not_set_up_for_is_dropped_not_paused(db, settings
     """An env flag that's off isn't coming back, so it must not hold setup open."""
     settings.WHATSAPP_ENABLED = True
     settings.EMAIL_ENABLED = False
-    acc = _make_account(Account.Services.BOTH)
+    acc = _make_account(BOTH)
     assert _keys(acc, essentials_only=True) == ["account", "verify_email", "whatsapp"]
     assert ob.get_state(acc)["paused"] == []
 
@@ -358,7 +363,7 @@ def test_channel_the_server_is_not_set_up_for_is_dropped_not_paused(db, settings
 @pytest.mark.django_db
 def test_whatsapp_account_with_whatsapp_off_is_paused(db, all_wired):
     _switch_off("whatsapp")
-    acc = _make_account(Account.Services.WHATSAPP)
+    acc = _make_account(WHATSAPP)
     keys = _keys(acc)
     assert "whatsapp_paused" in keys
     # It is not pushed into email setup it never chose.
@@ -369,7 +374,7 @@ def test_whatsapp_account_with_whatsapp_off_is_paused(db, all_wired):
 @pytest.mark.django_db
 def test_both_with_one_channel_off(db, all_wired):
     _switch_off("email")
-    acc = _make_account(Account.Services.BOTH)
+    acc = _make_account(BOTH)
     state = ob.get_state(acc, essentials_only=True)
     # What can be done today comes first, and is what "next up" points at.
     assert [s["key"] for s in state["steps"]] == [
@@ -397,7 +402,7 @@ def test_both_with_one_channel_off(db, all_wired):
 @pytest.mark.django_db
 def test_both_channels_off(db, all_wired):
     _switch_off("email", "whatsapp")
-    acc = _make_account(Account.Services.BOTH)
+    acc = _make_account(BOTH)
     assert _keys(acc, essentials_only=True) == [
         "account",
         "verify_email",
@@ -434,7 +439,7 @@ def test_onboarding_page_with_email_off(client, account, all_wired):
 @pytest.mark.django_db
 def test_state_reports_which_channels_are_being_set_up(db, all_wired):
     _switch_off("email")
-    acc = _make_account(Account.Services.BOTH)
+    acc = _make_account(BOTH)
     state = ob.get_state(acc, essentials_only=True)
     assert state["wants_whatsapp"] is True and state["wants_email"] is False
 
@@ -455,7 +460,7 @@ def test_automation_step_needs_whatsapp(account, monkeypatch):
 def test_paused_prerequisite_drops_the_dependent_steps(db, all_wired, monkeypatch):
     _switch_off("whatsapp")
     _usable(monkeypatch, {"automations", "whatsapp_campaigns"})
-    acc = _make_account(Account.Services.WHATSAPP)
+    acc = _make_account(WHATSAPP)
     keys = set(_keys(acc))
     assert not {"build", "wa_template", "wa_campaign"} & keys
 
@@ -528,7 +533,7 @@ def test_one_request_computes_the_checklist_once(rf, account, monkeypatch):
         return real(acc)
 
     monkeypatch.setattr(ob, "_whatsapp_step", spy)
-    account.selected_services = Account.Services.BOTH
+    account.selected_channels = BOTH
     account.save()
     request = rf.get("/dashboard/")
     first = ob.get_state(account, essentials_only=True, request=request)
@@ -581,9 +586,9 @@ def test_widget_not_shown_on_onboarding_page(client, account):
 # --- WhatsApp step follows the setup console -----------------------------
 
 
-def _wa_account(settings, services=Account.Services.WHATSAPP):
+def _wa_account(settings, channels=WHATSAPP):
     settings.WHATSAPP_ENABLED = True
-    return _make_account(services)
+    return _make_account(channels)
 
 
 def _wa_step(acc):
@@ -644,7 +649,7 @@ def test_failed_test_does_not_complete_step(settings):
 
 @pytest.mark.django_db
 def test_advance_onboarding_waits_for_registered_number(settings):
-    acc = _wa_account(settings, Account.Services.BOTH)
+    acc = _wa_account(settings, BOTH)
     n = _wa_number(acc)  # exists, but not registered
     assert ob.advance_onboarding(acc) == "/whatsapp/numbers/"
     n.registration_status = "registered"

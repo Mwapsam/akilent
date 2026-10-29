@@ -517,13 +517,23 @@ def payments(request):
 
 @admin_required
 def plans(request):
+    from apps.accounts.forms import CHANNEL_CHOICES
+    from apps.billing import api as billing_api
+
+    plans_list = list(Plan.objects.order_by("price_monthly"))
+    matrix = billing_api.plan_feature_matrix()
+    labels = {key: label for key, label, _ in CHANNEL_CHOICES}
+    for plan in plans_list:
+        sold = billing_api.plan_channel_keys(plan, matrix.get(plan.pk, set()))
+        plan.channel_keys = sold
+        plan.channel_labels = [labels[k] for k, _, _ in CHANNEL_CHOICES if k in sold]
     return render(
         request,
         "manage/plans.html",
         {
-            "plans": Plan.objects.order_by("price_monthly"),
+            "plans": plans_list,
             "payment_methods": PaymentMethod.objects.all(),
-            "plan_service_type_choices": Plan.SERVICE_TYPE_CHOICES,
+            "channel_choices": [(key, label) for key, label, _ in CHANNEL_CHOICES],
             "payments_enabled": SiteSettings.load().payments_enabled,
         },
     )

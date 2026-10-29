@@ -21,24 +21,12 @@ class Plan(models.Model):
         (BUSINESS, "Business"),
     ]
 
-    # Which services this package covers. Drives the service-first signup
-    # wizard: "Email & WhatsApp" only lists BOTH plans, etc.
-    SERVICE_EMAIL = "email"
-    SERVICE_WHATSAPP = "whatsapp"
-    SERVICE_BOTH = "both"
-    SERVICE_TYPE_CHOICES = [
-        (SERVICE_EMAIL, "Email"),
-        (SERVICE_WHATSAPP, "WhatsApp"),
-        (SERVICE_BOTH, "Email & WhatsApp"),
-    ]
-
     # Free-form so admins can create custom packages; the constants above are
     # just the seeded defaults referenced in code (signals, limits).
     slug = models.SlugField(max_length=50, unique=True)
     name = models.CharField(max_length=100)
-    service_type = models.CharField(
-        max_length=10, choices=SERVICE_TYPE_CHOICES, default=SERVICE_EMAIL
-    )
+    # The channels a plan sells are channel features in the matrix
+    # (apps.core.channels.CHANNEL_FEATURE), like everything else it includes.
     price_monthly = models.DecimalField(
         max_digits=8, decimal_places=2, default=Decimal("0.00")
     )

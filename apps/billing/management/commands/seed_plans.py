@@ -8,7 +8,6 @@ PLANS = [
     {
         "slug": Plan.TRIAL,
         "name": "Trial",
-        "service_type": Plan.SERVICE_BOTH,
         "price_monthly": Decimal("0.00"),
         "max_conversations_per_month": 100,
         "max_emails_per_month": 500,
@@ -27,7 +26,6 @@ PLANS = [
     {
         "slug": Plan.STARTER,
         "name": "Starter",
-        "service_type": Plan.SERVICE_EMAIL,
         "price_monthly": Decimal("19.00"),
         "max_conversations_per_month": 1000,
         "max_emails_per_month": 10000,
@@ -48,7 +46,6 @@ PLANS = [
     {
         "slug": Plan.PROFESSIONAL,
         "name": "Professional",
-        "service_type": Plan.SERVICE_WHATSAPP,
         "price_monthly": Decimal("49.00"),
         "max_conversations_per_month": 5000,
         "max_emails_per_month": 50000,
@@ -69,7 +66,6 @@ PLANS = [
     {
         "slug": Plan.BUSINESS,
         "name": "Business",
-        "service_type": Plan.SERVICE_BOTH,
         "price_monthly": Decimal("99.00"),
         "max_conversations_per_month": -1,
         "max_emails_per_month": -1,
@@ -99,6 +95,8 @@ class Command(BaseCommand):
                 data
             )  # PLANS is module state: popping from it breaks a second run
             slug = data.pop("slug")
+            # A new plan gets every channel from seed_new_plan_features; an existing one keeps
+            # the channels the operator chose.
             plan, created = Plan.objects.update_or_create(slug=slug, defaults=data)
             action = "Created" if created else "Updated"
             self.stdout.write(f"{action}: {plan.name} (${plan.price_monthly}/mo)")
