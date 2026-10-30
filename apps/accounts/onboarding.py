@@ -23,7 +23,9 @@ from functools import cached_property
 from django.conf import settings
 from django.urls import reverse
 
+from apps.accounts.forms import CHANNEL_CHOICES
 from apps.core.channels import (
+    CHANNEL_FEATURE,
     CHANNEL_REGISTRY,
     channel_state,
     enabled_channels,
@@ -31,6 +33,8 @@ from apps.core.channels import (
 )
 
 WHATSAPP_SETUP_URL = "/whatsapp/numbers/"
+INSTAGRAM_SETUP_URL = "/instagram/accounts/"
+FACEBOOK_SETUP_URL = "/facebook/"
 DOMAIN_SETUP_URL = "/email/domains/"
 # The order channel setup runs in. WhatsApp first: for WhatsApp and Email, Meta onboarding
 # comes before domain setup.
@@ -138,7 +142,7 @@ def advance_onboarding(account) -> str:
     elif "instagram" in setup and not _has_ready_instagram(account):
         target, url = Account.Onboarding.INSTAGRAM_SETUP, reverse("instagram-accounts")
     elif "facebook" in setup and not _has_facebook_page(account):
-        target, url = Account.Onboarding.FACEBOOK_SETUP, reverse("publishing:channels")
+        target, url = Account.Onboarding.FACEBOOK_SETUP, reverse("facebook-page")
     elif "email" in setup and not _has_sending_domain(account):
         target, url = Account.Onboarding.DOMAIN_SETUP, DOMAIN_SETUP_URL
     elif paused:
@@ -171,6 +175,7 @@ class _Ctx:
         self.wants_instagram = "instagram" in setup
         self.wants_facebook = "facebook" in setup
         self.wants_email = "email" in setup
+        self.wanted = setup
 
     @cached_property
     def public(self) -> frozenset:
@@ -280,14 +285,30 @@ def _instagram_usable(ctx) -> bool:
     return "instagram" in ctx.channels and "instagram" in ctx.usable
 
 
-def _instagram_offered(ctx) -> bool:
-    """Instagram, recommended to a business that didn't pick it at signup. Never while
-    it's restricted (Meta App Review), unless the business has already connected it."""
-    return (
-        _instagram_usable(ctx)
-        and not ctx.wants_instagram
-        and ("instagram" in ctx.public or ctx.instagram_ready)
-    )
+def _channel_connected(ctx, channel: str) -> bool:
+    if channel == "whatsapp":
+        return _done_whatsapp(ctx)
+    if channel == "instagram":
+        return ctx.instagram_ready
+    if channel == "facebook":
+        return ctx.facebook_connected
+    return _done_domain(ctx)
+
+
+def _channel_offered(channel: str) -> Callable:
+    """A channel recommended to a business that didn't pick it at signup, the same rule for
+    every channel: it's on, the plan sells it, and it's open to the public (not restricted
+    during Meta App Review) unless the business has already connected it."""
+
+    def offered(ctx) -> bool:
+        return (
+            channel in ctx.channels
+            and CHANNEL_FEATURE[channel] in ctx.usable
+            and channel not in ctx.wanted
+            and (channel in ctx.public or _channel_connected(ctx, channel))
+        )
+
+    return offered
 
 
 def _facebook_offered(ctx) -> bool:
@@ -401,6 +422,21 @@ def _done_team(ctx) -> bool:
     )
 
 
+# Where each channel is set up, and its icon: the same for the signup pick and a later add.
+_CHANNEL_SETUP_URLS = {
+    "whatsapp": WHATSAPP_SETUP_URL,
+    "instagram": INSTAGRAM_SETUP_URL,
+    "facebook": FACEBOOK_SETUP_URL,
+    "email": DOMAIN_SETUP_URL,
+}
+_CHANNEL_ICONS = {
+    "whatsapp": "chat",
+    "instagram": "instagram",
+    "facebook": "facebook",
+    "email": "mail",
+}
+
+
 def _wants_whatsapp_ctx(ctx) -> bool:
     return ctx.wants_whatsapp
 
@@ -467,10 +503,10 @@ STEPS: tuple[StepDef, ...] = (
         key="connect_facebook",
         section="setup",
         title="Connect your Facebook Page",
-        desc="Connect the Facebook Page you want to publish posts to from Content Studio.",
-        icon="image",
+        desc="Connect your Facebook Page so its messages and comments arrive in your inbox.",
+        icon="facebook",
         cta="Connect Page",
-        url="publishing:channels",
+        url="facebook-page",
         done=lambda ctx: ctx.facebook_connected,
         available=_wants_facebook_ctx,
         required=True,
@@ -500,22 +536,25 @@ STEPS: tuple[StepDef, ...] = (
         required=True,
     ),
     # Reach customers -------------------------------------------------------
-    StepDef(
-        key="instagram",
-        section="reach",
-        title="Connect Instagram",
-        desc="Connect your Instagram business account to Akilent.",
-        icon="instagram",
-        cta="Connect",
-        url="instagram-accounts",
-        done=_done_instagram,
-        available=_instagram_offered,
+    *(
+        StepDef(
+            key=f"add_{channel}",
+            section="reach",
+            title=f"Add {label}",
+            desc=f"{pitch}.",
+            icon=_CHANNEL_ICONS[channel],
+            cta="Set up",
+            url=lambda ctx, channel=channel: _CHANNEL_SETUP_URLS[channel],
+            done=lambda ctx, channel=channel: _channel_connected(ctx, channel),
+            available=_channel_offered(channel),
+        )
+        for channel, label, pitch in CHANNEL_CHOICES
     ),
     StepDef(
         key="instagram_reply",
         section="reach",
         title="Answer your first Instagram DM",
-        desc="Instagram messages arrive in the same inbox as WhatsApp. Reply to one from there.",
+        desc="Instagram messages arrive in the same inbox as your other channels. Reply to one from there.",
         icon="instagram",
         cta="Open the inbox",
         url="conversations:inbox",
@@ -526,6 +565,22 @@ STEPS: tuple[StepDef, ...] = (
         ),
         available=_wants_instagram_ctx,
         needs="connect_instagram",
+    ),
+    StepDef(
+        key="facebook_reply",
+        section="reach",
+        title="Answer your first Facebook Page message",
+        desc="Facebook Page messages arrive in the same inbox as your other channels. Reply to one from there.",
+        icon="facebook",
+        cta="Open the inbox",
+        url="conversations:inbox",
+        done=_exists(
+            "conversations.Message",
+            direction="outbound",
+            conversation__channel="facebook",
+        ),
+        available=_wants_facebook_ctx,
+        needs="connect_facebook",
     ),
     # Publish & grow ---------------------------------------------------------
     StepDef(
@@ -666,9 +721,10 @@ STEPS: tuple[StepDef, ...] = (
         cta="Choose one",
         url="build:home",
         done=_done_automation,
-        # Starters answer customers on WhatsApp or Instagram; each says what it still needs.
+        # Starters answer customers on any inbox channel; each says what it still needs.
         available=lambda ctx: (
-            (ctx.wants_whatsapp or ctx.wants_instagram) and "automations" in ctx.usable
+            (ctx.wants_whatsapp or ctx.wants_instagram or ctx.wants_facebook)
+            and "automations" in ctx.usable
         ),
     ),
     StepDef(

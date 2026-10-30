@@ -150,7 +150,7 @@ def _usable(monkeypatch, keys):
 def test_feature_steps_hidden_without_the_feature(account, monkeypatch):
     _usable(monkeypatch, set())
     keys = set(_keys(account))
-    hidden = {"orders", "sales", "ai", "knowledge", "build", "profile", "instagram"}
+    hidden = {"orders", "sales", "ai", "knowledge", "build", "profile", "add_instagram"}
     hidden |= {"email_template", "email_campaign", "use"}
     assert not hidden & keys
     # Core things every business can do are always suggested.
@@ -182,7 +182,7 @@ def test_feature_steps_shown_when_usable(account, monkeypatch, settings):
         "ai",
         "knowledge",
         "profile",
-        "instagram",
+        "add_instagram",
         "post",
         "email_template",
         "email_campaign",

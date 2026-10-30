@@ -101,7 +101,6 @@ def onboarding_status(request):
         from apps.accounts.utils import current_membership
 
         membership = current_membership(request)
-        from apps.billing import api as billing_api
 
         return {
             "onboarding": state,
@@ -114,9 +113,10 @@ def onboarding_status(request):
             "onboarding_can_publish": state["can_publish"],
             # Only WhatsApp, Instagram and Facebook Page messages reach the inbox
             # (messaging truth rule).
+            # Like every channel step, trusts the signup pick (checked against the plan).
             "onboarding_has_inbox": state["wants_whatsapp"]
             or state["wants_instagram"]
-            or (state["wants_facebook"] and billing_api.usable(account, "facebook")),
+            or state["wants_facebook"],
             "onboarding_tour_channels": [
                 c for c in TOUR_CHANNELS if state[f"wants_{c['key']}"]
             ],
@@ -144,9 +144,9 @@ TOUR_CHANNELS = (
     {
         "key": "facebook",
         "label": "Facebook Page",
-        "icon": "image",
-        "href": "/publishing/channels/",
-        "note": "Publish and schedule posts to your Page",
+        "icon": "facebook",
+        "href": "/facebook/",
+        "note": "Page messages in the same inbox, comment replies, publishing",
     },
     {
         "key": "email",

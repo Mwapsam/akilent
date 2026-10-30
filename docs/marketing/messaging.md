@@ -109,7 +109,7 @@ Use these on feature cards, use-case pages, onboarding steps and in-app prompts.
 
 | Feature | Customer problem | Headline | Proof (screen) | Next step |
 |---|---|---|---|---|
-| Shared inbox (WhatsApp + Instagram) | "Messages get lost between phones and people" | Every enquiry in one shared inbox | `/inbox/`: conversation list with channel badges, assignment | Connect WhatsApp / Connect Instagram |
+| Shared inbox (WhatsApp, Instagram, Facebook Page) | "Messages get lost between phones and people" | Every enquiry in one shared inbox | `/inbox/`: conversation list with channel badges, assignment | Connect WhatsApp / Connect Instagram / Connect your Facebook Page |
 | Auto-replies | "Customers wait when we're busy or closed" | Customers hear back even when you're closed | `/automations/`: greeting, closed-hours and keyword starters | Turn on your first automation |
 | AI answers + knowledge | "We answer the same questions all day" | Answer recurring questions with your own business information | `/ai/`: knowledge list and suggested reply in the inbox | Teach AI about your business |
 | Instagram comment rules | "Comments asking 'price?' go unanswered" | Turn post comments into private conversations | `/instagram/` rules | Add a comment rule |

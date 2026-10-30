@@ -2,6 +2,8 @@
 
 Akilent is a **customer engagement and communications platform for businesses**.
 
+[![Architecture diagram](https://gitdiagram.com/diagram-badge.svg)](https://gitdiagram.com/mwapsam/akilent?utm_source=readme&utm_medium=badge)
+
 It helps businesses capture customer conversations, respond consistently, follow up with interested customers, keep their teams informed, and automate routine customer engagement through WhatsApp and email.
 
 The core idea is simple:

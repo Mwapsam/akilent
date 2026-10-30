@@ -73,7 +73,7 @@ def test_facebook_comes_after_instagram_and_completes_once_connected():
     from apps.publishing.models import FacebookPageConnection
 
     acc = _account(["facebook"])
-    assert ob.advance_onboarding(acc) == "/publishing/channels/"
+    assert ob.advance_onboarding(acc) == "/facebook/"
     FacebookPageConnection.objects.create(
         account=acc,
         page_id="1",
@@ -114,9 +114,9 @@ def test_restricted_instagram_is_not_recommended(monkeypatch):
         },
     )
     acc = _account(["whatsapp"])
-    assert "instagram" not in _keys(acc)
+    assert "add_instagram" not in _keys(acc)
     _open("instagram")
-    assert "instagram" in _keys(acc)
+    assert "add_instagram" in _keys(acc)
 
 
 def _all_usable(monkeypatch, keys):
@@ -170,17 +170,17 @@ def test_tour_flags_follow_the_picks(client, monkeypatch):
     html = client.get("/dashboard/").content.decode()
     tour = html.split("open-welcome-tour.window", 1)[1]
     assert 'href="/instagram/accounts/"' in tour
-    assert 'href="/publishing/channels/"' in tour
+    assert 'href="/facebook/"' in tour
     assert 'href="/whatsapp/numbers/"' not in tour
     assert "canPublish: true" in html
     assert "current === 'journey'" in html
-    # Instagram DMs reach the inbox, so the journey may promise it.
+    # Instagram and Facebook Page messages reach the inbox, so the journey may promise it.
     assert "your team answers from one inbox" in tour
 
 
 def test_tour_never_promises_an_inbox_without_one(client, monkeypatch):
     _all_usable(monkeypatch, {"content_studio"})
-    acc = _account(["facebook", "email"])
+    acc = _account(["email"])
     client.force_login(acc.memberships.get().user)
     tour = (
         client.get("/dashboard/")
@@ -191,5 +191,48 @@ def test_tour_never_promises_an_inbox_without_one(client, monkeypatch):
     assert "Talk" not in tour
     assert "Email them from your own domain" in tour
     assert "Some features depend on your plan." in tour
-    # Publish, Automate, Sell & measure: the odd last tile spans the row.
-    assert "col-span-2" in tour
+    # Automate and Sell & measure share the row, so no tile spans it.
+    assert "col-span-2" not in tour
+
+
+# --- Every channel is treated the same ---------------------------------------
+
+CHANNEL_KEYS = {
+    "whatsapp": "whatsapp",
+    "instagram": "instagram",
+    "facebook": "facebook",
+    "email": "email_sending",
+}
+
+
+@pytest.mark.parametrize("channel", ["whatsapp", "instagram", "facebook", "email"])
+def test_a_channel_the_plan_sells_but_was_not_picked_is_suggested(monkeypatch, channel):
+    _open("instagram", "facebook")
+    others = [c for c in CHANNEL_KEYS if c != channel]
+    acc = _account([others[0]])
+    _all_usable(monkeypatch, set())
+    assert f"add_{channel}" not in _keys(acc)
+    _all_usable(monkeypatch, {CHANNEL_KEYS[channel]})
+    keys = _keys(acc)
+    assert f"add_{channel}" in keys
+    # The channel that was picked is set up, never suggested.
+    assert f"add_{others[0]}" not in keys
+
+
+def test_a_facebook_page_is_an_inbox_channel_like_the_others(client, monkeypatch):
+    _all_usable(monkeypatch, {"facebook", "automations"})
+    acc = _account(["facebook"])
+    assert ob.advance_onboarding(acc) == "/facebook/"
+    keys = _keys(acc)
+    assert "build" in keys
+    step = next(s for s in ob.get_state(acc)["steps"] if s["key"] == "facebook_reply")
+    assert step["locked"] == "Connect your Facebook Page"
+
+    client.force_login(acc.memberships.get().user)
+    tour = (
+        client.get("/dashboard/")
+        .content.decode()
+        .split("open-welcome-tour.window", 1)[1]
+    )
+    assert 'href="/facebook/"' in tour
+    assert "your team answers from one inbox" in tour
