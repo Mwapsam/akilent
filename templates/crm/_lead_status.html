@@ -1,0 +1,5 @@
+{% comment %}A lead's status: still open (neutral), bought (success) or lost.{% endcomment %}
+{% if lead.status == "converted" %}<span class="badge badge-success">{{ lead.get_status_display }}</span>
+{% elif lead.status == "lost" %}<span class="badge badge-danger">{{ lead.get_status_display }}</span>
+{% elif lead.status == "qualified" %}<span class="badge badge-info">{{ lead.get_status_display }}</span>
+{% else %}<span class="badge badge-neutral">{{ lead.get_status_display }}</span>{% endif %}

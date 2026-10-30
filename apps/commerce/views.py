@@ -8,6 +8,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -20,6 +21,8 @@ from apps.conversations import attribution
 from apps.core.actions import ActionError, run_action
 from apps.core.module_gate import module_required
 
+ORDERS_PER_PAGE = 50
+
 
 @login_required
 @module_required("orders")
@@ -29,7 +32,22 @@ def orders(request):
         return redirect("dashboard")
 
     view = (request.GET.get("view") or "needs_attention").strip()
-    qs = Order.objects.filter(account=account).select_related("contact")
+    qs = (
+        Order.objects.filter(account=account)
+        .select_related("contact")
+        .order_by("-created_at", "-pk")
+    )
+    # ?contact=<public_id>: one customer's orders (the profile's "Orders" count links here).
+    # An id that isn't this business's customer is ignored rather than showing an empty list.
+    for_contact = (
+        Contact.objects.filter(
+            account=account, public_id=request.GET.get("contact") or ""
+        ).first()
+        if request.GET.get("contact")
+        else None
+    )
+    if for_contact is not None:
+        qs = qs.filter(contact=for_contact)
     if view == "all":
         pass
     else:
@@ -41,8 +59,9 @@ def orders(request):
         "commerce/orders.html",
         {
             "account": account,
-            "page": qs,
+            "page": Paginator(qs, ORDERS_PER_PAGE).get_page(request.GET.get("page")),
             "view": view,
+            "for_contact": for_contact,
             "needs_attention_count": Order.objects.filter(
                 account=account,
                 status__in=[Order.Status.PENDING, Order.Status.AWAITING_PAYMENT],

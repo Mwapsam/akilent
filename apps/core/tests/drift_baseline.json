@@ -1,7 +1,4 @@
 {
-  "commerce::gray-text": 14,
-  "contacts::gray-text": 86,
-  "crm::gray-text": 19,
   "docs::hex-style": 10,
   "email::gray-text": 69,
   "email::hex-style": 6,
@@ -10,7 +7,5 @@
   "legal::hex-style": 1,
   "logs::gray-text": 45,
   "manage::gray-text": 128,
-  "public::hex-style": 24,
-  "scheduler::gray-text": 2,
-  "verticals::gray-text": 2
+  "public::hex-style": 24
 }

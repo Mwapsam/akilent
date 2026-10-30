@@ -3,21 +3,21 @@
 
 {% block content %}
 <div class="mb-6">
-  <a href="{% url 'commerce:orders' %}" class="text-sm text-gray-500 hover:text-ink">&larr; Orders</a>
-  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink mt-1 font-mono">{{ order.public_id }}</h1>
-  <p class="text-sm text-gray-500">
-    {% if order.status == 'paid' %}<span class="badge badge-success">Paid</span>
-    {% elif order.status == 'failed' or order.status == 'cancelled' %}<span class="badge badge-danger">{{ order.get_status_display }}</span>
-    {% else %}<span class="badge badge-neutral">{{ order.get_status_display }}</span>{% endif %}
-  </p>
+  <nav class="text-xs text-ink-subtle" aria-label="Breadcrumb">
+    <a href="{% url 'commerce:orders' %}" class="hover:text-ink">Orders</a>
+    <span aria-hidden="true">/</span>
+    <span class="text-ink" aria-current="page">{{ order.public_id }}</span>
+  </nav>
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink mt-1 font-mono break-all">{{ order.public_id }}</h1>
+  <p class="mt-1">{% include "commerce/_order_status.html" %}</p>
 </div>
 
 <div class="grid gap-6 lg:grid-cols-3">
   <section class="card card-pad text-sm space-y-2">
-    <div class="flex justify-between"><span class="text-gray-500">Customer</span><span>{{ order.contact.full_name|default:order.contact.phone }}</span></div>
-    <div class="flex justify-between"><span class="text-gray-500">Total</span><span>{{ order.currency }} {{ order.total }}</span></div>
-    <div class="flex justify-between"><span class="text-gray-500">Placed</span><span>{{ order.created_at|date:"Y-m-d H:i" }}</span></div>
-    {% if order.paid_at %}<div class="flex justify-between"><span class="text-gray-500">Paid</span><span>{{ order.paid_at|date:"Y-m-d H:i" }}</span></div>{% endif %}
+    <div class="flex justify-between"><span class="text-ink-subtle">Customer</span><span>{{ order.contact.full_name|default:order.contact.phone }}</span></div>
+    <div class="flex justify-between"><span class="text-ink-subtle">Total</span><span>{{ order.currency }} {{ order.total }}</span></div>
+    <div class="flex justify-between"><span class="text-ink-subtle">Placed</span><span>{{ order.created_at|date:"Y-m-d H:i" }}</span></div>
+    {% if order.paid_at %}<div class="flex justify-between"><span class="text-ink-subtle">Paid</span><span>{{ order.paid_at|date:"Y-m-d H:i" }}</span></div>{% endif %}
     {% include "publishing/_source_post.html" with subject=order %}
     <a href="{% url 'contacts:detail' order.contact.public_id %}" class="btn btn-ghost btn-sm w-full mt-2">View full profile</a>
   </section>
@@ -25,31 +25,32 @@
   {% if origin_insight %}
   <section class="card card-pad text-sm lg:col-span-3 space-y-3">
     <h2 class="text-base font-semibold text-ink">Customer journey</h2>
-    <div class="flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
-      <span class="badge badge-neutral">{{ origin_insight.type|title }}</span>
-      <span>→</span>
-      <span class="badge badge-neutral">Opportunity</span>
-      <span>→</span>
-      <span class="badge badge-neutral">{% include "components/channel_tag.html" with channel=order.contact.source compact=True %} DM</span>
-      <span>→</span>
-      <span class="badge badge-neutral">Conversation</span>
-      <span>→</span>
-      <span class="badge badge-neutral">Lead</span>
-      <span>→</span>
-      <span class="badge badge-success">Order</span>
-    </div>
+    {% comment %}Only the links that are recorded: the insight's recommendation started the
+    conversation the order was credited to. Nothing in between (a lead, the channel) is claimed.{% endcomment %}
+    <ol class="flex flex-wrap items-center gap-1.5 text-xs text-ink-subtle" aria-label="How this order came about">
+      <li><span class="badge badge-neutral">Insight</span></li>
+      <li aria-hidden="true">→</li>
+      <li><span class="badge badge-neutral">Conversation</span></li>
+      <li aria-hidden="true">→</li>
+      <li><span class="badge {% if order.status == 'paid' %}badge-success{% else %}badge-neutral{% endif %}">Order{% if order.status != 'paid' %} · not paid yet{% endif %}</span></li>
+    </ol>
     <div class="pt-2 border-t border-border space-y-1">
-      <p class="text-gray-500">Attribution</p>
+      <p class="text-ink-subtle">Attribution</p>
       <p>
-        <span class="text-gray-500">Originated from:</span>
+        <span class="text-ink-subtle">Originated from:</span>
         <a href="{% url 'insights' %}#insight-{{ origin_insight.pk }}" class="font-medium text-ink underline">{{ origin_insight.title }}</a>
       </p>
       <p>
-        <span class="text-gray-500">Attributed revenue:</span>
+        {% if order.status == 'paid' %}
+        <span class="text-ink-subtle">Attributed revenue:</span>
         <span class="font-medium text-ink">{{ order.currency }} {{ order.total }}</span>
+        {% else %}
+        <span class="text-ink-subtle">Order value, not paid yet:</span>
+        <span class="font-medium text-ink">{{ order.currency }} {{ order.total }}</span>
+        {% endif %}
       </p>
     </div>
-    <p class="text-xs text-gray-400">ⓘ Attribution shows provenance, not proof of causation.</p>
+    <p class="text-xs text-ink-subtle">ⓘ Attribution shows provenance, not proof of causation.</p>
   </section>
   {% endif %}
 
@@ -65,7 +66,7 @@
               <td data-label="Line total" class="text-right">{{ order.currency }} {{ item.line_total }}</td>
             </tr>
             {% empty %}
-            <tr><td data-label="Item" class="text-gray-500">This order has no line items.</td></tr>
+            <tr><td data-label="Item" class="text-ink-subtle">This order has no line items.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -74,18 +75,27 @@
 
     <div class="card card-pad">
       <h2 class="text-lg font-semibold text-ink mb-3">Payment</h2>
+      {% comment %}Said as the records have it. A link is only "ready to share" while its payment
+      is still pending; a failed attempt says so; a closed order offers nothing to collect.{% endcomment %}
       {% if payment and payment.status == 'succeeded' %}
-        <p class="text-sm text-gray-600">Paid via {{ payment.provider }} — transaction {{ payment.transaction_id }}.</p>
-      {% elif payment and payment.checkout_url %}
-        <p class="text-sm text-gray-600 mb-2">Payment link created — share it with the customer to collect payment.</p>
-        <a href="{{ payment.checkout_url }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">Open checkout link</a>
+        <p class="text-sm text-ink-muted">Paid via {{ payment.provider }} — transaction {{ payment.transaction_id }}.</p>
       {% elif order.status == 'paid' %}
-        <p class="text-sm text-gray-600">Paid.</p>
+        <p class="text-sm text-ink-muted">Paid.</p>
+      {% elif order.status == 'refunded' %}
+        <p class="text-sm text-ink-muted" data-payment="refunded">Refunded. There's nothing to collect.</p>
+      {% elif order.status == 'cancelled' %}
+        <p class="text-sm text-ink-muted" data-payment="cancelled">This order was cancelled, so there's nothing to collect.</p>
+      {% elif payment and payment.status == 'pending' and payment.checkout_url %}
+        <p class="text-sm text-ink-muted mb-2" data-payment="link-pending">Payment link created. Share it with the customer; this page shows Paid once they've paid.</p>
+        <a href="{{ payment.checkout_url }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">Open checkout link</a>
       {% else %}
-        <form method="post">
+        {% if payment and payment.status == 'failed' %}
+        <div class="alert alert-danger mb-3" role="status" data-payment="failed">The last payment attempt failed. You can send the customer a new link.</div>
+        {% endif %}
+        <form method="post" data-busy-submit>
           {% csrf_token %}
           <input type="hidden" name="action" value="request_payment" />
-          <button class="btn btn-primary">Request payment</button>
+          <button class="btn btn-primary">{% if payment and payment.status == 'failed' %}Request payment again{% else %}Request payment{% endif %}</button>
         </form>
       {% endif %}
     </div>

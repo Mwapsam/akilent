@@ -3,9 +3,9 @@
 
 {% block content %}
 <header class="mb-6">
-  <a href="{% url 'contacts:list' %}" class="text-sm text-gray-500 hover:text-ink">&larr; Customers</a>
+  <a href="{% url 'contacts:list' %}" class="inline-flex items-center min-h-6 text-sm text-ink-subtle hover:text-ink">&larr; Customers</a>
   <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink mt-1">Possible duplicates</h1>
-  <p class="mt-1 text-sm text-gray-600 max-w-2xl">Customers who share an email or a phone number, or have the same full name. Compare each pair and merge, or mark them as different people.</p>
+  <p class="mt-1 text-sm text-ink-muted max-w-2xl">Customers who share an email or a phone number, or have the same full name. Compare each pair and merge, or mark them as different people.</p>
 </header>
 
 {% if pairs %}
@@ -14,7 +14,7 @@
   <li class="px-4 py-3 flex flex-wrap items-center justify-between gap-3">
     <span class="min-w-0 text-sm">
       <a href="{% url 'contacts:detail' a.public_id %}" class="font-medium text-accent hover:text-accent-strong">{{ a.full_name|default:a.phone|default:a.email }}</a>
-      <span class="text-gray-400">and</span>
+      <span class="text-ink-subtle">and</span>
       <a href="{% url 'contacts:detail' b.public_id %}" class="font-medium text-accent hover:text-accent-strong">{{ b.full_name|default:b.phone|default:b.email }}</a>
     </span>
     <span class="flex gap-2">

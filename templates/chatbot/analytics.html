@@ -6,7 +6,7 @@
 
   {# ── Header ─────────────────────────────────────────────────────────────── #}
   <div class="flex items-center gap-3">
-    <a href="{% url 'chatbot:detail' bot.pk %}" class="text-ink-subtle hover:text-ink">
+    <a href="{% url 'chatbot:detail' bot.pk %}" class="btn-icon text-ink-subtle hover:text-ink" aria-label="Back">
       {% include "components/icon.html" with name="arrow-left" class="w-5 h-5" %}
     </a>
     <h1 class="text-2xl font-semibold text-ink flex-1">{{ bot.name }} — Analytics</h1>

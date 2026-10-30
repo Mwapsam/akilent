@@ -3,9 +3,9 @@
 
 {% block content %}
 <header class="mb-6">
-  <a href="{% url 'contacts:list' %}" class="text-sm text-gray-500 hover:text-ink">&larr; Customers</a>
+  <a href="{% url 'contacts:list' %}" class="inline-flex items-center min-h-6 text-sm text-ink-subtle hover:text-ink">&larr; Customers</a>
   <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink mt-1">Customer details you keep</h1>
-  <p class="mt-1 text-sm text-gray-600 max-w-2xl">Add your own details to every customer — like birthday, area or favourite order. They show on each profile and can be used in segments.</p>
+  <p class="mt-1 text-sm text-ink-muted max-w-2xl">Add your own details to every customer — like birthday, area or favourite order. They show on each profile and can be used in segments.</p>
 </header>
 
 {% if error %}
@@ -36,8 +36,8 @@
               </form>
               {% endif %}
             </td>
-            <td data-label="Kind" class="text-gray-600">{{ d.get_type_display }}</td>
-            <td data-label="Options" class="text-gray-600">{% for o in d.options %}{{ o.label }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</td>
+            <td data-label="Kind" class="text-ink-muted">{{ d.get_type_display }}</td>
+            <td data-label="Options" class="text-ink-muted">{% for o in d.options %}{{ o.label }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</td>
             <td class="text-right whitespace-nowrap">
               {% if can_manage %}
               <button type="button" class="btn btn-ghost btn-sm" x-show="!editing" @click="editing = true">Edit</button>
@@ -57,11 +57,11 @@
     {% endif %}
 
     {% if archived %}
-    <h2 class="mt-8 text-sm font-semibold text-gray-500 uppercase tracking-wide">Archived</h2>
+    <h2 class="mt-8 text-sm font-semibold text-ink-subtle uppercase tracking-wide">Archived</h2>
     <ul class="mt-2 divide-y divide-border card">
       {% for d in archived %}
       <li class="px-4 py-2 flex items-center justify-between text-sm">
-        <span class="text-gray-600">{{ d.label|default:d.key }}</span>
+        <span class="text-ink-muted">{{ d.label|default:d.key }}</span>
         {% if can_manage %}
         <form method="post" action="{% url 'contacts:field_archive' d.pk %}">{% csrf_token %}<input type="hidden" name="restore" value="1"><button class="btn btn-ghost btn-sm">Bring back</button></form>
         {% endif %}
@@ -87,7 +87,7 @@
         </select>
       </div>
       <div x-show="type === 'choice'" x-cloak>
-        <label class="label" for="new-options">Options <span class="font-normal text-gray-400">(one per line)</span></label>
+        <label class="label" for="new-options">Options <span class="font-normal text-ink-subtle">(one per line)</span></label>
         <textarea id="new-options" name="options" rows="4" class="input" placeholder="Lusaka&#10;Ndola&#10;Kitwe"></textarea>
       </div>
       <button class="btn btn-primary btn-sm">Add detail</button>

@@ -96,7 +96,7 @@
       {% csrf_token %}
       <input type="hidden" name="action" value="reply">
       <textarea name="body" rows="3" placeholder="Write a reply…"
-                class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-accent"></textarea>
+                class="textarea resize-none"></textarea>
       <div class="mt-2 flex justify-end">
         <button type="submit" class="btn btn-primary btn-sm">Send reply</button>
       </div>
@@ -120,7 +120,7 @@
       {% csrf_token %}
       <input type="hidden" name="action" value="internal_note">
       <textarea name="body" rows="3" placeholder="Add an internal note (not visible to customer)…"
-                class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-accent"></textarea>
+                class="textarea resize-none"></textarea>
       <div class="mt-2 flex justify-end">
         <button type="submit" class="btn btn-secondary btn-sm">Add note</button>
       </div>

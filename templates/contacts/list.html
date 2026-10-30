@@ -22,7 +22,7 @@
 <header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
   <div class="min-w-0">
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Customers</h1>
-    <p class="mt-1 text-sm text-gray-600">{{ total }} customer{{ total|pluralize }}. Group them into lists to send WhatsApp campaigns.</p>
+    <p class="mt-1 text-sm text-ink-muted">{{ total }} customer{{ total|pluralize }}. Group them into lists to send WhatsApp campaigns.</p>
   </div>
   <div class="flex flex-wrap items-center gap-2">
     <a href="{% url 'contacts:lists' %}" class="btn btn-secondary btn-sm">
@@ -130,7 +130,7 @@
     <template x-for="id in selected" :key="id"><input type="hidden" name="ids" :value="id"></template>
     <input type="hidden" name="all_matching" :value="allMatching ? '1' : ''">
     <input type="hidden" name="filter" :value="window.location.search.replace(/^\?/, '')">
-    <p class="text-sm text-gray-600">Add a tag to <strong x-text="count.toLocaleString()"></strong> customer<span x-show="count !== 1">s</span>, or take it off them.</p>
+    <p class="text-sm text-ink-muted">Add a tag to <strong x-text="count.toLocaleString()"></strong> customer<span x-show="count !== 1">s</span>, or take it off them.</p>
     <div>
       <label class="label" for="bulk-tag-name">Tag</label>
       <input id="bulk-tag-name" name="tag" class="input" list="bulk-known-tags" maxlength="40" placeholder="e.g. VIP" required>
@@ -151,7 +151,7 @@
     <template x-for="id in selected" :key="id"><input type="hidden" name="ids" :value="id"></template>
     <input type="hidden" name="all_matching" :value="allMatching ? '1' : ''">
     <input type="hidden" name="filter" :value="window.location.search.replace(/^\?/, '')">
-    <p class="text-sm text-gray-600">This permanently deletes <strong x-text="count.toLocaleString()"></strong> customer<span x-show="count !== 1">s</span> and everything about them — conversations, orders, notes and history. It can't be undone.</p>
+    <p class="text-sm text-ink-muted">This permanently deletes <strong x-text="count.toLocaleString()"></strong> customer<span x-show="count !== 1">s</span> and everything about them — conversations, orders, notes and history. It can't be undone.</p>
     <div>
       <label class="label" for="bulk-delete-confirm">Type <strong>delete</strong> to confirm</label>
       <input id="bulk-delete-confirm" name="confirm" class="input" x-model="typed" autocomplete="off">
@@ -172,7 +172,7 @@
     <template x-for="id in selected" :key="id"><input type="hidden" name="ids" :value="id"></template>
     <input type="hidden" name="all_matching" :value="allMatching ? '1' : ''">
     <input type="hidden" name="filter" :value="window.location.search.replace(/^\?/, '')">
-    <p class="text-sm text-gray-600">Add <strong x-text="count.toLocaleString()"></strong> customer<span x-show="count !== 1">s</span> to:</p>
+    <p class="text-sm text-ink-muted">Add <strong x-text="count.toLocaleString()"></strong> customer<span x-show="count !== 1">s</span> to:</p>
     <div>
       <label class="label" for="bulk-list">List</label>
       <select id="bulk-list" name="list" class="select" x-model="choice">
@@ -209,10 +209,10 @@
     <div>
       <label class="label" for="new-contact-phone">WhatsApp number</label>
       <input id="new-contact-phone" name="phone" class="input" inputmode="tel" placeholder="+260971234567" />
-      <p class="text-xs text-gray-500 mt-1">Include the country code so WhatsApp can reach them.</p>
+      <p class="text-xs text-ink-subtle mt-1">Include the country code so WhatsApp can reach them.</p>
     </div>
     <div>
-      <label class="label" for="new-contact-email">Email <span class="font-normal text-gray-400">(optional)</span></label>
+      <label class="label" for="new-contact-email">Email <span class="font-normal text-ink-subtle">(optional)</span></label>
       <input id="new-contact-email" name="email" type="email" class="input" placeholder="name@example.com" />
     </div>
     <div class="flex justify-end gap-2 pt-1">

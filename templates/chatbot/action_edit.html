@@ -4,7 +4,7 @@
 {% block content %}
 <div class="max-w-xl mx-auto py-8 px-4">
   <div class="flex items-center gap-3 mb-6">
-    <a href="{% url 'chatbot:detail' bot.pk %}" class="text-ink-subtle hover:text-ink">
+    <a href="{% url 'chatbot:detail' bot.pk %}" class="btn-icon text-ink-subtle hover:text-ink" aria-label="Back">
       {% include "components/icon.html" with name="arrow-left" class="w-5 h-5" %}
     </a>
     <h1 class="text-2xl font-semibold text-ink">
@@ -19,13 +19,6 @@
     The description is shown to the LLM so it knows when to invoke the action.
   </p>
 
-  {% if messages %}
-  <div class="mb-4 space-y-2">
-    {% for message in messages %}
-    <div class="{% if message.tags == 'error' %}alert-danger{% else %}alert-success{% endif %}">{{ message }}</div>
-    {% endfor %}
-  </div>
-  {% endif %}
 
   <form method="post"
         action="{% if action %}{% url 'chatbot:action-edit' bot.pk action.pk %}{% else %}{% url 'chatbot:action-create' bot.pk %}{% endif %}"
@@ -37,8 +30,7 @@
       <input type="text" id="slug" name="slug" required
              value="{{ action.slug|default:'' }}"
              placeholder="create_support_ticket"
-             {% if action %}readonly class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm font-mono text-ink-muted cursor-not-allowed"
-             {% else %}class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-accent"{% endif %}>
+             class="input font-mono"{% if action %} readonly{% endif %}>
       {% if action %}<p class="mt-1 text-xs text-ink-muted">Slug cannot be changed after creation.</p>{% endif %}
     </div>
 
@@ -47,7 +39,7 @@
       <input type="text" id="label" name="label" required
              value="{{ action.label|default:'' }}"
              placeholder="Create support ticket"
-             class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent">
+             class="input">
     </div>
 
     <div>
@@ -57,7 +49,7 @@
       </label>
       <textarea id="description" name="description" rows="3"
                 placeholder="Create a new support ticket from the chat session. Use this when the visitor requests human help or the bot cannot resolve the issue."
-                class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-accent">{{ action.description|default:'' }}</textarea>
+                class="textarea resize-none">{{ action.description|default:'' }}</textarea>
     </div>
 
     <div class="flex items-center gap-2">

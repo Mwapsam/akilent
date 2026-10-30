@@ -5,25 +5,15 @@
 <div class="max-w-3xl mx-auto py-8 px-4 space-y-6">
 
   <div class="flex items-center gap-3">
-    <a href="{% url 'chatbot:list' %}" class="text-ink-subtle hover:text-ink">
+    <a href="{% url 'chatbot:list' %}" class="btn-icon text-ink-subtle hover:text-ink" aria-label="Back">
       {% include "components/icon.html" with name="arrow-left" class="w-5 h-5" %}
     </a>
     <h1 class="text-2xl font-semibold text-ink flex-1">{{ bot.name }}</h1>
-    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs
-      {% if bot.is_active %}tone-teal{% else %}tone-neutral{% endif %}">
-      {% if bot.is_active %}Active{% else %}Inactive{% endif %}
-    </span>
+    {% include "chatbot/_status.html" %}
     <a href="{% url 'chatbot:analytics' bot.pk %}" class="btn btn-ghost btn-sm">Analytics</a>
     <a href="{% url 'chatbot:edit' bot.pk %}" class="btn btn-ghost btn-sm">Edit</a>
   </div>
 
-  {% if messages %}
-  <div class="space-y-2">
-    {% for message in messages %}
-    <div class="{% if message.tags == 'error' %}alert-danger{% else %}alert-success{% endif %}">{{ message }}</div>
-    {% endfor %}
-  </div>
-  {% endif %}
 
   {# ── Embed snippet ──────────────────────────────────────────────────────── #}
   <div class="card card-pad space-y-2">
@@ -51,7 +41,7 @@
   <div class="card card-pad space-y-2">
     <div class="flex items-center justify-between">
       <p class="text-xs font-semibold text-ink-subtle uppercase tracking-wide">Allowed domains</p>
-      <a href="{% url 'chatbot:edit' bot.pk %}" class="text-xs text-accent hover:underline">Edit</a>
+      <a href="{% url 'chatbot:edit' bot.pk %}" class="inline-flex items-center justify-center min-h-6 min-w-6 text-xs text-accent hover:underline" aria-label="Edit allowed domains">Edit</a>
     </div>
     {% if bot.allowed_domains %}
     <ul class="space-y-1">
@@ -82,10 +72,10 @@
           <input type="hidden" name="entry_id" value="{{ entry.pk }}">
           {% if entry.pk in linked_ids %}
           <input type="hidden" name="action" value="remove">
-          <button type="submit" class="text-xs text-ink-muted hover:text-coral">Remove</button>
+          <button type="submit" class="inline-flex items-center min-h-6 text-xs text-ink-muted hover:text-coral">Remove</button>
           {% else %}
           <input type="hidden" name="action" value="add">
-          <button type="submit" class="text-xs text-accent hover:underline">Add</button>
+          <button type="submit" class="inline-flex items-center min-h-6 text-xs text-accent hover:underline">Add</button>
           {% endif %}
         </form>
       </li>

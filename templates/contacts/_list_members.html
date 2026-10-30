@@ -27,10 +27,10 @@
         <tr>
           <td data-label="Customer">
             <a href="{% url 'contacts:detail' c.public_id %}" class="font-medium text-accent hover:text-accent-strong">{{ c.full_name|default:c.phone|default:c.email|default:"Unnamed customer" }}</a>
-            {% if c.full_name %}<span class="block text-xs text-gray-500 tabular-nums">{{ c.phone|default:c.email|default:"" }}</span>{% endif %}
+            {% if c.full_name %}<span class="block text-xs text-ink-subtle tabular-nums">{{ c.phone|default:c.email|default:"" }}</span>{% endif %}
           </td>
           <td data-label="WhatsApp">{% include "components/wa_state.html" with state=c.wa_state %}</td>
-          <td data-label="Last active" class="text-gray-500 tabular-nums">{{ c.last_engaged_at|date:"j M Y"|default:"—" }}</td>
+          <td data-label="Last active" class="text-ink-subtle tabular-nums">{{ c.last_engaged_at|date:"j M Y"|default:"—" }}</td>
           <td class="text-right">
             <form method="post" action="{% url 'contacts:list_remove_contact' contact_list.pk %}"
                   data-confirm="Remove {{ c.full_name|default:c.phone|default:c.email }} from “{{ contact_list.name }}”? They stay in your customers."

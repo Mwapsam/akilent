@@ -1,7 +1,7 @@
 {% comment %}Small info tooltip (hover/focus/tap). Usage:
   include components/help_tip.html with text="Storage capped by your plan."{% endcomment %}
 <span x-data="{ open: false }" class="relative inline-flex align-middle">
-  <button type="button" class="text-ink-subtle hover:text-ink-muted"
+  <button type="button" class="inline-flex items-center justify-center w-6 h-6 -m-1 text-ink-subtle hover:text-ink-muted"
           @mouseenter="open = true" @mouseleave="open = false"
           @focus="open = true" @blur="open = false" @click.prevent="open = !open"
           :aria-expanded="open" aria-label="More information">

@@ -6,7 +6,7 @@
 <header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
   <div>
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Interested customers</h1>
-    <p class="mt-1 text-sm text-gray-600">When someone asks about buying, keep track of them so you don't forget to follow up.</p>
+    <p class="mt-1 text-sm text-ink-muted">When someone asks about buying, keep track of them so you don't forget to follow up.</p>
   </div>
   <button class="btn btn-primary btn-sm" @click="$dispatch('modal-open', 'new-lead')">
     {% include "components/icon.html" with name="plus" class="w-4 h-4" %} Add someone
@@ -14,7 +14,10 @@
 </header>
 
 <section class="mb-8">
-  <h2 class="text-lg font-semibold text-ink mb-3">Everyone who showed interest</h2>
+  {% comment %}Only open leads are listed (new, contacted, qualified); people who bought or were
+  lost are on their own pages and in their profile.{% endcomment %}
+  <h2 class="text-lg font-semibold text-ink">Still deciding</h2>
+  <p class="text-sm text-ink-muted mb-3">Interested customers who haven't bought yet or been marked lost.</p>
   {% if leads %}
   <div class="table-wrap">
     <table class="table table--cards">
@@ -24,13 +27,14 @@
         <tr>
           <td data-label="Customer"><a href="{% url 'crm:lead-detail' lead.public_id %}" class="text-accent hover:text-accent-strong">{{ lead.contact.full_name|default:lead.contact.phone|default:lead.contact.email }}</a></td>
           <td data-label="Where they came from">{{ lead.source|default:"—" }}</td>
-          <td data-label="Where they stand"><span class="badge badge-neutral">{{ lead.get_status_display }}</span></td>
-          <td data-label="First interested" class="text-gray-500">{{ lead.created_at|date:"j M Y" }}</td>
+          <td data-label="Where they stand">{% include "crm/_lead_status.html" %}</td>
+          <td data-label="First interested" class="text-ink-subtle">{{ lead.created_at|date:"j M Y" }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+  {% include "components/pagination.html" with page=leads %}
   {% else %}
   <div class="table-wrap">
     {% include "components/empty_state.html" with icon="building" title="See who's considering buying" message="When a customer asks about buying, keep track of them here so nobody is forgotten. Akilent adds people automatically when they ask about price or availability — or you can add someone yourself." %}
@@ -46,18 +50,20 @@
 <section>
   <h2 class="text-lg font-semibold text-ink mb-3">Where each one stands</h2>
   {% if has_pipeline %}
-  <div class="grid gap-4" style="grid-template-columns: repeat({{ stages|length }}, minmax(0, 1fr));">
+  {% comment %}One column per stage only where there's room; on a phone each stage is a full-width
+  card, two per row on a tablet.{% endcomment %}
+  <div class="pipeline-grid" style="--stages: {{ stages|length }}">
     {% for stage in stages %}
     <div class="card card-pad">
       <h3 class="text-sm font-semibold text-ink mb-2">{{ stage.name }}</h3>
       <div class="space-y-2">
         {% for deal in stage.deals_in_stage %}
-        <a href="{% url 'crm:deal-detail' deal.public_id %}" class="block rounded-lg border border-border p-2 text-sm hover:border-brand-400">
+        <a href="{% url 'crm:deal-detail' deal.public_id %}" class="block rounded-lg border border-border p-2 text-sm hover:border-accent">
           <p class="font-medium text-ink">{{ deal.title }}</p>
-          <p class="text-gray-500">{{ deal.contact.full_name|default:deal.contact.phone }}</p>
+          <p class="text-ink-subtle">{{ deal.contact.full_name|default:deal.contact.phone }}</p>
         </a>
         {% empty %}
-        <p class="text-xs text-gray-400">Nobody here yet</p>
+        <p class="text-xs text-ink-subtle">Nobody here yet</p>
         {% endfor %}
       </div>
     </div>
@@ -76,7 +82,7 @@
     <div>
       <label class="label" for="lead-contact">Customer</label>
       <input id="lead-contact" name="contact" class="input" placeholder="Phone number or email" />
-      <p class="text-xs text-gray-400 mt-1">Must already be a contact (or pick their conversation below). <a href="/contacts/" class="underline">Find or add one first</a>.</p>
+      <p class="text-xs text-ink-subtle mt-1">Must already be a contact (or pick their conversation below). <a href="/contacts/" class="underline">Find or add one first</a>.</p>
     </div>
     {% include "conversations/_attribution_picker.html" with pid="lead-conversation" %}
     <div>
@@ -86,7 +92,7 @@
     <div>
       <label class="label" for="lead-value">What it could be worth (optional)</label>
       <input id="lead-value" name="value" type="number" step="0.01" min="0" class="input" placeholder="e.g. 500" />
-      <p class="text-xs text-gray-400 mt-1">Adding a value starts tracking them through New, Contacted, Won and Lost.</p>
+      <p class="text-xs text-ink-subtle mt-1">Adding a value starts tracking them through New, Contacted, Won and Lost.</p>
     </div>
     <div class="flex justify-end gap-2 pt-1">
       <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close')">Cancel</button>

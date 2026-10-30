@@ -3,16 +3,20 @@
 
 {% block content %}
 <div class="mb-6">
-  <a href="{% url 'automation:list' %}" class="text-sm text-gray-500 hover:text-ink">&larr; Automations</a>
+  <nav class="text-xs text-ink-subtle" aria-label="Breadcrumb">
+    <a href="{% url 'automation:list' %}" class="hover:text-ink">Automations</a>
+    <span aria-hidden="true">/</span>
+    <span class="text-ink" aria-current="page">Starter packs</span>
+  </nav>
   <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink mt-1">Starter packs</h1>
-  <p class="mt-1 text-sm text-gray-600">Pre-built automations for how your business operates — activate one to get a working system in a click, no workflow building required.</p>
+  <p class="mt-1 text-sm text-ink-muted">Pre-built automations for how your business operates — activate one to get a working system in a click, no workflow building required.</p>
 </div>
 
 <div class="grid gap-6 md:grid-cols-2">
   {% for v in verticals %}
   <div class="card card-pad">
     <h2 class="text-lg font-semibold text-ink">{{ v.name }} Starter</h2>
-    <p class="text-sm text-gray-500 mb-3">{{ v.tagline }}</p>
+    <p class="text-sm text-ink-subtle mb-3">{{ v.tagline }}</p>
     <ul class="space-y-1.5 mb-4 text-sm">
       {% for item in v.checklist %}
       <li class="flex items-start gap-2">
@@ -23,14 +27,16 @@
     </ul>
     {% if v.key in activated %}
       <span class="badge badge-success">Activated</span>
-      <form method="post" action="{% url 'verticals:activate' v.key %}" class="inline">
+      <form method="post" action="{% url 'verticals:activate' v.key %}" class="inline"
+            data-confirm="Re-sync the {{ v.name }} starter? Its automations go back to the starter versions: changes you made to them are replaced, and any you paused are turned back on." data-confirm-label="Re-sync" data-confirm-danger>
         {% csrf_token %}
-        <button class="btn btn-ghost btn-sm ml-2">Re-sync</button>
+        <button class="btn btn-ghost btn-sm ml-2" aria-label="Re-sync {{ v.name }} starter">Re-sync</button>
       </form>
     {% else %}
-      <form method="post" action="{% url 'verticals:activate' v.key %}">
+      <form method="post" action="{% url 'verticals:activate' v.key %}"
+            data-confirm="Activate the {{ v.name }} starter? Its automations go live straight away and start acting on your customers. You can pause any of them later." data-confirm-label="Activate">
         {% csrf_token %}
-        <button class="btn btn-primary btn-sm">Activate</button>
+        <button class="btn btn-primary btn-sm" aria-label="Activate {{ v.name }} starter">Activate</button>
       </form>
     {% endif %}
   </div>

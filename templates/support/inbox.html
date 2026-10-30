@@ -40,8 +40,9 @@
       <div class="flex items-center gap-2">
         <form method="get" class="flex items-center gap-2">
           {% if active_queue %}<input type="hidden" name="queue" value="{{ active_queue }}">{% endif %}
-          <select name="status" onchange="this.form.submit()"
-                  class="text-sm border border-border rounded-md px-2 py-1 bg-surface">
+          <label class="sr-only" for="ticket-status">Show tickets</label>
+          <select name="status" id="ticket-status" onchange="this.form.requestSubmit()"
+                  class="select w-auto">
             <option value="open" {% if status_filter == "open" %}selected{% endif %}>Open</option>
             <option value="resolved" {% if status_filter == "resolved" %}selected{% endif %}>Resolved</option>
             <option value="closed" {% if status_filter == "closed" %}selected{% endif %}>Closed</option>

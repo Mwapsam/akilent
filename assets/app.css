@@ -1356,6 +1356,12 @@
 
   .chart-legend { @apply flex flex-wrap items-center gap-x-4 gap-y-1 mb-2 text-xs; color: var(--color-ink-subtle); }
   .chart-legend-item { @apply inline-flex items-center gap-1.5; }
+  /* Links in table cells (a name, an order number, a sort header) are the row's way in, not
+     words in a sentence, so they get the 24px minimum target (WCAG 2.5.8). */
+  .table :is(td, th) a:not(.btn) { display: inline-block; min-height: 1.5rem; line-height: 1.5rem; }
+  /* CRM pipeline: a column per stage on wide screens only (--stages set inline). */
+  .pipeline-grid { @apply grid gap-4 grid-cols-1 sm:grid-cols-2; }
+  @media (min-width: 64rem) { .pipeline-grid { grid-template-columns: repeat(var(--stages, 4), minmax(0, 1fr)); } }
   .chart-empty { @apply text-sm py-6 text-center; color: var(--color-ink-muted); }
   .chart-swatch { @apply inline-block w-2.5 h-2.5 rounded-sm shrink-0; }
   .chart-swatch--good { background: var(--chart-good); }

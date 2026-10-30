@@ -3,12 +3,11 @@
 <div class="rounded-xl border border-border divide-y divide-border">
 
   <div class="px-4 py-3">
-    <p class="text-xs font-semibold text-ink-subtle uppercase tracking-wide mb-2">Status</p>
+    <label for="ticket-status-{{ ticket.pk }}" class="block text-xs font-semibold text-ink-subtle uppercase tracking-wide mb-2">Status</label>
     <form method="post" action="{% url 'support:detail' ticket.ticket_number %}">
       {% csrf_token %}
       <input type="hidden" name="action" value="change_status">
-      <select name="status" onchange="this.form.submit()"
-              class="w-full text-sm rounded-md border border-border bg-surface px-2 py-1.5">
+      <select name="status" id="ticket-status-{{ ticket.pk }}" onchange="this.form.requestSubmit()" class="select">
         {% for val, label in status_choices %}
         <option value="{{ val }}" {% if ticket.status == val %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
@@ -17,12 +16,11 @@
   </div>
 
   <div class="px-4 py-3">
-    <p class="text-xs font-semibold text-ink-subtle uppercase tracking-wide mb-2">Priority</p>
+    <label for="ticket-priority-{{ ticket.pk }}" class="block text-xs font-semibold text-ink-subtle uppercase tracking-wide mb-2">Priority</label>
     <form method="post" action="{% url 'support:detail' ticket.ticket_number %}">
       {% csrf_token %}
       <input type="hidden" name="action" value="change_priority">
-      <select name="priority" onchange="this.form.submit()"
-              class="w-full text-sm rounded-md border border-border bg-surface px-2 py-1.5">
+      <select name="priority" id="ticket-priority-{{ ticket.pk }}" onchange="this.form.requestSubmit()" class="select">
         {% for val, label in priority_choices %}
         <option value="{{ val }}" {% if ticket.priority == val %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
@@ -31,12 +29,11 @@
   </div>
 
   <div class="px-4 py-3">
-    <p class="text-xs font-semibold text-ink-subtle uppercase tracking-wide mb-2">Assigned to</p>
+    <label for="ticket-agent-id-{{ ticket.pk }}" class="block text-xs font-semibold text-ink-subtle uppercase tracking-wide mb-2">Assigned to</label>
     <form method="post" action="{% url 'support:detail' ticket.ticket_number %}">
       {% csrf_token %}
       <input type="hidden" name="action" value="assign">
-      <select name="agent_id" onchange="this.form.submit()"
-              class="w-full text-sm rounded-md border border-border bg-surface px-2 py-1.5">
+      <select name="agent_id" id="ticket-agent-id-{{ ticket.pk }}" onchange="this.form.requestSubmit()" class="select">
         <option value="">— Unassigned —</option>
         {% for agent in agents %}
         <option value="{{ agent.pk }}" {% if ticket.assigned_agent_id == agent.pk %}selected{% endif %}>
@@ -99,13 +96,15 @@
   <form method="post" action="{% url 'support:detail' ticket.ticket_number %}">
     {% csrf_token %}
     <input type="hidden" name="action" value="escalate">
-    <select name="to_level" class="w-full text-sm rounded-md border border-border bg-surface px-2 py-1.5 mb-2">
+    <label class="sr-only" for="escalate-level-{{ ticket.pk }}">Escalate to</label>
+    <select name="to_level" id="escalate-level-{{ ticket.pk }}" class="select mb-2">
       <option value="l2">L2</option>
       <option value="l3">L3</option>
       <option value="l4">L4</option>
     </select>
-    <textarea name="notes" rows="2" placeholder="Escalation notes…"
-              class="w-full text-sm rounded-md border border-border bg-surface px-2 py-1.5 resize-none mb-2"></textarea>
+    <label class="sr-only" for="escalate-notes-{{ ticket.pk }}">Escalation notes</label>
+    <textarea name="notes" id="escalate-notes-{{ ticket.pk }}" rows="2" placeholder="Escalation notes…"
+              class="textarea resize-none mb-2"></textarea>
     <button type="submit" class="w-full btn btn-secondary btn-sm">Escalate</button>
   </form>
 </div>

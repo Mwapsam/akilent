@@ -5,7 +5,7 @@
 {% block content %}
 <header class="mb-6">
   <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Scheduled</h1>
-  <p class="mt-1 text-sm text-gray-600">Everything queued to send later — single sends, campaigns, and recurring schedules, across every channel.</p>
+  <p class="mt-1 text-sm text-ink-muted">Everything queued to send later — single sends, campaigns, and recurring schedules, across every channel.</p>
 </header>
 
 <div x-data="scheduledView()" @reschedule-submitted.window="handleRescheduleSubmit($event.detail)">
@@ -19,7 +19,7 @@
   {% if groups %}
   {% for day, jobs in groups.items %}
   <section class="mb-6">
-    <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{{ day }}</h2>
+    <h2 class="text-xs font-semibold uppercase tracking-wide text-ink-subtle mb-2">{{ day }}</h2>
     <div class="table-wrap">
       <table class="table table--cards">
         <thead>
@@ -28,7 +28,7 @@
         <tbody>
           {% for job in jobs %}
           <tr id="job-{{ job.public_id }}">
-            <td data-label="Time" class="whitespace-nowrap text-gray-500 tabular-nums">{{ job.fire_at|date:"H:i" }} {{ job.tz }}</td>
+            <td data-label="Time" class="whitespace-nowrap text-ink-subtle tabular-nums">{{ job.fire_at|date:"H:i" }} {{ job.tz }}</td>
             <td data-label="Channel">
               {% if job.kind == 'whatsapp' %}{% include "components/channel_tag.html" with channel="whatsapp" %}
               {% else %}{% include "components/channel_tag.html" with channel="email" %}{% endif %}
@@ -72,7 +72,7 @@
   {% modal "reschedule-modal" %}
   <div class="space-y-4">
     <h2 class="text-lg font-semibold text-ink">Reschedule</h2>
-    <p class="text-sm text-gray-600">When would you like to send this?</p>
+    <p class="text-sm text-ink-muted">When would you like to send this?</p>
     <form @submit.prevent="
       const input = $el.querySelector('input[type=datetime-local]');
       if (!input.value) { window.toast('danger', 'Please select a date and time'); return; }

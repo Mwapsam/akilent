@@ -10,6 +10,7 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -54,6 +55,9 @@ def _origin_recommendation_for_lead(lead):
         return None
 
 
+LEADS_PER_PAGE = 50
+
+
 @login_required
 @module_required("sales")
 def sales(request):
@@ -61,10 +65,15 @@ def sales(request):
     if account is None:
         return redirect("dashboard")
 
-    leads = Lead.objects.filter(
-        account=account,
-        status__in=[Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED],
-    ).select_related("contact")
+    leads = Paginator(
+        Lead.objects.filter(
+            account=account,
+            status__in=[Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED],
+        )
+        .select_related("contact")
+        .order_by("-created_at", "-pk"),
+        LEADS_PER_PAGE,
+    ).get_page(request.GET.get("page"))
 
     pipeline = Pipeline.objects.filter(account=account, is_default=True).first()
     stages = list(pipeline.stages.all()) if pipeline else []

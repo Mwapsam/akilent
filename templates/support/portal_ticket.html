@@ -5,7 +5,7 @@
 {% block content %}
 <div class="max-w-2xl mx-auto py-6">
   <div class="flex items-center gap-3 mb-4">
-    <a href="{% url 'support:portal' %}" class="text-ink-subtle hover:text-ink">
+    <a href="{% url 'support:portal' %}" class="btn-icon text-ink-subtle hover:text-ink" aria-label="Back">
       {% include "components/icon.html" with name="arrow-left" class="w-5 h-5" %}
     </a>
     <span class="text-xs font-mono text-ink-subtle">{{ ticket.ticket_number }}</span>
@@ -49,7 +49,7 @@
   <form method="post" action="{% url 'support:portal-ticket' ticket.ticket_number %}" class="mt-6">
     {% csrf_token %}
     <textarea name="body" rows="4" placeholder="Reply to this ticket…"
-              class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-accent"></textarea>
+              class="textarea resize-none"></textarea>
     <div class="mt-2 flex justify-end">
       <button type="submit" class="btn btn-primary btn-sm">Send reply</button>
     </div>

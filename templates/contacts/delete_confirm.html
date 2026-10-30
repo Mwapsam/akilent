@@ -3,9 +3,9 @@
 
 {% block content %}
 <div class="max-w-xl">
-  <a href="{% url 'contacts:detail' contact.public_id %}" class="text-sm text-gray-500 hover:text-ink">&larr; Back to {{ contact.full_name|default:contact.phone|default:contact.email|default:"the customer" }}</a>
+  <a href="{% url 'contacts:detail' contact.public_id %}" class="inline-flex items-center min-h-6 text-sm text-ink-subtle hover:text-ink">&larr; Back to {{ contact.full_name|default:contact.phone|default:contact.email|default:"the customer" }}</a>
   <h1 class="text-2xl font-semibold tracking-tight text-ink mt-1">Delete {{ contact.full_name|default:contact.phone|default:contact.email|default:"this customer" }}?</h1>
-  <p class="mt-2 text-sm text-gray-600">This permanently removes the customer and everything about them from {{ account.company_name|default:"your business" }}. It can't be undone.</p>
+  <p class="mt-2 text-sm text-ink-muted">This permanently removes the customer and everything about them from {{ account.company_name|default:"your business" }}. It can't be undone.</p>
 
   <div class="card card-pad mt-4 text-sm">
     <p class="font-medium text-ink">What gets deleted</p>
@@ -13,7 +13,7 @@
       <li class="flex justify-between"><span>Their customer record, tags and list memberships</span></li>
       {% for label, n in removes %}<li class="flex justify-between"><span>{{ label }}</span><span class="tabular-nums text-ink font-medium">{{ n }}</span></li>{% endfor %}
     </ul>
-    <p class="mt-3 text-xs text-gray-500">If you use HubSpot, the contact is removed there too. Messages already delivered to their phone stay on their phone.</p>
+    <p class="mt-3 text-xs text-ink-subtle">If you use HubSpot, the contact is removed there too. Messages already delivered to their phone stay on their phone.</p>
   </div>
 
   <form method="post" class="mt-6 space-y-3" x-data="{ typed: '' }">

@@ -1465,3 +1465,92 @@ None new. All the changes are presentation; no backend states or rules changed. 
 | Implementation | **Done** |
 | Verification | **Done**: tests and 23/23 in the browser. **Open:** a screen-reader pass on the charts (table view and hover), and a real phone. |
 | Acceptance | **Pending your review** |
+
+## Entry 15: Phase 8, contacts, interested customers, orders, starter packs, chatbots and support (2026-10-30)
+
+You said to continue. This is Phase 8. The exit-gate task in each area: list, filter, detail, edit, and confirm before deleting.
+
+**Scope:** contacts (the reference area), CRM ("Interested customers"), commerce (orders), verticals (starter packs), chatbot, support (agent inbox and customer portal) and scheduler.
+- **seo:** only a meta-tag partial; no UI.
+- **Scheduler:** `templates/scheduler/index.html` is dead code. Its view now redirects to Campaigns → Scheduled. It was swept for tokens but not reworked; you may want to delete it.
+
+### Tested code
+
+| | |
+|---|---|
+| HEAD | `12b628c` |
+| Tracked changes | 42 files, +347 −299. `git diff HEAD --binary -- . ':!docs/design/ui-quality-log.md'` SHA-256 `139ce74c58e9e298…` |
+| Untracked | `apps/core/tests/test_small_areas_ui_quality.py`, `templates/chatbot/_status.html`, `templates/commerce/_order_status.html`, `templates/crm/_lead_status.html`, `tools/qa/small_areas_qa.mjs`. Combined SHA-256 `f118bba12320e5a2…` |
+
+### Defects found and fixed
+
+| # | Sev | Defect | Fix |
+|---|---|---|---|
+| D1 | High | **The order payment card said untrue things.** A failed payment still read "Payment link created — share it with the customer". Cancelled and refunded orders offered "Request payment". | The card follows the records. A pending link is "ready to share". A failed attempt says so and offers "Request payment again". Cancelled and refunded orders say there's nothing to collect. Request payment has a busy state. |
+| D2 | High | **A customer's "Orders: 3" link showed other people's orders.** It went to `/orders/?q=<phone>`, which the orders page ignores, so it opened everyone's orders needing attention. | The orders list takes `?contact=<public_id>` (this business's customers only; any other id is ignored). It shows "Showing orders for … · Show everyone's", and the tabs keep the filter. The profile links to it. |
+| D3 | Med | **"Needs attention" with nothing waiting looked like a brand-new account** ("Turn conversations into orders… Create your first order"). | "Nothing needs your attention. Every order is paid or closed." with a link to All. |
+| D4 | Med | **Orders and leads were unpaginated**, so every row rendered at once. | 50 per page with the shared pagination. Newest first. |
+| D5 | Med | **The order's "Customer journey" claimed steps that aren't recorded** (Opportunity, a channel "DM", Lead). It showed "Attributed revenue" for unpaid orders. | Only the recorded links: Insight → Conversation → Order, marked "not paid yet" until paid. An unpaid order shows "Order value, not paid yet". |
+| D6 | Med | **"Everyone who showed interest" listed only open leads.** Bought and lost leads were left out. | Renamed "Still deciding" and says who's included. Status badges have tones: bought (success), lost (danger), qualified (info). |
+| D7 | Med | **Starter packs changed live automations in one click.** Activate publishes them straight away. Re-sync puts back the starter versions, which replaces your edits and turns paused automations back on. | Both ask first and say exactly that. Re-sync uses danger styling. |
+| D8 | Med | **Chatbot and support forms were hand-styled at 14px**, so iOS zooms the page on every field, with their own focus ring. The ticket status, priority, assignee and escalate fields had no labels. The chatbot's Position choice reset after a validation error. | Shared `.input`/`.select`/`.textarea` (16px on phones). Labels added. The position choice is kept. |
+| D9 | Med | **A chatbot with no allowed sites said "Active"**, though its widget is refused everywhere. | A shared badge reads "Active · no sites allowed" (warning) in that case. |
+| D10 | Med | **CRM pipeline on a phone:** an inline `repeat(N, 1fr)` squeezed every stage into a narrow column. | `.pipeline-grid`: one column on a phone, two on a tablet, one per stage from `lg`. |
+| D11 | Med | **Status pickers used the amber primary button for the current state** (lead status, deal stage). The lead page's fields had no linked labels. | The current status is pressed (`aria-pressed`, secondary plus ring). The page's real action stays amber. Labels use `for`/`id`. |
+| D12 | Low | **Each chatbot save message showed twice** (inline and as a toast). Icon-only back arrows had no name (chatbot ×5, support portal ×2). | The inline lists are removed. Back arrows are named "Back". |
+| D13 | Low | **Targets under 24px:** links in table cells (names, order numbers, sort headers) app-wide, "← Customers"-style back links, the help tip "?", and small links on the contact and chatbot pages. | A shared rule: `.table :is(td, th) a:not(.btn)` gets a 24px minimum. The help tip button gets a 24px target with no layout shift. `min-h-6`/`min-w-6` on the rest. |
+| D14 | Low | **The list readiness legend put `<a>` directly inside `<dl>`** (invalid markup). The order and lead pages had no breadcrumbs. | A labelled group of links with `aria-current` on the active filter. Breadcrumbs added. |
+
+**Drift:** contacts, crm, commerce, scheduler and verticals all reach 0. Total 421 → 298, and the baseline was lowered.
+
+### Automated results
+
+| Command | Result |
+|---|---|
+| `pytest apps/contacts apps/crm apps/commerce apps/chatbot apps/support apps/verticals apps/scheduler apps/core` | All passed except the known `test_import_5000_contacts` timing failure, which also fails on a clean checkout. |
+| `test_small_areas_ui_quality.py` (new) | **19 tests, 20 cases, all pass:** filter-aware empty state, pagination and tabs, closed orders, failed vs pending payment, awaiting-payment tone, the customer filter (and refusing another business's customer), the "Still deciding" heading, the pipeline on a phone, lead labels and the pressed status, starter-pack confirms, the chatbot badge (both cases), messages shown once, shared fields, named back links, labelled support fields, valid legend markup. |
+| Re-run after the last fixes | Same packages plus drift and template-compile tests: exit 0. |
+| `ruff check`, `ruff format`, drift | Clean. Drift 298. |
+
+The full suite was not re-run for this phase.
+
+### Browser verification
+
+**`tools/qa/small_areas_qa.mjs`: 91 of 91.** Headless Chrome, signed in as the QA user. Data from scratchpad `p8_seed.py`: a customer on a list, a paid order, an order with a failed payment, a cancelled order, an open lead, and a chatbot with no sites. Every POST is answered by the harness, so nothing was written.
+- **Scans:** 20 pages at 1280 and 390, in both themes:
+  - contacts: list, profile, lists, list, segments, fields
+  - orders: both tabs and three orders
+  - CRM: interested customers and a lead
+  - starter packs
+  - chatbot: list, page and new
+  - support: inbox, portal and new ticket
+
+  No sideways scroll, no contrast failures, no targets under 24px.
+- **Phone fields:** every text field on the chatbot, ticket, lead and support pages is at least 16px.
+- **CRM:** the pipeline is one column on a phone.
+- **Contacts:** search, then profile, then delete, which stays disabled until "delete" is typed. The profile's order count opens exactly that customer's three orders.
+- **Orders:** the current tab is marked. The failed payment says so and offers a new link (not "Payment link created"), with an "Awaiting payment" badge. The cancelled order offers nothing to collect.
+- **Lead:** the current status is pressed and not amber; the fields are named.
+- **Starter pack:** Activate asks first, and Cancel sends nothing.
+- **Chatbot:** the bot with no sites shows "no sites allowed".
+
+**Found by the browser, not the tests:** the table-cell link target sizes (app-wide), the help tip, the small links, and the orders filter bug (D2).
+
+**Harness fixes:**
+- the lead check matched the header's theme toggle; it is now scoped to the status form
+- the theme switch now waits for the colour transitions before scanning (two false light-theme contrast readings)
+- one run hit a page-load timeout that didn't recur, and left a headless Chrome holding the port, which was stopped
+
+Screenshots are in `docs/design/qa/phase8/` (local only).
+
+### Backend gaps
+
+None new. The orders customer filter and pagination are read-only list options. No states or rules changed. G5–G9 still need your authorization.
+
+### Sign-offs
+
+| Gate | Status |
+|---|---|
+| Implementation | **Done** |
+| Verification | **Done**: tests and 91/91 in the browser. **Open:** a screen-reader pass and a real phone (the iOS zoom fix especially). |
+| Acceptance | **Pending your review** |

@@ -3,12 +3,12 @@
 
 {% block content %}
 <header class="mb-6">
-  <nav class="mb-1 flex items-center gap-1.5 text-xs text-gray-500" aria-label="Breadcrumb">
+  <nav class="mb-1 flex items-center gap-1.5 text-xs text-ink-subtle" aria-label="Breadcrumb">
     <a href="{% url 'contacts:segments' %}" class="hover:text-ink">Segments</a>
     <span aria-hidden="true">/</span><span class="text-ink">{% if segment %}{{ segment.name }}{% else %}New segment{% endif %}</span>
   </nav>
   <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">{% if segment %}Edit segment{% else %}New segment{% endif %}</h1>
-  <p class="mt-1 text-sm text-gray-600">Choose the rules. The count on the right updates as you go.</p>
+  <p class="mt-1 text-sm text-ink-muted">Choose the rules. The count on the right updates as you go.</p>
 </header>
 
 {% if error %}
@@ -69,7 +69,7 @@
                 </select>
               </template>
               <template x-if="field(rule).type === 'number'">
-                <span class="flex items-center gap-2"><input type="number" min="0" class="input" :id="'v-' + rule.id" x-model="rule.value"><span class="text-sm text-gray-600" x-text="field(rule).unit"></span></span>
+                <span class="flex items-center gap-2"><input type="number" min="0" class="input" :id="'v-' + rule.id" x-model="rule.value"><span class="text-sm text-ink-muted" x-text="field(rule).unit"></span></span>
               </template>
               <template x-if="field(rule).type === 'text'">
                 <input type="text" class="input" :id="'v-' + rule.id" x-model="rule.value">
@@ -78,7 +78,7 @@
             <button type="button" class="btn btn-ghost btn-sm min-h-[44px]" @click="rules.splice(i, 1)" :aria-label="'Remove rule ' + (i + 1)">{% include "components/icon.html" with name="x" class="w-4 h-4" %}</button>
           </div>
         </template>
-        <p x-show="!rules.length" class="text-sm text-gray-500">No rules yet.</p>
+        <p x-show="!rules.length" class="text-sm text-ink-subtle">No rules yet.</p>
         <button type="button" class="btn btn-secondary btn-sm" @click="addRule()">{% include "components/icon.html" with name="plus" class="w-4 h-4" %} Add a rule</button>
       </fieldset>
     </div>
@@ -90,7 +90,7 @@
              hx-include="#segment-form"
              hx-trigger="load, segment-changed from:body delay:400ms"
              aria-live="polite">
-          <div class="card card-pad text-sm text-gray-500">Add a rule to see who matches.</div>
+          <div class="card card-pad text-sm text-ink-subtle">Add a rule to see who matches.</div>
         </div>
         {% if segment %}
         <div class="card card-pad text-sm space-y-2">
@@ -118,7 +118,7 @@
     <button class="btn btn-secondary btn-sm">Save who matches now as a list</button>
   </form>
   {% if used_by %}
-  <p class="text-sm text-gray-500 self-center">Used by {{ used_by }} campaign{{ used_by|pluralize }}, so it can't be deleted.</p>
+  <p class="text-sm text-ink-subtle self-center">Used by {{ used_by }} campaign{{ used_by|pluralize }}, so it can't be deleted.</p>
   {% else %}
   <form method="post" action="{% url 'contacts:segment_delete' segment.pk %}"
         x-data @submit.prevent="$store.confirm.ask({title: 'Delete this segment?', message: 'Only the rules are deleted. No customers are removed.', confirmLabel: 'Delete', danger: true}).then(ok => ok && $el.submit())">

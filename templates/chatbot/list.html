@@ -20,10 +20,7 @@
           <p class="text-sm font-medium text-ink truncate">{{ bot.name }}</p>
           <p class="text-xs text-ink-muted mt-0.5">{{ bot.get_purpose_display }} · {{ bot.public_key }}</p>
         </div>
-        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs
-          {% if bot.is_active %}tone-teal{% else %}tone-neutral{% endif %}">
-          {% if bot.is_active %}Active{% else %}Inactive{% endif %}
-        </span>
+        {% include "chatbot/_status.html" %}
       </a>
     </li>
     {% endfor %}

@@ -1,0 +1,6 @@
+{% comment %}An order's status, one tone per state. Awaiting payment is the state that needs
+someone to act, so it stands out; a refund isn't a failure.{% endcomment %}
+{% if order.status == "paid" %}<span class="badge badge-success">Paid</span>
+{% elif order.status == "awaiting_payment" %}<span class="badge badge-warning">Awaiting payment</span>
+{% elif order.status == "failed" or order.status == "cancelled" %}<span class="badge badge-danger">{{ order.get_status_display }}</span>
+{% else %}<span class="badge badge-neutral">{{ order.get_status_display }}</span>{% endif %}

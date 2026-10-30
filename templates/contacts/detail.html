@@ -5,9 +5,9 @@
 {% block content %}
 <div class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
   <div class="min-w-0">
-    <a href="{% url 'contacts:list' %}" class="text-sm text-gray-500 hover:text-ink">&larr; Customers</a>
+    <a href="{% url 'contacts:list' %}" class="inline-flex items-center min-h-6 text-sm text-ink-subtle hover:text-ink">&larr; Customers</a>
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink mt-1">{{ contact.full_name|default:contact.phone|default:contact.email|default:"Unnamed customer" }}</h1>
-    <p class="text-sm text-gray-500 tabular-nums">{{ contact.phone|default:"" }}{% if contact.email and contact.phone %} &middot; {% endif %}{{ contact.email|default:"" }}{% for h in instagram_handles %} &middot; <span class="inline-flex items-center gap-1">{% include "components/icon.html" with name="instagram" class="w-3.5 h-3.5" %}@{{ h }}</span>{% endfor %}</p>
+    <p class="text-sm text-ink-subtle tabular-nums">{{ contact.phone|default:"" }}{% if contact.email and contact.phone %} &middot; {% endif %}{{ contact.email|default:"" }}{% for h in instagram_handles %} &middot; <span class="inline-flex items-center gap-1">{% include "components/icon.html" with name="instagram" class="w-3.5 h-3.5" %}@{{ h }}</span>{% endfor %}</p>
   </div>
   <div class="flex flex-wrap items-center gap-2">
     {% for conv in conversations|slice:":1" %}
@@ -51,16 +51,16 @@
       <h2 id="wa-title" class="font-medium text-ink">WhatsApp</h2>
       {% include "components/wa_state.html" with state=wa_state %}
     </div>
-    <p class="text-gray-600 mt-2">
+    <p class="text-ink-muted mt-2">
       {% if wa_state == 'opted_in' %}Agreed to hear from you — can receive any campaign, including offers.
       {% elif wa_state == 'updates' %}Can receive updates like order messages. Offers need them to opt in first.
       {% elif wa_state == 'opted_out' %}Asked not to be messaged. Campaigns skip them.
       {% else %}No phone number yet. <button type="button" class="text-accent hover:text-accent-strong font-medium" @click="$dispatch('modal-open', 'edit-contact')">Add one</button> to reach them on WhatsApp.{% endif %}
     </p>
     {% if wa_identity and wa_identity.opt_in_at and wa_state == 'opted_in' %}
-      <p class="text-xs text-gray-500 mt-1">Since {{ wa_identity.opt_in_at|date:"j M Y" }}{% if wa_identity.opt_in_source %} · {% if 'owner_attestation' in wa_identity.opt_in_source %}marked by your team{% elif 'campaign_test' in wa_identity.opt_in_source %}your team's own test number{% elif 'keyword' in wa_identity.opt_in_source or wa_identity.opt_in_source == 'start' %}replied START{% else %}{{ wa_identity.opt_in_source }}{% endif %}{% endif %}</p>
+      <p class="text-xs text-ink-subtle mt-1">Since {{ wa_identity.opt_in_at|date:"j M Y" }}{% if wa_identity.opt_in_source %} · {% if 'owner_attestation' in wa_identity.opt_in_source %}marked by your team{% elif 'campaign_test' in wa_identity.opt_in_source %}your team's own test number{% elif 'keyword' in wa_identity.opt_in_source or wa_identity.opt_in_source == 'start' %}replied START{% else %}{{ wa_identity.opt_in_source }}{% endif %}{% endif %}</p>
     {% elif wa_identity and wa_identity.opt_out_at and wa_state == 'opted_out' %}
-      <p class="text-xs text-gray-500 mt-1">Since {{ wa_identity.opt_out_at|date:"j M Y" }}</p>
+      <p class="text-xs text-ink-subtle mt-1">Since {{ wa_identity.opt_out_at|date:"j M Y" }}</p>
     {% endif %}
     {% if wa_state == 'updates' %}
       <form method="post" action="{% url 'contacts:whatsapp_consent' contact.public_id %}" class="mt-3 space-y-2" x-data="{ ok: false }">
@@ -68,7 +68,7 @@
         <input type="hidden" name="action" value="opt_in">
         <label class="flex items-start gap-2 cursor-pointer">
           <input type="checkbox" name="attested" value="1" class="h-4 w-4 mt-0.5 rounded" x-model="ok">
-          <span class="text-gray-600">They agreed to get WhatsApp messages from {{ account.company_name|default:"us" }}</span>
+          <span class="text-ink-muted">They agreed to get WhatsApp messages from {{ account.company_name|default:"us" }}</span>
         </label>
         <button class="btn btn-secondary btn-sm" :disabled="!ok">Mark as opted in</button>
       </form>
@@ -87,7 +87,7 @@
     <ul class="space-y-1">
       {% for l in lists %}
       <li class="flex items-center justify-between gap-2">
-        <a href="{% url 'contacts:list_detail' l.pk %}" class="text-accent hover:text-accent-strong truncate">{{ l.name }}</a>
+        <a href="{% url 'contacts:list_detail' l.pk %}" class="block min-h-6 leading-6 text-accent hover:text-accent-strong truncate">{{ l.name }}</a>
         <form method="post" action="{% url 'contacts:list_remove_contact' l.pk %}">
           {% csrf_token %}
           <input type="hidden" name="public_id" value="{{ contact.public_id }}">
@@ -96,7 +96,7 @@
         </form>
       </li>
       {% empty %}
-      <li class="text-gray-500">Not on any list yet.</li>
+      <li class="text-ink-subtle">Not on any list yet.</li>
       {% endfor %}
     </ul>
     {% if other_lists %}
@@ -119,13 +119,13 @@
   <section class="card card-pad text-sm space-y-2" aria-labelledby="followups-title">
     <div class="flex items-center justify-between">
       <h2 id="followups-title" class="font-medium text-ink">Follow-ups</h2>
-      <a href="{% url 'conversations:followups_due' %}" class="text-xs text-gray-500 hover:underline">All</a>
+      <a href="{% url 'conversations:followups_due' %}" class="inline-flex items-center justify-center min-h-6 min-w-6 text-xs text-ink-subtle hover:underline">All</a>
     </div>
     {% for f in open_followups %}
       <div class="flex items-start justify-between gap-2">
         <div class="min-w-0">
           <p class="text-ink">{{ f.note|default:"Follow up" }}</p>
-          <p class="text-xs text-gray-500">Due {{ f.due_label }}{% if f.assigned_to %} · {{ f.assigned_to.get_full_name|default:f.assigned_to.email }}{% endif %}</p>
+          <p class="text-xs text-ink-subtle">Due {{ f.due_label }}{% if f.assigned_to %} · {{ f.assigned_to.get_full_name|default:f.assigned_to.email }}{% endif %}</p>
         </div>
         <form method="post" action="{% url 'conversations:followup_complete' f.pk %}" hx-boost="false">{% csrf_token %}
           <input type="hidden" name="next" value="{{ request.get_full_path }}">
@@ -133,7 +133,7 @@
         </form>
       </div>
     {% empty %}
-      <p class="text-xs text-gray-500">No reminders. Set one from a conversation with “Remind me”.</p>
+      <p class="text-xs text-ink-subtle">No reminders. Set one from a conversation with “Remind me”.</p>
     {% endfor %}
   </section>
 
@@ -144,7 +144,7 @@
       <div class="flex items-start justify-between gap-2">
         <div class="min-w-0">
           <a href="{% url 'automation:run' r.run_id %}" class="font-medium text-ink hover:underline">{{ r.workflow }}</a>
-          <p class="text-xs text-gray-500">{{ r.state }}{% if r.step %} · {{ r.step }}{% endif %}{% if r.next_due_at %} · until {{ r.next_due_at|date:"j M, H:i" }}{% endif %}</p>
+          <p class="text-xs text-ink-subtle">{{ r.state }}{% if r.step %} · {{ r.step }}{% endif %}{% if r.next_due_at %} · until {{ r.next_due_at|date:"j M, H:i" }}{% endif %}</p>
         </div>
         <form method="post" action="{% url 'automation:run-action' r.run_id 'cancel' %}" hx-boost="false"
               data-confirm="Stop {{ r.workflow }} for this customer?" data-confirm-label="Stop">{% csrf_token %}
@@ -152,7 +152,7 @@
         </form>
       </div>
     {% empty %}
-      <p class="text-xs text-gray-500">Nothing is running for them right now.</p>
+      <p class="text-xs text-ink-subtle">Nothing is running for them right now.</p>
     {% endfor %}
     {% if automations.manual %}
     <form method="post" class="flex gap-2 pt-1" hx-boost="false"
@@ -172,15 +172,15 @@
 
   <section class="card card-pad text-sm space-y-2" aria-labelledby="details-title">
     <h2 id="details-title" class="font-medium text-ink">Details</h2>
-    <div class="flex justify-between"><span class="text-gray-500">Added</span><span>{{ contact.first_seen|date:"j M Y" }}</span></div>
-    <div class="flex justify-between"><span class="text-gray-500">Last active</span><span>{{ contact.last_engaged_at|date:"j M Y"|default:"—" }}</span></div>
-    {% if contact.source %}<div class="flex justify-between"><span class="text-gray-500">How they arrived</span><span>{{ contact.source|source_label }}</span></div>{% endif %}
-    {% if related.orders %}<div class="flex justify-between"><span class="text-gray-500">Orders</span><a href="{% url 'commerce:orders' %}?q={{ contact.phone|default:contact.email|urlencode }}" class="text-accent hover:text-accent-strong">{{ related.orders }}</a></div>{% endif %}
-    {% if related.leads %}<div class="flex justify-between"><span class="text-gray-500">Leads</span><span>{{ related.leads }}</span></div>{% endif %}
-    {% if related.deals %}<div class="flex justify-between"><span class="text-gray-500">Deals</span><span>{{ related.deals }}</span></div>{% endif %}
+    <div class="flex justify-between"><span class="text-ink-subtle">Added</span><span>{{ contact.first_seen|date:"j M Y" }}</span></div>
+    <div class="flex justify-between"><span class="text-ink-subtle">Last active</span><span>{{ contact.last_engaged_at|date:"j M Y"|default:"—" }}</span></div>
+    {% if contact.source %}<div class="flex justify-between"><span class="text-ink-subtle">How they arrived</span><span>{{ contact.source|source_label }}</span></div>{% endif %}
+    {% if related.orders %}<div class="flex justify-between"><span class="text-ink-subtle">Orders</span><a href="{% url 'commerce:orders' %}?view=all&amp;contact={{ contact.public_id }}" class="inline-flex items-center justify-center min-h-6 min-w-6 text-accent hover:text-accent-strong" aria-label="{{ related.orders }} order{{ related.orders|pluralize }}: see them">{{ related.orders }}</a></div>{% endif %}
+    {% if related.leads %}<div class="flex justify-between"><span class="text-ink-subtle">Leads</span><span>{{ related.leads }}</span></div>{% endif %}
+    {% if related.deals %}<div class="flex justify-between"><span class="text-ink-subtle">Deals</span><span>{{ related.deals }}</span></div>{% endif %}
 
     <div class="pt-2">
-      <p class="text-gray-500 mb-1">Tags</p>
+      <p class="text-ink-subtle mb-1">Tags</p>
       <div class="flex flex-wrap gap-1 mb-2">
         {% for t in contact_tags %}
         <form method="post" action="{% url 'contacts:tag_remove' contact.public_id %}" class="inline-flex">
@@ -190,7 +190,7 @@
             <button class="inline-flex items-center justify-center w-6 h-6 -my-1 rounded-full opacity-60 hover:opacity-100 hover:bg-surface-subtle" aria-label="Remove tag {{ t.name }}" title="Remove tag">{% include "components/icon.html" with name="x" class="w-3.5 h-3.5" %}</button>
           </span>
         </form>
-        {% empty %}<span class="text-gray-400">None</span>{% endfor %}
+        {% empty %}<span class="text-ink-subtle">None</span>{% endfor %}
       </div>
       <form method="post" action="{% url 'contacts:tag_add' contact.public_id %}" class="flex gap-2">
         {% csrf_token %}
@@ -210,27 +210,27 @@
     {% if field_rows or extra_rows %}
     <dl class="space-y-1">
       {% for r in field_rows %}
-      <div class="flex justify-between gap-4"><dt class="text-gray-500">{{ r.def.label|default:r.def.key }}</dt><dd class="text-ink text-right">{{ r.shown|default:"—" }}</dd></div>
+      <div class="flex justify-between gap-4"><dt class="text-ink-subtle">{{ r.def.label|default:r.def.key }}</dt><dd class="text-ink text-right">{{ r.shown|default:"—" }}</dd></div>
       {% endfor %}
       {% for label, value in extra_rows %}
-      <div class="flex justify-between gap-4"><dt class="text-gray-500">{{ label }}</dt><dd class="text-ink text-right">{{ value }}</dd></div>
+      <div class="flex justify-between gap-4"><dt class="text-ink-subtle">{{ label }}</dt><dd class="text-ink text-right">{{ value }}</dd></div>
       {% endfor %}
     </dl>
     {% else %}
-    <p class="text-gray-500">Keep details like birthday or favourite order. <a href="{% url 'contacts:fields' %}" class="text-accent hover:text-accent-strong">Choose what to keep</a></p>
+    <p class="text-ink-subtle">Keep details like birthday or favourite order. <a href="{% url 'contacts:fields' %}" class="text-accent hover:text-accent-strong">Choose what to keep</a></p>
     {% endif %}
   </section>
 
   {% if contact_recs %}
   <section class="card card-pad text-sm">
-    <p class="text-gray-500 mb-2">Recommended actions</p>
+    <p class="text-ink-subtle mb-2">Recommended actions</p>
     <ul class="space-y-2">
       {% for rec in contact_recs %}
       {% if rec.insight %}
       <li>
         <p class="font-medium text-ink">{{ rec.insight.title }}</p>
-        {% if rec.insight.evidence_count %}<p class="text-xs text-gray-400">{{ rec.insight.evidence_count }} signal{{ rec.insight.evidence_count|pluralize }}</p>{% endif %}
-        <a href="{% url 'insights' %}#insight-{{ rec.insight.pk }}" class="text-xs text-gray-400 hover:text-gray-600 underline">View →</a>
+        {% if rec.insight.evidence_count %}<p class="text-xs text-ink-subtle">{{ rec.insight.evidence_count }} signal{{ rec.insight.evidence_count|pluralize }}</p>{% endif %}
+        <a href="{% url 'insights' %}#insight-{{ rec.insight.pk }}" class="text-xs text-ink-subtle hover:text-ink underline">View →</a>
       </li>
       {% endif %}
       {% endfor %}
@@ -253,18 +253,18 @@
         <span class="absolute -left-1.5 mt-1.5 h-3 w-3 rounded-full ring-4 ring-canvas {% if i.kind == 'message' %}bg-teal-500{% elif i.kind == 'order' %}bg-amber-400{% elif i.kind == 'note' %}bg-gray-400{% elif i.kind == 'campaign' %}bg-blue-400{% else %}bg-brand-500{% endif %}" aria-hidden="true"></span>
         <div class="flex items-baseline justify-between gap-4">
           <span class="font-medium text-ink">{% if i.url %}<a href="{{ i.url }}" class="hover:text-accent">{{ i.title }}</a>{% else %}{{ i.title }}{% endif %}</span>
-          <span class="text-xs text-gray-400 whitespace-nowrap">{{ i.at|date:"j M Y, H:i" }}</span>
+          <span class="text-xs text-ink-subtle whitespace-nowrap">{{ i.at|date:"j M Y, H:i" }}</span>
         </div>
-        {% if i.detail %}<p class="mt-0.5 text-sm text-gray-600 whitespace-pre-line break-words">{{ i.detail }}</p>{% endif %}
+        {% if i.detail %}<p class="mt-0.5 text-sm text-ink-muted whitespace-pre-line break-words">{{ i.detail }}</p>{% endif %}
         {% if i.note and i.note.author_id == request.user.pk or i.note and is_admin %}
         <form method="post" action="{% url 'contacts:note_delete' contact.public_id i.note.pk %}" class="mt-1"
               data-confirm="Delete this note?" data-confirm-label="Delete">
-          {% csrf_token %}<button class="text-xs text-gray-500 hover:text-coral-700">Delete note</button>
+          {% csrf_token %}<button class="text-xs text-ink-subtle hover:text-coral-700">Delete note</button>
         </form>
         {% endif %}
       </li>
       {% empty %}
-      <li class="ml-4 text-gray-400 text-sm">Nothing yet. Messages, orders, campaigns and notes show up here.</li>
+      <li class="ml-4 text-ink-subtle text-sm">Nothing yet. Messages, orders, campaigns and notes show up here.</li>
       {% endfor %}
     </ol>
   </section>
@@ -280,7 +280,7 @@
         <tr>
           <td class="py-1.5">{{ m.subject|default:"—"|truncatechars:60 }}</td>
           <td data-label="Status">{% if m.status == 'sent' %}{% include "components/status.html" with state="sent" badge=True %}{% elif m.status == 'failed' or m.status == 'bounced' %}{% include "components/status.html" with state="failed" badge=True %}{% else %}<span class="badge badge-neutral">{{ m.get_status_display }}</span>{% endif %}</td>
-          <td class="py-1.5 text-gray-400">{{ m.created_at|date:"j M Y, H:i" }}</td>
+          <td class="py-1.5 text-ink-subtle">{{ m.created_at|date:"j M Y, H:i" }}</td>
           <td class="text-right"><a href="/logs/messages/{{ m.public_id }}/" class="btn btn-ghost btn-sm">View</a></td>
         </tr>
         {% endfor %}
@@ -308,7 +308,7 @@
       <input id="edit-contact-phone" name="phone" class="input" value="{{ contact.phone|default:'' }}" placeholder="+260971234567" />
     </div>
     <div>
-      <label class="label" for="edit-contact-email">Email <span class="font-normal text-gray-400">(optional)</span></label>
+      <label class="label" for="edit-contact-email">Email <span class="font-normal text-ink-subtle">(optional)</span></label>
       <input id="edit-contact-email" name="email" type="email" class="input" value="{{ contact.email|default:'' }}" />
     </div>
     <div class="flex justify-end gap-2 pt-1">
@@ -345,7 +345,7 @@
       {% endif %}
     </div>
     {% endfor %}
-    <p class="text-xs text-gray-500"><a href="{% url 'contacts:fields' %}" class="text-accent hover:text-accent-strong">Change which details you keep</a></p>
+    <p class="text-xs text-ink-subtle"><a href="{% url 'contacts:fields' %}" class="text-accent hover:text-accent-strong">Change which details you keep</a></p>
     <div class="flex justify-end gap-2 pt-1">
       <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close')">Cancel</button>
       <button class="btn btn-primary btn-sm">Save</button>

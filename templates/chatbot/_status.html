@@ -1,0 +1,5 @@
+{% comment %}A chatbot's status. "Active" alone would be untrue for a bot with no allowed domains:
+the widget is refused on every site until one is added, so that case says so.{% endcomment %}
+{% if not bot.is_active %}<span class="badge badge-neutral" data-bot-status="inactive">Inactive</span>
+{% elif not bot.allowed_domains %}<span class="badge badge-warning" data-bot-status="no-sites">Active · no sites allowed</span>
+{% else %}<span class="badge badge-success" data-bot-status="active">Active</span>{% endif %}
