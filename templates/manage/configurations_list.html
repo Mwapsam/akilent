@@ -16,7 +16,7 @@
       <h1 class="text-2xl font-semibold text-ink">
         Configurations
       </h1>
-      <p class="mt-1 text-sm text-gray-500">
+      <p class="mt-1 text-sm text-ink-subtle">
         Manage application configuration values.
       </p>
     </div>
@@ -37,13 +37,13 @@
         <table class="w-full text-sm">
           <thead class="bg-surface-muted border-b border-border">
             <tr>
-              <th class="px-6 py-3 text-left font-medium text-gray-500">
+              <th class="px-6 py-3 text-left font-medium text-ink-subtle">
                 Name
               </th>
-              <th class="px-6 py-3 text-left font-medium text-gray-500">
+              <th class="px-6 py-3 text-left font-medium text-ink-subtle">
                 Value
               </th>
-              <th class="px-6 py-3 text-right font-medium text-gray-500">
+              <th class="px-6 py-3 text-right font-medium text-ink-subtle">
                 Actions
               </th>
             </tr>
@@ -60,7 +60,7 @@
                 </td>
 
                 <td class="px-6 py-4">
-                <span class="text-gray-600 break-all font-mono text-xs">
+                <span class="text-ink-muted break-all font-mono text-xs">
                     {% if configuration.is_secret %}
                     {# Mask the value so it doesn't show plaintext in the UI #}
                     ••••••••••••••••
@@ -106,14 +106,14 @@
 
       <div class="px-6 py-12 text-center">
         <div class="mx-auto w-12 h-12 rounded-xl tone-neutral-bg flex items-center justify-center mb-4">
-          {% include "components/icon.html" with name="settings" class="w-6 h-6 text-gray-400" %}
+          {% include "components/icon.html" with name="settings" class="w-6 h-6 text-ink-subtle" %}
         </div>
 
         <h3 class="text-sm font-semibold text-ink">
           No configurations
         </h3>
 
-        <p class="mt-1 text-sm text-gray-500">
+        <p class="mt-1 text-sm text-ink-subtle">
           Create your first application configuration.
         </p>
 

@@ -5,7 +5,7 @@
 {% block content %}
 
 <header class="mb-6">
-  <nav class="mb-1 flex items-center gap-1.5 text-xs text-gray-500" aria-label="Breadcrumb">
+  <nav class="mb-1 flex items-center gap-1.5 text-xs text-ink-subtle" aria-label="Breadcrumb">
     <a href="/email/campaigns/" class="hover:text-ink">Campaigns</a>
     <span aria-hidden="true">/</span>
     <span class="text-ink">New campaign</span>
@@ -13,7 +13,7 @@
   <div class="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
     <div class="min-w-0">
       <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">New campaign</h1>
-      <p class="mt-1 flex items-center gap-2 text-sm text-gray-600">
+      <p class="mt-1 flex items-center gap-2 text-sm text-ink-muted">
         {% include "components/channel_tag.html" with channel="email" %}
         <span>·</span> Build a message, add recipients, then send or schedule.
       </p>
@@ -42,10 +42,10 @@
   <ol class="flex flex-wrap items-center gap-x-3 gap-y-2 mb-6 text-xs font-medium">
     <template x-for="(label, i) in stepLabels" :key="i">
       <li class="flex items-center gap-2">
-        <span class="w-6 h-6 rounded-full flex items-center justify-center text-[11px]"
-              :class="i === step ? 'bg-brand-600 text-white' : (i < step ? 'tone-teal' : 'tone-neutral-bg text-gray-400')"
+        <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs"
+              :class="i === step ? 'bg-brand-600 text-white' : (i < step ? 'tone-teal' : 'tone-neutral-bg text-ink-subtle')"
               x-text="i < step ? '✓' : (i + 1)"></span>
-        <span :class="i === step ? 'text-gray-900' : 'text-gray-400'" x-text="label"></span>
+        <span :class="i === step ? 'text-ink' : 'text-ink-subtle'" x-text="label"></span>
         <span x-show="i < stepLabels.length - 1" class="w-6 h-px tone-neutral-bg hidden sm:inline-block"></span>
       </li>
     </template>
@@ -70,14 +70,14 @@
           <span class="flex items-center gap-2 font-medium text-sm">
             <input type="radio" x-model="mode" value="text" class="accent-brand-600"> Write a message
           </span>
-          <span class="text-xs text-gray-500 mt-1 block">A simple subject and body. Best for announcements and updates.</span>
+          <span class="text-xs text-ink-subtle mt-1 block">A simple subject and body. Best for announcements and updates.</span>
         </label>
         <label class="card card-pad cursor-pointer border-2 transition-colors"
                :class="mode === 'template' ? 'border-brand-500' : 'border-border'">
           <span class="flex items-center gap-2 font-medium text-sm">
             <input type="radio" x-model="mode" value="template" class="accent-brand-600"> Use a saved template
           </span>
-          <span class="text-xs text-gray-500 mt-1 block">A designed email you built in Templates.</span>
+          <span class="text-xs text-ink-subtle mt-1 block">A designed email you built in Templates.</span>
         </label>
       </div>
 
@@ -97,7 +97,7 @@
                     placeholder="Hi there,&#10;&#10;We wanted to let you know…"
                     class="input"></textarea>
         </div>
-        <div x-show="mergeFields.length" class="text-xs text-gray-500">
+        <div x-show="mergeFields.length" class="text-xs text-ink-subtle">
           <span class="inline-flex items-center gap-1">
             Personalise it
             {% include "components/help_tip.html" with text="Click a field to drop it into your message. We swap it for each person's real value when the email is sent." %}
@@ -135,7 +135,7 @@
         </div>
         <p class="help">Need a different design? <a href="/email/templates/" class="text-accent font-medium">Create a template</a> first, then come back.</p>
         {% else %}
-        <div class="rounded-xl border border-border bg-surface-muted px-4 py-3 text-sm text-gray-600">
+        <div class="rounded-xl border border-border bg-surface-muted px-4 py-3 text-sm text-ink-muted">
           You don't have any templates yet. <a href="/email/templates/" class="text-accent font-medium">Create one</a>, or switch to “Write a message”.
         </div>
         {% endif %}
@@ -152,7 +152,7 @@
 
       {# CSV #}
       <div x-show="recipientMethod === 'csv'" class="grid gap-2">
-        <p class="text-sm text-gray-600">
+        <p class="text-sm text-ink-muted">
           One row per person. Include a <code>to</code> column for the email address; any other columns
           (like <code>first_name</code>) become personalisation fields.
           <a href="{% url 'email-campaign-sample-csv' %}" class="text-accent font-medium">Download a sample CSV</a>.
@@ -162,7 +162,7 @@
         <p x-show="csvError" class="field-error" x-text="csvError"></p>
         <div x-show="csv.rows.length" class="rounded-xl border border-border overflow-hidden">
           {# Column headers come from the uploaded CSV, so width is unbounded. #}
-          <div class="px-4 py-2 bg-surface-muted text-xs text-gray-600 flex flex-wrap gap-x-4 gap-y-1">
+          <div class="px-4 py-2 bg-surface-muted text-xs text-ink-muted flex flex-wrap gap-x-4 gap-y-1">
             <span><strong x-text="csv.rows.length"></strong> recipients</span>
             <span x-show="csv.variables.length">Fields: <span x-text="csv.variables.join(', ')"></span></span>
           </div>
@@ -187,7 +187,7 @@
                   placeholder="ada@example.com&#10;grace@example.com"
                   class="input"></textarea>
         <p class="help">One per line, or separated by commas. No personalisation fields with this option.</p>
-        <p x-show="pasteText.trim()" class="text-xs text-gray-600"><strong x-text="recipientCount"></strong> valid addresses found.</p>
+        <p x-show="pasteText.trim()" class="text-xs text-ink-muted"><strong x-text="recipientCount"></strong> valid addresses found.</p>
       </div>
 
       {# JSON (advanced) #}
@@ -196,7 +196,7 @@
         <textarea id="id_recipients_json" name="recipients_json" rows="6" x-model="jsonText"
                   :disabled="recipientMethod !== 'json'"
                   placeholder='[{"to": "a@example.com", "variables": {"first_name": "Ada"}}]'
-                  class="input font-mono text-sm"></textarea>
+                  class="input font-mono sm:text-sm"></textarea>
         <p class="help">For power users — an array of <code>{"to", "variables"}</code> objects.</p>
       </div>
 
@@ -210,9 +210,9 @@
           <label class="label" for="id_from_local">Send from</label>
           <div class="flex items-stretch gap-2">
             <input id="id_from_local" type="text" x-model="fromLocal" class="input sm:max-w-[12rem]" placeholder="hello">
-            <span class="flex items-center text-gray-400 text-sm">@</span>
+            <span class="flex items-center text-ink-subtle text-sm">@</span>
             <template x-if="cfg.verifiedDomains.length === 1">
-              <span class="flex items-center px-3 rounded-xl bg-surface-muted border border-border text-sm text-gray-700" x-text="fromDomain"></span>
+              <span class="flex items-center px-3 rounded-xl bg-surface-muted border border-border text-sm text-ink-muted" x-text="fromDomain"></span>
             </template>
             <template x-if="cfg.verifiedDomains.length > 1">
               <select x-model="fromDomain" class="input sm:max-w-xs">
@@ -238,19 +238,19 @@
     <div x-show="step === 3" x-cloak class="grid gap-4">
       <dl class="rounded-xl border border-border divide-y divide-gray-100 text-sm">
         <div class="flex justify-between gap-4 px-4 py-3">
-          <dt class="text-gray-500">From</dt><dd class="font-medium text-right" x-text="fromEmail"></dd>
+          <dt class="text-ink-subtle">From</dt><dd class="font-medium text-right" x-text="fromEmail"></dd>
         </div>
         <div class="flex justify-between gap-4 px-4 py-3">
-          <dt class="text-gray-500">Content</dt>
+          <dt class="text-ink-subtle">Content</dt>
           <dd class="font-medium text-right"
               x-text="mode === 'template' ? ((selectedTemplate && selectedTemplate.name) || 'Template') : (subject || '(no subject)')"></dd>
         </div>
         <div class="flex justify-between gap-4 px-4 py-3">
-          <dt class="text-gray-500">Recipients</dt>
+          <dt class="text-ink-subtle">Recipients</dt>
           <dd class="font-medium text-right"><span x-text="recipientCount"></span> <span x-text="recipientCount === 1 ? 'person' : 'people'"></span></dd>
         </div>
         <div class="flex justify-between gap-4 px-4 py-3" x-show="mergeFields.length">
-          <dt class="text-gray-500">Personalised fields</dt>
+          <dt class="text-ink-subtle">Personalised fields</dt>
           <dd class="font-medium text-right" x-text="mergeFields.join(', ')"></dd>
         </div>
       </dl>

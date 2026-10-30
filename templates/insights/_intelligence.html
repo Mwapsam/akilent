@@ -74,7 +74,7 @@ an automation mapping (pass ``frozenset(BusinessPolicy.INSIGHT_TYPE_TO_TRIGGER)`
         </div>
 
         {# Actions #}
-        <div class="flex items-center gap-2 shrink-0 flex-wrap">
+        <div class="flex items-center gap-2 min-w-0 max-w-full flex-wrap">
           {% if insight.suggested_action.action %}
           <form method="post" action="{% url 'insight-act' insight.pk %}">
             {% csrf_token %}

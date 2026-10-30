@@ -4,7 +4,7 @@
 {% block content %}
 <header class="mb-6">
   <h1 class="text-2xl font-semibold tracking-tight text-ink">Audit log</h1>
-  <p class="mt-1 text-sm text-gray-600">Everything operators changed in this console, and every "View as" session. Newest first.</p>
+  <p class="mt-1 text-sm text-ink-muted">Everything operators changed in this console, and every "View as" session. Newest first.</p>
 </header>
 
 <form method="get" class="mb-4 flex flex-wrap items-center gap-2">
@@ -24,15 +24,15 @@
       <tr>
         <td data-label="When">{{ r.row.at|date:"j M Y, H:i" }}</td>
         <td data-label="Operator">{{ r.row.actor.get_username|default:"—" }}</td>
-        <td data-label="What">{{ r.label }}{% if r.row.target %} · <span class="text-gray-600">{{ r.row.target }}</span>{% endif %}</td>
+        <td data-label="What">{{ r.label }}{% if r.row.target %} · <span class="text-ink-muted">{{ r.row.target }}</span>{% endif %}</td>
         <td data-label="Business">{% if r.row.account %}<a class="text-accent" href="{% url 'core:business' r.row.account.pk %}">{{ r.row.account.company_name }}</a>{% else %}—{% endif %}</td>
-        <td data-label="Details" class="text-xs text-gray-600">{% for k, v in r.row.detail.items %}{{ k }}: {{ v }}{% if not forloop.last %} · {% endif %}{% endfor %}</td>
+        <td data-label="Details" class="text-xs text-ink-muted">{% for k, v in r.row.detail.items %}{{ k }}: {{ v }}{% if not forloop.last %} · {% endif %}{% endfor %}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
 {% else %}
-<p class="card card-pad text-sm text-gray-600">Nothing recorded yet.</p>
+<p class="card card-pad text-sm text-ink-muted">Nothing recorded yet.</p>
 {% endif %}
 {% endblock %}

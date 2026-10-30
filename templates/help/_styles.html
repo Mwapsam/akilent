@@ -1,26 +1,26 @@
 {% comment %}Shared styles for the public help centre (index and article pages).{% endcomment %}
 <style>
-  .help-hero{ background:#0E1526; color:#FAFBFC; position:relative; overflow:hidden; }
+  .help-hero{ background:var(--color-gray-950); color:var(--color-gray-50); position:relative; overflow:hidden; }
   .help-hero::before{ content:""; position:absolute; width:520px; height:520px; top:-300px; left:50%; margin-left:-260px;
     border-radius:999px; background:var(--color-teal-500); opacity:.14; filter:blur(110px); pointer-events:none; }
   .help-hero-inner{ position:relative; max-width:48rem; margin:0 auto; padding:3.5rem 1.25rem 3rem; text-align:center; }
   @media (min-width:640px){ .help-hero-inner{ padding:4.5rem 1.5rem 3.5rem; } }
-  .help-eyebrow{ font-size:.8125rem; font-weight:600; letter-spacing:.02em; color:#74D4C4; }
+  .help-eyebrow{ font-size:.8125rem; font-weight:600; letter-spacing:.02em; color:var(--color-teal-300); }
   .help-hero h1{ margin:.5rem 0 0; font-size:2rem; line-height:1.15; font-weight:700; letter-spacing:-0.02em; }
   @media (min-width:640px){ .help-hero h1{ font-size:2.5rem; } }
-  .help-hero p{ margin:.75rem auto 0; max-width:34rem; color:#DCE1E8; font-size:1.0625rem; line-height:1.6; }
+  .help-hero p{ margin:.75rem auto 0; max-width:34rem; color:var(--color-gray-300); font-size:1.0625rem; line-height:1.6; }
 
   .help-search{ position:relative; max-width:36rem; margin:2rem auto 0; }
-  .help-search svg{ position:absolute; left:1rem; top:50%; transform:translateY(-50%); width:1.25rem; height:1.25rem; color:#657089; pointer-events:none; }
+  .help-search svg{ position:absolute; left:1rem; top:50%; transform:translateY(-50%); width:1.25rem; height:1.25rem; color:var(--color-gray-600); pointer-events:none; }
   .help-search input{ width:100%; min-height:3.25rem; padding:.75rem 1rem .75rem 3rem; border-radius:12px; border:1px solid transparent;
-    background:#FFFFFF; color:#12182B; font-size:1rem; box-shadow:0 20px 40px -24px rgba(0,0,0,.6); }
-  .help-search input::placeholder{ color:#657089; }
+    background:var(--color-white); color:var(--color-ink-fixed); font-size:1rem; box-shadow:0 20px 40px -24px rgba(0,0,0,.6); }
+  .help-search input::placeholder{ color:var(--color-gray-600); }
   .help-search input:focus{ outline:none; border-color:var(--color-teal-500); box-shadow:0 0 0 3px rgba(31,175,156,.35); }
 
   .help-chips{ display:flex; flex-wrap:wrap; justify-content:center; gap:.5rem; margin-top:1.25rem; }
   .help-chips a{ display:inline-flex; align-items:center; min-height:36px; padding:.375rem .875rem; border-radius:999px;
-    border:1px solid #26314A; color:#DCE1E8; font-size:.875rem; text-decoration:none; transition:border-color .15s ease, color .15s ease; }
-  .help-chips a:hover{ border-color:#74D4C4; color:#FAFBFC; }
+    border:1px solid var(--color-gray-800); color:var(--color-gray-300); font-size:.875rem; text-decoration:none; transition:border-color .15s ease, color .15s ease; }
+  .help-chips a:hover{ border-color:var(--color-teal-300); color:var(--color-gray-50); }
 
   .help-body{ max-width:64rem; margin:0 auto; padding:3rem 1.25rem 0; }
   @media (min-width:640px){ .help-body{ padding:3.5rem 1.5rem 0; } }
@@ -51,9 +51,9 @@
   .help-empty strong{ display:block; color:var(--color-ink); font-weight:600; }
   .help-empty p{ margin:.375rem 0 0; font-size:.875rem; color:var(--color-ink-muted); }
 
-  .help-cta-row{ display:grid; gap:1rem; margin-top:3.5rem; grid-template-columns:1fr; }
+  .help-cta-row{ display:grid; gap:1rem; margin-top:3.5rem; grid-template-columns:minmax(0,1fr); }
   @media (min-width:768px){ .help-cta-row{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
-  .help-cta{ display:flex; align-items:center; gap:1rem; padding:1.25rem 1.375rem; border-radius:14px; background:var(--color-surface);
+  .help-cta{ display:flex; flex-wrap:wrap; align-items:center; gap:1rem; padding:1.25rem 1.375rem; border-radius:14px; background:var(--color-surface);
     border:1px solid var(--color-border); }
   .help-cta .help-card-icon{ background:var(--tone-neutral-bg); color:var(--color-ink-muted); }
   .help-cta-text{ flex:1; min-width:0; }

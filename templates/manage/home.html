@@ -4,21 +4,21 @@
 {% block content %}
 <header class="mb-6">
   <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Operator console</h1>
-  <p class="mt-1 text-sm text-gray-600">What needs you today, across every business on {{ site.app_name|default:"Akilent" }}.</p>
+  <p class="mt-1 text-sm text-ink-muted">What needs you today, across every business on {{ site.app_name|default:"Akilent" }}.</p>
 </header>
 
 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
   <a href="{% url 'core:businesses' %}?filter=attention" class="card card-pad block card-hover">
     <p class="text-2xl font-semibold tabular-nums {% if needing_count %}text-red-700{% else %}text-ink{% endif %}">{{ needing_count }}</p>
-    <p class="text-sm text-gray-600">of {{ total }} business{{ total|pluralize:"es" }} need attention</p>
+    <p class="text-sm text-ink-muted">of {{ total }} business{{ total|pluralize:"es" }} need attention</p>
   </a>
   <a href="{% url 'core:payments' %}" class="card card-pad block card-hover">
     <p class="text-2xl font-semibold tabular-nums {% if pending_payments %}text-red-700{% else %}text-ink{% endif %}">{{ pending_payments }}</p>
-    <p class="text-sm text-gray-600">payment{{ pending_payments|pluralize }} waiting for approval</p>
+    <p class="text-sm text-ink-muted">payment{{ pending_payments|pluralize }} waiting for approval</p>
   </a>
   <a href="{% url 'core:pilot' %}" class="card card-pad block card-hover">
     <p class="text-2xl font-semibold tabular-nums {% if late_queues %}text-red-700{% else %}text-ink{% endif %}">{{ late_queues|length }}</p>
-    <p class="text-sm text-gray-600">worker queue{{ late_queues|length|pluralize }} late{% if late_queues %}: {% for q in late_queues %}{{ q.name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</p>
+    <p class="text-sm text-ink-muted">worker queue{{ late_queues|length|pluralize }} late{% if late_queues %}: {% for q in late_queues %}{{ q.name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</p>
   </a>
   <a href="{% url 'core:pilot' %}" class="card card-pad block card-hover">
     {% if not backup.configured %}
@@ -28,7 +28,7 @@
     {% else %}
     <p class="text-lg font-semibold text-red-700">None yet</p>
     {% endif %}
-    <p class="text-sm text-gray-600">last database backup</p>
+    <p class="text-sm text-ink-muted">last database backup</p>
   </a>
 </div>
 
@@ -36,13 +36,13 @@
   <section class="card card-pad lg:col-span-2" aria-labelledby="h-attention">
     <div class="flex items-center justify-between mb-3">
       <h2 id="h-attention" class="font-semibold">Businesses that need attention</h2>
-      <a href="{% url 'core:businesses' %}?filter=attention" class="text-sm text-accent">See all</a>
+      <a href="{% url 'core:businesses' %}?filter=attention" class="inline-flex items-center min-h-6 text-sm text-accent">See all</a>
     </div>
     {% if needing %}
     <ul class="divide-y divide-border text-sm">
       {% for r in needing %}
       <li class="py-2 flex flex-wrap items-start justify-between gap-2">
-        <a href="{% url 'core:business' r.account.pk %}" class="font-medium text-ink hover:text-accent">{{ r.account.company_name }}</a>
+        <a href="{% url 'core:business' r.account.pk %}" class="inline-flex items-center min-h-6 font-medium text-ink hover:text-accent">{{ r.account.company_name }}</a>
         <span class="flex flex-wrap gap-1 justify-end">
           {% for why in r.reasons %}<span class="badge badge-warning">{{ why }}</span>{% endfor %}
         </span>
@@ -50,7 +50,7 @@
       {% endfor %}
     </ul>
     {% else %}
-    <p class="text-sm text-gray-600">Nothing needs you right now.</p>
+    <p class="text-sm text-ink-muted">Nothing needs you right now.</p>
     {% endif %}
   </section>
 
@@ -73,12 +73,12 @@
     <ul class="text-sm space-y-1">
       {% for a in recent_actions %}
       <li><span class="text-ink">{{ a.label }}</span>{% if a.row.account %} · {{ a.row.account.company_name }}{% endif %}
-        <span class="block text-xs text-gray-500">{{ a.row.actor.get_username|default:"—" }} · {{ a.row.at|timesince }} ago</span></li>
+        <span class="block text-xs text-ink-subtle">{{ a.row.actor.get_username|default:"—" }} · {{ a.row.at|timesince }} ago</span></li>
       {% endfor %}
     </ul>
     <a href="{% url 'core:audit' %}" class="text-sm text-accent">Full audit log</a>
     {% else %}
-    <p class="text-sm text-gray-600">None yet.</p>
+    <p class="text-sm text-ink-muted">None yet.</p>
     {% endif %}
   </section>
 </div>

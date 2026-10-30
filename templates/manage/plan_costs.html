@@ -5,10 +5,10 @@
 <header class="mb-6">
   <a href="{% url 'core:plans' %}" class="text-sm text-accent">← Plans</a>
   <h1 class="mt-1 text-2xl font-semibold tracking-tight text-ink">Costs &amp; margin</h1>
-  <p class="mt-1 text-sm text-gray-600">What Akilent pays per unit, what each plan can cost at most, and what each business actually cost this month. Prices and costs in USD.</p>
+  <p class="mt-1 text-sm text-ink-muted">What Akilent pays per unit, what each plan can cost at most, and what each business actually cost this month. Prices and costs in USD.</p>
 </header>
 
-<p class="mb-6 text-sm text-gray-600">Only email and AI are Akilent's per-unit costs. WhatsApp messages are billed by Meta to each business directly (Akilent must not resell them), so they never appear here; WhatsApp limits in <a class="text-accent underline" href="{% url 'core:plan-limits' %}">plan limits</a> set tiers and guard against abuse.</p>
+<p class="mb-6 text-sm text-ink-muted">Only email and AI are Akilent's per-unit costs. WhatsApp messages are billed by Meta to each business directly (Akilent must not resell them), so they never appear here; WhatsApp limits in <a class="text-accent underline" href="{% url 'core:plan-limits' %}">plan limits</a> set tiers and guard against abuse.</p>
 
 <section class="card card-pad mb-6" aria-labelledby="h-unit">
   <h2 id="h-unit" class="font-semibold mb-3">Unit costs</h2>
@@ -23,7 +23,7 @@
       <input name="target" type="number" min="0" max="100" class="input" value="{{ settings.target_margin_pct }}"></label>
     <div><button class="btn btn-primary btn-sm">Save costs</button></div>
   </form>
-  <p class="mt-2 text-xs text-gray-500">Fixed cost covers hosting, support and anything else that doesn't grow with use.</p>
+  <p class="mt-2 text-xs text-ink-subtle">Fixed cost covers hosting, support and anything else that doesn't grow with use.</p>
 </section>
 
 <section class="mb-6" aria-labelledby="h-plans">
@@ -44,7 +44,7 @@
             {% if e.price > 0 %}
             <span class="{% if e.can_lose_money %}text-red-700 font-medium{% elif e.below_target %}text-amber-700{% else %}text-green-700{% endif %}">${{ e.margin|floatformat:2 }}{% if e.margin_pct is not None %} ({{ e.margin_pct }}%){% endif %}</span>
             {% for r in e.reasons %}<span class="block text-xs text-red-700">{{ r }}</span>{% endfor %}
-            {% else %}<span class="text-gray-500">Free plan</span>{% endif %}
+            {% else %}<span class="text-ink-subtle">Free plan</span>{% endif %}
           </td>
         </tr>
         {% endfor %}
@@ -55,7 +55,7 @@
 
 <section aria-labelledby="h-actual">
   <h2 id="h-actual" class="font-semibold mb-1">Actual cost this month</h2>
-  <p class="text-xs text-gray-500 mb-3">Least profitable first, so a business costing more than it pays is at the top.</p>
+  <p class="text-xs text-ink-subtle mb-3">Least profitable first, so a business costing more than it pays is at the top.</p>
   <div class="table-wrap">
     <table class="table table--cards">
       <thead><tr><th>Business</th><th>Plan</th>{% for d in drivers %}<th>{{ d.name }}s</th>{% endfor %}<th>Cost</th><th>Pays</th><th>Margin</th></tr></thead>
@@ -70,7 +70,7 @@
           <td data-label="Margin" class="{% if b.margin < 0 %}text-red-700 font-medium{% endif %}">${{ b.margin|floatformat:2 }}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="6" class="text-sm text-gray-600">No businesses with a plan yet.</td></tr>
+        <tr><td colspan="6" class="text-sm text-ink-muted">No businesses with a plan yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>

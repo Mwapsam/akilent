@@ -123,7 +123,7 @@
       </div>
 
       <div>
-        <label class="flex items-center gap-2 cursor-pointer">
+        <label class="flex min-h-6 items-center gap-2 cursor-pointer">
           <input type="checkbox" name="is_active" class="rounded"
             {% if post %}
               {% if post.is_active %}checked{% endif %}
@@ -154,7 +154,7 @@
               oninput="document.getElementById('primary_color').value=this.value">
             <input type="text" id="primary_color" name="primary_color" maxlength="7"
               value="{{ color }}"
-              class="input flex-1 font-mono text-sm"
+              class="input flex-1 font-mono sm:text-sm"
               oninput="document.getElementById('primary_color_picker').value=this.value">
           </div>
           {% endwith %}
@@ -175,7 +175,7 @@
     <div class="card card-pad space-y-3">
       <h2 class="text-sm font-semibold text-ink-subtle uppercase tracking-wide">Allowed domains</h2>
       <p class="text-xs text-ink-muted">One domain per line. Empty = deny all origins.</p>
-      <textarea name="allowed_domains" rows="4" class="input w-full font-mono text-sm"
+      <textarea name="allowed_domains" rows="4" class="input w-full font-mono sm:text-sm"
         placeholder="https://example.com">{{ post.allowed_domains|default:initial.domains_display }}</textarea>
     </div>
 

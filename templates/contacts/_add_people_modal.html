@@ -53,7 +53,7 @@ column we'll use before anything is uploaded. The server re-checks everything.
 
     <div x-show="tab === 'paste'">
       <label class="label" for="add-people-numbers">Phone numbers</label>
-      <textarea id="add-people-numbers" name="numbers" rows="7" class="textarea font-mono text-sm" x-model="pasted"
+      <textarea id="add-people-numbers" name="numbers" rows="7" class="textarea font-mono sm:text-sm" x-model="pasted"
                 placeholder="+260 97 123 4567, Ada Mwape&#10;+260 96 555 0101, Bwalya&#10;0955 123 456"
                 :required="tab === 'paste'"></textarea>
       <p class="text-xs text-ink-subtle mt-1">One per line. Add a comma and a name if you have one. Include the country code — numbers starting with 0 are read as Zambian.

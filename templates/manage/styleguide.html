@@ -30,9 +30,9 @@
       <p class="text-3xl font-semibold tracking-tight text-ink">Display / page title — text-3xl</p>
       <p class="text-xl font-semibold text-ink">Sub-page title — text-xl</p>
       <p class="text-lg font-semibold text-ink">Section title — text-lg</p>
-      <p class="text-base text-gray-700">Lead paragraph — text-base</p>
-      <p class="text-sm text-gray-700">Body — text-sm (default)</p>
-      <p class="text-xs text-gray-500">Meta / help — text-xs</p>
+      <p class="text-base text-ink-muted">Lead paragraph — text-base</p>
+      <p class="text-sm text-ink-muted">Body — text-sm (default)</p>
+      <p class="text-xs text-ink-subtle">Meta / help — text-xs</p>
     </div>
   </section>
 
@@ -122,7 +122,7 @@
         <button class="tab" :class="t==='b' && 'tab-active'" @click="t='b'" role="tab">Activity</button>
         <button class="tab" :class="t==='c' && 'tab-active'" @click="t='c'" role="tab">Settings</button>
       </div>
-      <p class="mt-3 text-sm text-gray-600" x-text="'Panel ' + t"></p>
+      <p class="mt-3 text-sm text-ink-muted" x-text="'Panel ' + t"></p>
     </div>
   </section>
 
@@ -132,7 +132,7 @@
     <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {% include "components/stat_card.html" with label="Messages sent" value="12,480" icon="send" tone="brand" sub="this month" %}
       {% include "components/stat_card.html" with label="Success rate" value="98.2%" icon="check-circle" tone="success" sub="0 failed" %}
-      <div class="card card-hover card-pad"><p class="font-semibold text-ink">Interactive card</p><p class="text-sm text-gray-600 mt-1">.card-hover — hover me.</p></div>
+      <div class="card card-hover card-pad"><p class="font-semibold text-ink">Interactive card</p><p class="text-sm text-ink-muted mt-1">.card-hover — hover me.</p></div>
       <div class="card card-pad"><p class="skeleton h-4 w-2/3"></p><p class="skeleton h-4 w-1/2 mt-2"></p></div>
     </div>
   </section>
@@ -234,7 +234,7 @@
 
   <section>
     <h2 class="text-lg font-semibold text-ink mb-3">Tooltip</h2>
-    <p class="text-sm text-gray-600 mb-3">
+    <p class="text-sm text-ink-muted mb-3">
       Hover or focus the button. Suppressed on touch, which cannot hover &mdash; those
       contexts must keep a visible label.
     </p>
@@ -271,7 +271,7 @@
 
   <section>
     <h2 class="text-lg font-semibold text-ink mb-3">Skeletons</h2>
-    <p class="text-sm text-gray-600 mb-3">
+    <p class="text-sm text-ink-muted mb-3">
       Loading placeholders mirror the shape of the content that replaces them.
       Page content never uses a spinner (spec &sect;9).
     </p>
@@ -295,7 +295,7 @@
 
   <section class="mb-10">
     <h2 class="text-lg font-semibold text-ink mb-1">Charts</h2>
-    <p class="text-sm text-gray-500 mb-4">
+    <p class="text-sm text-ink-subtle mb-4">
       Server-rendered SVG driven by <code class="text-xs">apps.core.charts</code>. The
       series colours are CSS variables, so switching the theme above re-colours
       every chart on this page with no redraw. Both palettes were validated for
@@ -304,24 +304,24 @@
     </p>
 
     <div class="card card-pad mb-4">
-      <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Line chart — two series</p>
+      <p class="text-xs font-medium text-ink-subtle uppercase tracking-wide mb-3">Line chart — two series</p>
       {% line_chart styleguide_series styleguide_days unit="Day" title="Engagement" %}
     </div>
 
     <div class="grid gap-4 sm:grid-cols-2 mb-4">
       <div class="card card-pad">
-        <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Sparkline in a stat card</p>
+        <p class="text-xs font-medium text-ink-subtle uppercase tracking-wide mb-3">Sparkline in a stat card</p>
         {% include "components/stat_card.html" with label="Messages sent" value="1,284" icon="inbox" trend=styleguide_trend trend_label="Messages sent per day, last 14 days" %}
       </div>
       <div class="card card-pad">
-        <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Flat and single-point series</p>
-        <p class="text-xs text-gray-500 mb-2">A flat series draws a straight line; one reading draws nothing.</p>
+        <p class="text-xs font-medium text-ink-subtle uppercase tracking-wide mb-3">Flat and single-point series</p>
+        <p class="text-xs text-ink-subtle mb-2">A flat series draws a straight line; one reading draws nothing.</p>
         {% include "components/stat_card.html" with label="Steady" value="4" trend=styleguide_flat trend_label="Flat" %}
       </div>
     </div>
 
     <div class="card card-pad mb-4">
-      <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Meter — one value against its limit</p>
+      <p class="text-xs font-medium text-ink-subtle uppercase tracking-wide mb-3">Meter — one value against its limit</p>
       <div class="space-y-3 max-w-sm">
         <div>{% meter 94 100 label="Good" tone="good" %}</div>
         <div>{% meter 72 100 label="Brand" tone="brand" %}</div>
@@ -331,7 +331,7 @@
     </div>
 
     <div class="card card-pad">
-      <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Stacked bar — part to whole</p>
+      <p class="text-xs font-medium text-ink-subtle uppercase tracking-wide mb-3">Stacked bar — part to whole</p>
       <div class="max-w-md">{% stacked_bar styleguide_segments label="Step outcomes" %}</div>
     </div>
   </section>

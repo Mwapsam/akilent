@@ -9,17 +9,17 @@
 {% block title %}{% block page_title %}{% endblock %} — {{ site.app_name|default:"Akilent" }}{% endblock %}
 {% block extra_head %}
 <style>
-  .uc-hero{ background:#0E1526; color:#FAFBFC; position:relative; overflow:hidden; }
+  .uc-hero{ background:var(--color-gray-950); color:var(--color-gray-50); position:relative; overflow:hidden; }
   .uc-hero::before{ content:""; position:absolute; width:520px; height:520px; top:-300px; left:50%; margin-left:-260px;
     border-radius:999px; background:var(--color-teal-500); opacity:.14; filter:blur(110px); pointer-events:none; }
   .uc-hero-inner{ position:relative; max-width:48rem; margin:0 auto; padding:3.5rem 1.25rem 3rem; text-align:center; }
   @media (min-width:640px){ .uc-hero-inner{ padding:4.5rem 1.5rem 3.5rem; } }
-  .uc-eyebrow{ font-size:.8125rem; font-weight:600; letter-spacing:.02em; color:#74D4C4; margin:0; }
+  .uc-eyebrow{ font-size:.8125rem; font-weight:600; letter-spacing:.02em; color:var(--color-teal-300); margin:0; }
   .uc-hero h1{ margin:.5rem 0 0; font-size:2rem; line-height:1.15; font-weight:700; letter-spacing:-0.02em; text-wrap:balance; }
   @media (min-width:640px){ .uc-hero h1{ font-size:2.5rem; } }
-  .uc-hero p{ margin:1rem auto 0; max-width:36rem; color:#DCE1E8; font-size:1.0625rem; line-height:1.6; }
+  .uc-hero p{ margin:1rem auto 0; max-width:36rem; color:var(--color-gray-300); font-size:1.0625rem; line-height:1.6; }
   .uc-cta{ display:inline-flex; align-items:center; justify-content:center; min-height:44px; margin-top:2rem; padding:.75rem 1.5rem;
-    border-radius:10px; background:var(--color-amber-400); color:#12182B; font-weight:600; text-decoration:none; }
+    border-radius:10px; background:var(--color-amber-400); color:var(--color-ink-fixed); font-weight:600; text-decoration:none; }
   .uc-cta:hover{ background:var(--color-amber-500); }
 
   .uc-body{ max-width:64rem; margin:0 auto; padding:3.5rem 1.25rem 0; }

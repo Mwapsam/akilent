@@ -22,6 +22,7 @@ lives with the templates, not here.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 
@@ -63,7 +64,7 @@ class Series:
     """One plotted line, already scaled to the viewport."""
 
     label: str
-    values: list[float | None]
+    values: Sequence[float | None]
     points: list[Point] = field(default_factory=list)
     path: str = ""
     area: str = ""
@@ -87,7 +88,7 @@ def _round(n: float) -> float:
 
 
 def scale_series(
-    values: list[float | None],
+    values: Sequence[float | None],
     *,
     width: float,
     height: float,

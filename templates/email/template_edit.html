@@ -5,18 +5,18 @@
 {% block content %}
 <header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
   <div class="min-w-0">
-    <nav class="mb-1 flex items-center gap-1.5 text-xs text-gray-500" aria-label="Breadcrumb">
+    <nav class="mb-1 flex items-center gap-1.5 text-xs text-ink-subtle" aria-label="Breadcrumb">
       <a href="/email/templates/" class="hover:text-ink">Templates</a>
       <span aria-hidden="true">/</span><span class="text-ink">{{ template.name }}</span>
     </nav>
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Edit template</h1>
-    <p class="mt-1 text-sm text-gray-600">{{ template.name }} &middot; <code>{{ template.slug }}</code></p>
+    <p class="mt-1 text-sm text-ink-muted">{{ template.name }} &middot; <code>{{ template.slug }}</code></p>
   </div>
   <div class="flex flex-wrap items-center gap-2">
     <button id="editor-undo" type="button" class="btn btn-secondary btn-sm" title="Undo (Ctrl+Z)" aria-label="Undo" disabled>Undo</button>
     <button id="editor-redo" type="button" class="btn btn-secondary btn-sm" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled>Redo</button>
     <button id="template-send-test" type="button" class="btn btn-secondary btn-sm">Send Test</button>
-    <span id="email-builder-status" class="text-xs text-gray-400 min-w-[5.5rem]" role="status" aria-live="polite"></span>
+    <span id="email-builder-status" class="text-xs text-ink-subtle min-w-[5.5rem]" role="status" aria-live="polite"></span>
     <a href="?mode=blocks" class="btn btn-secondary btn-sm" title="Build it from sections instead of HTML">Drag-and-drop editor</a>
     <a href="/email/templates/assets/" class="btn btn-secondary btn-sm">Media library</a>
     <button id="email-builder-save" type="submit" form="raw-editor-form" class="btn btn-primary btn-sm">
@@ -54,12 +54,12 @@ tall. At lg and up nothing changes: both panes show side by side.{% endcomment %
       <input type="hidden" name="builder_mode" value="raw">
       <div>
         <label class="label" for="tpl-text-body">Text body</label>
-        <textarea id="tpl-text-body" name="text_body" rows="6" class="textarea font-mono text-sm"
+        <textarea id="tpl-text-body" name="text_body" rows="6" class="textarea font-mono sm:text-sm"
                   data-merge-tags='{{ merge_tag_paths_json }}'>{{ template.text_body }}</textarea>
       </div>
       <div class="flex flex-col flex-1">
         <label class="label" for="tpl-html-body">HTML body</label>
-        <textarea id="tpl-html-body" name="html_body" class="textarea font-mono text-sm flex-1 min-h-[20rem]"
+        <textarea id="tpl-html-body" name="html_body" class="textarea font-mono sm:text-sm flex-1 min-h-[20rem]"
                   data-merge-tags='{{ merge_tag_paths_json }}'>{{ template.html_body }}</textarea>
       </div>
     </form>
@@ -115,10 +115,10 @@ tall. At lg and up nothing changes: both panes show side by side.{% endcomment %
   <h2 class="text-lg font-semibold text-ink mb-3">Version history</h2>
   <div class="grid gap-2">
     {% for v in template.versions.all %}
-    <div class="text-sm text-gray-600 flex items-center justify-between gap-3 border-b border-border py-2 last:border-0">
+    <div class="text-sm text-ink-muted flex items-center justify-between gap-3 border-b border-border py-2 last:border-0">
       <span class="truncate">{{ v.subject|default:"(no subject)" }}</span>
       <span class="flex items-center gap-2 shrink-0">
-        <span class="text-xs text-gray-400">{{ v.created_at|date:"M j, H:i" }}</span>
+        <span class="text-xs text-ink-subtle">{{ v.created_at|date:"M j, H:i" }}</span>
         <form method="post" action="/email/templates/{{ template.pk }}/versions/{{ v.pk }}/restore/" hx-confirm="Restore this version? Your current content will be saved as a new version first."
               hx-post="/email/templates/{{ template.pk }}/versions/{{ v.pk }}/restore/" hx-swap="none">
           {% csrf_token %}

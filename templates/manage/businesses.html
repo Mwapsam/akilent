@@ -4,7 +4,7 @@
 {% block content %}
 <header class="mb-6">
   <h1 class="text-2xl font-semibold tracking-tight text-ink">Businesses</h1>
-  <p class="mt-1 text-sm text-gray-600">Every business on {{ site.app_name|default:"Akilent" }}. Open one to see and fix anything about it.</p>
+  <p class="mt-1 text-sm text-ink-muted">Every business on {{ site.app_name|default:"Akilent" }}. Open one to see and fix anything about it.</p>
 </header>
 
 <form method="get" class="mb-4 flex flex-wrap items-center gap-2">
@@ -25,13 +25,13 @@
       <tr>
         <td data-label="Business">
           <a href="{% url 'core:business' r.account.pk %}" class="font-medium text-ink hover:text-accent">{{ r.account.company_name }}</a>
-          <span class="block text-xs text-gray-500">{{ r.account.slug }} · since {{ r.account.created_at|date:"j M Y" }}</span>
+          <span class="block text-xs text-ink-subtle">{{ r.account.slug }} · since {{ r.account.created_at|date:"j M Y" }}</span>
         </td>
         <td data-label="Owner">{{ r.owner.email|default:"—" }}</td>
-        <td data-label="Plan">{% if r.subscription %}{{ r.subscription.plan.name }} <span class="text-xs text-gray-500">· {{ r.subscription.get_status_display }}</span>{% else %}<span class="text-gray-500">None</span>{% endif %}</td>
+        <td data-label="Plan">{% if r.subscription %}{{ r.subscription.plan.name }} <span class="text-xs text-ink-subtle">· {{ r.subscription.get_status_display }}</span>{% else %}<span class="text-ink-subtle">None</span>{% endif %}</td>
         <td data-label="Members">{{ r.members }}</td>
         <td data-label="Needs attention">
-          {% for why in r.reasons %}<span class="badge {% if why == 'Suspended' %}badge-danger{% else %}badge-warning{% endif %} mr-1 mb-1">{{ why }}</span>{% empty %}<span class="text-gray-500">—</span>{% endfor %}
+          {% for why in r.reasons %}<span class="badge {% if why == 'Suspended' %}badge-danger{% else %}badge-warning{% endif %} mr-1 mb-1">{{ why }}</span>{% empty %}<span class="text-ink-subtle">—</span>{% endfor %}
         </td>
       </tr>
       {% endfor %}
@@ -39,6 +39,6 @@
   </table>
 </div>
 {% else %}
-<p class="card card-pad text-sm text-gray-600">No business matches.</p>
+<p class="card card-pad text-sm text-ink-muted">No business matches.</p>
 {% endif %}
 {% endblock %}

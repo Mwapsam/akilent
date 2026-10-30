@@ -63,7 +63,7 @@
       {% if contact_list %}<input type="hidden" name="list" value="{{ contact_list.pk }}">{% endif %}
       {% if attested %}<input type="hidden" name="attested" value="1">{% endif %}
       <label class="label" for="fix-numbers">Corrected numbers</label>
-      <textarea id="fix-numbers" name="numbers" rows="5" class="textarea font-mono text-sm" required>{{ invalid_text }}</textarea>
+      <textarea id="fix-numbers" name="numbers" rows="5" class="textarea font-mono sm:text-sm" required>{{ invalid_text }}</textarea>
       <div class="flex justify-end">
         <button class="btn btn-primary btn-sm" :aria-busy="busy" :disabled="busy"><span class="btn-spinner" x-show="busy"></span><span>Add these</span></button>
       </div>

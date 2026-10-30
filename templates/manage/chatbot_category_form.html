@@ -40,7 +40,7 @@
         <p class="text-xs text-ink-muted mt-1">Lower numbers appear first.</p>
       </div>
       <div class="flex items-end pb-1">
-        <label class="flex items-center gap-2 cursor-pointer">
+        <label class="flex min-h-6 items-center gap-2 cursor-pointer">
           <input type="checkbox" name="is_active" class="rounded"
             {% if post %}{% if post.is_active %}checked{% endif %}{% elif initial.is_active %}checked{% endif %}>
           <span class="text-sm font-medium text-ink">Active</span>

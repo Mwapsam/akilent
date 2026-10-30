@@ -53,7 +53,8 @@
       <label class="flex items-center gap-2 min-h-[2rem]"><input type="checkbox" name="payment_methods" value="{{ key }}" {% if key in profile.payment_methods %}checked{% endif %}> {{ label }}</label>
       {% endfor %}
     </div>
-    <input name="payment_other" class="input mt-2" maxlength="120" value="{{ profile.payment_other|default:'' }}" placeholder="Anything else, e.g. Zamtel Kwacha">
+    <label class="sr-only" for="payment-other">Other ways customers pay</label>
+    <input name="payment_other" id="payment-other" class="input mt-2" maxlength="120" value="{{ profile.payment_other|default:'' }}" placeholder="Anything else, e.g. Zamtel Kwacha">
   </fieldset>
   <div>
     <label class="label" for="b-web">Website <span class="font-normal text-ink-subtle">· Optional</span></label>

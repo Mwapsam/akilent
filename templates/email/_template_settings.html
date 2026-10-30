@@ -16,7 +16,7 @@ instead (see email-builder.js).
     </div>
     <div>
       <label class="label" for="tpl-slug">Slug</label>
-      <input id="tpl-slug" type="text" value="{{ template.slug }}" disabled class="input font-mono text-sm">
+      <input id="tpl-slug" type="text" value="{{ template.slug }}" disabled class="input font-mono sm:text-sm">
     </div>
   </div>
   <div class="mt-3">
@@ -49,9 +49,9 @@ instead (see email-builder.js).
     {% endif %}
   </div>
   <div class="mt-3">
-    <label class="label" for="tpl-sample-variables">Sample variables <span class="text-gray-400 font-normal">(used to fill merge tags in the preview)</span></label>
+    <label class="label" for="tpl-sample-variables">Sample variables <span class="text-ink-subtle font-normal">(used to fill merge tags in the preview)</span></label>
     <textarea id="tpl-sample-variables" name="sample_variables" form="raw-editor-form" rows="4"
-              class="input font-mono text-xs">{{ sample_variables_json }}</textarea>
+              class="input font-mono sm:text-xs">{{ sample_variables_json }}</textarea>
     <p class="help">JSON, e.g. <code>&#123;"first_name": "Ada", "contact": &#123;"phone": "555-0100"&#125;&#125;</code></p>
   </div>
 </div>

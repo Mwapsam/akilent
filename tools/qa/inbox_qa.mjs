@@ -440,7 +440,9 @@ const convId = await evaluate("JSON.parse(document.getElementById('chat-config')
 await evaluate(`sessionStorage.setItem('inbox-unconfirmed:${convId}', JSON.stringify([{ id: 'pold', body: 'QA old unconfirmed', ts: new Date(Date.now() - 864e5 * 3).toISOString() }]))`);
 await go(detailPath);
 st = await chat("(() => { const ts = c.messages.map(m => new Date(m.ts).getTime()); return { sorted: ts.every((t, i) => i === 0 || ts[i - 1] <= t), idx: c.messages.findIndex(m => m.id === 'pold'), n: c.messages.length }; })()");
-check("send.restored-in-time-order", st.sorted && st.idx === 0, st);
+// In time order and present. Not "first": the seeded thread ages, and once it holds a message
+// older than three days, that one rightly comes before the restored send.
+check("send.restored-in-time-order", st.sorted && st.idx >= 0, st);
 await chat("c.dismissUnknown(c.messages.find(m => m.id === 'pold'))");
 
 // 18. A one-off load that fails is still said (it is not a background refresh).

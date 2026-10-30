@@ -110,12 +110,12 @@ hx-trigger of its own, so it loads exactly once.
       <li class="px-5 sm:px-6 py-3 flex items-center gap-3">
         <span class="w-2 h-2 rounded-full shrink-0 {% if bot.is_active %}bg-teal-500{% else %}bg-gray-300{% endif %}"></span>
         <span class="flex-1 min-w-0">
-          <a href="{% url 'chatbot:detail' bot.pk %}" class="text-sm font-medium text-ink hover:text-accent truncate block">
+          <a href="{% url 'chatbot:detail' bot.pk %}" class="text-sm font-medium text-ink hover:text-accent truncate block min-h-6 leading-6">
             {{ bot.name }}
           </a>
           <span class="text-xs text-ink-muted">{{ bot.get_purpose_display }}</span>
         </span>
-        <a href="{% url 'chatbot:analytics' bot.pk %}" class="text-xs text-ink-muted hover:text-accent shrink-0">Analytics</a>
+        <a href="{% url 'chatbot:analytics' bot.pk %}" class="inline-flex items-center min-h-6 text-xs text-ink-muted hover:text-accent shrink-0" aria-label="{{ bot.name }} analytics">Analytics</a>
       </li>
       {% endfor %}
     </ul>

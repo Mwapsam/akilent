@@ -7,7 +7,7 @@
 <header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
   <div class="min-w-0">
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Templates</h1>
-    <p class="mt-1 text-sm text-gray-600">
+    <p class="mt-1 text-sm text-ink-muted">
       {% if channel == 'whatsapp' %}Templates approved by Meta for use in replies, workflows and campaigns.
       {% else %}Reusable subject/body content with <code>{% verbatim %}{{ variable }}{% endverbatim %}</code> interpolation, usable in single sends and bulk campaigns.{% endif %}
     </p>
@@ -101,7 +101,7 @@ form below. Nothing is saved until the owner presses Create template.{% endcomme
 <section class="card card-pad mb-6 space-y-2"
          x-data="aiDraft({kind: 'email_template', createUrl: '{% url 'ai:draft-create' %}', statusUrl: '{% url 'ai:draft-status' 0 %}', onReady(d) { window.location = '?draft=' + d.id } })">
   <h2 class="text-base font-semibold text-ink">Describe the email you need</h2>
-  <p class="text-sm text-gray-500">AI writes the words, Akilent builds the email and fills in the form below. You check it, then create it.</p>
+  <p class="text-sm text-ink-subtle">AI writes the words, Akilent builds the email and fills in the form below. You check it, then create it.</p>
   <div x-data="{ prompt: '' }" class="space-y-2">
     <textarea x-model="prompt" class="textarea" rows="2" aria-label="The email you need"
               placeholder="Thank customers after they pay and show their receipt number."></textarea>
@@ -127,8 +127,8 @@ form below. Nothing is saved until the owner presses Create template.{% endcomme
   {% if ai_draft %}
   {{ ai_draft.parts|json_script:"email-ai-parts" }}
   <div class="mb-4 rounded-xl border border-border p-3 text-sm">
-    <p class="text-xs font-semibold text-gray-500">Why I built it this way</p>
-    <ul class="mt-1 list-disc pl-5 space-y-0.5 text-gray-600">
+    <p class="text-xs font-semibold text-ink-subtle">Why I built it this way</p>
+    <ul class="mt-1 list-disc pl-5 space-y-0.5 text-ink-muted">
       {% for reason in ai_draft.reasons %}<li>{{ reason }}</li>{% endfor %}
     </ul>
     {% if ai_draft.warnings %}
@@ -137,7 +137,7 @@ form below. Nothing is saved until the owner presses Create template.{% endcomme
     {% if ai_on %}
     <div class="mt-3" x-data="aiDraft({kind: 'email_edit', createUrl: '{% url 'ai:draft-create' %}', statusUrl: '{% url 'ai:draft-status' 0 %}'})">
       <div class="flex flex-wrap items-center gap-1.5 text-xs" role="group" aria-label="Improve with AI">
-        <span class="text-gray-500">Improve with AI:</span>
+        <span class="text-ink-subtle">Improve with AI:</span>
         <button type="button" class="btn btn-ghost btn-sm" :disabled="busy" @click="start(emailAiEdit('friendlier'))">Friendlier</button>
         <button type="button" class="btn btn-ghost btn-sm" :disabled="busy" @click="start(emailAiEdit('shorter'))">Shorter</button>
         <button type="button" class="btn btn-ghost btn-sm" :disabled="busy" @click="start(emailAiEdit('business_name'))">Add our business name</button>
@@ -149,7 +149,7 @@ form below. Nothing is saved until the owner presses Create template.{% endcomme
           <button type="button" class="btn btn-ghost btn-sm" :disabled="busy" @click="start(emailAiEdit('translate:' + lang))">Translate</button>
         </span>
         <button type="button" class="btn btn-ghost btn-sm" :disabled="busy" @click="start(emailAiEdit('subjects'))">Suggest subject lines</button>
-        <span x-show="busy" x-cloak class="text-gray-500">Working…</span>
+        <span x-show="busy" x-cloak class="text-ink-subtle">Working…</span>
       </div>
       <p class="text-xs text-red-700 mt-1" x-show="error" x-text="error" role="alert"></p>
       <div x-show="draft && draft.result.subjects" x-cloak class="mt-2 flex flex-wrap gap-2" role="group" aria-label="Suggested subject lines">
@@ -159,7 +159,7 @@ form below. Nothing is saved until the owner presses Create template.{% endcomme
         <button type="button" class="btn btn-ghost btn-sm" @click="draft = null">Discard</button>
       </div>
       <div x-show="draft && draft.result.diff" x-cloak class="mt-2 rounded-xl border border-border p-3">
-        <p class="text-xs font-semibold text-gray-500">Suggested change</p>
+        <p class="text-xs font-semibold text-ink-subtle">Suggested change</p>
         <p class="mt-1 whitespace-pre-line">
           <template x-for="part in (draft && draft.result.diff) || []">
             <span :class="part[0] === 'del' ? 'line-through text-red-700' : ''"
@@ -178,7 +178,7 @@ form below. Nothing is saved until the owner presses Create template.{% endcomme
   {% endif %}
 
   <div class="mb-4" id="starter-template-picker" data-starters='{{ starter_templates_json }}'>
-    <p class="text-xs font-medium text-gray-500 mb-1.5">Start from a sample</p>
+    <p class="text-xs font-medium text-ink-subtle mb-1.5">Start from a sample</p>
     <div class="flex flex-wrap gap-2" id="starter-template-buttons"></div>
   </div>
 
@@ -195,11 +195,11 @@ form below. Nothing is saved until the owner presses Create template.{% endcomme
     {% include "components/form_field.html" with name="subject" label="Subject" placeholder="Welcome, &#123;&#123; first_name &#125;&#125;!" required=True value=ai_draft.fields.subject %}
     <div>
       <label class="label" for="id_text_body">Text body</label>
-      <textarea id="id_text_body" name="text_body" rows="4" class="textarea font-mono text-sm" placeholder="Hi &#123;&#123; first_name &#125;&#125;, thanks for joining.">{{ ai_draft.fields.text_body }}</textarea>
+      <textarea id="id_text_body" name="text_body" rows="4" class="textarea font-mono sm:text-sm" placeholder="Hi &#123;&#123; first_name &#125;&#125;, thanks for joining.">{{ ai_draft.fields.text_body }}</textarea>
     </div>
     <div>
       <label class="label" for="id_html_body">HTML body</label>
-      <textarea id="id_html_body" name="html_body" rows="6" class="textarea font-mono text-sm" placeholder="&lt;p&gt;Hi &#123;&#123; first_name &#125;&#125;, thanks for joining.&lt;/p&gt;">{{ ai_draft.fields.html_body }}</textarea>
+      <textarea id="id_html_body" name="html_body" rows="6" class="textarea font-mono sm:text-sm" placeholder="&lt;p&gt;Hi &#123;&#123; first_name &#125;&#125;, thanks for joining.&lt;/p&gt;">{{ ai_draft.fields.html_body }}</textarea>
       {% if ai_draft %}<p class="help">Built by Akilent from the words above. After creating it you can restyle it in Drag-and-drop.</p>{% endif %}
     </div>
     <div>
@@ -250,8 +250,8 @@ form below. Nothing is saved until the owner presses Create template.{% endcomme
         <td data-label="Name">
           <a href="/email/templates/{{ t.pk }}/" class="font-medium text-accent hover:text-accent-strong">{{ t.name }}</a>
         </td>
-        <td data-label="Type" class="text-gray-600">{% if t.builder_mode == 'blocks' %}Drag &amp; Drop{% else %}Raw HTML{% endif %}</td>
-        <td data-label="Updated" class="text-gray-500 tabular-nums">{{ t.updated_at|date:"M j, H:i" }}</td>
+        <td data-label="Type" class="text-ink-muted">{% if t.builder_mode == 'blocks' %}Drag &amp; Drop{% else %}Raw HTML{% endif %}</td>
+        <td data-label="Updated" class="text-ink-subtle tabular-nums">{{ t.updated_at|date:"M j, H:i" }}</td>
         <td data-label="Actions">
           <div class="flex items-center gap-1 justify-end">
             <button type="button" class="btn btn-ghost btn-icon btn-sm" title="Preview" aria-label="Preview {{ t.name }}"

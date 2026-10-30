@@ -5,11 +5,11 @@
 {% block breadcrumbs %}
   <div class="flex items-center gap-2 text-sm">
     <a href="{% url 'core:configurations-list' %}"
-       class="text-gray-500 hover:text-ink transition-colors">
+       class="text-ink-subtle hover:text-ink transition-colors">
       Configurations
     </a>
 
-    {% include "components/icon.html" with name="chevron-right" class="w-4 h-4 text-gray-400" %}
+    {% include "components/icon.html" with name="chevron-right" class="w-4 h-4 text-ink-subtle" %}
 
     <span class="font-medium text-ink">
       Delete
@@ -23,7 +23,7 @@
       Delete configuration
     </h1>
 
-    <p class="mt-1 text-sm text-gray-500">
+    <p class="mt-1 text-sm text-ink-subtle">
       This action cannot be undone.
     </p>
   </div>

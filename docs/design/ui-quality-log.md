@@ -1554,3 +1554,102 @@ None new. The orders customer filter and pagination are read-only list options. 
 | Implementation | **Done** |
 | Verification | **Done**: tests and 91/91 in the browser. **Open:** a screen-reader pass and a real phone (the iOS zoom fix especially). |
 | Acceptance | **Pending your review** |
+
+## Entry 16: Phase 9, public pages, email, logs and the Operator Console, plus the full regression pass (2026-10-30)
+
+You said to continue. This is Phase 9, the last area phase. The exit-gate task is a full regression checklist across all areas, both themes, and several widths.
+
+### Tested code
+
+| | |
+|---|---|
+| HEAD | `ec74057` |
+| Tracked changes | 70 files, +480 −473. `git diff HEAD --binary -- . ':!docs/design/ui-quality-log.md'` SHA-256 `e776b74837161f11…` |
+| Untracked | `apps/core/tests/test_public_ui_quality.py`, `tools/qa/phase9_qa.mjs`. Combined SHA-256 `6302ddfb64c54cd5…` |
+
+### Defects found and fixed: Phase 9 areas
+
+| # | Sev | Defect | Fix |
+|---|---|---|---|
+| D1 | Med | **Raw hex colours in the public shells** (`public/_base.html`, the "for" pages, help styles, docs layout, legal print style). | All colours now come from the palette. Code blocks are dark in both themes, so they get fixed tokens: `--code-bg`, `--code-fg` and `--code-line`. |
+| D2 | Med | **The email unsubscribe page** (seen by the business's customers) was hard-coded light, with its own greys and reds. | It links `app.css` and uses tokens, so it follows the reader's dark mode. The ✓ is hidden from screen readers. It has a 16px side margin on phones. |
+| D3 | Med | **The help search box took focus on load.** Keyboard and screen-reader users started mid-page, past the skip link and the header. | `autofocus` removed. The first Tab now reaches "Skip to content". |
+| D4 | Low | **Grey text left in email (54 places), logs (45) and the Operator Console (128).** `text-[11px]` in email (3). | `ink-subtle` / `ink-muted` / `ink`, and `text-xs`. **Drift is 0 across the whole product.** The baseline was 1,252 at the start of the programme. |
+| D5 | Low | **Docs:** the "On this page" heading was 3.02:1. Links in table cells were 17px tall. The public "Sign in" link was 21px tall. | `ink-subtle`, and 24px minimums. |
+| D6 | Med | **Operator Console:** the settings page scrolled sideways at 390 (the logo file input wouldn't shrink in an implicit grid column). The checkbox and radio labels and several links were under 24px. "Deactivate" was 2.52:1 (`text-amber-600`). | `grid-cols-1`, `min-w-0`, `min-h-6` and `tone-amber-fg`. |
+| D7 | Low | **Shared:** "Learn more" help links and links in any `.table-wrap` table were under 24px. | `components/help_link.html` has a 24px minimum. The table-link rule covers `:is(.table, .table-wrap table)`. |
+
+### Defects found by the full regression pass
+
+The per-phase checks ran at 390. The full crawl (`tools/qa/area_scan.mjs`) runs at 360, and new seed data showed states the earlier checks hadn't seen.
+
+| # | Sev | Defect | Fix |
+|---|---|---|---|
+| R1 | **High** | **The inbox page scrolled as a whole on a 1280×860 screen** once the list was longer than its column. A row's `.sr-only` label is `position: absolute`. The scrolling list column wasn't positioned, so those labels escaped its scroll box and stretched the page (203px here). | `position: relative` on the list column. A test guards it. |
+| R2 | Med | **Fields under 16px on phones in 13 templates and one script.** A `text-sm`/`text-xs` on a shared `.input`/`.textarea`/`.select` overrode its `text-base` phone size, so iOS zooms. This affected the email template editor, workflow editor, campaign compose and console forms, among others. | Made desktop-only (`sm:text-sm` / `sm:text-xs`) everywhere, including `static/js/sample-variables-editor.js`. Two tests guard templates and script-built fields. |
+| R3 | Med | **Sideways scroll at 360:** the insight action row (Dismiss clipped), the Instagram accounts row (Disconnect clipped), and the help page's two "need a hand" cards. | The action rows wrap (`min-w-0 max-w-full` instead of `shrink-0`). The help row is `minmax(0,1fr)` and the cards wrap. |
+| R4 | Low | **Unlabelled fields:** "Other ways customers pay" on Build, and the email assets search. | Labels added (the search is now `type="search"`). |
+| R5 | Low | **The dashboard's chatbot panel** (shown once a bot exists) had a 20px bot name and a 16px "Analytics" link. | 24px minimums, and an accessible name for "Analytics". |
+| R6 | Med | **Type check:** the Phase 7 chart change typed series as `list[float \| None]`, which mypy rejects for the sparkline's `list[float]`. You found this with `mypy .`. | `Sequence[float \| None]` (covariant). `mypy .` is clean. |
+
+### Automated results
+
+| Command | Result |
+|---|---|
+| `poetry run pytest -n 4` (full suite, final) | **5,170 passed, 25 skipped, 0 failed.** The first attempt at the default 12 workers crashed in collection with WinError 1450 (insufficient system resources, about 500 MB free). This was an environment problem, not a test failure; 4 workers ran cleanly. |
+| `test_public_ui_quality.py` (new) | **11 pass:** drift is 0, code tokens, no help autofocus, the unsubscribe page uses tokens, small targets, console settings at phone width, no field under 16px (templates and scripts), action rows wrap, labels, the inbox list column contains its absolute children. |
+| `ruff check .`, `ruff format --check .`, `mypy .` | Clean. 652 source files. |
+| Drift | **0 total.** The baseline records zero everywhere. |
+
+### Browser verification: full regression
+
+Each harness ran against the dev server with fresh seed data. Every POST is answered by the harness, except Phase 6's pause and resume, which ran for real on QA data.
+
+| Harness | Result |
+|---|---|
+| `landing_qa` (WhatsApp on) | 26/26 |
+| `landing_qa` (WhatsApp off) | 26/26 |
+| `inbox_qa` | **73/73** after R1 and two harness fixes |
+| `publishing_qa` | 21/21 |
+| `accounts_qa` | 12/12 |
+| `channels_qa` | 17/17 |
+| `billing_qa` | A 17/17, B 1/1 |
+| `automation_qa` | 30/30 |
+| `insights_qa` | 23/23 (the dashboard failed until R5) |
+| `small_areas_qa` | 91/91 |
+| `phase9_qa` public / user / operator | 23/23, 31/31, 47/47 |
+| `area_scan` (crawl from the sidebar, 360 and 1280, both themes) | **119 pages, 0 with issues.** It was 9 before R2–R4. |
+
+**Not re-run:** `sse_qa.mjs`, which needs the uvicorn server on :8002 (Entry 8).
+
+**Phase 9 scope notes:**
+- Public pages are scanned in light only. Their shell is always light (`data-theme="light"`), so a forced dark scan tests a state visitors never see.
+- The Operator Console was checked with a separate local test operator, `ui-qa-operator@akilent-qa.invalid`. Its credentials are `QA_UI_OP_*` in the gitignored `.env`. It exists in the dev database only.
+
+**Harness fixes:**
+- `inbox_qa` "restored in time order" required position 0. The seeded thread has aged and now holds an older message, so the check now asserts time order and presence.
+- The inbox "Not connected" check failed once on timing (one failed poll in 9s) and passed on the re-run.
+- Headless Chrome left on a port by a crashed run is now stopped by its profile directory before each harness.
+
+**Diagnosis note (R1):** I first thought a late-rendering suggestion card above the split was the cause and added a resize observer. Measuring showed the split fitted exactly and the overflow came from the escaped `.sr-only` labels, so I reverted that change. Only the `position: relative` fix remains.
+
+Screenshots are in `docs/design/qa/phase9/` (local only).
+
+### Backend gaps
+
+None new. G5–G9 still need your authorization.
+
+### Sign-offs
+
+| Gate | Status |
+|---|---|
+| Implementation | **Done** |
+| Verification | **Done**: full suite, every area harness and the 119-page crawl are green. **Open (yours):** real iPhone and Android checks (the iOS zoom fix especially), and a screen-reader pass. |
+| Acceptance | **Pending your review** |
+
+### Programme status
+
+All ten phases (0–9) are implemented and verified. Under the release rule, three items are still open:
+- your acceptance review of Phases 7–9 (Phase 8 committed as `ec74057`)
+- the real-device and screen-reader passes listed in each entry
+- the pilot-user validation of the flagged flows (inbox send and recover, scheduling a post, billing checkout, editing a workflow)

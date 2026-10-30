@@ -5,7 +5,7 @@
 <div class="flex flex-wrap items-end justify-between gap-3 mb-6">
   <div>
     <h1 class="text-2xl font-semibold tracking-tight">Webhooks</h1>
-    <p class="text-sm text-gray-500 mt-1">Get signed, real-time callbacks when messages send, fail, or get opened/clicked.</p>
+    <p class="text-sm text-ink-subtle mt-1">Get signed, real-time callbacks when messages send, fail, or get opened/clicked.</p>
   </div>
   <a href="/email/domains/" class="btn btn-secondary btn-sm">
     {% include "components/icon.html" with name="globe" class="w-4 h-4" %} Domains
@@ -21,7 +21,7 @@
   <h2 class="font-semibold flex items-center gap-2">
     {% include "components/icon.html" with name="key" class="w-4 h-4 text-amber-500" %} Webhooks
   </h2>
-  <p class="text-sm text-gray-600 mt-2">Your current plan doesn't include outbound webhooks. <a href="/billing/plans/" class="text-accent font-medium">Upgrade your plan</a> to subscribe an endpoint.</p>
+  <p class="text-sm text-ink-muted mt-2">Your current plan doesn't include outbound webhooks. <a href="/billing/plans/" class="text-accent font-medium">Upgrade your plan</a> to subscribe an endpoint.</p>
 </div>
 {% else %}
 
@@ -32,10 +32,10 @@
     {% csrf_token %}
     {% include "components/form_field.html" with name="url" label="Endpoint URL" type="url" placeholder="https://yourapp.com/webhooks/akilent" required=True %}
     <div>
-      <p class="text-xs font-medium text-gray-500 mb-1.5">Events</p>
+      <p class="text-xs font-medium text-ink-subtle mb-1.5">Events</p>
       <div class="flex flex-wrap gap-3">
         {% for slug, label in event_choices %}
-        <label class="inline-flex items-center gap-1.5 text-sm">
+        <label class="inline-flex items-center min-h-6 gap-1.5 text-sm">
           <input type="checkbox" name="event_types" value="{{ slug }}" class="checkbox">
           {{ label }}
         </label>
@@ -66,9 +66,9 @@
             <span class="ml-2 inline-flex items-center rounded-full tone-coral px-2 py-0.5 text-xs font-medium">Disabled</span>
           {% endif %}
         </p>
-        <p class="text-xs text-gray-500 mt-1">{{ e.event_types|join:", " }}</p>
-        <p class="text-xs text-gray-400 mt-1">Signing secret: <code>{{ e.signing_secret }}</code></p>
-        {% if e.last_success_at %}<p class="text-xs text-gray-400 mt-1">Last success: {{ e.last_success_at }}</p>{% endif %}
+        <p class="text-xs text-ink-subtle mt-1">{{ e.event_types|join:", " }}</p>
+        <p class="text-xs text-ink-subtle mt-1">Signing secret: <code>{{ e.signing_secret }}</code></p>
+        {% if e.last_success_at %}<p class="text-xs text-ink-subtle mt-1">Last success: {{ e.last_success_at }}</p>{% endif %}
         {% if e.disabled_reason %}<p class="text-xs text-red-600 mt-1">{{ e.disabled_reason }}</p>{% endif %}
         {% if e.last_error %}<p class="text-xs text-red-600 mt-1">Last error: {{ e.last_error|truncatechars:200 }}</p>{% endif %}
       </div>
@@ -126,7 +126,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="7" class="text-center text-gray-400 py-8">No deliveries yet.</td></tr>
+        <tr><td colspan="7" class="text-center text-ink-subtle py-8">No deliveries yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>

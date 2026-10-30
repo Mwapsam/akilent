@@ -12,7 +12,7 @@
     {% comment %}Server-side search, so it works without JavaScript.{% endcomment %}
     <form method="get" action="{% url 'help' %}" class="help-search" role="search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input type="search" name="q" value="{{ q }}" {% if not q %}autofocus{% endif %}
+      <input type="search" name="q" value="{{ q }}"
              placeholder="Search guides, e.g. “DNS” or “invite a teammate”"
              aria-label="Search help">
     </form>

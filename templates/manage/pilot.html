@@ -5,14 +5,14 @@
 {% block content %}
 <header class="mb-6">
   <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Pilot Command Center</h1>
-  <p class="mt-1 text-sm text-gray-600">Check every morning: is the platform healthy, and is each pilot business using Akilent? Staff only.</p>
+  <p class="mt-1 text-sm text-ink-muted">Check every morning: is the platform healthy, and is each pilot business using Akilent? Staff only.</p>
 </header>
 
 <section class="card card-pad mb-8" aria-labelledby="pc-credit" x-data="{ open: false }">
   <div class="flex items-center justify-between gap-3">
     <div>
       <h2 id="pc-credit" class="font-semibold">Early-adopter credit</h2>
-      <p class="text-xs text-gray-500">Give every enrolled pilot business account credit. It pays for their plan before any card is charged. Businesses that already have it are skipped. One business at a time: its Billing tab.</p>
+      <p class="text-xs text-ink-subtle">Give every enrolled pilot business account credit. It pays for their plan before any card is charged. Businesses that already have it are skipped. One business at a time: its Billing tab.</p>
     </div>
     <button type="button" class="btn btn-secondary btn-sm" @click="open = !open" :aria-expanded="open">Give credit</button>
   </div>
@@ -34,14 +34,14 @@
       <li class="flex justify-between gap-3 py-1.5">
         <code>{{ q.name }}</code>
         {% if q.seen %}
-        <span class="{% if q.late %}text-red-700 font-medium{% else %}text-gray-600{% endif %}">{% if q.late %}Late · {% endif %}{{ q.seen|timesince }} ago</span>
+        <span class="{% if q.late %}text-red-700 font-medium{% else %}text-ink-muted{% endif %}">{% if q.late %}Late · {% endif %}{{ q.seen|timesince }} ago</span>
         {% else %}
         <span class="text-red-700 font-medium">Never seen</span>
         {% endif %}
       </li>
       {% endfor %}
     </ul>
-    <p class="text-xs text-gray-500">Each queue gets a heartbeat every minute. "Late" means no worker has picked it up for 5 minutes.</p>
+    <p class="text-xs text-ink-subtle">Each queue gets a heartbeat every minute. "Late" means no worker has picked it up for 5 minutes.</p>
   </section>
 
   <section class="card card-pad space-y-3" aria-labelledby="pc-wa">
@@ -82,17 +82,17 @@
     <ul class="text-sm space-y-1">
       {% for r in failed_runs %}
       <li><span class="font-medium">{{ r.account }}</span> · {{ r.workflow }}{% if r.step %} · {{ r.step }}{% endif %} · {{ r.at|timesince }} ago
-        {% if r.error %}<span class="block text-xs text-gray-600">{{ r.error|truncatechars:140 }}</span>{% endif %}</li>
+        {% if r.error %}<span class="block text-xs text-ink-muted">{{ r.error|truncatechars:140 }}</span>{% endif %}</li>
       {% endfor %}
     </ul>
     {% else %}
-    <p class="text-sm text-gray-600">No failed automation runs.</p>
+    <p class="text-sm text-ink-muted">No failed automation runs.</p>
     {% endif %}
   </section>
 </div>
 
 <section aria-labelledby="pc-biz">
-  <h2 id="pc-biz" class="text-lg font-semibold text-ink mb-3">Pilot businesses <span class="text-gray-500 font-normal">· {{ businesses|length }}</span></h2>
+  <h2 id="pc-biz" class="text-lg font-semibold text-ink mb-3">Pilot businesses <span class="text-ink-subtle font-normal">· {{ businesses|length }}</span></h2>
   {% if businesses %}
   <div class="table-wrap">
     <table class="table table--cards">
@@ -106,10 +106,10 @@
           <td data-label="Business" class="font-medium text-ink">{{ b.account }}
             {% if b.quiet %}<span class="badge badge-warning ml-1">Quiet</span>{% endif %}</td>
           <td data-label="Connected">{{ b.connected_at|date:"j M Y" }}</td>
-          <td data-label="First automation ran">{% if b.first_value is not None %}{{ b.first_value.days }} day{{ b.first_value.days|pluralize }} after connecting{% else %}<span class="text-gray-500">Not yet</span>{% endif %}</td>
+          <td data-label="First automation ran">{% if b.first_value is not None %}{{ b.first_value.days }} day{{ b.first_value.days|pluralize }} after connecting{% else %}<span class="text-ink-subtle">Not yet</span>{% endif %}</td>
           <td data-label="Automations on">{{ b.automations_on }}</td>
-          <td data-label="Conversations, 7 days">{{ b.conversations_7d }}{% if b.last_customer_message_at %} <span class="text-xs text-gray-500">· last {{ b.last_customer_message_at|timesince }} ago</span>{% endif %}</td>
-          <td data-label="AI suggestions used, 7 days">{% if b.ai.suggested %}{{ b.ai.used }} of {{ b.ai.suggested }}{% else %}<span class="text-gray-500">None</span>{% endif %}</td>
+          <td data-label="Conversations, 7 days">{{ b.conversations_7d }}{% if b.last_customer_message_at %} <span class="text-xs text-ink-subtle">· last {{ b.last_customer_message_at|timesince }} ago</span>{% endif %}</td>
+          <td data-label="AI suggestions used, 7 days">{% if b.ai.suggested %}{{ b.ai.used }} of {{ b.ai.suggested }}{% else %}<span class="text-ink-subtle">None</span>{% endif %}</td>
           <td data-label="Starting point">
             {% with sp=b.starting_point %}
             {% if not sp %}—
@@ -123,7 +123,7 @@
       </tbody>
     </table>
   </div>
-  <p class="mt-2 text-xs text-gray-500">"Quiet" means no customer message for 3 days: call them before they drift away.</p>
+  <p class="mt-2 text-xs text-ink-subtle">"Quiet" means no customer message for 3 days: call them before they drift away.</p>
 
   <h3 id="pc-score" class="mt-8 text-base font-semibold text-ink mb-3">Pilot scorecard, last 7 days</h3>
   <div class="table-wrap">
@@ -136,10 +136,10 @@
         {% with s=b.score %}
         <tr>
           <td data-label="Business" class="font-medium text-ink">{{ b.account }}</td>
-          <td data-label="Acquisition">{{ s.acquisition }} new conversation{{ s.acquisition|pluralize }}{% if b.posts and b.posts.chats is not None %} <span class="text-xs text-gray-500">· {{ b.posts.chats }} from posts</span>{% endif %}</td>
-          <td data-label="Response">{% if s.response_seconds is not None %}{{ s.response_seconds|duration }} median first reply{% else %}<span class="text-gray-500">No enquiries</span>{% endif %}</td>
+          <td data-label="Acquisition">{{ s.acquisition }} new conversation{{ s.acquisition|pluralize }}{% if b.posts and b.posts.chats is not None %} <span class="text-xs text-ink-subtle">· {{ b.posts.chats }} from posts</span>{% endif %}</td>
+          <td data-label="Response">{% if s.response_seconds is not None %}{{ s.response_seconds|duration }} median first reply{% else %}<span class="text-ink-subtle">No enquiries</span>{% endif %}</td>
           <td data-label="Conversion">{{ s.leads }} lead{{ s.leads|pluralize }} → {{ s.paid_orders }} paid</td>
-          <td data-label="Revenue">{% for r in s.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}{% if b.posts.revenue %} <span class="text-xs text-gray-500">· from posts: {% for r in b.posts.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}, {% endif %}{% endfor %}</span>{% endif %}</td>
+          <td data-label="Revenue">{% for r in s.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}{% if b.posts.revenue %} <span class="text-xs text-ink-subtle">· from posts: {% for r in b.posts.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}, {% endif %}{% endfor %}</span>{% endif %}</td>
           <td data-label="Retention">{{ s.active_weeks }} of the last 4 weeks active</td>
         </tr>
         {% endwith %}
@@ -147,9 +147,9 @@
       </tbody>
     </table>
   </div>
-  <p class="mt-2 text-xs text-gray-500">Revenue counts paid orders credited to a conversation. "From posts" counts only chats that used a post's chat link or a comment reply. An active week has at least one customer message.</p>
+  <p class="mt-2 text-xs text-ink-subtle">Revenue counts paid orders credited to a conversation. "From posts" counts only chats that used a post's chat link or a comment reply. An active week has at least one customer message.</p>
   {% else %}
-  <p class="text-sm text-gray-600">No business has connected WhatsApp yet.</p>
+  <p class="text-sm text-ink-muted">No business has connected WhatsApp yet.</p>
   {% endif %}
 </section>
 {% endblock %}

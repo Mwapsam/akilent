@@ -325,7 +325,7 @@
                   <span class="field-error" x-show="fieldError(step.id, 'url')" x-text="fieldError(step.id, 'url')"></span>
                 </label>
                 <label class="text-xs sm:col-span-2">Body (JSON, optional)
-                  <textarea class="textarea font-mono text-xs w-full mt-0.5" rows="3"
+                  <textarea class="textarea font-mono sm:text-xs w-full mt-0.5" rows="3"
                             x-model="step._bodyText" @blur="syncWebhookBody(step)"
                             placeholder='{"note": "run context fields are merged in automatically"}'></textarea>
                   <span class="field-error" x-show="step._bodyError" x-text="step._bodyError"></span>
@@ -921,7 +921,7 @@
                   <span class="field-error" x-show="fieldError(step.id, 'action')" x-text="fieldError(step.id, 'action')"></span>
                 </label>
                 <label class="text-xs block">Inputs (JSON)
-                  <textarea class="textarea font-mono text-xs w-full mt-0.5" rows="3" x-model="step._paramsText" @blur="syncJson(step, '_paramsText', 'params')"
+                  <textarea class="textarea font-mono sm:text-xs w-full mt-0.5" rows="3" x-model="step._paramsText" @blur="syncJson(step, '_paramsText', 'params')"
                             placeholder='{"body": "Followed up automatically"}'></textarea>
                   <span class="field-error" x-show="step._paramsError || fieldError(step.id, 'params')" x-text="step._paramsError || fieldError(step.id, 'params')"></span>
                 </label>
@@ -1083,7 +1083,7 @@
 
   {# ---- Code ---- #}
   <div x-show="tab === 'code'" x-cloak>
-    <textarea class="textarea font-mono text-xs w-full h-96" x-model="codeText"
+    <textarea class="textarea font-mono sm:text-xs w-full h-96" x-model="codeText"
               @blur="syncFromCode()"></textarea>
     <p class="text-xs text-ink-subtle mt-1" x-text="codeError || 'Edits apply when you click away, then Save.'"
        :class="codeError ? 'text-red-600' : ''"></p>

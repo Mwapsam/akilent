@@ -3,19 +3,19 @@
 
 {% block content %}
 <div class="mb-6">
-  <a href="/logs/messages/" class="text-sm text-gray-500 hover:text-ink">&larr; Email logs</a>
+  <a href="/logs/messages/" class="text-sm text-ink-subtle hover:text-ink">&larr; Email logs</a>
   <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink mt-1 font-mono">{{ msg.public_id }}</h1>
 </div>
 <div class="grid gap-6 lg:grid-cols-3">
   <section class="lg:col-span-1 card card-pad text-sm space-y-2">
-    <div class="flex justify-between"><span class="text-gray-500">Status</span>{% if msg.status == 'sent' %}{% include "components/status.html" with state="sent" badge=True %}{% elif msg.status == 'failed' or msg.status == 'bounced' %}{% include "components/status.html" with state="failed" badge=True %}{% else %}<span class="badge badge-neutral">{{ msg.get_status_display }}</span>{% endif %}</div>
-    <div class="flex justify-between"><span class="text-gray-500">From</span><span>{{ msg.from_email }}</span></div>
-    <div class="flex justify-between"><span class="text-gray-500">To</span><span>{{ msg.to_email }}</span></div>
-    <div class="flex justify-between"><span class="text-gray-500">Template</span><span>{{ msg.template.slug|default:"—" }}</span></div>
-    <div class="flex justify-between"><span class="text-gray-500">Campaign</span><span>{{ msg.campaign_id|default:"—" }}</span></div>
-    <div class="flex justify-between"><span class="text-gray-500">Provider ID</span><span class="font-mono text-xs">{{ msg.provider_message_id|default:"—" }}</span></div>
-    <div class="flex justify-between"><span class="text-gray-500">Created</span><span>{{ msg.created_at|date:"Y-m-d H:i:s" }}</span></div>
-    <div class="flex justify-between"><span class="text-gray-500">Sent</span><span>{{ msg.sent_at|date:"Y-m-d H:i:s"|default:"—" }}</span></div>
+    <div class="flex justify-between"><span class="text-ink-subtle">Status</span>{% if msg.status == 'sent' %}{% include "components/status.html" with state="sent" badge=True %}{% elif msg.status == 'failed' or msg.status == 'bounced' %}{% include "components/status.html" with state="failed" badge=True %}{% else %}<span class="badge badge-neutral">{{ msg.get_status_display }}</span>{% endif %}</div>
+    <div class="flex justify-between"><span class="text-ink-subtle">From</span><span>{{ msg.from_email }}</span></div>
+    <div class="flex justify-between"><span class="text-ink-subtle">To</span><span>{{ msg.to_email }}</span></div>
+    <div class="flex justify-between"><span class="text-ink-subtle">Template</span><span>{{ msg.template.slug|default:"—" }}</span></div>
+    <div class="flex justify-between"><span class="text-ink-subtle">Campaign</span><span>{{ msg.campaign_id|default:"—" }}</span></div>
+    <div class="flex justify-between"><span class="text-ink-subtle">Provider ID</span><span class="font-mono text-xs">{{ msg.provider_message_id|default:"—" }}</span></div>
+    <div class="flex justify-between"><span class="text-ink-subtle">Created</span><span>{{ msg.created_at|date:"Y-m-d H:i:s" }}</span></div>
+    <div class="flex justify-between"><span class="text-ink-subtle">Sent</span><span>{{ msg.sent_at|date:"Y-m-d H:i:s"|default:"—" }}</span></div>
     {% if msg.error %}<p class="text-red-600 pt-2">{{ msg.error }}</p>{% endif %}
   </section>
 
@@ -27,13 +27,13 @@
         <span class="absolute -left-1.5 mt-1.5 h-3 w-3 rounded-full bg-brand-500 ring-4 ring-canvas"></span>
         <div class="flex items-baseline justify-between gap-4">
           <span class="font-medium capitalize">{{ e.get_type_display }}</span>
-          <span class="text-xs text-gray-400">{{ e.occurred_at|date:"Y-m-d H:i:s" }}</span>
+          <span class="text-xs text-ink-subtle">{{ e.occurred_at|date:"Y-m-d H:i:s" }}</span>
         </div>
-        <p class="text-xs text-gray-500">source: {{ e.get_source_display }}</p>
+        <p class="text-xs text-ink-subtle">source: {{ e.get_source_display }}</p>
         {% if e.data %}<pre class="mt-1 text-xs bg-surface-muted border border-border rounded-lg p-2 overflow-x-auto">{{ e.data }}</pre>{% endif %}
       </li>
       {% empty %}
-      <li class="ml-4 text-gray-400 text-sm">No events recorded.</li>
+      <li class="ml-4 text-ink-subtle text-sm">No events recorded.</li>
       {% endfor %}
     </ol>
   </section>
@@ -58,7 +58,7 @@
       </p>
       <pre class="mt-2 text-xs bg-surface-muted border border-border rounded-lg p-3 overflow-x-auto max-h-72">{{ api_request.request_body }}</pre>
     {% else %}
-      <p class="text-sm text-gray-400">Not sent via the API, or the request log has aged out.</p>
+      <p class="text-sm text-ink-subtle">Not sent via the API, or the request log has aged out.</p>
     {% endif %}
 
     <h2 class="text-lg font-semibold text-ink mt-5 mb-3">Webhook deliveries</h2>
@@ -69,7 +69,7 @@
           <td data-label="Event" class="py-1.5">{{ d.event_type }}</td>
           <td data-label="Status" class="py-1.5">{{ d.get_status_display }}</td>
           <td data-label="Response" class="py-1.5">{{ d.response_code|default:"—" }}</td>
-          <td data-label="Attempts" class="py-1.5 text-gray-400">{{ d.attempt_count }} attempt(s)</td>
+          <td data-label="Attempts" class="py-1.5 text-ink-subtle">{{ d.attempt_count }} attempt(s)</td>
           <td data-label="Action" class="py-1.5 text-right">
             {% if "email" in enabled_channels %}
             <form method="post" action="/email/webhooks/deliveries/{{ d.pk }}/resend/">
@@ -81,7 +81,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td class="py-2 text-gray-400">No webhook deliveries.</td></tr>
+        <tr><td class="py-2 text-ink-subtle">No webhook deliveries.</td></tr>
         {% endfor %}
       </tbody>
     </table>

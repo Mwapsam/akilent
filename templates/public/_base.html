@@ -42,29 +42,29 @@ Help centre or Developers from the request path.
 
     /* Header */
     .pub-header{ position:sticky; top:0; z-index:var(--z-sticky); background:rgba(14,21,38,.96);
-      -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); border-bottom:1px solid #26314A; }
+      -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); border-bottom:1px solid var(--color-gray-800); }
     .pub-header-row{ height:4rem; display:flex; align-items:center; justify-content:space-between; gap:1.5rem; }
     .pub-brand{ display:flex; align-items:center; gap:.625rem; min-height:44px; font-weight:700; font-size:1.0625rem;
-      color:#FAFBFC; text-decoration:none; flex-shrink:0; }
+      color:var(--color-gray-50); text-decoration:none; flex-shrink:0; }
     .pub-nav{ display:none; align-items:center; gap:1.75rem; font-size:.875rem; font-weight:500; }
-    .pub-nav a{ position:relative; padding:.5rem 0; color:#A8B2C4; text-decoration:none; transition:color .15s ease; }
+    .pub-nav a{ position:relative; padding:.5rem 0; color:var(--color-gray-400); text-decoration:none; transition:color .15s ease; }
     .pub-nav a::after{ content:""; position:absolute; left:0; right:0; bottom:0; height:2px; border-radius:2px;
-      background:#74D4C4; transform:scaleX(0); transition:transform .2s ease; }
-    .pub-nav a:hover, .pub-nav a[aria-current="page"]{ color:#FAFBFC; }
+      background:var(--color-teal-300); transform:scaleX(0); transition:transform .2s ease; }
+    .pub-nav a:hover, .pub-nav a[aria-current="page"]{ color:var(--color-gray-50); }
     .pub-nav a[aria-current="page"]::after{ transform:scaleX(1); }
     .pub-actions{ display:none; align-items:center; gap:1.25rem; font-size:.875rem; }
-    .pub-signin{ color:#A8B2C4; font-weight:500; text-decoration:none; }
-    .pub-signin:hover{ color:#FAFBFC; }
+    .pub-signin{ display:inline-flex; align-items:center; min-height:1.5rem; color:var(--color-gray-400); font-weight:500; text-decoration:none; }
+    .pub-signin:hover{ color:var(--color-gray-50); }
     .pub-cta{ display:inline-flex; align-items:center; justify-content:center; min-height:40px; padding:.5rem 1rem;
       border-radius:10px; background:var(--color-amber-400); color:var(--color-ink); font-weight:600; font-size:.875rem;
       text-decoration:none; white-space:nowrap; transition:background .15s ease; }
     .pub-cta:hover{ background:var(--color-amber-500); }
     .pub-burger{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px;
       width:44px; height:44px; margin-right:-.5rem; cursor:pointer; border-radius:8px; }
-    .pub-burger span{ display:block; width:20px; height:1.5px; background:#FAFBFC; }
-    .pub-mobile{ display:none; border-top:1px solid #26314A; padding:.75rem 0 1.25rem; }
-    .pub-mobile a{ display:flex; align-items:center; min-height:44px; color:#A8B2C4; text-decoration:none; font-size:.9375rem; }
-    .pub-mobile a:hover, .pub-mobile a[aria-current="page"]{ color:#FAFBFC; }
+    .pub-burger span{ display:block; width:20px; height:1.5px; background:var(--color-gray-50); }
+    .pub-mobile{ display:none; border-top:1px solid var(--color-gray-800); padding:.75rem 0 1.25rem; }
+    .pub-mobile a{ display:flex; align-items:center; min-height:44px; color:var(--color-gray-400); text-decoration:none; font-size:.9375rem; }
+    .pub-mobile a:hover, .pub-mobile a[aria-current="page"]{ color:var(--color-gray-50); }
     .pub-mobile a[aria-current="page"]{ font-weight:600; }
     .pub-mobile .pub-cta{ justify-content:center; margin-top:.75rem; color:var(--color-ink); }
     #pub-menu:checked ~ .pub-mobile{ display:block; }
@@ -75,19 +75,19 @@ Help centre or Developers from the request path.
     }
 
     /* Footer */
-    .pub-footer{ flex-shrink:0; margin-top:4rem; background:#0E1526; color:#A8B2C4; border-top:1px solid #26314A; font-size:.875rem; }
+    .pub-footer{ flex-shrink:0; margin-top:4rem; background:var(--color-gray-950); color:var(--color-gray-400); border-top:1px solid var(--color-gray-800); font-size:.875rem; }
     .pub-footer-grid{ display:grid; gap:2rem; padding-top:3rem; padding-bottom:2.5rem; grid-template-columns:repeat(2,minmax(0,1fr)); }
     @media (min-width:768px){ .pub-footer-grid{ grid-template-columns:1.4fr 1fr 1fr 1fr; } }
     .pub-footer-about{ grid-column:1 / -1; max-width:20rem; }
     @media (min-width:768px){ .pub-footer-about{ grid-column:auto; } }
     .pub-footer-about p{ margin:.75rem 0 0; line-height:1.6; }
-    .pub-footer h2{ font-size:.8125rem; font-weight:600; color:#FAFBFC; margin:0 0 .5rem; }
+    .pub-footer h2{ font-size:.8125rem; font-weight:600; color:var(--color-gray-50); margin:0 0 .5rem; }
     .pub-footer ul{ list-style:none; margin:0; padding:0; }
-    .pub-footer li a{ display:inline-flex; align-items:center; min-height:36px; color:#DCE1E8; text-decoration:none; }
-    .pub-footer li a:hover{ color:#FAFBFC; }
+    .pub-footer li a{ display:inline-flex; align-items:center; min-height:36px; color:var(--color-gray-300); text-decoration:none; }
+    .pub-footer li a:hover{ color:var(--color-gray-50); }
     .pub-footer-base{ display:flex; flex-wrap:wrap; justify-content:space-between; gap:.75rem; padding-top:1.25rem;
-      padding-bottom:2rem; border-top:1px solid #26314A; font-size:.8125rem; }
-    .pub-footer-base a{ color:#DCE1E8; text-decoration:underline; text-underline-offset:3px; }
+      padding-bottom:2rem; border-top:1px solid var(--color-gray-800); font-size:.8125rem; }
+    .pub-footer-base a{ color:var(--color-gray-300); text-decoration:underline; text-underline-offset:3px; }
 
     /* Cookie notice */
     .pub-cookie{ position:fixed; left:0; right:0; bottom:0; z-index:var(--z-toast); background:var(--color-surface);

@@ -77,7 +77,7 @@
 
         var pathInput = document.createElement("input");
         pathInput.type = "text";
-        pathInput.className = "input font-mono text-xs";
+        pathInput.className = "input font-mono sm:text-xs"; // 16px on phones (no iOS zoom), as .input is
         pathInput.placeholder = "contact.first_name";
         pathInput.value = row.path;
         pathInput.setAttribute("aria-label", "Variable path");
@@ -88,7 +88,7 @@
 
         var valueInput = document.createElement("input");
         valueInput.type = "text";
-        valueInput.className = "input text-xs";
+        valueInput.className = "input sm:text-xs";
         valueInput.placeholder = "Ada";
         valueInput.value = row.value == null ? "" : row.value;
         valueInput.setAttribute("aria-label", "Sample value for " + (row.path || "variable"));

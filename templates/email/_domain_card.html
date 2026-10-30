@@ -53,17 +53,17 @@ d.dns_diagnostics, persisted by the last check.{% endcomment %}
   {% if d.is_verified and email_apis_enabled %}
   <div class="mt-4 rounded-xl border border-border tone-neutral-bg p-3">
     <div class="flex items-center justify-between gap-2 mb-1">
-      <p class="text-xs font-medium text-gray-500">SMTP relay — {{ smtp_relay_host }}:{{ smtp_relay_port }}</p>
+      <p class="text-xs font-medium text-ink-subtle">SMTP relay — {{ smtp_relay_host }}:{{ smtp_relay_port }}</p>
     </div>
     {% for cred in d.smtp_credentials.all %}
       {% if new_smtp_secret.credential_id == cred.pk %}
         <div class="rounded-lg border border-amber-300 tone-amber-bg px-3 py-2 mb-2">
           <p class="text-xs font-medium text-amber-800">Copy this password now — it won't be shown again.</p>
-          <p class="text-xs text-gray-600 mt-1">Username: <code>{{ cred.username }}</code></p>
+          <p class="text-xs text-ink-muted mt-1">Username: <code>{{ cred.username }}</code></p>
           <div class="mt-1">{% include "components/copy_field.html" with value=new_smtp_secret.secret label="Copy" %}</div>
         </div>
       {% else %}
-        <p class="text-xs text-gray-600">
+        <p class="text-xs text-ink-muted">
           <code>{{ cred.username }}</code> · password ends in <code>{{ cred.last4 }}</code>
         </p>
       {% endif %}
@@ -108,7 +108,7 @@ d.dns_diagnostics, persisted by the last check.{% endcomment %}
   {% endif %}
 
   {% if d.mail_from_domain %}
-  <p class="mt-2 text-xs text-gray-500" data-mail-from-status="{{ d.mail_from_status|default:'none' }}">
+  <p class="mt-2 text-xs text-ink-subtle" data-mail-from-status="{{ d.mail_from_status|default:'none' }}">
     Bounce domain <code>{{ d.mail_from_domain }}</code> —
     {% if d.mail_from_status == "SUCCESS" %}<span class="text-green-700">active at Amazon SES</span>.
     {% elif d.mail_from_status == "FAILED" %}Amazon couldn't confirm it yet. Once the two bounce-domain records below are found, we'll ask Amazon to check again.
@@ -126,7 +126,7 @@ d.dns_diagnostics, persisted by the last check.{% endcomment %}
   {% comment %}Records{% endcomment %}
   <div class="mt-4">
     <div class="flex items-center justify-between gap-2 mb-2">
-      <p class="text-xs font-medium text-gray-500">DNS records — add each one at your DNS host</p>
+      <p class="text-xs font-medium text-ink-subtle">DNS records — add each one at your DNS host</p>
       {% include "components/help_link.html" with slug="dns-setup" text="Full guide" %}
     </div>
 
@@ -140,27 +140,27 @@ d.dns_diagnostics, persisted by the last check.{% endcomment %}
               {% include "components/icon.html" with name="check-circle" class="w-4 h-4" %} Found
             </span>
           {% else %}
-            <span class="inline-flex items-center gap-1 text-xs font-medium {% if code and code != 'missing' and code != 'timeout' %}text-amber-700{% else %}text-gray-500{% endif %}">
+            <span class="inline-flex items-center gap-1 text-xs font-medium {% if code and code != 'missing' and code != 'timeout' %}text-amber-700{% else %}text-ink-subtle{% endif %}">
               {% include "components/icon.html" with name="alert" class="w-4 h-4" %}
               {% if not code %}Not checked yet{% elif code == "missing" %}Not added yet{% elif code == "doubled" or code == "wrong_name" %}Wrong name{% elif code == "wrong_value" or code == "mx_mismatch" %}Wrong value{% elif code == "multiple_spf" %}Two SPF records{% elif code == "proxied" %}Proxied{% elif code == "wrong_type" %}Wrong type{% elif code == "cname_conflict" %}Conflicting record{% elif code == "timeout" %}DNS host didn't answer{% else %}Not found{% endif %}
             </span>
           {% endif %}
           <span class="badge badge-neutral">{{ rec.type }}</span>
-          <span class="text-xs font-medium text-gray-700 truncate">{{ rec.label }}</span>
-          {% if rec.required %}<span class="text-[11px] text-red-500">required</span>
-          {% else %}<span class="text-[11px] text-gray-400">recommended</span>{% endif %}
+          <span class="text-xs font-medium text-ink-muted truncate">{{ rec.label }}</span>
+          {% if rec.required %}<span class="text-xs text-red-500">required</span>
+          {% else %}<span class="text-xs text-ink-subtle">recommended</span>{% endif %}
         </div>
-        <p class="text-xs text-gray-500 mb-2">{{ rec.desc }}</p>
+        <p class="text-xs text-ink-subtle mb-2">{{ rec.desc }}</p>
 
         {% if not rec.ok and code and code != "missing" %}
         <div class="mb-2 rounded-lg tone-amber px-2.5 py-2 text-xs" data-dns-diag="{{ code }}">
           <p>{{ rec.diag.message }}</p>
           {% if rec.diag.found %}
-          <p class="mt-1 text-gray-600">We found:</p>
+          <p class="mt-1 text-ink-muted">We found:</p>
           <ul class="mt-0.5 space-y-0.5">{% for v in rec.diag.found %}<li><code class="break-all">{{ v }}</code></li>{% endfor %}</ul>
           {% endif %}
           {% if rec.diag.suggestion %}
-          <p class="mt-1.5 text-gray-600">Use this single record instead:</p>
+          <p class="mt-1.5 text-ink-muted">Use this single record instead:</p>
           <div class="mt-1">{% include "components/copy_field.html" with value=rec.diag.suggestion label="Copy" %}</div>
           {% endif %}
         </div>
@@ -168,14 +168,14 @@ d.dns_diagnostics, persisted by the last check.{% endcomment %}
 
         <dl class="grid gap-2 text-xs">
           <div class="grid items-start gap-2" style="grid-template-columns:5.5rem 1fr">
-            <dt class="text-gray-500 pt-1">Host</dt>
+            <dt class="text-ink-subtle pt-1">Host</dt>
             <dd class="min-w-0">
               {% include "components/copy_field.html" with value=rec.host label="Copy" %}
               <p class="help mt-1">What to type in the Name / Host field. Most DNS hosts add <code>{{ rec.zone }}</code> for you.</p>
             </dd>
           </div>
           <div class="grid items-start gap-2" style="grid-template-columns:5.5rem 1fr">
-            <dt class="text-gray-500 pt-1">Full name</dt>
+            <dt class="text-ink-subtle pt-1">Full name</dt>
             <dd class="min-w-0">
               {% include "components/copy_field.html" with value=rec.name label="Copy" %}
               <p class="help mt-1">Only if your DNS host asks for the complete name.</p>
@@ -183,12 +183,12 @@ d.dns_diagnostics, persisted by the last check.{% endcomment %}
           </div>
           {% if rec.type == "MX" %}
           <div class="grid items-center gap-2" style="grid-template-columns:5.5rem 1fr">
-            <dt class="text-gray-500">Priority</dt>
+            <dt class="text-ink-subtle">Priority</dt>
             <dd class="min-w-0">{% include "components/copy_field.html" with value=rec.priority|default:10 label="Copy" %}</dd>
           </div>
           {% endif %}
           <div class="grid items-center gap-2" style="grid-template-columns:5.5rem 1fr">
-            <dt class="text-gray-500">{% if rec.type == "CNAME" %}Points to{% elif rec.type == "MX" %}Mail server{% else %}Value{% endif %}</dt>
+            <dt class="text-ink-subtle">{% if rec.type == "CNAME" %}Points to{% elif rec.type == "MX" %}Mail server{% else %}Value{% endif %}</dt>
             <dd class="min-w-0">{% include "components/copy_field.html" with value=rec.value|default:"(pending provisioning)" label="Copy" %}</dd>
           </div>
         </dl>
@@ -210,17 +210,17 @@ d.dns_diagnostics, persisted by the last check.{% endcomment %}
       </button>
 
       <div x-show="open" x-cloak x-transition class="mt-3 rounded-xl border border-border bg-surface p-3">
-        <p class="text-xs text-gray-500 mb-2">
+        <p class="text-xs text-ink-subtle mb-2">
           {% if d.dns_host and d.dns_host != "other" %}Your domain's DNS is hosted at {{ d.dns_host_display }}, so those steps are shown first.
           {% else %}We couldn't tell who hosts your DNS. These general steps work with any DNS host.{% endif %}
         </p>
         <div class="flex flex-wrap gap-1 mb-3 text-xs">
           {% for slug, name in d.dns_host_tabs %}
-          <button type="button" @click="tab='{{ slug }}'" :class="tab==='{{ slug }}' ? 'tone-brand' : 'text-gray-500 hover:bg-surface-muted'" class="px-2.5 py-1 rounded-lg font-medium" data-dns-tab="{{ slug }}">{{ name }}</button>
+          <button type="button" @click="tab='{{ slug }}'" :class="tab==='{{ slug }}' ? 'tone-brand' : 'text-ink-subtle hover:bg-surface-muted'" class="px-2.5 py-1 rounded-lg font-medium" data-dns-tab="{{ slug }}">{{ name }}</button>
           {% endfor %}
         </div>
         {% include "email/_dns_host_steps.html" %}
-        <p class="mt-2 text-xs text-gray-500">More detail in the <a href="{% url 'help-article' 'dns-setup' %}" class="text-accent">DNS setup guide</a>.</p>
+        <p class="mt-2 text-xs text-ink-subtle">More detail in the <a href="{% url 'help-article' 'dns-setup' %}" class="text-accent">DNS setup guide</a>.</p>
       </div>
     </div>
   </div>

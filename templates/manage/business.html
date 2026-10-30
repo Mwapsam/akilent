@@ -3,12 +3,12 @@
 {% block title %}{{ business.company_name }} — Operator{% endblock %}
 
 {% block content %}
-<a href="{% url 'core:businesses' %}" class="text-sm text-gray-500 hover:text-ink mb-2 inline-block">← Businesses</a>
+<a href="{% url 'core:businesses' %}" class="text-sm text-ink-subtle hover:text-ink mb-2 inline-block">← Businesses</a>
 <header class="mb-4 flex flex-wrap items-start justify-between gap-3">
   <div class="min-w-0">
     <h1 class="text-2xl font-semibold tracking-tight text-ink">{{ business.company_name }}
       {% if not business.is_active %}<span class="badge badge-danger align-middle">Suspended</span>{% endif %}</h1>
-    <p class="text-sm text-gray-500">{{ business.slug }} · joined {{ business.created_at|date:"j M Y" }}
+    <p class="text-sm text-ink-subtle">{{ business.slug }} · joined {{ business.created_at|date:"j M Y" }}
       {% if business.scheduled_deletion_at %} · <span class="text-red-700">closed; deleted on {{ business.scheduled_deletion_at|date:"j M Y" }}</span>{% endif %}</p>
   </div>
   <form method="post" action="{% url 'core:view-as-start' business.pk %}" hx-boost="false">{% csrf_token %}
@@ -28,7 +28,7 @@
     <h2 class="font-semibold">Needs attention</h2>
     {% if d.reasons %}
     <ul class="flex flex-wrap gap-1">{% for why in d.reasons %}<li class="badge badge-warning">{{ why }}</li>{% endfor %}</ul>
-    {% else %}<p class="text-sm text-gray-600">Nothing right now.</p>{% endif %}
+    {% else %}<p class="text-sm text-ink-muted">Nothing right now.</p>{% endif %}
     <ul class="text-sm divide-y divide-border">
       <li class="flex justify-between py-1.5"><span>Owner</span><span>{{ d.owner.email|default:"—" }}</span></li>
       <li class="flex justify-between py-1.5"><span>Setup</span><span>{{ business.get_onboarding_state_display }}</span></li>
@@ -39,7 +39,7 @@
   </section>
   <section class="card card-pad space-y-3">
     <h2 class="font-semibold">{% if business.is_active %}Suspend{% else %}Reactivate{% endif %}</h2>
-    <p class="text-sm text-gray-600">{% if business.is_active %}Members see a "suspended" page, the API refuses its keys, automations stop and nothing is sent. Data is kept.{% else %}Everything works again for this business{% if business.scheduled_deletion_at %}, and the scheduled deletion is cancelled{% endif %}.{% endif %}</p>
+    <p class="text-sm text-ink-muted">{% if business.is_active %}Members see a "suspended" page, the API refuses its keys, automations stop and nothing is sent. Data is kept.{% else %}Everything works again for this business{% if business.scheduled_deletion_at %}, and the scheduled deletion is cancelled{% endif %}.{% endif %}</p>
     <form method="post" action="{% url 'core:business-action' business.pk 'suspend' %}">{% csrf_token %}
       <button class="btn {% if business.is_active %}btn-danger-ghost{% else %}btn-primary{% endif %} btn-sm">{% if business.is_active %}Suspend business{% else %}Reactivate business{% endif %}</button>
     </form>
@@ -58,7 +58,7 @@
       {% if d.subscription.trial_ends_at %}<li class="flex justify-between py-1.5"><span>Trial ends</span><span>{{ d.subscription.trial_ends_at|date:"j M Y" }}</span></li>{% endif %}
       <li class="flex justify-between py-1.5"><span>Period ends</span><span>{{ d.subscription.current_period_end|date:"j M Y"|default:"—" }}</span></li>
     </ul>
-    {% else %}<p class="text-sm text-gray-600">No subscription yet.</p>{% endif %}
+    {% else %}<p class="text-sm text-ink-muted">No subscription yet.</p>{% endif %}
     <form method="post" action="{% url 'core:business-action' business.pk 'subscription' %}" class="flex flex-wrap gap-2 items-end">{% csrf_token %}
       <label class="text-sm">Plan <select name="plan" class="input">{% for p in d.plans %}<option value="{{ p.pk }}" {% if d.subscription.plan_id == p.pk %}selected{% endif %}>{{ p.name }}{% if not p.is_active %} (hidden){% endif %}</option>{% endfor %}</select></label>
       <label class="text-sm">Status <select name="status" class="input">{% for v, t in d.statuses %}<option value="{{ v }}" {% if d.subscription.status == v %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
@@ -75,7 +75,7 @@
       <li class="py-1.5" x-data="{ open: false }">
         <div class="flex items-center justify-between gap-2">
           <span class="min-w-0"><span class="text-ink">{{ u.name }}</span>
-            <span class="text-xs text-gray-500">·
+            <span class="text-xs text-ink-subtle">·
               {% if u.period != "per_use" %}{{ u.used }} used{% if u.period == "month" %} this month{% elif u.period == "day" %} today{% endif %} ·{% endif %}
               {% if u.limit < 0 %}unlimited{% else %}limit {{ u.limit }}{% endif %}
               ({% if u.source == "override" %}this business{% elif u.source == "plan" %}plan{% else %}default{% endif %}){% if u.cost_bearing %} · costs Akilent{% endif %}</span></span>
@@ -101,15 +101,15 @@
   </section>
   <section class="card card-pad space-y-3">
     <h2 class="font-semibold">Features</h2>
-    <p class="text-xs text-gray-500">What this business can use and why. Change what a plan includes in the <a class="text-accent underline" href="{% url 'core:plan-features' %}">feature matrix</a>; exceptions for this business go here.</p>
+    <p class="text-xs text-ink-subtle">What this business can use and why. Change what a plan includes in the <a class="text-accent underline" href="{% url 'core:plan-features' %}">feature matrix</a>; exceptions for this business go here.</p>
     <ul class="text-sm divide-y divide-border">
       {% for f in d.features %}
       <li class="py-1.5" x-data="{ open: false }">
         <div class="flex items-center justify-between gap-2">
           <span class="min-w-0">
-            <span class="{% if f.entitled %}text-green-700{% else %}text-gray-400{% endif %}" aria-hidden="true">{% if f.entitled %}✓{% else %}✕{% endif %}</span>
+            <span class="{% if f.entitled %}text-green-700{% else %}text-ink-subtle{% endif %}" aria-hidden="true">{% if f.entitled %}✓{% else %}✕{% endif %}</span>
             <span class="text-ink">{{ f.name }}</span>
-            <span class="text-xs text-gray-500">·
+            <span class="text-xs text-ink-subtle">·
               {% if f.source == "core" %}Every plan
               {% elif f.source == "plan" %}{{ f.plan_name }} plan
               {% elif f.source == "grant" %}Operator grant
@@ -118,7 +118,7 @@
               {% else %}Not included{% endif %}
               {% if f.entitled and f.owner_off %}· owner switched it off{% endif %}
             </span>
-            {% if f.override %}<span class="block text-xs text-gray-500">“{{ f.override.note }}” — {{ f.override.set_by|default:"operator" }}, {{ f.override.created|date:"j M Y" }}</span>{% endif %}
+            {% if f.override %}<span class="block text-xs text-ink-subtle">“{{ f.override.note }}” — {{ f.override.set_by|default:"operator" }}, {{ f.override.created|date:"j M Y" }}</span>{% endif %}
           </span>
           {% if f.overridable %}<button type="button" class="btn btn-ghost btn-sm" @click="open = !open" :aria-expanded="open">Change</button>{% endif %}
         </div>
@@ -138,13 +138,13 @@
     {% if d.payments %}
     <ul class="text-sm space-y-1">{% for p in d.payments %}<li>{{ p.created_at|date:"j M Y" }} · {{ p.plan.name }} · {{ p.get_status_display }}{% if p.reference %} · <code>{{ p.reference }}</code>{% endif %}</li>{% endfor %}</ul>
     <a href="{% url 'core:payments' %}" class="text-sm text-accent">Approve or reject in Payments</a>
-    {% else %}<p class="text-sm text-gray-600">None.</p>{% endif %}
+    {% else %}<p class="text-sm text-ink-muted">None.</p>{% endif %}
   </section>
 </div>
 <div class="grid gap-4 lg:grid-cols-2 mt-4">
   <section class="card card-pad space-y-3" aria-labelledby="h-credit">
     <h2 id="h-credit" class="font-semibold">Account credit · {{ d.credit.balance|money }}</h2>
-    <p class="text-xs text-gray-500">Used before any card is charged, at checkout and at every renewal{% if d.credit.expires_at %} · some expires {{ d.credit.expires_at|date:"j M Y" }}{% endif %}.</p>
+    <p class="text-xs text-ink-subtle">Used before any card is charged, at checkout and at every renewal{% if d.credit.expires_at %} · some expires {{ d.credit.expires_at|date:"j M Y" }}{% endif %}.</p>
     <form method="post" action="{% url 'core:business-action' business.pk 'credit_grant' %}" class="flex flex-wrap gap-2 items-end">{% csrf_token %}
       <label class="text-xs">Amount ({{ d.currency }}) <input type="number" name="amount" min="0.01" step="0.01" required class="input w-28"></label>
       <label class="text-xs">Reason <select name="reason" class="input">{% for v, t in d.credit_reasons %}<option value="{{ v }}">{{ t }}</option>{% endfor %}</select></label>
@@ -157,7 +157,7 @@
       {% for g in d.grants %}
       <li class="py-1.5 flex items-center justify-between gap-2">
         <span class="min-w-0">{{ g.remaining|money:g.currency }} of {{ g.amount|money:g.currency }} left · {{ g.get_reason_display }}
-          <span class="block text-xs text-gray-500">{{ g.created_at|date:"j M Y" }}{% if g.granted_by %} by {{ g.granted_by }}{% endif %}{% if g.note %} · “{{ g.note }}”{% endif %}{% if g.revoked_at %} · revoked {{ g.revoked_at|date:"j M Y" }}{% elif g.expires_at %} · expires {{ g.expires_at|date:"j M Y" }}{% endif %}</span></span>
+          <span class="block text-xs text-ink-subtle">{{ g.created_at|date:"j M Y" }}{% if g.granted_by %} by {{ g.granted_by }}{% endif %}{% if g.note %} · “{{ g.note }}”{% endif %}{% if g.revoked_at %} · revoked {{ g.revoked_at|date:"j M Y" }}{% elif g.expires_at %} · expires {{ g.expires_at|date:"j M Y" }}{% endif %}</span></span>
         {% if g.is_usable %}
         <form method="post" action="{% url 'core:business-action' business.pk 'credit_revoke' %}" data-confirm="Take back the {{ g.remaining|money:g.currency }} left on this credit?" data-confirm-danger data-confirm-label="Take back">{% csrf_token %}
           <input type="hidden" name="grant" value="{{ g.pk }}">
@@ -167,23 +167,23 @@
       </li>
       {% endfor %}
     </ul>
-    {% else %}<p class="text-sm text-gray-600">No credit given yet.</p>{% endif %}
+    {% else %}<p class="text-sm text-ink-muted">No credit given yet.</p>{% endif %}
     {% if d.ledger %}
-    <details class="text-sm"><summary class="cursor-pointer text-gray-600">Credit history</summary>
-      <ul class="mt-2 space-y-1 text-xs text-gray-600">{% for t in d.ledger %}<li>{{ t.created_at|date:"j M Y H:i" }} · {{ t.get_kind_display }} · {{ t.amount|money:t.grant.currency }}{% if t.payment %} · <code>{{ t.payment.reference }}</code>{% endif %}</li>{% endfor %}</ul>
+    <details class="text-sm"><summary class="cursor-pointer text-ink-muted">Credit history</summary>
+      <ul class="mt-2 space-y-1 text-xs text-ink-muted">{% for t in d.ledger %}<li>{{ t.created_at|date:"j M Y H:i" }} · {{ t.get_kind_display }} · {{ t.amount|money:t.grant.currency }}{% if t.payment %} · <code>{{ t.payment.reference }}</code>{% endif %}</li>{% endfor %}</ul>
     </details>
     {% endif %}
   </section>
   <section class="card card-pad space-y-3" aria-labelledby="h-billing-payments">
     <h2 id="h-billing-payments" class="font-semibold">Payments</h2>
-    {% if d.saved_method %}<p class="text-xs text-gray-500">Renews with {{ d.saved_method.brand|default:"card"|title }} ending {{ d.saved_method.last4|default:"····" }} ({{ d.saved_method.provider }}){% if d.saved_method.provider != d.active_provider %} · <span class="text-amber-700">not the active provider, so the next renewal asks the customer to pay again</span>{% endif %}.</p>
-    {% else %}<p class="text-xs text-gray-500">No saved payment method; renewals are paid through an emailed link.</p>{% endif %}
+    {% if d.saved_method %}<p class="text-xs text-ink-subtle">Renews with {{ d.saved_method.brand|default:"card"|title }} ending {{ d.saved_method.last4|default:"····" }} ({{ d.saved_method.provider }}){% if d.saved_method.provider != d.active_provider %} · <span class="text-amber-700">not the active provider, so the next renewal asks the customer to pay again</span>{% endif %}.</p>
+    {% else %}<p class="text-xs text-ink-subtle">No saved payment method; renewals are paid through an emailed link.</p>{% endif %}
     {% if d.billing_payments %}
     <ul class="text-sm divide-y divide-border">{% for p in d.billing_payments %}
       <li class="py-1.5">{{ p.created_at|date:"j M Y" }} · {{ p.plan.name }} ({{ p.billing_period }}) · {{ p.get_purpose_display }} · <strong>{{ p.get_status_display }}</strong>
-        <span class="block text-xs text-gray-500">{{ p.amount_due|money:p.currency }} via {{ p.provider|default:"—" }}{% if p.credit_applied %} + {{ p.credit_applied|money:p.currency }} credit{% endif %}{% if p.failure_reason %} · {{ p.failure_reason }}{% endif %} · <code>{{ p.reference }}</code></span></li>
+        <span class="block text-xs text-ink-subtle">{{ p.amount_due|money:p.currency }} via {{ p.provider|default:"—" }}{% if p.credit_applied %} + {{ p.credit_applied|money:p.currency }} credit{% endif %}{% if p.failure_reason %} · {{ p.failure_reason }}{% endif %} · <code>{{ p.reference }}</code></span></li>
     {% endfor %}</ul>
-    {% else %}<p class="text-sm text-gray-600">None yet.</p>{% endif %}
+    {% else %}<p class="text-sm text-ink-muted">None yet.</p>{% endif %}
   </section>
 </div>
 
@@ -200,7 +200,7 @@
           {% if not n.number.is_active %}<span class="badge badge-neutral">Inactive</span>{% endif %}</span>
         <span class="badge {% if n.setup == 'ready' %}badge-success{% elif n.setup == 'failed' or n.setup == 'degraded' %}badge-danger{% else %}badge-warning{% endif %}">{{ n.number.get_setup_status_display|default:n.setup }}</span>
       </div>
-      <p class="text-xs text-gray-500">Number ID {{ n.number.phone_number_id }} · WABA {{ n.number.waba_id|default:"—" }} · registration {{ n.status|lower }}</p>
+      <p class="text-xs text-ink-subtle">Number ID {{ n.number.phone_number_id }} · WABA {{ n.number.waba_id|default:"—" }} · registration {{ n.status|lower }}</p>
       {% if n.number.registration_error %}<p class="text-xs text-red-700">{{ n.number.registration_error|truncatechars:240 }}</p>{% endif %}
       {% if n.number.registration_status != "registered" %}
       <form method="post" action="{% url 'core:business-action' business.pk 'retry_registration' %}">{% csrf_token %}
@@ -208,7 +208,7 @@
       </form>
       {% endif %}
     </div>
-    {% empty %}<p class="text-sm text-gray-600">No WhatsApp number connected.</p>{% endfor %}
+    {% empty %}<p class="text-sm text-ink-muted">No WhatsApp number connected.</p>{% endfor %}
   </section>
 
   <section class="card card-pad space-y-3">
@@ -221,7 +221,7 @@
       <li class="flex justify-between gap-2 py-1.5"><span><code>{{ t.whatsapp_template_name|default:t.name }}</code> · {{ t.get_category_display }} · {{ t.language_code }}</span>
         <span class="badge {% if t.approval_status == 'approved' %}badge-success{% elif t.approval_status == 'rejected' or t.approval_status == 'paused' %}badge-danger{% else %}badge-warning{% endif %}">{{ t.get_approval_status_display }}</span></li>
     {% endfor %}</ul>
-    {% else %}<p class="text-sm text-gray-600">No templates.</p>{% endif %}
+    {% else %}<p class="text-sm text-ink-muted">No templates.</p>{% endif %}
   </section>
 
   <section class="card card-pad space-y-3">
@@ -230,14 +230,14 @@
     <ul class="text-sm divide-y divide-border">{% for f in d.failed %}
       <li class="flex flex-wrap items-start justify-between gap-2 py-2">
         <span class="min-w-0">{{ f.message.contact.phone_number }} · {{ f.message.updated_at|date:"j M, H:i" }}
-          <span class="block text-xs text-gray-600">{{ f.reason }}</span></span>
+          <span class="block text-xs text-ink-muted">{{ f.reason }}</span></span>
         {% if f.retryable %}
         <form method="post" action="{% url 'core:business-action' business.pk 'retry_send' %}">{% csrf_token %}
           <input type="hidden" name="message" value="{{ f.message.pk }}"><button class="btn btn-ghost btn-sm">Send again</button></form>
         {% endif %}
       </li>
     {% endfor %}</ul>
-    {% else %}<p class="text-sm text-gray-600">None.</p>{% endif %}
+    {% else %}<p class="text-sm text-ink-muted">None.</p>{% endif %}
   </section>
 
   <section class="card card-pad space-y-3">
@@ -251,7 +251,7 @@
           <input type="hidden" name="event" value="{{ e.pk }}"><button class="btn btn-ghost btn-sm">Process again</button></form>
       </li>
     {% endfor %}</ul>
-    {% else %}<p class="text-sm text-gray-600">None.</p>{% endif %}
+    {% else %}<p class="text-sm text-ink-muted">None.</p>{% endif %}
   </section>
 </div>
 
@@ -261,13 +261,13 @@
     <h2 class="font-semibold">Sending reputation</h2>
     {% if d.reputation %}
     <p class="text-sm">State: <span class="badge {% if d.reputation.state == 'ok' %}badge-success{% else %}badge-danger{% endif %}">{{ d.reputation.state|capfirst }}</span>
-      {% if d.reputation.halted_reason %}<span class="block text-xs text-gray-600 mt-1">{{ d.reputation.halted_reason }}</span>{% endif %}</p>
-    <p class="text-xs text-gray-500">{{ d.reputation.sent }} sent · {{ d.reputation.bounced }} bounced · {{ d.reputation.complained }} complaints this window</p>
+      {% if d.reputation.halted_reason %}<span class="block text-xs text-ink-muted mt-1">{{ d.reputation.halted_reason }}</span>{% endif %}</p>
+    <p class="text-xs text-ink-subtle">{{ d.reputation.sent }} sent · {{ d.reputation.bounced }} bounced · {{ d.reputation.complained }} complaints this window</p>
     {% if d.reputation.state != 'ok' %}
     <form method="post" action="{% url 'core:business-action' business.pk 'reset_reputation' %}">{% csrf_token %}
       <button class="btn btn-secondary btn-sm">Clear the halt and start a fresh window</button></form>
     {% endif %}
-    {% else %}<p class="text-sm text-gray-600">No email sent yet.</p>{% endif %}
+    {% else %}<p class="text-sm text-ink-muted">No email sent yet.</p>{% endif %}
     <p class="text-sm">Suppressed addresses: {{ d.suppressed }}</p>
   </section>
   <section class="card card-pad space-y-3">
@@ -279,22 +279,22 @@
       <form method="post" action="{% url 'core:business-action' business.pk 'reverify_domain' %}">{% csrf_token %}
         <input type="hidden" name="domain" value="{{ dom.pk }}"><button class="btn btn-ghost btn-sm">Check DNS now</button></form>
     </div>
-    {% empty %}<p class="text-sm text-gray-600">None.</p>{% endfor %}
+    {% empty %}<p class="text-sm text-ink-muted">None.</p>{% endfor %}
     <h2 class="font-semibold pt-2">Recent failures</h2>
     {% if d.failures %}
     <ul class="text-sm space-y-1">{% for m in d.failures %}<li>{{ m.created_at|date:"j M, H:i" }} · {{ m.status }} · {{ m.to_email|default:"" }}</li>{% endfor %}</ul>
-    {% else %}<p class="text-sm text-gray-600">None.</p>{% endif %}
+    {% else %}<p class="text-sm text-ink-muted">None.</p>{% endif %}
   </section>
 </div>
 
 {% elif tab == "automations" %}
 <div class="space-y-4">
   <section class="card card-pad space-y-3">
-    <h2 class="font-semibold">Automations <span class="text-sm font-normal text-gray-500">· {{ d.adoption.on }} on{% if d.overdue %} · <span class="text-red-700">{{ d.overdue }} wait{{ d.overdue|pluralize }} overdue</span>{% endif %}</span></h2>
+    <h2 class="font-semibold">Automations <span class="text-sm font-normal text-ink-subtle">· {{ d.adoption.on }} on{% if d.overdue %} · <span class="text-red-700">{{ d.overdue }} wait{{ d.overdue|pluralize }} overdue</span>{% endif %}</span></h2>
     {% if d.workflows %}
     <ul class="text-sm divide-y divide-border">{% for w in d.workflows %}
       <li class="flex flex-wrap items-center justify-between gap-2 py-1.5">
-        <span>{{ w.name }} <span class="text-xs text-gray-500">v{{ w.version }}</span>
+        <span>{{ w.name }} <span class="text-xs text-ink-subtle">v{{ w.version }}</span>
           <span class="badge {% if w.status == 'published' %}badge-success{% else %}badge-neutral{% endif %}">{% if w.status == 'published' %}On{% elif w.status == 'archived' %}Paused{% else %}Draft{% endif %}</span></span>
         {% if w.status == 'published' %}
         <form method="post" action="{% url 'core:business-action' business.pk 'pause_workflow' %}">{% csrf_token %}
@@ -302,7 +302,7 @@
         {% endif %}
       </li>
     {% endfor %}</ul>
-    {% else %}<p class="text-sm text-gray-600">No automations.</p>{% endif %}
+    {% else %}<p class="text-sm text-ink-muted">No automations.</p>{% endif %}
   </section>
   <section class="card card-pad space-y-3">
     <h2 class="font-semibold">Failed runs</h2>
@@ -310,7 +310,7 @@
     <ul class="text-sm divide-y divide-border">{% for f in d.failed_runs %}
       <li class="py-1.5">{{ f.run.workflow.name }} · {{ f.run.started_at|date:"j M, H:i" }}{% if f.error %}<span class="block text-xs text-red-700">{{ f.error|truncatechars:200 }}</span>{% endif %}</li>
     {% endfor %}</ul>
-    {% else %}<p class="text-sm text-gray-600">None.</p>{% endif %}
+    {% else %}<p class="text-sm text-ink-muted">None.</p>{% endif %}
   </section>
 </div>
 
@@ -332,7 +332,7 @@
     <form method="post" action="{% url 'core:business-action' business.pk 'ai_off' %}">{% csrf_token %}<button class="btn btn-ghost btn-sm">Turn AI off</button></form>
     {% endif %}
   </div>
-  <p class="text-xs text-gray-500">Turning AI back on is the business's own choice, in its AI settings.</p>
+  <p class="text-xs text-ink-subtle">Turning AI back on is the business's own choice, in its AI settings.</p>
 </section>
 
 {% elif tab == "team" %}
@@ -361,7 +361,7 @@
         </span>
       </li>
     {% endfor %}</ul>
-    {% else %}<p class="text-sm text-gray-600">None.</p>{% endif %}
+    {% else %}<p class="text-sm text-ink-muted">None.</p>{% endif %}
   </section>
 </div>
 
@@ -373,14 +373,14 @@
     <ul class="text-sm divide-y divide-border">{% for k in d.keys %}
       <li class="flex flex-wrap items-center justify-between gap-2 py-1.5">
         <span><code>{{ k.key_prefix }}…{{ k.last4 }}</code> · {{ k.get_mode_display }}
-          {% if k.is_active %}<span class="text-xs text-gray-500">· {% if k.last_used_at %}used {{ k.last_used_at|timesince }} ago{% else %}never used{% endif %}</span>{% else %}<span class="badge badge-neutral">Revoked</span>{% endif %}</span>
+          {% if k.is_active %}<span class="text-xs text-ink-subtle">· {% if k.last_used_at %}used {{ k.last_used_at|timesince }} ago{% else %}never used{% endif %}</span>{% else %}<span class="badge badge-neutral">Revoked</span>{% endif %}</span>
         {% if k.is_active %}
         <form method="post" action="{% url 'core:business-action' business.pk 'revoke_key' %}" data-confirm="Revoke this key? Anything using it stops working." data-confirm-danger data-confirm-label="Revoke">{% csrf_token %}
           <input type="hidden" name="key" value="{{ k.pk }}"><button class="btn btn-danger-ghost btn-sm">Revoke</button></form>
         {% endif %}
       </li>
     {% endfor %}</ul>
-    {% else %}<p class="text-sm text-gray-600">No keys.</p>{% endif %}
+    {% else %}<p class="text-sm text-ink-muted">No keys.</p>{% endif %}
   </section>
   <section class="card card-pad space-y-3">
     <h2 class="font-semibold">Scheduled jobs</h2>
@@ -393,7 +393,7 @@
     {% if d.upcoming_jobs %}
     <ul class="text-sm space-y-1">{% for j in d.upcoming_jobs %}<li class="flex justify-between gap-2"><span>{{ j.get_kind_display }} · {{ j.fire_at|date:"j M, H:i" }}</span>
       <form method="post" action="{% url 'core:business-action' business.pk 'cancel_job' %}">{% csrf_token %}<input type="hidden" name="job" value="{{ j.pk }}"><button class="btn btn-ghost btn-sm">Cancel</button></form></li>{% endfor %}</ul>
-    {% else %}<p class="text-sm text-gray-600">None.</p>{% endif %}
+    {% else %}<p class="text-sm text-ink-muted">None.</p>{% endif %}
   </section>
 </div>
 
@@ -404,11 +404,11 @@
     <p class="text-sm">{{ d.contacts }} contacts · {{ d.conversations }} conversations · {{ d.messages }} messages</p>
     <form method="post" action="{% url 'core:business-export-contacts' business.pk %}" hx-boost="false">{% csrf_token %}
       <button class="btn btn-secondary btn-sm">Download contacts (CSV)</button></form>
-    <p class="text-xs text-gray-500">For the business's own data requests. Every export is recorded in the audit log.</p>
+    <p class="text-xs text-ink-subtle">For the business's own data requests. Every export is recorded in the audit log.</p>
   </section>
   <section class="card card-pad space-y-3">
     <h2 class="font-semibold">Delete one customer</h2>
-    <p class="text-sm text-gray-600">For a deletion request from one of this business's customers: removes their contact record, conversations, messages, orders and history. This can't be undone.</p>
+    <p class="text-sm text-ink-muted">For a deletion request from one of this business's customers: removes their contact record, conversations, messages, orders and history. This can't be undone.</p>
     <form method="post" action="{% url 'core:business-action' business.pk 'delete_customer' %}" class="space-y-2">{% csrf_token %}
       <input name="who" class="input" placeholder="Their WhatsApp number or email" required aria-label="Customer's phone or email">
       <input name="confirm" class="input" placeholder="Type {{ business.slug }} to confirm" required aria-label="Confirmation">
@@ -417,7 +417,7 @@
   </section>
   <section class="card card-pad space-y-3 lg:col-span-2">
     <h2 class="font-semibold">Close the account</h2>
-    <p class="text-sm text-gray-600">Suspends the business now and deletes all of its data in 30 days. Reactivating it before then cancels the deletion.</p>
+    <p class="text-sm text-ink-muted">Suspends the business now and deletes all of its data in 30 days. Reactivating it before then cancels the deletion.</p>
     {% if business.scheduled_deletion_at %}
     <p class="text-sm text-red-700">Already closed: everything is deleted on {{ business.scheduled_deletion_at|date:"j M Y" }}.</p>
     {% else %}
@@ -434,10 +434,10 @@
   <h2 class="font-semibold mb-3">What operators did for this business</h2>
   {% if d.actions %}
   <ul class="text-sm divide-y divide-border">{% for a in d.actions %}
-    <li class="py-1.5 flex flex-wrap justify-between gap-2"><span>{{ a.label }}{% if a.row.target %} · <span class="text-gray-600">{{ a.row.target }}</span>{% endif %}</span>
-      <span class="text-xs text-gray-500">{{ a.row.actor.get_username|default:"—" }} · {{ a.row.at|date:"j M Y, H:i" }}</span></li>
+    <li class="py-1.5 flex flex-wrap justify-between gap-2"><span>{{ a.label }}{% if a.row.target %} · <span class="text-ink-muted">{{ a.row.target }}</span>{% endif %}</span>
+      <span class="text-xs text-ink-subtle">{{ a.row.actor.get_username|default:"—" }} · {{ a.row.at|date:"j M Y, H:i" }}</span></li>
   {% endfor %}</ul>
-  {% else %}<p class="text-sm text-gray-600">Nothing yet.</p>{% endif %}
+  {% else %}<p class="text-sm text-ink-muted">Nothing yet.</p>{% endif %}
 </section>
 {% endif %}
 {% endblock %}

@@ -4,7 +4,7 @@
 {% block page_header %}
 <div class="mb-6">
   <h1 class="text-2xl font-semibold tracking-tight">Platform Health</h1>
-  <p class="text-sm text-gray-500 mt-1">System-wide delivery, audit, and webhook status.</p>
+  <p class="text-sm text-ink-subtle mt-1">System-wide delivery, audit, and webhook status.</p>
 </div>
 {% endblock %}
 
@@ -44,7 +44,7 @@
       </table>
     </div>
     {% else %}
-    <div class="card card-pad text-center py-8 text-gray-500">
+    <div class="card card-pad text-center py-8 text-ink-subtle">
       <p class="flex items-center justify-center gap-2">
         <span>✓</span> All accounts healthy
       </p>
@@ -73,7 +73,7 @@
             <td data-label="Time">{{ log.timestamp|date:"M j H:i" }}</td>
             <td data-label="Account"><a href="/manage/businesses/{{ log.account.pk }}/" class="text-ink hover:text-accent font-medium">{{ log.account.company_name }}</a></td>
             <td data-label="Action" class="font-mono text-xs">{{ log.action }}</td>
-            <td data-label="Resource" class="text-gray-600">{{ log.resource_type }}: {{ log.resource_id }}</td>
+            <td data-label="Resource" class="text-ink-muted">{{ log.resource_type }}: {{ log.resource_id }}</td>
             <td data-label="Error" class="text-red-600 text-xs">{{ log.error|truncatewords:10 }}</td>
           </tr>
           {% endfor %}
@@ -81,7 +81,7 @@
       </table>
     </div>
     {% else %}
-    <div class="card card-pad text-center py-8 text-gray-500">
+    <div class="card card-pad text-center py-8 text-ink-subtle">
       <p class="flex items-center justify-center gap-2">
         <span>✓</span> No failures
       </p>
@@ -116,7 +116,7 @@
       </table>
     </div>
     {% else %}
-    <div class="card card-pad text-center py-8 text-gray-500">
+    <div class="card card-pad text-center py-8 text-ink-subtle">
       <p class="flex items-center justify-center gap-2">
         <span>✓</span> All webhooks processed
       </p>

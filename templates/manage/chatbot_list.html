@@ -5,7 +5,7 @@
 <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
   <div>
     <h1 class="text-2xl font-semibold text-ink">Chatbots</h1>
-    <p class="mt-1 text-sm text-gray-600">All chat widgets across every business. <a href="{% url 'core:chatbot-categories' %}" class="text-accent">Manage categories →</a></p>
+    <p class="mt-1 text-sm text-ink-muted">All chat widgets across every business. <a href="{% url 'core:chatbot-categories' %}" class="text-accent">Manage categories →</a></p>
   </div>
   <a href="{% url 'core:chatbot-create' %}" class="btn btn-primary btn-sm">New chatbot</a>
 </div>
@@ -21,19 +21,19 @@
 {# Filters #}
 <form method="get" class="flex flex-wrap gap-2 mb-5">
   <input type="text" name="q" value="{{ q }}" placeholder="Search name or business…"
-    class="input w-56 text-sm" aria-label="Search">
-  <select name="category" class="input text-sm" aria-label="Category">
+    class="input w-56 sm:text-sm" aria-label="Search">
+  <select name="category" class="input sm:text-sm" aria-label="Category">
     <option value="">All categories</option>
     {% for cat in categories %}
     <option value="{{ cat.pk }}" {% if category_pk == cat.pk|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
     {% endfor %}
   </select>
-  <select name="active" class="input text-sm" aria-label="Status">
+  <select name="active" class="input sm:text-sm" aria-label="Status">
     <option value="">All statuses</option>
     <option value="1" {% if active_filter == "1" %}selected{% endif %}>Active</option>
     <option value="0" {% if active_filter == "0" %}selected{% endif %}>Inactive</option>
   </select>
-  <select name="chatbot_type" class="input text-sm" aria-label="Type">
+  <select name="chatbot_type" class="input sm:text-sm" aria-label="Type">
     <option value="">All types</option>
     {% for val, label in chatbot_types %}
     <option value="{{ val }}" {% if type_filter == val %}selected{% endif %}>{{ label }}</option>
@@ -90,10 +90,10 @@
         </td>
         <td class="text-xs text-ink-muted tabular-nums">{{ bot.created_at|date:"M j, Y" }}</td>
         <td class="text-right whitespace-nowrap">
-          <a href="{% url 'core:chatbot-edit' bot.pk %}" class="text-sm text-accent hover:text-accent-strong mr-3">Edit</a>
+          <a href="{% url 'core:chatbot-edit' bot.pk %}" class="inline-flex items-center min-h-6 text-sm text-accent hover:text-accent-strong mr-3">Edit</a>
           <form method="post" action="{% url 'core:chatbot-toggle' bot.pk %}" class="inline">
             {% csrf_token %}
-            <button type="submit" class="text-sm {% if bot.is_active %}text-amber-600 hover:text-amber-800{% else %}text-teal-600 hover:text-teal-800{% endif %}">
+            <button type="submit" class="inline-flex items-center min-h-6 text-sm {% if bot.is_active %}tone-amber-fg{% else %}tone-teal-fg{% endif %} hover:text-ink">
               {% if bot.is_active %}Deactivate{% else %}Activate{% endif %}
             </button>
           </form>

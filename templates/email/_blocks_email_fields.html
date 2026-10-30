@@ -54,8 +54,8 @@
   <div class="eb-samples">
     <template x-for="(row, ri) in samples" :key="ri">
       <div class="eb-sample">
-        <input class="input font-mono text-xs" x-model="row.key" placeholder="blank" aria-label="Blank name">
-        <input class="input text-sm" x-model="row.value" placeholder="Example" aria-label="Example value">
+        <input class="input font-mono sm:text-xs" x-model="row.key" placeholder="blank" aria-label="Blank name">
+        <input class="input sm:text-sm" x-model="row.value" placeholder="Example" aria-label="Example value">
         <button type="button" class="btn btn-ghost btn-icon btn-sm" @click="samples.splice(ri, 1)" aria-label="Remove">
           <svg viewBox="0 0 24 24" class="w-4 h-4" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>
         </button>

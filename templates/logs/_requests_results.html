@@ -19,15 +19,15 @@ re-renders itself, so it carries its own id.
       <tbody class="divide-y divide-border">
         {% for r in page %}
         <tr class="hover:tone-neutral-bg">
-          <td data-label="Time" class="text-gray-500 tabular-nums">{{ r.created_at|date:"Y-m-d H:i:s" }}</td>
+          <td data-label="Time" class="text-ink-subtle tabular-nums">{{ r.created_at|date:"Y-m-d H:i:s" }}</td>
           <td data-label="Method" class="font-mono text-xs">{{ r.method }}</td>
           <td data-label="Path" class="font-mono text-xs">
             <a href="/logs/requests/{{ r.public_id }}/" class="text-accent hover:text-accent-strong">{{ r.path }}</a>
             {% if r.idempotency_replayed %}<span class="badge badge-neutral ml-1">replayed</span>{% endif %}
           </td>
-          <td data-label="Status" class="tabular-nums">{{ r.status_code }}{% if r.error_code %} <span class="text-gray-400">({{ r.error_code }})</span>{% endif %}</td>
-          <td data-label="Latency" class="text-gray-500 tabular-nums">{{ r.latency_ms }} ms</td>
-          <td data-label="Request ID" class="font-mono text-xs text-gray-400">{{ r.request_id|default:"—" }}</td>
+          <td data-label="Status" class="tabular-nums">{{ r.status_code }}{% if r.error_code %} <span class="text-ink-subtle">({{ r.error_code }})</span>{% endif %}</td>
+          <td data-label="Latency" class="text-ink-subtle tabular-nums">{{ r.latency_ms }} ms</td>
+          <td data-label="Request ID" class="font-mono text-xs text-ink-subtle">{{ r.request_id|default:"—" }}</td>
         </tr>
         {% empty %}
         <tr><td colspan="6">

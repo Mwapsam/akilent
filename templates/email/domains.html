@@ -5,7 +5,7 @@
 <div class="flex flex-wrap items-end justify-between gap-3 mb-6">
   <div>
     <h1 class="text-2xl font-semibold tracking-tight">Sending domains</h1>
-    <p class="text-sm text-gray-500 mt-1">Provision domains, verify DNS, and manage your transactional API key.</p>
+    <p class="text-sm text-ink-subtle mt-1">Provision domains, verify DNS, and manage your transactional API key.</p>
     <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
       {% include "components/help_link.html" with slug="domains" text="Domain setup guide" %}
       {% include "components/help_link.html" with slug="dns-setup" text="How to add DNS records" %}
@@ -29,13 +29,13 @@
   <h2 class="font-semibold flex items-center gap-2">
     {% include "components/icon.html" with name="key" class="w-4 h-4 text-amber-500" %} Email API &amp; SMTP relay
   </h2>
-  <p class="text-sm text-gray-600 mt-2">Your current plan doesn't include the email API. <a href="/billing/plans/" class="text-accent font-medium">Upgrade your plan</a> to generate a key and send.</p>
+  <p class="text-sm text-ink-muted mt-2">Your current plan doesn't include the email API. <a href="/billing/plans/" class="text-accent font-medium">Upgrade your plan</a> to generate a key and send.</p>
 </div>
 {% elif account %}
 <div class="card card-pad mb-6">
   <div class="flex items-center justify-between mb-3">
     <h2 class="font-semibold flex items-center gap-2">
-      {% include "components/icon.html" with name="key" class="w-4 h-4 text-gray-400" %} API key
+      {% include "components/icon.html" with name="key" class="w-4 h-4 text-ink-subtle" %} API key
     </h2>
     {% if api_key or new_api_key_plaintext %}
     <a href="{% url 'settings-api-keys' %}" class="btn btn-ghost btn-sm">Manage keys</a>
@@ -55,10 +55,10 @@
     </div>
     <p class="help mt-2">Send with header <code>X-Api-Key</code> to <code>POST /api/v1/messages</code> (legacy path: <code>POST /email/send/</code>).</p>
   {% elif api_key %}
-    <p class="text-sm text-gray-600 font-mono">{{ api_key.key_prefix }}••••{{ api_key.last4 }}</p>
+    <p class="text-sm text-ink-muted font-mono">{{ api_key.key_prefix }}••••{{ api_key.last4 }}</p>
     <p class="help mt-2">Send with header <code>X-Api-Key</code> to <code>POST /api/v1/messages</code> (legacy path: <code>POST /email/send/</code>). Lost it? Create a new key in <a href="{% url 'settings-api-keys' %}" class="underline">Settings › API keys</a> and revoke this one.</p>
   {% else %}
-    <p class="text-sm text-gray-400">No API key yet. Create one to start sending.</p>
+    <p class="text-sm text-ink-subtle">No API key yet. Create one to start sending.</p>
   {% endif %}
 </div>
 {% endif %}
@@ -97,7 +97,7 @@
           </div>
           
         </div>
-        <span class="text-xs text-gray-400 shrink-0">{{ d.dns_found_count }}/{{ d.dns_total_count }} DNS records</span>
+        <span class="text-xs text-ink-subtle shrink-0">{{ d.dns_found_count }}/{{ d.dns_total_count }} DNS records</span>
         {% include "components/icon.html" with name="chevron-right" class="w-4 h-4 text-gray-300 shrink-0" %}
       </a>
     </li>
@@ -123,13 +123,13 @@
         {% for m in recent %}
           <tr>
             <td data-label="To">{{ m.to_email }}</td>
-            <td data-label="Subject" class="text-gray-500">{{ m.subject|default:"—"|truncatechars:40 }}</td>
+            <td data-label="Subject" class="text-ink-subtle">{{ m.subject|default:"—"|truncatechars:40 }}</td>
             <td data-label="Status">
               {% if m.status == 'sent' %}<span class="badge badge-success">Sent</span>
               {% elif m.status == 'failed' %}<span class="badge badge-danger">Failed</span>
               {% else %}<span class="badge badge-warning">Queued</span>{% endif %}
             </td>
-            <td data-label="When" class="text-gray-400">{{ m.created_at|date:"M j, H:i" }}</td>
+            <td data-label="When" class="text-ink-subtle">{{ m.created_at|date:"M j, H:i" }}</td>
           </tr>
         {% endfor %}
       </tbody>

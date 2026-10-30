@@ -17,14 +17,14 @@ re-renders itself, so it carries its own id.
             <a href="/logs/messages/{{ m.public_id }}/" class="text-accent hover:text-accent-strong">{{ m.public_id }}</a>
           </td>
           <td data-label="To" class="font-medium text-ink">{{ m.to_email }}</td>
-          <td data-label="Subject" class="max-w-xs truncate text-gray-500">{{ m.subject|default:"—" }}</td>
+          <td data-label="Subject" class="max-w-xs truncate text-ink-subtle">{{ m.subject|default:"—" }}</td>
           <td data-label="Status">
             {% if m.status == 'sent' %}{% include "components/status.html" with state="sent" badge=True %}
             {% elif m.status == 'failed' or m.status == 'bounced' %}{% include "components/status.html" with state="failed" badge=True %}
             {% elif m.status == 'queued' or m.status == 'sending' %}{% include "components/status.html" with state="sending" badge=True %}
             {% else %}<span class="badge badge-neutral">{{ m.get_status_display }}</span>{% endif %}
           </td>
-          <td data-label="Created" class="text-gray-500 tabular-nums">{{ m.created_at|date:"Y-m-d H:i:s" }}</td>
+          <td data-label="Created" class="text-ink-subtle tabular-nums">{{ m.created_at|date:"Y-m-d H:i:s" }}</td>
         </tr>
         {% endfor %}
       </tbody>

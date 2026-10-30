@@ -1,11 +1,1 @@
-{
-  "docs::hex-style": 10,
-  "email::gray-text": 69,
-  "email::hex-style": 6,
-  "email::px-text": 3,
-  "help::hex-style": 12,
-  "legal::hex-style": 1,
-  "logs::gray-text": 45,
-  "manage::gray-text": 128,
-  "public::hex-style": 24
-}
+{}

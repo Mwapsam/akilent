@@ -272,6 +272,10 @@
   /* Ink that never flips with the theme: fixed-palette surfaces (the marketing landing
      page, text on amber) use it where --color-ink would turn near-white in dark mode. */
   --color-ink-fixed: #12182B;
+  /* Code blocks are dark in both themes (docs, API samples): fixed, never flipped. */
+  --code-bg: #0B111F;
+  --code-fg: #E7ECF5;
+  --code-line: #1C2640;
 
   /* Keyboard focus. 2px outline, 3:1 against what it sits on (WCAG 1.4.11).
      brand-600 is 8:1 on white but 2.3:1 on the dark canvas, so the dark
@@ -739,6 +743,9 @@
     .inbox-split.has-conversation .inbox-list-col {
       display: flex; flex-direction: column; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
       scrollbar-gutter: stable;
+      /* The containing block for anything absolutely placed in a row (.sr-only labels): without
+         it they escaped the scroll box, and a long list stretched the whole page. */
+      position: relative;
     }
     /* The list's card reaches the bottom of its column, level with the conversation beside
        it, however few rows there are; more rows than fit scroll inside the column. */
@@ -1358,7 +1365,7 @@
   .chart-legend-item { @apply inline-flex items-center gap-1.5; }
   /* Links in table cells (a name, an order number, a sort header) are the row's way in, not
      words in a sentence, so they get the 24px minimum target (WCAG 2.5.8). */
-  .table :is(td, th) a:not(.btn) { display: inline-block; min-height: 1.5rem; line-height: 1.5rem; }
+  :is(.table, .table-wrap table) :is(td, th) a:not(.btn) { display: inline-block; min-height: 1.5rem; line-height: 1.5rem; }
   /* CRM pipeline: a column per stage on wide screens only (--stages set inline). */
   .pipeline-grid { @apply grid gap-4 grid-cols-1 sm:grid-cols-2; }
   @media (min-width: 64rem) { .pipeline-grid { grid-template-columns: repeat(var(--stages, 4), minmax(0, 1fr)); } }

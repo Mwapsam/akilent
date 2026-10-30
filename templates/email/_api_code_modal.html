@@ -25,15 +25,15 @@ in, see templates.html) into #api-code-modal-content.
   <div class="card shadow-modal w-full max-w-2xl relative" x-transition.scale.95.opacity x-trap.noscroll="open">
     <div class="flex items-center justify-between px-6 py-4 border-b border-border">
       <div>
-        <h2 id="api-modal-title" class="text-base font-semibold text-gray-900">Send via API</h2>
-        <p class="text-xs text-gray-500 mt-0.5" x-text="title"></p>
+        <h2 id="api-modal-title" class="text-base font-semibold text-ink">Send via API</h2>
+        <p class="text-xs text-ink-subtle mt-0.5" x-text="title"></p>
       </div>
       <button type="button" class="btn-ghost rounded-lg p-1.5" @click="open = false" aria-label="Close">
         {% include "components/icon.html" with name="x" class="w-5 h-5" %}
       </button>
     </div>
     <div class="p-6">
-      <p class="text-sm text-gray-500 mb-4">
+      <p class="text-sm text-ink-subtle mb-4">
         POST to <code class="copy-value">/api/v1/messages</code> with an
         <code class="copy-value">X-Api-Key</code> header. Get an API key from
         <a href="/email/domains/" class="text-accent font-medium">Domains</a>.

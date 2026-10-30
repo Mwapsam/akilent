@@ -45,7 +45,7 @@
           <p class="mt-1 text-xs text-ink-subtle font-mono">ID: {{ iba.instagram_business_account_id }}</p>
         </div>
       </div>
-      <div class="flex items-center gap-2 shrink-0 flex-wrap">
+      <div class="flex items-center gap-2 min-w-0 max-w-full flex-wrap">
         {% comment %}The connection's own state. Not components/status.html: that is a
         message's lifecycle, and it labelled a working connection "Sent".{% endcomment %}
         {% if iba.is_ready %}
