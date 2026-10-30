@@ -10,12 +10,12 @@ an automation mapping (pass ``frozenset(BusinessPolicy.INSIGHT_TYPE_TO_TRIGGER)`
   <div class="flex items-center justify-between gap-3">
     <div>
       <h2 id="intelligence-h" class="text-lg font-semibold text-ink">What needs your attention</h2>
-      <p class="text-sm text-gray-600">Akilent observed these in your business data.</p>
+      <p class="text-sm text-ink-muted">Akilent observed these in your business data.</p>
     </div>
     <div class="flex items-center gap-3">
-      <span class="text-xs text-gray-500">{{ intelligence_insights|length }} insight{{ intelligence_insights|length|pluralize }}</span>
+      <span class="text-xs text-ink-subtle">{{ intelligence_insights|length }} insight{{ intelligence_insights|length|pluralize }}</span>
       {% if rec_stats.total %}
-      <span class="text-xs text-gray-500">
+      <span class="text-xs text-ink-subtle">
         {{ rec_stats.acted_on }} of {{ rec_stats.total }} acted on{% if rec_stats.dismissed %} · {{ rec_stats.dismissed }} dismissed{% endif %}
       </span>
       {% endif %}
@@ -35,10 +35,10 @@ an automation mapping (pass ``frozenset(BusinessPolicy.INSIGHT_TYPE_TO_TRIGGER)`
         <div class="flex items-start gap-3 min-w-0">
           {# Severity icon #}
           <span class="mt-0.5 shrink-0
-              {% if insight.severity == 'urgent' %}text-red-500
-              {% elif insight.severity == 'warning' %}text-amber-500
-              {% elif insight.severity == 'opportunity' %}text-emerald-600
-              {% else %}text-blue-500
+              {% if insight.severity == 'urgent' %}tone-coral-fg
+              {% elif insight.severity == 'warning' %}tone-amber-fg
+              {% elif insight.severity == 'opportunity' %}tone-teal-fg
+              {% else %}tone-info-fg
               {% endif %}">
             {% if insight.severity == 'urgent' %}
               {% include "components/icon.html" with name="alert-triangle" class="w-5 h-5" %}
@@ -65,11 +65,11 @@ an automation mapping (pass ``frozenset(BusinessPolicy.INSIGHT_TYPE_TO_TRIGGER)`
               {% endif %}
             </div>
             {% if insight.body %}
-            <p class="mt-1 text-sm text-gray-600 leading-relaxed">{{ insight.body }}</p>
+            <p class="mt-1 text-sm text-ink-muted leading-relaxed">{{ insight.body }}</p>
             {% endif %}
-            {% if insight.evidence_count %}
-            <p class="mt-1.5 text-xs text-gray-500 tabular-nums">{{ insight.evidence_count }} record{{ insight.evidence_count|pluralize }} affected</p>
-            {% endif %}
+            <p class="mt-1.5 text-xs text-ink-subtle tabular-nums">
+              <span data-insight="spotted">Spotted <time datetime="{{ insight.created_at|date:'c' }}">{{ insight.created_at|timesince }} ago</time></span>{% if insight.evidence_count %} · {{ insight.evidence_count }} record{{ insight.evidence_count|pluralize }} affected{% endif %}
+            </p>
           </div>
         </div>
 
@@ -84,7 +84,7 @@ an automation mapping (pass ``frozenset(BusinessPolicy.INSIGHT_TYPE_TO_TRIGGER)`
             </button>
           </form>
           {% elif insight.suggested_action.label %}
-          <span class="text-sm text-gray-500 italic">{{ insight.suggested_action.label }}</span>
+          <span class="text-sm text-ink-subtle italic">{{ insight.suggested_action.label }}</span>
           {% endif %}
 
           {% if insight.type in automatable_insight_types %}
@@ -121,8 +121,8 @@ an automation mapping (pass ``frozenset(BusinessPolicy.INSIGHT_TYPE_TO_TRIGGER)`
 
       {% with rec=insight.accepted_recs.0 %}
       {% if rec %}
-      <div class="mt-3 pt-3 border-t border-border text-xs text-gray-500 space-y-0.5">
-        <p>✓ Contacted {% if rec.acted_at %}<span class="text-gray-400">· {{ rec.acted_at|date:"j M, H:i" }}</span>{% endif %}</p>
+      <div class="mt-3 pt-3 border-t border-border text-xs text-ink-subtle space-y-0.5">
+        <p>✓ Contacted {% if rec.acted_at %}<span class="text-ink-subtle">· {{ rec.acted_at|date:"j M, H:i" }}</span>{% endif %}</p>
         {% if rec.outcome_summary.lead_created_at %}<p>Lead created</p>{% endif %}
         {% if rec.outcome_summary.order_paid_at %}
         <p>Order paid{% if rec.outcome_summary.revenue %} · <span class="font-medium text-ink">{{ rec.outcome_summary.currency }} {{ rec.outcome_summary.revenue }}</span>{% endif %}</p>
@@ -135,8 +135,8 @@ an automation mapping (pass ``frozenset(BusinessPolicy.INSIGHT_TYPE_TO_TRIGGER)`
   </ul>
 </section>
 {% else %}
-<div class="card card-pad flex items-center gap-3 text-sm text-gray-500">
-  {% include "components/icon.html" with name="check-circle" class="w-5 h-5 shrink-0 text-emerald-500" %}
+<div class="card card-pad flex items-center gap-3 text-sm text-ink-subtle">
+  {% include "components/icon.html" with name="check-circle" class="w-5 h-5 shrink-0 tone-teal-fg" %}
   <span>Business health looks good — no open observations right now.</span>
 </div>
 {% endif %}

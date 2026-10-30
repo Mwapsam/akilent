@@ -624,14 +624,29 @@ def email_analytics_context(account, request) -> dict:
                 deliverability = compute_score(account, sel_domain).as_dict()
             except Exception:
                 logger.exception("insights: deliverability score failed")
+                error = (
+                    "Couldn't work out the deliverability score for this domain right now. "
+                    "Reload the page to try again."
+                )
 
     # Shaped for the chart here rather than in the template: a template cannot
     # check that the two series line up with the days, and a chart drawn from
-    # mismatched columns is wrong without looking wrong.
-    engagement_days = [row["day"] for row in stats]
+    # mismatched columns is wrong without looking wrong. Every day from the first
+    # event to the last is a column: a day nobody opened anything is a real 0, and
+    # leaving it out would draw a line straight across it.
+    by_day = {row["day"]: row for row in stats}
+    engagement_days = []
+    if stats:
+        from datetime import date, timedelta
+
+        day = date.fromisoformat(stats[0]["day"])
+        last = date.fromisoformat(stats[-1]["day"])
+        while day <= last:
+            engagement_days.append(str(day))
+            day += timedelta(days=1)
     engagement_series = [
-        ("Opens", [row["opens"] for row in stats]),
-        ("Clicks", [row["clicks"] for row in stats]),
+        ("Opens", [by_day.get(d, {}).get("opens", 0) for d in engagement_days]),
+        ("Clicks", [by_day.get(d, {}).get("clicks", 0) for d in engagement_days]),
     ]
 
     return {

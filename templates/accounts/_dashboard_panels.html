@@ -34,7 +34,7 @@ hx-trigger of its own, so it loads exactly once.
       <div class="flex items-center justify-between card-pad pb-3">
         <h2 class="text-lg font-semibold text-ink">Upcoming sends</h2>
         {% if CAMPAIGNS_ENABLED %}<a href="/email/campaigns/?status=scheduled"
-           class="text-sm text-accent hover:text-accent-strong">View all</a>{% endif %}
+           class="inline-flex items-center min-h-6 text-sm text-accent hover:text-accent-strong">View all</a>{% endif %}
       </div>
       {% if upcoming_sends %}
         <ul class="divide-y divide-border">
@@ -74,7 +74,7 @@ hx-trigger of its own, so it loads exactly once.
         <ul class="space-y-2">
           {% for a in attention_items %}
           <li>
-            <a href="{{ a.url }}" class="flex items-start gap-2 text-sm text-ink-muted hover:text-ink">
+            <a href="{{ a.url }}" class="flex items-start gap-2 min-h-6 py-0.5 text-sm text-ink-muted hover:text-ink">
               {% include "components/icon.html" with name="alert" class="w-4 h-4 tone-amber-fg shrink-0 mt-0.5" %}
               <span>{{ a.text }}</span>
             </a>
@@ -143,7 +143,7 @@ hx-trigger of its own, so it loads exactly once.
   <div class="card overflow-hidden">
     <div class="flex items-center justify-between card-pad pb-3">
       <h2 class="text-lg font-semibold text-ink">Recent activity</h2>
-      <a href="/logs/messages/" class="text-sm text-accent hover:text-accent-strong">View activity log</a>
+      <a href="/logs/messages/" class="inline-flex items-center min-h-6 text-sm text-accent hover:text-accent-strong">View activity log</a>
     </div>
     {% if recent_sends %}
       <div class="table-scroll">

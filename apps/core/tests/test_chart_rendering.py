@@ -78,13 +78,11 @@ class TestLineChart:
         ids = re.findall(r'<script id="(chart-\d+)"', html)
         assert len(ids) == 2 and len(set(ids)) == 2
 
-    def test_an_empty_series_renders_nothing_rather_than_empty_axes(self):
-        assert (
-            _render(
-                "{% line_chart series days %}", series=[("Opens", [])], days=[]
-            ).strip()
-            == ""
-        )
+    def test_an_empty_series_says_so_rather_than_drawing_empty_axes(self):
+        html = _render("{% line_chart series days %}", series=[("Opens", [])], days=[])
+        assert "<svg" not in html and "chart-y-axis" not in html
+        assert 'data-chart="empty"' in html
+        assert "nothing recorded for this period yet" in html
 
     def test_mismatched_series_and_labels_are_refused(self):
         """A chart drawn from mismatched columns plots real numbers against the

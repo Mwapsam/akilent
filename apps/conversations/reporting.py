@@ -1063,28 +1063,44 @@ def momentum(account, *, weeks: int = 12) -> dict:
     from apps.conversations import snapshots
 
     rows = snapshots.trend(account, weeks=weeks)
+    # The charts run week by week from the first captured week to the last. A week with no
+    # snapshot, or no reply to time, is a gap (None), never 0: a 0-minute median would read as
+    # the best week on record, and joining the weeks either side would hide that it's missing.
+    # A column per week: each captured row, with an empty column for any week missing between
+    # two of them. "Missing" is a jump of well over a week, not exactly 7 days, so a clock change
+    # moving a week start by an hour isn't taken for a lost week.
+    columns: list[tuple[datetime, dict | None]] = []
+    for r in rows:
+        if columns:
+            week = columns[-1][0]
+            while r["week_start"] - week > timedelta(days=10):
+                week += timedelta(days=7)
+                columns.append((week, None))
+        columns.append((r["week_start"], r))
+
+    def series(key, scale=1):
+        return [
+            None if r is None or r.get(key) is None else r[key] / scale
+            for _, r in columns
+        ]
+
     # Not "%-d %b": that's a Linux-only strftime extension and breaks on Windows.
-    labels = [f"{r['week_start'].day} {r['week_start']:%b}" for r in rows]
+    labels = [f"{w.day} {w:%b}" for w, _ in columns]
     return {
         "rows": rows,
         "has_data": bool(rows),
+        # One week is a number, not a trend: the charts wait for a second week.
+        "enough_for_trend": len(rows) >= 2,
+        "last_week": rows[-1]["week_start"] if rows else None,
         "labels": labels,
         "reply_series": [
-            (
-                "Median first reply (min)",
-                [
-                    (r["median_first_reply_seconds"] or 0) / 60
-                    if r["median_first_reply_seconds"] is not None
-                    else 0
-                    for r in rows
-                ],
-            )
+            ("Median first reply (min)", series("median_first_reply_seconds", 60))
         ],
         "answered_series": [
-            ("Answered", [r["answered"] for r in rows]),
-            ("Unanswered", [r["unanswered"] for r in rows]),
+            ("Answered", series("answered")),
+            ("Unanswered", series("unanswered")),
         ],
-        "paid_series": [("Paid orders", [r["paid_orders"] for r in rows])],
+        "paid_series": [("Paid orders", series("paid_orders"))],
     }
 
 

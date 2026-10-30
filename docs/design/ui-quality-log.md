@@ -1391,3 +1391,77 @@ A code review raised eight findings. All eight were confirmed and fixed.
 - `publishing_qa.mjs` 21/21.
 
 A harness flaw was also found and fixed: evaluating `save()` waited for its promise, so the timing check started too late.
+
+## Entry 14: Phase 7, Insights and analytics (2026-10-30)
+
+You said to continue. This is Phase 7. The exit-gate task: each dashboard loads, fails gracefully, and shows empty and sparse data honestly, telling "zero" apart from "unknown".
+
+Scope: Business Health (`/insights/`, all partials, including the Email section), the automation policy pages, the shared line chart, and the dashboard's lazily loaded panels.
+
+### Tested code
+
+| | |
+|---|---|
+| HEAD | `60ef3a2` |
+| Tracked changes | 26 files, +275 −195. `git diff HEAD --binary -- . ':!docs/design/ui-quality-log.md'` SHA-256 `5076ffd61c24f2ec…` |
+| Untracked | `apps/insights/tests/test_insights_ui_quality.py`, `tools/qa/insights_qa.mjs`. Combined SHA-256 `0961f15c524acc6e…` |
+
+### Defects found and fixed
+
+| # | Sev | Defect | Fix |
+|---|---|---|---|
+| D1 | High | **A week with nothing to measure was drawn as a perfect week.** The chart turned every missing reading into 0, so a week with no reply to time showed a 0-minute median reply. A week with no snapshot was skipped, so the line ran straight across it. | The shared chart (`apps/core/charts.py`, `{% line_chart %}`) treats `None` as "no reading": the line breaks, the table shows "—", hover says "No data", and no marker is drawn. A reading cut off by gaps on both sides is drawn as a dot. Momentum passes `None` for those weeks and adds an empty column for a missing week. A clock change isn't taken for a missing week. |
+| D2 | Med | **One week was drawn as a "trend".** | Charts start from two counted weeks. With one, the table shows and a sentence says when the charts will start. |
+| D3 | Med | **A chart with nothing recorded rendered nothing**, leaving an empty card. | It now says "nothing recorded for this period yet". |
+| D4 | Med | **Email engagement:** days with no opens were left out, so the line joined distant days. The chart is all-time, while the page's period selector suggested otherwise. | Every day from the first event to the last is a column (a day without opens is a real 0). The card says it covers everything since tracking began. |
+| D5 | Med | **A failed deliverability score made the card silently disappear.** | It shows "Couldn't work out the deliverability score for this domain right now". (`error` was already rendered but never set.) |
+| D6 | Med | **No freshness.** Nothing said when the figures were from. | "Figures as of 30 Oct, 06:11. Reload for the latest." Each insight says when it was spotted. Momentum says which week it counts up to. |
+| D7 | Med | **The empty proof bar assumed WhatsApp** ("Once WhatsApp messages start coming in"). | "Once customers message you on a connected channel". |
+| D8 | Med | **Removing a goal happened in one click.** Deleting a policy used its own inline "Sure?" pattern. | Both use the shared confirm dialog with danger styling. The goal and policy are named, and the copy says the policy can't be brought back (the view hard-deletes it). |
+| D9 | Med | **Policy editor:** hand-styled fields with a blue focus ring and `dark:` overrides. The number fields had no accessible name. The back link was an unnamed icon. Each flash message showed twice (inline and as a toast). No leave guard. | Shared `.input`/`.select` fields. Each "No reply for [n] hours" row is a `<label>`. "Back to policies" is named. The inline message list is removed. `dirtyGuard` plus a busy submit. |
+| D10 | Med | **Dark-mode contrast:** severity icons in stock red/amber/emerald/blue, `text-brand-800` advice text, and red/amber run states on the policies page. | Tone tokens (`tone-coral-fg`, `tone-amber-fg`, `tone-teal-fg`, and a new `tone-info-fg` utility). |
+| D11 | Med | **The dashboard's panels stayed a skeleton forever when their load failed** (`aria-busy="true"` stayed set). | The region opts into the shared error state: "Couldn't load these panels", with Try again. `app.js` clears `aria-busy` on any region that shows a failure. |
+| D12 | Low | **Targets under 24px** on the dashboard panels: "View all", "View activity log" and setup-step links. Also the weekly-report checkbox label. | `min-h-6`. |
+
+**Drift:** `templates/insights` 51 → 0. Total 472 → 421, and the baseline was lowered.
+
+### Automated results
+
+| Command | Result |
+|---|---|
+| `poetry run pytest apps/insights apps/conversations apps/email apps/core apps/accounts` | Everything else passed, with 2 failures. **Mine:** `test_an_empty_series_renders_nothing_rather_than_empty_axes` failed because D3 changes that behaviour deliberately; it is rewritten to check there are still no empty axes, plus the sentence. **Known:** `test_import_5000_contacts` (72.9s against a 60s budget) also fails on a clean checkout and has nothing to do with this phase. |
+| `test_insights_ui_quality.py` (new) | **24 pass:** chart gaps (line break, no fill across gaps, scale, all-gaps means no data, zero is data, isolated dots), table dash and tooltip, the empty chart, momentum gaps, missing weeks, the clock change, one week vs two, email day filling, the failed score, freshness, channel-neutral copy, both confirms, the policy editor, tokens only, the dashboard error region. |
+| Chart tests (`test_charts.py`, `test_chart_rendering.py`) | Pass after the rewrite above. |
+| `ruff check`, `ruff format`, drift | Clean. Drift 421. |
+
+The full suite was not re-run for this phase.
+
+### Browser verification
+
+**`tools/qa/insights_qa.mjs`: 23 of 23.** Headless Chrome, signed in as the QA user. Data from scratchpad `p7_seed.py`: four weekly snapshots with one missing week and one week with no reply to time, an open insight, a goal and a policy. Every POST is answered by the harness, so nothing was written.
+- **Scans:** Insights, policies, the policy editor and the dashboard, at 1280 and 390, in **both themes**. No sideways scroll, no contrast failures, no targets under 24px.
+- **Freshness:** the page, insight and momentum timestamps are shown.
+- **Reply chart:** three separate readings drawn as dots, "—" in the table for the empty week and the missing week, no "0". Hovering the empty week says "No data" with no marker.
+- **Goal removal and policy delete:** both ask first, and Cancel sends nothing.
+- **Policy editor:** the number field is named "Customer inactive for days". Leaving with a change asks "Leave without saving?", and Stay keeps you on the page.
+- **Dashboard panels:** a 500 shows "Couldn't load these panels" with Try again, no skeleton, and `aria-busy` cleared. Try again then loads the panels.
+
+**Found by the browser, not the tests:**
+- the dashboard's three small links
+- readings cut off by gaps drew as 2px specks, which is why the dot was added
+
+**Harness flaw fixed:** the app's own usage beacon (`/internal/ux-event/`) was counted as a sent change.
+
+Screenshots are in `docs/design/qa/phase7/` (local only).
+
+### Backend gaps
+
+None new. All the changes are presentation; no backend states or rules changed. G5–G9 still need your authorization.
+
+### Sign-offs
+
+| Gate | Status |
+|---|---|
+| Implementation | **Done** |
+| Verification | **Done**: tests and 23/23 in the browser. **Open:** a screen-reader pass on the charts (table view and hover), and a real phone. |
+| Acceptance | **Pending your review** |

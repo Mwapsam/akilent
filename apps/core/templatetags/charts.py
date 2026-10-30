@@ -31,9 +31,12 @@ def line_chart(series, labels, title="", unit="", height=200, baseline_at_zero=T
     ``series`` is an iterable of ``(label, values)``. Every series must be the
     same length as ``labels`` — a short series would otherwise plot against the
     wrong dates, silently, which is the kind of chart bug nobody catches by
-    looking.
+    looking. A ``None`` value is a missing reading (a gap), never zero.
     """
-    pairs = [(str(label), [float(v or 0) for v in values]) for label, values in series]
+    pairs = [
+        (str(label), [None if v is None else float(v) for v in values])
+        for label, values in series
+    ]
     labels = [str(x) for x in labels]
     for label, values in pairs:
         if len(values) != len(labels):

@@ -6,7 +6,7 @@ comment replies), per the messaging truth rule.
 {% endcomment %}
 <section class="space-y-4" aria-labelledby="journey-h">
   <h2 id="journey-h" class="text-lg font-semibold text-ink">Your customer journey</h2>
-  <p class="text-sm text-gray-600">From the posts you publish to the orders customers pay.</p>
+  <p class="text-sm text-ink-muted">From the posts you publish to the orders customers pay.</p>
 
   <div class="card card-pad space-y-5">
     <ol class="grid grid-cols-2 sm:grid-cols-3 gap-x-8 gap-y-5">
@@ -19,7 +19,7 @@ comment replies), per the messaging truth rule.
       {% for step in journey_steps %}
       <li>
         {% if step.value is None %}
-          <p class="text-sm font-medium text-gray-500 leading-7">Not tracked yet</p>
+          <p class="text-sm font-medium text-ink-subtle leading-7">Not tracked yet</p>
           <p class="stat-label">{{ step.label }}</p>
         {% elif step.href %}
           <a href="{{ step.href }}" class="block hover:text-accent">
@@ -34,7 +34,7 @@ comment replies), per the messaging truth rule.
       {% endfor %}
       <li>
         {% if journey.revenue is None %}
-          <p class="text-sm font-medium text-gray-500 leading-7">Not tracked yet</p>
+          <p class="text-sm font-medium text-ink-subtle leading-7">Not tracked yet</p>
         {% else %}
           <p class="stat-value">{% for r in journey.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}</p>
         {% endif %}
@@ -43,7 +43,7 @@ comment replies), per the messaging truth rule.
     </ol>
 
     {% if journey.chats is None %}
-    <p class="text-sm text-gray-600 border-t border-border pt-4">
+    <p class="text-sm text-ink-muted border-t border-border pt-4">
       {% if journey.chat_links %}Add a WhatsApp chat link to a post in <a href="{% url 'publishing:index' %}" class="text-accent hover:text-accent-strong">Content Studio</a> to see the chats, leads and paid orders your posts bring in.{% else %}Chats, leads and orders from posts show here once a customer starts a chat from one of your posts.{% endif %}
     </p>
     {% elif journey.top %}
@@ -54,7 +54,7 @@ comment replies), per the messaging truth rule.
         <li>
           <a href="{% url 'publishing:post-detail' post.pk %}" class="flex items-center justify-between gap-4 py-2 min-h-11 hover:text-accent">
             <span class="text-sm truncate">{{ post.caption|truncatechars:70|default:"(no caption)" }}</span>
-            <span class="text-sm text-gray-600 shrink-0 tabular-nums">{{ post.chats }} chat{{ post.chats|pluralize }}</span>
+            <span class="text-sm text-ink-muted shrink-0 tabular-nums">{{ post.chats }} chat{{ post.chats|pluralize }}</span>
           </a>
         </li>
         {% endfor %}
@@ -64,23 +64,23 @@ comment replies), per the messaging truth rule.
     {% if journey.chats is not None %}
     <div class="border-t border-border pt-4" data-journey="not-from-posts">
       <h3 class="text-sm font-semibold text-ink">Not credited to a post</h3>
-      <p class="text-xs text-gray-500 mt-0.5">Still your customers and your sales, just without proof that a post brought them in.</p>
+      <p class="text-xs text-ink-subtle mt-0.5">Still your customers and your sales, just without proof that a post brought them in.</p>
       <dl class="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
         <div>
-          <dt class="text-gray-500">New chats not from a post</dt>
+          <dt class="text-ink-subtle">New chats not from a post</dt>
           <dd class="font-medium text-ink tabular-nums">{{ journey.untracked_chats }}</dd>
         </div>
         <div>
-          <dt class="text-gray-500">Paid, linked to a recent chat (a guess)</dt>
+          <dt class="text-ink-subtle">Paid, linked to a recent chat (a guess)</dt>
           <dd class="font-medium text-ink tabular-nums">{% for r in journey.guessed_revenue %}{{ r.currency }} {{ r.total|floatformat:2 }} ({{ r.orders }} order{{ r.orders|pluralize }}){% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}</dd>
         </div>
         <div>
-          <dt class="text-gray-500">Paid, not from a tracked post</dt>
+          <dt class="text-ink-subtle">Paid, not from a tracked post</dt>
           <dd class="font-medium text-ink tabular-nums">{% for r in journey.untracked_revenue %}{{ r.currency }} {{ r.total|floatformat:2 }} ({{ r.orders }} order{{ r.orders|pluralize }}){% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}</dd>
         </div>
       </dl>
     </div>
     {% endif %}
-    <p class="text-xs text-gray-500">Counted only when a customer used a post's chat link or a reply to a comment on it, and the lead or order was made from that chat (by your team or an automation). A chat Akilent only guessed at is never credited to a post. So these are the least your posts brought in. <a href="{% url 'help-article' 'post-results' %}" class="underline">How it's counted</a></p>
+    <p class="text-xs text-ink-subtle">Counted only when a customer used a post's chat link or a reply to a comment on it, and the lead or order was made from that chat (by your team or an automation). A chat Akilent only guessed at is never credited to a post. So these are the least your posts brought in. <a href="{% url 'help-article' 'post-results' %}" class="underline">How it's counted</a></p>
   </div>
 </section>

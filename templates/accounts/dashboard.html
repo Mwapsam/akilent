@@ -100,6 +100,8 @@
        hx-get="{% url 'dashboard-panels' %}"
        hx-trigger="load"
        hx-swap="outerHTML"
+       data-error-region
+       data-error-title="Couldn't load these panels"
        aria-busy="true"
        aria-label="Loading dashboard panels">
     <div class="grid gap-6 lg:grid-cols-3">

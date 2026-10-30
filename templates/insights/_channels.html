@@ -4,11 +4,11 @@ only — no "best channel" label. Gated on ``has_history`` (the plan's detailed-
 {% endcomment %}
 <section class="space-y-4" aria-labelledby="channels-h">
   <h2 id="channels-h" class="text-lg font-semibold text-ink">Channel performance</h2>
-  <p class="text-sm text-gray-600">Which channel are customers writing in from?</p>
+  <p class="text-sm text-ink-muted">Which channel are customers writing in from?</p>
 
   {% if not has_history %}
   <div class="card card-pad text-center">
-    <p class="text-sm text-gray-500">Channel performance is available on higher plans.</p>
+    <p class="text-sm text-ink-subtle">Channel performance is available on higher plans.</p>
     <a href="/billing/plans/" class="btn btn-primary btn-sm mt-3">Upgrade your plan</a>
   </div>
   {% elif channels %}
@@ -29,6 +29,6 @@ only — no "best channel" label. Gated on ``has_history`` (the plan's detailed-
     </table>
   </div>
   {% else %}
-  <p class="text-sm text-gray-600">No channel activity yet this period.</p>
+  <p class="text-sm text-ink-muted">No channel activity yet this period.</p>
   {% endif %}
 </section>

@@ -8,7 +8,7 @@ catalogue is ``goal_metrics``. Adding, editing and deleting goals is owner/admin
   <div class="flex items-center justify-between gap-3">
     <div>
       <h2 id="goals-h" class="text-lg font-semibold text-ink">Monthly goals</h2>
-      <p class="text-sm text-gray-600">Are we on track?</p>
+      <p class="text-sm text-ink-muted">Are we on track?</p>
     </div>
     {% if goals.total %}
     <span class="text-sm font-medium text-ink tabular-nums">{{ goals.on_track }} of {{ goals.total }} on track</span>
@@ -24,7 +24,7 @@ catalogue is ``goal_metrics``. Adding, editing and deleting goals is owner/admin
           <p class="text-sm font-medium text-ink">
             {{ row.label }}{% if row.currency %} ({{ row.currency }}){% endif %}
           </p>
-          <p class="text-sm text-gray-600 tabular-nums">
+          <p class="text-sm text-ink-muted tabular-nums">
             {% if row.actual is None %}
               No data yet this month
             {% elif row.unit == "minutes" %}
@@ -57,11 +57,12 @@ catalogue is ``goal_metrics``. Adding, editing and deleting goals is owner/admin
           <label class="sr-only" for="target-{{ row.goal.pk }}">New target</label>
           <input type="number" step="0.01" min="0.01" name="target" id="target-{{ row.goal.pk }}"
                  value="{{ row.target|floatformat:2 }}" class="input input-sm w-28">
-          <button type="submit" class="btn btn-ghost btn-sm">Save</button>
+          <button type="submit" class="btn btn-ghost btn-sm" aria-label="Save target: {{ row.label }}">Save</button>
         </form>
-        <form method="post" action="/insights/goals/{{ row.goal.pk }}/delete/">
+        <form method="post" action="/insights/goals/{{ row.goal.pk }}/delete/"
+              data-confirm="Remove the {{ row.label }}{% if row.currency %} ({{ row.currency }}){% endif %} goal? Its progress stops showing here." data-confirm-label="Remove" data-confirm-danger>
           {% csrf_token %}
-          <button type="submit" class="btn btn-ghost btn-sm text-red-600">Remove</button>
+          <button type="submit" class="btn btn-danger-ghost btn-sm" aria-label="Remove goal: {{ row.label }}">Remove</button>
         </form>
       </div>
       {% endif %}
@@ -69,12 +70,12 @@ catalogue is ``goal_metrics``. Adding, editing and deleting goals is owner/admin
     {% endfor %}
   </ul>
   {% else %}
-  <p class="text-sm text-gray-600">No goals set yet.</p>
+  <p class="text-sm text-ink-muted">No goals set yet.</p>
   {% endif %}
 
   {% if can_manage_goals %}
     {% if goal_limit_reached %}
-    <p class="text-sm text-gray-600">
+    <p class="text-sm text-ink-muted">
       Your plan includes up to {{ goal_limit }} goals.
       <a href="/billing/plans/" class="text-accent hover:text-accent-strong">Upgrade for unlimited goals.</a>
     </p>
@@ -84,7 +85,7 @@ catalogue is ``goal_metrics``. Adding, editing and deleting goals is owner/admin
           x-data="{ metric: '' }">
       {% csrf_token %}
       <div>
-        <label class="block text-xs text-gray-500 mb-1" for="goal-metric">Add a goal</label>
+        <label class="block text-xs text-ink-subtle mb-1" for="goal-metric">Add a goal</label>
         <select id="goal-metric" name="metric" class="select" x-model="metric">
           <option value="">Choose what to track</option>
           {% for key, info in goal_metrics.items %}
@@ -95,11 +96,11 @@ catalogue is ``goal_metrics``. Adding, editing and deleting goals is owner/admin
         </select>
       </div>
       <div x-show="metric === 'revenue'" x-cloak>
-        <label class="block text-xs text-gray-500 mb-1" for="goal-currency">Currency</label>
+        <label class="block text-xs text-ink-subtle mb-1" for="goal-currency">Currency</label>
         <input type="text" id="goal-currency" name="currency" maxlength="8" placeholder="USD" class="input w-24">
       </div>
       <div>
-        <label class="block text-xs text-gray-500 mb-1" for="goal-target">Target</label>
+        <label class="block text-xs text-ink-subtle mb-1" for="goal-target">Target</label>
         <input type="number" step="0.01" min="0.01" id="goal-target" name="target" class="input w-32" required>
       </div>
       <button type="submit" class="btn btn-primary btn-sm">Add goal</button>

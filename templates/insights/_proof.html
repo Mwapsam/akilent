@@ -8,7 +8,7 @@ apps.conversations.reporting.proof. Counts only, never causes, per the messaging
     <div>
       <h2 id="proof-h" class="font-semibold text-ink">This week, Akilent helped your business</h2>
       {% if proof.sentence %}
-      <p class="mt-1 text-sm text-gray-700">{{ proof.sentence }}.</p>
+      <p class="mt-1 text-sm text-ink-muted">{{ proof.sentence }}.</p>
       {% endif %}
     </div>
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
@@ -16,7 +16,7 @@ apps.conversations.reporting.proof. Counts only, never causes, per the messaging
         <p class="stat-value">{{ proof.median.seconds|duration }}</p>
         <p class="stat-label">median first reply</p>
         {% if proof.median.change is not None %}
-        <p class="stat-delta {% if proof.median.change < 0 %}stat-delta--down{% elif proof.median.change > 0 %}stat-delta--up{% else %}text-gray-400{% endif %}">
+        <p class="stat-delta {% if proof.median.change < 0 %}stat-delta--down{% elif proof.median.change > 0 %}stat-delta--up{% else %}text-ink-subtle{% endif %}">
           <span aria-hidden="true">{% if proof.median.change < 0 %}↓{% elif proof.median.change > 0 %}↑{% else %}→{% endif %}</span><span class="sr-only">{% if proof.median.change < 0 %}improved{% elif proof.median.change > 0 %}worsened{% else %}unchanged{% endif %},</span> {{ proof.median.change|duration }} vs last week
         </p>
         {% endif %}
@@ -25,26 +25,26 @@ apps.conversations.reporting.proof. Counts only, never causes, per the messaging
         <p class="stat-value">{{ proof.recovered.recovered }}</p>
         <p class="stat-label">missed conversation{{ proof.recovered.recovered|pluralize }} recovered</p>
         {% if proof.recovered.became_leads %}
-        <p class="stat-delta text-gray-500">{{ proof.recovered.became_leads }} became lead{{ proof.recovered.became_leads|pluralize }}</p>
+        <p class="stat-delta text-ink-subtle">{{ proof.recovered.became_leads }} became lead{{ proof.recovered.became_leads|pluralize }}</p>
         {% endif %}
       </div>
       <div>
         <p class="stat-value">{{ proof.paid.orders }}</p>
         <p class="stat-label">paid order{{ proof.paid.orders|pluralize }} from conversations</p>
         {% if proof.paid.revenue %}
-        <p class="stat-delta text-gray-500">{% for r in proof.paid.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>
+        <p class="stat-delta text-ink-subtle">{% for r in proof.paid.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>
         {% endif %}
       </div>
     </div>
-    <p class="text-xs text-gray-500">Every number comes from recorded conversations, follow-ups and orders.</p>
+    <p class="text-xs text-ink-subtle">Every number comes from recorded conversations, follow-ups and orders.</p>
   {% else %}
     <h2 id="proof-h" class="font-semibold text-ink">This week, Akilent helped your business</h2>
-    <p class="text-sm text-gray-600">No customer activity yet this week. Once WhatsApp messages start coming in, this page fills in automatically.</p>
+    <p class="text-sm text-ink-muted">No customer activity yet this week. Once customers message you on a connected channel, this page fills in automatically.</p>
   {% endif %}
   {% if can_manage_goals %}
   <form method="post" action="/insights/report-settings/" class="pt-2 border-t border-border">
     {% csrf_token %}
-    <label class="flex items-center gap-2 text-xs text-gray-500">
+    <label class="inline-flex items-center gap-2 min-h-6 text-xs text-ink-muted">
       <input type="checkbox" name="weekly_report" onchange="this.form.submit()" {% if weekly_report_enabled %}checked{% endif %}>
       Email this to the owners every week
     </label>

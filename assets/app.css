@@ -462,6 +462,9 @@
 @utility tone-coral-fg {
   color: var(--tone-coral-fg);
 }
+@utility tone-info-fg {
+  color: var(--tone-info-fg);
+}
 
 /* Background only, for tiles that set their own text colour. */
 @utility tone-surface {
@@ -1353,6 +1356,7 @@
 
   .chart-legend { @apply flex flex-wrap items-center gap-x-4 gap-y-1 mb-2 text-xs; color: var(--color-ink-subtle); }
   .chart-legend-item { @apply inline-flex items-center gap-1.5; }
+  .chart-empty { @apply text-sm py-6 text-center; color: var(--color-ink-muted); }
   .chart-swatch { @apply inline-block w-2.5 h-2.5 rounded-sm shrink-0; }
   .chart-swatch--good { background: var(--chart-good); }
   .chart-swatch--critical { background: var(--chart-critical); }

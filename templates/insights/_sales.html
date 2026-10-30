@@ -3,7 +3,7 @@ Pillar: sales from conversations. ``sales`` from apps.conversations.reporting.sa
 {% endcomment %}
 <section class="space-y-4" aria-labelledby="sales-h">
   <h2 id="sales-h" class="text-lg font-semibold text-ink">Sales from conversations</h2>
-  <p class="text-sm text-gray-600">Did conversations turn into money?</p>
+  <p class="text-sm text-ink-muted">Did conversations turn into money?</p>
 
   <div class="card card-pad">
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-5">
@@ -38,7 +38,7 @@ Pillar: sales from conversations. ``sales`` from apps.conversations.reporting.sa
       <div><p class="stat-value">{{ sales.funnel.paid }}</p><p class="stat-label">paid orders</p></div>
     </div>
     {% if sales.named or sales.recent %}
-    <p class="text-xs text-gray-500 border-t border-border pt-4">Of paid orders credited to a conversation: {{ sales.named }} named it explicitly, {{ sales.recent }} used the customer's most recent chat.</p>
+    <p class="text-xs text-ink-subtle border-t border-border pt-4">Of paid orders credited to a conversation: {{ sales.named }} named it explicitly, {{ sales.recent }} used the customer's most recent chat.</p>
     {% endif %}
   </div>
 </section>

@@ -860,6 +860,8 @@
     }
     const swapInto = region.querySelector("[data-error-slot]") || region;
     swapInto.replaceChildren(node);
+    // A region that announced itself as loading has stopped: it shows the failure now.
+    region.removeAttribute("aria-busy");
     return true;
   }
   function jsonError(xhr) {

@@ -27,7 +27,7 @@ context dict).
         {% include "components/icon.html" with name="sparkles" class="w-6 h-6" %}
       </span>
       <h3 class="mt-4 font-semibold">Detailed analytics &amp; insights</h3>
-      <p class="text-sm text-gray-500 mt-1">Delivery logs, open and click tracking are available on higher plans.</p>
+      <p class="text-sm text-ink-subtle mt-1">Delivery logs, open and click tracking are available on higher plans.</p>
       <a href="/billing/plans/" class="btn btn-primary btn-sm mt-4">Upgrade your plan</a>
     </div>
 
@@ -46,7 +46,7 @@ context dict).
     <div class="card overflow-hidden">
       <div class="px-5 sm:px-6 py-4 border-b border-border flex items-center justify-between">
         <h3 class="font-semibold">Deliverability score — {{ selected }}</h3>
-        <span class="text-2xl font-bold tabular-nums">{{ deliverability.score }}<span class="text-sm text-gray-400"> / 100</span></span>
+        <span class="text-2xl font-bold tabular-nums">{{ deliverability.score }}<span class="text-sm text-ink-subtle"> / 100</span></span>
       </div>
       <div class="px-5 sm:px-6 py-4">
         <div class="mb-4">
@@ -64,14 +64,14 @@ context dict).
             <span class="mt-0.5">
               {% if c.status == 'ok' %}✓{% elif c.status == 'warn' %}⚠{% elif c.status == 'fail' %}✗{% else %}–{% endif %}
             </span>
-            <span><span class="font-medium">{{ c.label }}</span> <span class="text-gray-500">— {{ c.detail }}</span></span>
+            <span><span class="font-medium">{{ c.label }}</span> <span class="text-ink-subtle">— {{ c.detail }}</span></span>
           </li>
           {% endfor %}
         </ul>
         {% if deliverability.recommendations %}
         <div class="mt-4 rounded-xl tone-brand-bg border tone-brand-border p-4">
           <p class="text-xs font-semibold uppercase tracking-wide text-accent-strong mb-2">What to do next</p>
-          <ul class="list-disc list-inside space-y-1 text-sm text-brand-800">
+          <ul class="list-disc list-inside space-y-1 text-sm text-ink">
             {% for r in deliverability.recommendations %}<li>{{ r }}</li>{% endfor %}
           </ul>
         </div>
@@ -83,6 +83,7 @@ context dict).
     <div class="card overflow-hidden">
       <div class="px-5 sm:px-6 py-4 border-b border-border">
         <h3 class="font-semibold">Engagement — {{ selected }}</h3>
+        <p class="text-xs text-ink-subtle mt-0.5">Every tracked open and click since tracking began, not only the period above.</p>
       </div>
       {% if stats %}
         <div class="px-5 sm:px-6 py-5">
@@ -106,16 +107,16 @@ context dict).
               <tbody>
                 {% for row in logs %}
                   <tr>
-                    <td data-label="Time" class="text-gray-400 whitespace-nowrap tabular-nums">{{ row.sent_at|default:row.created_at|default:"—" }}</td>
+                    <td data-label="Time" class="text-ink-subtle whitespace-nowrap tabular-nums">{{ row.sent_at|default:row.created_at|default:"—" }}</td>
                     <td data-label="Sender">{{ row.from_email|default:"—" }}</td>
                     <td data-label="Recipient" class="font-medium text-ink">{{ row.to_email|default:"—" }}</td>
-                    <td data-label="Subject" class="text-gray-500">{{ row.subject|default:"—"|truncatechars:40 }}</td>
+                    <td data-label="Subject" class="text-ink-subtle">{{ row.subject|default:"—"|truncatechars:40 }}</td>
                     <td data-label="Status">
                       {% if row.status == 'sent' %}{% include "components/status.html" with state="sent" badge=True %}
                       {% elif row.status == 'failed' %}{% include "components/status.html" with state="failed" badge=True %}
                       {% else %}<span class="badge badge-neutral">{{ row.get_status_display }}</span>{% endif %}
                     </td>
-                    <td data-label="Error" class="text-gray-400">{{ row.error|default:"—"|truncatechars:60 }}</td>
+                    <td data-label="Error" class="text-ink-subtle">{{ row.error|default:"—"|truncatechars:60 }}</td>
                   </tr>
                 {% endfor %}
               </tbody>

@@ -4,14 +4,17 @@ WeeklySnapshot). The Starting point card is this pillar's baseline row: "since y
 {% endcomment %}
 {% load insights_tags charts %}
 <section class="space-y-4" aria-labelledby="momentum-h">
-  <h2 id="momentum-h" class="text-lg font-semibold text-ink">Business momentum</h2>
-  <p class="text-sm text-gray-600">Are we improving over time?</p>
+  <div>
+    <h2 id="momentum-h" class="text-lg font-semibold text-ink">Business momentum</h2>
+    <p class="text-sm text-ink-muted">Are we improving over time?{% if momentum.last_week %} <span data-momentum="as-of">Counted up to the week of {{ momentum.last_week|date:"j M" }}.</span>{% endif %}</p>
+  </div>
 
   {% if starting_point %}
   <div>{% include "conversations/_starting_point.html" %}</div>
   {% endif %}
 
   {% if momentum.has_data %}
+  {% if momentum.enough_for_trend %}
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
     <div class="card overflow-hidden">
       <div class="px-5 py-4 border-b border-border"><h3 class="font-semibold text-sm">Median first reply</h3></div>
@@ -26,6 +29,10 @@ WeeklySnapshot). The Starting point card is this pillar's baseline row: "since y
       <div class="px-5 py-5">{% line_chart momentum.paid_series momentum.labels unit="Week" %}</div>
     </div>
   </div>
+  <p class="text-xs text-ink-muted">A break in a line is a week with nothing to measure, not a zero.</p>
+  {% else %}
+  <p class="text-sm text-ink-muted" data-momentum="one-week">One week counted so far. Trend charts start once a second week has closed.</p>
+  {% endif %}
 
   <div class="table-wrap">
     <table class="table table--cards">
@@ -53,6 +60,6 @@ WeeklySnapshot). The Starting point card is this pillar's baseline row: "since y
     </table>
   </div>
   {% elif not starting_point %}
-  <p class="text-sm text-gray-600">Weekly trends appear here once your first week has closed and settled.</p>
+  <p class="text-sm text-ink-muted">Weekly trends appear here once your first week has closed and settled.</p>
   {% endif %}
 </section>

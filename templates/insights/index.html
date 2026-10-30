@@ -5,7 +5,10 @@
 <header class="mb-6 flex items-start justify-between flex-wrap gap-3">
   <div>
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Insights</h1>
-    <p class="mt-1 text-sm text-gray-600">What Akilent is doing for your business.</p>
+    <p class="mt-1 text-sm text-ink-muted">What Akilent is doing for your business.</p>
+    {% comment %}Every figure on this page is worked out when it loads; nothing is cached or
+    refreshed in the background, so this time is when all of them were true.{% endcomment %}
+    <p class="mt-0.5 text-xs text-ink-subtle" data-insights="as-of">Figures as of {% now "j M, H:i" %}. Reload for the latest.</p>
   </div>
   <form method="get" class="flex items-center gap-2"
         x-data="{ busy: false }" @submit="busy = true">

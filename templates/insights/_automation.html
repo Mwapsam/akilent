@@ -5,7 +5,7 @@ No composite score; the one estimate (time saved) always shows its formula.
 {% load insights_tags %}
 <section class="space-y-4" aria-labelledby="automation-h">
   <h2 id="automation-h" class="text-lg font-semibold text-ink">Automation &amp; AI impact</h2>
-  <p class="text-sm text-gray-600">How much work did Akilent handle?</p>
+  <p class="text-sm text-ink-muted">How much work did Akilent handle?</p>
 
   <div class="card card-pad space-y-5">
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-5">
@@ -40,7 +40,7 @@ No composite score; the one estimate (time saved) always shows its formula.
       <div>
         <p class="stat-value">{{ automation.minutes_saved|duration_minutes }}</p>
         <p class="stat-label">estimated time saved</p>
-        <p class="stat-delta text-gray-500">Estimate: {{ automation.automatic_replies }} automatic replies × {{ automation.minutes_per_reply }} min</p>
+        <p class="stat-delta text-ink-subtle">Estimate: {{ automation.automatic_replies }} automatic replies × {{ automation.minutes_per_reply }} min</p>
       </div>
     </div>
 

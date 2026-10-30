@@ -11,6 +11,10 @@ off-by-one in a scale draws a chart that looks entirely plausible and is wrong.
 Every function here is total: empty input, one point, and a flat series all have
 a defined answer rather than a ZeroDivisionError.
 
+``None`` in a line chart's series means "no reading", which is not zero: a week
+with no replies has no median reply time, and plotting it as 0 would draw the
+best week on record. A missing reading is a break in the line instead.
+
 Geometry only. Which *form* to use for which data is a design decision that
 lives with the templates, not here.
 """
@@ -49,8 +53,8 @@ def _extent(values: list[float], baseline_at_zero: bool) -> tuple[float, float]:
 @dataclass(frozen=True)
 class Point:
     x: float
-    y: float
-    value: float
+    y: float | None  # None: no reading here (a gap in the line)
+    value: float | None
     label: str = ""
 
 
@@ -59,10 +63,12 @@ class Series:
     """One plotted line, already scaled to the viewport."""
 
     label: str
-    values: list[float]
+    values: list[float | None]
     points: list[Point] = field(default_factory=list)
     path: str = ""
     area: str = ""
+    # Readings with a gap (or the edge) on both sides: a line can't show them, so they're dots.
+    dots: list[Point] = field(default_factory=list)
 
     @property
     def last(self) -> Point | None:
@@ -71,7 +77,7 @@ class Series:
 
     @property
     def total(self) -> float:
-        return sum(self.values)
+        return sum(v for v in self.values if v is not None)
 
 
 def _round(n: float) -> float:
@@ -81,7 +87,7 @@ def _round(n: float) -> float:
 
 
 def scale_series(
-    values: list[float],
+    values: list[float | None],
     *,
     width: float,
     height: float,
@@ -95,30 +101,56 @@ def scale_series(
     span = high - low or 1.0
     if not values:
         return []
+
+    def y(v: float | None) -> float | None:
+        return (
+            None if v is None else _round(pad + inner_h - ((v - low) / span) * inner_h)
+        )
+
     if len(values) == 1:
         # One reading is a dot in the middle, not a line from nowhere.
-        y = pad + inner_h - ((values[0] - low) / span) * inner_h
-        return [Point(_round(pad + inner_w / 2), _round(y), values[0])]
+        return [Point(_round(pad + inner_w / 2), y(values[0]), values[0])]
     step = inner_w / (len(values) - 1)
-    return [
-        Point(
-            _round(pad + i * step),
-            _round(pad + inner_h - ((v - low) / span) * inner_h),
-            v,
-        )
-        for i, v in enumerate(values)
-    ]
+    return [Point(_round(pad + i * step), y(v), v) for i, v in enumerate(values)]
 
 
 def _path(points: list[Point]) -> str:
-    if not points:
-        return ""
-    return "M" + " L".join(f"{p.x},{p.y}" for p in points)
+    """The line, broken wherever a reading is missing. A reading with no neighbour on either
+    side is a zero-length segment, which the round line cap draws as a dot."""
+    runs: list[list[Point]] = [[]]
+    for p in points:
+        if p.y is None:
+            if runs[-1]:
+                runs.append([])
+        else:
+            runs[-1].append(p)
+    parts = []
+    for run in runs:
+        if not run:
+            continue
+        if len(run) == 1:
+            run = run * 2
+        parts.append("M" + " L".join(f"{p.x},{p.y}" for p in run))
+    return " ".join(parts)
+
+
+def _isolated(points: list[Point]) -> list[Point]:
+    """Readings with no reading either side of them, in a line that has gaps."""
+    if not any(p.y is None for p in points):
+        return []
+    return [
+        p
+        for i, p in enumerate(points)
+        if p.y is not None
+        and (i == 0 or points[i - 1].y is None)
+        and (i == len(points) - 1 or points[i + 1].y is None)
+    ]
 
 
 def _area(points: list[Point], height: float) -> str:
-    """The line closed down to the floor, for a single-series fill."""
-    if len(points) < 2:
+    """The line closed down to the floor, for a single-series fill. None when the line has a
+    gap: a fill bridging the gap would claim readings that aren't there."""
+    if len(points) < 2 or any(p.y is None for p in points):
         return ""
     floor = _round(height)
     return (
@@ -167,7 +199,7 @@ class LineChart:
 
     @property
     def has_data(self) -> bool:
-        return any(s.values for s in self.series)
+        return any(v is not None for s in self.series for v in s.values)
 
 
 def _nice_ticks(low: float, high: float, count: int = 4) -> list[float]:
@@ -200,7 +232,7 @@ def _nice_ticks(low: float, high: float, count: int = 4) -> list[float]:
 
 
 def line_chart(
-    series: list[tuple[str, list[float]]],
+    series: list[tuple[str, list[float | None]]],
     labels: list[str],
     *,
     width: float = 640.0,
@@ -215,7 +247,7 @@ def line_chart(
     the crosshair uses, so the hit area is the whole column rather than the
     2px line.
     """
-    flat = [v for _, vs in series for v in vs]
+    flat = [v for _, vs in series for v in vs if v is not None]
     low, high = _extent(flat, baseline_at_zero=baseline_at_zero)
     ticks = _nice_ticks(low, high)
     if ticks:
@@ -234,6 +266,7 @@ def line_chart(
                 points=points,
                 path=_path(points),
                 area=_area(points, height - pad) if len(series) == 1 else "",
+                dots=_isolated(points),
             )
         )
 
