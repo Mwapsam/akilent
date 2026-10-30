@@ -222,9 +222,9 @@ OPTIONAL_TOOLS = [
     ),
     (
         "orders",
-        "Create orders and collect payments",
+        "Record orders",
         "Off unless you turn it on. Adds an Orders section for recording what a "
-        "customer bought and sending them a payment link.",
+        "customer bought and marking it paid once they've paid you.",
     ),
 ]
 

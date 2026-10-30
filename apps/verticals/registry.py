@@ -9,7 +9,7 @@ vertical-specific *infrastructure*; the platform doesn't know "restaurant" or
 
 Every workflow deliberately avoids steps that need external setup before
 they can run (an approved WhatsApp template, a verified sending domain) —
-``add_internal_note``/``create_lead``/``create_deal``/``request_payment``
+``add_internal_note``/``create_lead``/``create_deal``
 work the moment a vertical is activated, so "Activate" is never a lie.
 """
 
@@ -18,33 +18,12 @@ from __future__ import annotations
 RESTAURANT = {
     "key": "restaurant",
     "name": "Restaurant",
-    "tagline": "Take orders and get paid over WhatsApp.",
+    "tagline": "Take orders over WhatsApp and bring customers back.",
     "modules": ["orders"],
     "checklist": [
-        "Request payment automatically the moment an order comes in",
         "Win back customers who haven't ordered in 2 weeks",
     ],
     "workflows": [
-        {
-            "slug": "restaurant-confirm-and-charge",
-            "name": "Confirm order & request payment",
-            "definition": {
-                "trigger": {"type": "order.created"},
-                "steps": [
-                    {
-                        "id": "charge",
-                        "type": "action",
-                        "action": "request_payment",
-                        "params": {
-                            "order_id": "context.order_id",
-                            "redirect_url": "/orders/",
-                        },
-                        "next": "done",
-                    },
-                    {"id": "done", "type": "stop"},
-                ],
-            },
-        },
         {
             "slug": "restaurant-win-back",
             "name": "Win back repeat customers",

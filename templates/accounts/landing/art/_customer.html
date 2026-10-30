@@ -1,7 +1,7 @@
 {% comment %}
   Illustration (hero, when WhatsApp is off): one customer's record with the last message sent on
   a channel that is on (email from the business's own address, else an Instagram or Facebook
-  Page reply, else none), an order with a payment link and a follow-up reminder for the team.
+  Page reply, else none), an order recorded and not yet paid, and a follow-up reminder for the team.
   No channel that isn't on is shown. Sample names and amounts.
 {% endcomment %}
 {% if ch.email == "live" %}{% firstof "an email sent from the business's own address" as sent %}{% firstof "Email from orders@yourshop.com" as sent_label %}
@@ -9,7 +9,7 @@
 {% elif ch.facebook == "live" %}{% firstof "a Facebook Page message reply" as sent %}{% firstof "Facebook Page message" as sent_label %}
 {% endif %}
 <figure class="lp-art lp-hero-art" data-art="customer" data-claim-exempt>
-  <div role="img" aria-label="Illustration: a customer record showing {% if sent %}{{ sent }}, {% endif %}an order with a payment link, and a follow-up reminder for the team.">
+  <div role="img" aria-label="Illustration: a customer record showing {% if sent %}{{ sent }}, {% endif %}an order that isn't paid yet, and a follow-up reminder for the team.">
     <div class="lp-window" aria-hidden="true">
       <div class="lp-bar"><i></i><i></i><i></i><b>Customer</b></div>
       <div class="lp-order-top">
@@ -19,14 +19,14 @@
       {% if sent %}
       <div class="lp-thread">
         <span class="lp-sys">{{ sent_label }}</span>
-        <div class="lp-bub out">Your order is ready for collection. Here's your link to pay.<small>Sent 09:14</small></div>
+        <div class="lp-bub out">Your order is ready for collection. See you soon!<small>Sent 09:14</small></div>
       </div>
       {% endif %}
       <div class="lp-order-lines">
         <div><span>Linen summer dress · M</span><span>K450</span></div>
         <div><span>Total</span><span>K450</span></div>
       </div>
-      <div class="lp-order-foot"><span>Payment link sent</span><span class="lp-chip lp-chip-amber">Awaiting payment</span></div>
+      <div class="lp-order-foot"><span>Order recorded</span><span class="lp-chip lp-chip-amber">Not paid yet</span></div>
     </div>
     <div class="lp-floats" aria-hidden="true">
       <div class="lp-float remind">

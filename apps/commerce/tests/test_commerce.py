@@ -1,12 +1,11 @@
 from decimal import Decimal
-from unittest.mock import patch
 
 import pytest
 
 from apps.accounts.models import Account
 from apps.automation.models import Workflow, WorkflowRun
 from apps.commerce.models import Order, OrderItem, Payment
-from apps.commerce.services import create_order, mark_failed, mark_paid, request_payment
+from apps.commerce.services import create_order, mark_order_paid, mark_order_unpaid
 from apps.contacts.models import Contact
 from apps.conversations.models import Event
 from apps.core.actions import ActionError, run_action
@@ -52,51 +51,57 @@ def test_create_order_requires_items(account, contact):
 
 
 @pytest.mark.django_db
-def test_request_payment_creates_pending_payment_and_checkout_link(order):
-    with patch("apps.billing.flutterwave.get_fw_client") as fw:
-        fw.return_value.initialize_payment.return_value = "https://pay.example/abc"
-        payment = request_payment(order, redirect_url="https://app.example/orders/x/")
-
-    order.refresh_from_db()
-    assert order.status == Order.Status.AWAITING_PAYMENT
-    assert payment.status == Payment.Status.PENDING
-    assert payment.checkout_url == "https://pay.example/abc"
-
-
-@pytest.mark.django_db
-def test_mark_paid_is_idempotent_and_emits_events(order):
-    payment = Payment.objects.create(
-        account=order.account, order=order, amount=order.total
-    )
-
-    mark_paid(payment, transaction_id="tx-1", raw_payload={"status": "successful"})
+def test_mark_order_paid_records_how_and_emits_once(order):
+    assert mark_order_paid(order, method="mtn_momo", reference="TX 991") is True
     order.refresh_from_db()
     assert order.status == Order.Status.PAID
     assert order.paid_at is not None
+    assert (order.paid_method, order.paid_reference) == ("mtn_momo", "TX 991")
+    # Akilent records the payment; it never takes one.
+    assert not Payment.objects.filter(order=order).exists()
     assert (
         Event.objects.filter(type="order.paid", subject_id=order.public_id).count() == 1
     )
-    assert Event.objects.filter(type="payment.succeeded").count() == 1
 
-    # Replayed webhook processing the same Payment must not double-emit.
-    mark_paid(payment, transaction_id="tx-1", raw_payload={"status": "successful"})
+    # A second click (or a teammate at the same moment) changes nothing.
+    assert mark_order_paid(order, method="cash") is False
+    order.refresh_from_db()
+    assert order.paid_method == "mtn_momo"
     assert (
         Event.objects.filter(type="order.paid", subject_id=order.public_id).count() == 1
     )
 
 
 @pytest.mark.django_db
-def test_mark_failed_sets_order_and_payment_failed(order):
-    payment = Payment.objects.create(
-        account=order.account, order=order, amount=order.total
-    )
-
-    mark_failed(payment, error="insufficient funds")
-
+def test_an_unknown_method_is_stored_as_blank(order):
+    mark_order_paid(order, method="bitcoin")
     order.refresh_from_db()
-    payment.refresh_from_db()
-    assert order.status == Order.Status.FAILED
-    assert payment.status == Payment.Status.FAILED
+    assert order.status == Order.Status.PAID
+    assert order.paid_method == ""
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("status", [Order.Status.REFUNDED, Order.Status.CANCELLED])
+def test_a_closed_order_is_not_marked_paid(order, status):
+    Order.objects.filter(pk=order.pk).update(status=status)
+    assert mark_order_paid(order, method="cash") is False
+    order.refresh_from_db()
+    assert order.status == status
+    assert not Event.objects.filter(type="order.paid").exists()
+
+
+@pytest.mark.django_db
+def test_mark_order_unpaid_reopens_a_mistake(order):
+    mark_order_paid(order, method="cash", reference="r1")
+    assert mark_order_unpaid(order) is True
+    order.refresh_from_db()
+    assert order.status == Order.Status.PENDING
+    assert (order.paid_at, order.paid_method, order.paid_reference) == (None, "", "")
+    assert Event.objects.filter(
+        type="order.unpaid", subject_id=order.public_id
+    ).exists()
+    # Only a paid order can be reopened.
+    assert mark_order_unpaid(order) is False
 
 
 @pytest.mark.django_db
@@ -111,15 +116,13 @@ def test_order_paid_enrolls_published_workflow(account, contact, order):
             "steps": [{"id": "stop", "type": "stop"}],
         },
     )
-    payment = Payment.objects.create(account=account, order=order, amount=order.total)
-
-    mark_paid(payment, transaction_id="tx-2")
+    mark_order_paid(order, method="cash")
 
     assert WorkflowRun.objects.filter(contact=contact).exists()
 
 
 @pytest.mark.django_db
-def test_action_registry_create_order_and_request_payment(account, contact):
+def test_action_registry_creates_orders_but_cannot_request_payment(account, contact):
     result = run_action(
         "create_order",
         {},
@@ -128,13 +131,11 @@ def test_action_registry_create_order_and_request_payment(account, contact):
         items=[{"name": "Widget", "unit_price": Decimal("10.00"), "quantity": 1}],
     )
     order = Order.objects.get(public_id=result["order_id"])
+    assert order.total == Decimal("10.00")
 
-    with patch("apps.billing.flutterwave.get_fw_client") as fw:
-        fw.return_value.initialize_payment.return_value = "https://pay.example/xyz"
-        payment_result = run_action(
-            "request_payment", {}, order=order, redirect_url="https://app.example/o/"
-        )
-    assert payment_result["checkout_url"] == "https://pay.example/xyz"
+    # Payment links are retired: no automation can ask a customer for money.
+    with pytest.raises(ActionError):
+        run_action("request_payment", {}, order=order, redirect_url="https://x/")
 
 
 @pytest.mark.django_db
@@ -184,8 +185,7 @@ def test_each_paid_order_gets_its_own_order_paid_run(account, contact):
     wf = _order_workflow(account, "order.paid")
     orders = [_new_order(account, contact), _new_order(account, contact)]
     for o in orders:
-        payment = Payment.objects.create(account=account, order=o, amount=o.total)
-        mark_paid(payment, transaction_id=f"tx-{o.pk}", raw_payload={})
+        mark_order_paid(o, method="cash")
     assert WorkflowRun.objects.filter(workflow=wf, contact=contact).count() == 2
 
 

@@ -21,7 +21,8 @@ Every record is synthetic:
 Conversations, leads and orders go through the same services real traffic uses, so
 lead capture, post attribution and post results are the product's own behaviour.
 Workflows are not enrolled and nothing is sent: the workspace has no WhatsApp number,
-no live Instagram/Facebook connection and no payment provider. The "published" posts
+no live Instagram/Facebook connection, and paid orders are marked paid by hand (as a
+business would). The "published" posts
 carry no Meta ids and metrics collection is switched off for them.
 
 Running it again deletes the demo workspace (and only it) and builds it fresh.
@@ -265,8 +266,7 @@ class Command(BaseCommand):
     # --- Engage, convert --------------------------------------------------------
 
     def _journey(self, account, owner, posts):
-        from apps.commerce.models import Payment
-        from apps.commerce.services import create_order, mark_paid
+        from apps.commerce.services import create_order, mark_order_paid
         from apps.core.actions import run_action
         from apps.crm.models import Lead
         from apps.crm.services import create_lead, set_lead_status
@@ -286,14 +286,7 @@ class Command(BaseCommand):
                 conversation_id=conversation.public_id,
             )
             if paid:
-                payment = Payment.objects.create(
-                    account=account,
-                    order=created,
-                    provider="demo",
-                    amount=created.total,
-                    currency=created.currency,
-                )
-                mark_paid(payment, transaction_id=f"demo-{uuid.uuid4().hex[:12]}")
+                mark_order_paid(created, method="mtn_momo", reference="DEMO")
             return created
 
         def lead(contact, conversation, source, status=None):
@@ -322,7 +315,7 @@ class Command(BaseCommand):
         lead(thandi, chat, "Instagram post", Lead.Status.QUALIFIED)
         order(thandi, chat, "Linen summer dress (M)", Decimal("45.00"), paid=True)
 
-        # 2. Facebook post link → WhatsApp chat → lead → order waiting for payment.
+        # 2. Facebook post link → WhatsApp chat → lead → order not paid yet.
         joseph, chat = self._whatsapp(
             account,
             "+12025550102",
@@ -331,7 +324,9 @@ class Command(BaseCommand):
             [(4, ref(dress_fb)), (4, "Do you have it in blue? I want two.")],
         )
         self._reply(
-            chat, "We do! Two blue dresses come to $90. Shall I send a payment link?", 4
+            chat,
+            "We do! Two blue dresses come to $90. Shall I put the order through?",
+            4,
         )
         lead(joseph, chat, "Facebook post", Lead.Status.CONTACTED)
         order(
@@ -361,7 +356,7 @@ class Command(BaseCommand):
             {"account": account},
             conversation=chat,
             due_at=now + timedelta(days=1),
-            note="Chipo asked about the dress. Check her size and send a payment link.",
+            note="Chipo asked about the dress. Check her size and confirm the order.",
             created_by=owner,
         )
 

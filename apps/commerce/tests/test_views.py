@@ -1,5 +1,4 @@
 from decimal import Decimal
-from unittest.mock import patch
 
 import pytest
 from django.contrib.auth.models import User
@@ -112,12 +111,61 @@ def test_create_order_invalid_price_shows_error(logged_in, contact):
 
 
 @pytest.mark.django_db
-def test_request_payment_via_view(logged_in, order):
+def test_mark_paid_and_unpaid_via_view(logged_in, order):
     client, _, _ = logged_in
-    with patch("apps.billing.flutterwave.get_fw_client") as fw:
-        fw.return_value.initialize_payment.return_value = "https://pay.example/xyz"
-        resp = client.post(f"/orders/{order.public_id}/", {"action": "request_payment"})
+    page = client.get(f"/orders/{order.public_id}/")
+    assert b"Mark as paid" in page.content
+    assert b"Request payment" not in page.content
 
+    resp = client.post(
+        f"/orders/{order.public_id}/",
+        {"action": "mark_paid", "method": "airtel_money", "reference": "AM-12"},
+    )
     assert resp.status_code == 302
     order.refresh_from_db()
-    assert order.status == Order.Status.AWAITING_PAYMENT
+    assert order.status == Order.Status.PAID
+    assert (order.paid_method, order.paid_reference) == ("airtel_money", "AM-12")
+    page = client.get(f"/orders/{order.public_id}/")
+    assert b"Airtel Money" in page.content and b"AM-12" in page.content
+
+    client.post(f"/orders/{order.public_id}/", {"action": "mark_unpaid"})
+    order.refresh_from_db()
+    assert order.status == Order.Status.PENDING
+
+
+@pytest.mark.django_db
+def test_an_order_paid_online_through_an_old_link_cannot_be_marked_unpaid(
+    logged_in, order
+):
+    from django.utils import timezone
+
+    from apps.commerce.models import Payment
+
+    client, account, _ = logged_in
+    Payment.objects.create(
+        account=account,
+        order=order,
+        amount=order.total,
+        status=Payment.Status.SUCCEEDED,
+        transaction_id="fw-1",
+    )
+    Order.objects.filter(pk=order.pk).update(
+        status=Order.Status.PAID, paid_at=timezone.now()
+    )
+    page = client.get(f"/orders/{order.public_id}/")
+    assert b"Paid online" in page.content
+    assert b"Mark as not paid" not in page.content
+
+    client.post(f"/orders/{order.public_id}/", {"action": "mark_unpaid"})
+    order.refresh_from_db()
+    assert order.status == Order.Status.PAID
+
+
+@pytest.mark.django_db
+def test_request_payment_post_does_nothing_now(logged_in, order):
+    client, _, _ = logged_in
+    resp = client.post(f"/orders/{order.public_id}/", {"action": "request_payment"})
+    assert resp.status_code == 302
+    order.refresh_from_db()
+    assert order.status == Order.Status.PENDING
+    assert not order.payments.exists()

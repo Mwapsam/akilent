@@ -75,27 +75,48 @@
 
     <div class="card card-pad">
       <h2 class="text-lg font-semibold text-ink mb-3">Payment</h2>
-      {% comment %}Said as the records have it. A link is only "ready to share" while its payment
-      is still pending; a failed attempt says so; a closed order offers nothing to collect.{% endcomment %}
-      {% if payment and payment.status == 'succeeded' %}
-        <p class="text-sm text-ink-muted">Paid via {{ payment.provider }} — transaction {{ payment.transaction_id }}.</p>
-      {% elif order.status == 'paid' %}
-        <p class="text-sm text-ink-muted">Paid.</p>
+      {% comment %}Akilent never takes the payment: the business marks the order paid once the
+      customer has paid them, however they paid. A payment taken through a retired payment link
+      is shown as history, and such an order can't be marked unpaid. A late charge on a retired
+      link is being refunded, which the business needs to know.{% endcomment %}
+      {% if refund_payment %}
+        <div class="alert alert-warning mb-4" role="status" data-payment="refund-due">
+          <p>A payment of {{ refund_payment.currency }} {{ refund_payment.amount }} arrived through an old Akilent payment link. Akilent no longer takes payments, so it will be refunded to the customer. Ask them to pay you directly.</p>
+        </div>
+      {% endif %}
+      {% if order.status == 'paid' %}
+        {% if online_payment %}
+          <p class="text-sm text-ink-muted" data-payment="paid-online">Paid online on {{ order.paid_at|date:"j M Y" }} through {{ online_payment.provider|title }} (transaction {{ online_payment.transaction_id }}).</p>
+        {% else %}
+          <p class="text-sm text-ink-muted" data-payment="paid">Paid on {{ order.paid_at|date:"j M Y" }}{% if paid_method_label %} · {{ paid_method_label }}{% endif %}{% if order.paid_reference %} · Ref. {{ order.paid_reference }}{% endif %}.</p>
+          <form method="post" class="mt-3">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="mark_unpaid" />
+            <button class="btn btn-ghost btn-sm">Mark as not paid</button>
+          </form>
+        {% endif %}
       {% elif order.status == 'refunded' %}
         <p class="text-sm text-ink-muted" data-payment="refunded">Refunded. There's nothing to collect.</p>
       {% elif order.status == 'cancelled' %}
         <p class="text-sm text-ink-muted" data-payment="cancelled">This order was cancelled, so there's nothing to collect.</p>
-      {% elif payment and payment.status == 'pending' and payment.checkout_url %}
-        <p class="text-sm text-ink-muted mb-2" data-payment="link-pending">Payment link created. Share it with the customer; this page shows Paid once they've paid.</p>
-        <a href="{{ payment.checkout_url }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">Open checkout link</a>
       {% else %}
-        {% if payment and payment.status == 'failed' %}
-        <div class="alert alert-danger mb-3" role="status" data-payment="failed">The last payment attempt failed. You can send the customer a new link.</div>
-        {% endif %}
-        <form method="post" data-busy-submit>
+        <p class="text-sm text-ink-muted mb-4">Once the customer has paid you, mark the order paid so it counts in your sales.</p>
+        <form method="post" data-busy-submit class="space-y-3">
           {% csrf_token %}
-          <input type="hidden" name="action" value="request_payment" />
-          <button class="btn btn-primary">{% if payment and payment.status == 'failed' %}Request payment again{% else %}Request payment{% endif %}</button>
+          <input type="hidden" name="action" value="mark_paid" />
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label class="label" for="id_method">How they paid</label>
+              <select id="id_method" name="method" class="input">
+                {% for value, label in method_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="label" for="id_reference">Reference <span class="text-ink-subtle font-normal">(optional)</span></label>
+              <input id="id_reference" name="reference" type="text" maxlength="120" class="input" autocomplete="off">
+            </div>
+          </div>
+          <button class="btn btn-primary">Mark as paid</button>
         </form>
       {% endif %}
     </div>

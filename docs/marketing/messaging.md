@@ -24,7 +24,7 @@ The product is one business process, not four products. Each pillar is a step in
 | **Talk:** capture interest | Enquiries arrive on WhatsApp, Instagram and Facebook and some are missed or answered late | Fewer missed enquiries, more consistent replies | WhatsApp, Instagram DMs and Facebook Page messages in one shared inbox. Comments on Instagram and Facebook posts answered, moderated or replied to privately, by rule or by hand. Auto-replies (greeting, closed hours, keywords). AI suggests replies from your business knowledge, or answers simple questions only if you allow it | Facebook means a **Page**: no personal profiles, groups or ads. Email does not arrive in the inbox. AI is off by default |
 | **Publish:** stay visible | Posting is ad hoc and done separately on each app | A consistent social presence with less manual work | Content Studio: plan posts, write once with a version per channel, AI caption help, schedule per channel, optional review before publishing, publish to Instagram and a Facebook Page | Facebook means a **Page** |
 | **Automate:** follow through | Follow-ups are forgotten and the same tasks repeat | Less repetitive work, fewer forgotten follow-ups | Workflows you can test before they go live, forms (native WhatsApp Flows, or questions one by one elsewhere), follow-up reminders that tell the team when they're due, a nudge when a conversation goes unanswered (internal, not a customer message) | Lists and native forms are WhatsApp-only (forms fall back to one question per message elsewhere). Follow-ups never message the customer |
-| **Sell & measure:** understand what works | No one knows which post or message became a sale | A clear view from marketing activity to paid orders | Leads, orders and payment links. Campaigns by WhatsApp and email. Each post's results (clicks → chats → leads → orders → paid revenue). Business Health | Results count **explicit evidence only** (tracked link or comment reply). They are lower bounds, never estimates. Email is sending and campaigns |
+| **Sell & measure:** understand what works | No one knows which post or message became a sale | A clear view from marketing activity to paid orders | Leads, and orders the business marks paid. Campaigns by WhatsApp and email. Each post's results (clicks → chats → leads → orders → paid revenue). Business Health | Results count **explicit evidence only** (tracked link or comment reply). They are lower bounds, never estimates. Email is sending and campaigns |
 
 ## 3. The journey (the story every surface tells)
 
@@ -34,7 +34,7 @@ Every step below is real code. The demo (`docs/sales/demo.md`) walks through the
 |---|---|---|
 | **Attract** | The business plans and schedules a product post in Content Studio | `apps/publishing` composer and per-channel variants, published through the Meta Graph API |
 | **Engage** | A customer taps the post's WhatsApp chat link, or comments and gets a private reply, and the chat lands in the shared inbox | The tracked link (`/go/<code>`) prefills a ref code. `apps/conversations/entry_points.py` links the conversation to the post |
-| **Convert** | The team marks the customer interested (a lead), records an order and sends a payment link | `apps/crm/services.py` and `apps/commerce/services.py`. Attribution is fixed when the record is created (`apps/conversations/attribution.py`) |
+| **Convert** | The team marks the customer interested (a lead), records an order, and marks it paid when the customer pays | `apps/crm/services.py` and `apps/commerce/services.py`. Attribution is fixed when the record is created (`apps/conversations/attribution.py`) |
 | **Measure** | The post shows its clicks, chats, leads, orders and paid revenue per currency. Business Health shows the trend | `apps/publishing/results.py::results_for`, `/insights/` |
 
 Say "where the data supports it". A sale whose customer didn't use the link or the comment reply is not credited to a post, and the page says so.
@@ -50,7 +50,7 @@ The truth rule (§6) is checked against this table. A row that isn't **Live** is
 | Instagram DMs, comment rules, publishing | Live | Shown, by what it does, while the Instagram channel is on. Customer-facing copy doesn't mention Meta's app review. Who can sign up with it is a separate switch: Operator Console → Settings → Channels → "Offer to new customers" (`public_channels()`), which only controls signup and plan cards |
 | Facebook Page publishing | Live | Same as Instagram. Never "Facebook messages" |
 | Content Studio | Live (needs Instagram or a Facebook Page to publish to) | Shown when at least one publishing channel is on |
-| Leads, orders, payment links, Business Health, AI answers + knowledge | Live, depending on the plan | "Some features depend on your plan" nearby |
+| Leads, orders (marked paid by the business), Business Health, AI answers + knowledge | Live, depending on the plan | "Some features depend on your plan" nearby |
 | Website chatbot, Support tickets, HubSpot, custom fields | **Not released** (open release gates) | Only "Coming soon" via `ComingSoonFeature` |
 
 ## 5. The pattern
@@ -118,7 +118,7 @@ Use these on feature cards, use-case pages, onboarding steps and in-app prompts.
 | Workflows + follow-ups | "Follow-ups depend on someone remembering" | Keep every opportunity moving | `/automations/` workflow with **Test it**, a follow-up on a conversation and the Follow-ups page | Set a follow-up |
 | Forms | "We collect order details by going back and forth" | Get the details you need in one go | `/inbox/forms/`: a form with its preview and Answers page | Make your first form |
 | Leads | "Interested customers get forgotten" | Know who's ready to buy | `/sales/` leads list | Mark an interested customer |
-| Orders + payment links | "Taking payment means more back-and-forth" | Record the order and send a link to pay | `/orders/`: order with payment link | Create your first order |
+| Orders | "I lose track of who bought what, and who has paid" | Record the order from the conversation, and mark it paid when they pay you | `/orders/`: an order marked paid | Create your first order |
 | Campaigns + segments (WhatsApp, email) | "Reaching past customers is manual" | Bring customers back with the right message | Campaign builder with a segment | Send your first campaign |
 | Email from your domain | "Our emails look unprofessional or land in spam" | Email customers from your own address | `/email/domains/` verified domain | Add your sending domain |
 | Business Health | "We can't see whether things are improving" | See what your conversations turned into | `/insights/` | Set a monthly goal |
@@ -173,7 +173,7 @@ Evidence is `path::text`: the file must exist and contain the text.
 | campaigns | Capability | Send an approved WhatsApp message or an email to a list of customers | apps/whatsapp/campaigns.py::def |
 | campaign-scheduling | Capability | Schedule a WhatsApp campaign; pause, cancel or resend failed messages | apps/whatsapp/campaigns.py::def dispatch_due_campaigns |
 | segments | Capability | Send a WhatsApp campaign to a segment: customers picked by rules, updated automatically | apps/contacts/segments.py::def builder_fields |
-| payments | Capability | Record an order and send a link to pay online | apps/commerce/services.py::def request_payment |
+| orders | Capability | Record an order, and mark it paid when the customer pays you | apps/commerce/services.py::def mark_order_paid |
 | ai | Capability | AI suggests replies; answers simple questions on its own only if allowed; off by default | apps/ai/models.py::enabled = models.BooleanField(default=False) |
 | ai-knowledge | Capability | Teach AI your answers: add them, import a list, or read them from your website | apps/ai/knowledge.py::def read_site |
 | content-studio | Capability | Write a post once, with its own version for Instagram and for your Facebook Page | apps/publishing/composer.py::PLATFORM_LABELS = {"instagram": "Instagram", "facebook": "Facebook"} |

@@ -1,18 +1,18 @@
-"""Commerce service layer: create an Order, request payment for it via
-Flutterwave (the same gateway already integrated for platform billing —
-Phase 3's "one real provider"), and record the outcome — emitting durable
-Events and enrolling Workflows exactly like ``apps.crm.services``.
+"""Commerce service layer: create an Order and record when the business marks it paid.
+
+Akilent never takes payments for a business. An order is a record of what a customer bought;
+the business marks it paid once the customer has paid them, however they paid. Durable Events
+are emitted and Workflows enrolled exactly like ``apps.crm.services``.
 """
 
 from __future__ import annotations
 
 import logging
-import uuid
 
 from django.db import transaction
 from django.utils import timezone
 
-from apps.commerce.models import Order, OrderItem, Payment
+from apps.commerce.models import Order, OrderItem
 from apps.conversations.services import emit_event
 
 logger = logging.getLogger(__name__)
@@ -83,155 +83,231 @@ def create_order(
     return order
 
 
-class PaymentNotRequestable(ValueError):
-    """The order is already paid, refunded or cancelled, so asking for money again is wrong."""
+PAYMENT_METHODS_OTHER = "other"
 
-
-# An order in one of these states must never be sent back to "awaiting payment": that
-# would drop a paid order out of revenue, or ask a customer to pay twice.
+# Paid, refunded or cancelled: the business has already settled this order, so marking it
+# paid again must not re-run what being paid sets off (workflows, the conversation note).
 _SETTLED = (Order.Status.PAID, Order.Status.REFUNDED, Order.Status.CANCELLED)
 
 
-def request_payment(order: Order, *, redirect_url: str) -> Payment:
-    """Create a pending Payment and a Flutterwave hosted checkout link for it.
+class PaidOnline(ValueError):
+    """The money for this order really was taken online (a retired payment link), so the
+    business can't mark it unpaid."""
 
-    Mirrors ``apps.billing``'s Flutterwave flow (same client, same
-    verify-then-trust webhook pattern) but tagged with ``order_id`` in
-    ``meta`` so the shared webhook can route commerce charges separately
-    from subscription charges. Raises PaymentNotRequestable for a settled order.
 
-    Asking again while a link for the same amount is live returns that payment, so a
-    double click or a workflow plus a person never gives the customer two links to pay.
+def _custom_method(account) -> str:
+    """The business's own way to be paid, from its profile ("Zanaco bank transfer"), or ""."""
+    from apps.accounts import profile
+
+    return (getattr(profile.get_profile(account), "payment_other", "") or "").strip()[
+        :40
+    ]
+
+
+def payment_method_choices(account) -> list[tuple[str, str]]:
+    """How this business's customers pay, for the "Mark as paid" form: the methods in its
+    business profile, its own method if it named one, then "Other". Every built-in method
+    when the profile lists none at all."""
+    from apps.accounts import profile
+
+    listed = set(getattr(profile.get_profile(account), "payment_methods", None) or [])
+    custom = _custom_method(account)
+    keys = [k for k in profile.PAYMENT_METHODS if k in listed]
+    if not keys and not custom:
+        keys = list(profile.PAYMENT_METHODS)
+    choices = [(k, profile.PAYMENT_METHODS[k]) for k in keys]
+    if custom:
+        choices.append((custom, custom))
+    return choices + [(PAYMENT_METHODS_OTHER, "Other")]
+
+
+def payment_method_label(method: str) -> str:
+    """What ``Order.paid_method`` says: a built-in method's name, "Other", or the business's
+    own method, stored as typed so a later profile change doesn't rewrite the order."""
+    from apps.accounts import profile
+
+    if method == PAYMENT_METHODS_OTHER:
+        return "Other"
+    return profile.PAYMENT_METHODS.get(method, method)
+
+
+def paid_online(order: Order):
+    """The payment that paid this order through a payment link before they were retired, or
+    None. A late charge on a retired link isn't one: it's being refunded (refund_due)."""
+    from apps.commerce.models import Payment
+
+    return (
+        order.payments.filter(status=Payment.Status.SUCCEEDED)
+        .exclude(raw_payload__has_key="refund_due")
+        .first()
+    )
+
+
+def refund_due(order: Order):
+    """A late charge on a retired payment link that Akilent must refund, or None."""
+    from apps.commerce.models import Payment
+
+    return order.payments.filter(
+        status=Payment.Status.SUCCEEDED, raw_payload__has_key="refund_due"
+    ).first()
+
+
+def _set_paid_state(
+    order: Order, locked: Order, *, paid: bool, method="", reference=""
+):
+    """Write the paid fields on the locked row and copy them to the caller's object."""
+    locked.status = Order.Status.PAID if paid else Order.Status.PENDING
+    locked.paid_at = timezone.now() if paid else None
+    locked.paid_method = method
+    locked.paid_reference = reference
+    locked.save(
+        update_fields=[
+            "status",
+            "paid_at",
+            "paid_method",
+            "paid_reference",
+            "updated_at",
+        ]
+    )
+    for field in ("status", "paid_at", "paid_method", "paid_reference"):
+        setattr(order, field, getattr(locked, field))
+
+
+def mark_order_paid(
+    order: Order, *, method: str = "", reference: str = "", actor=None
+) -> bool:
+    """Record that the customer has paid the business. Akilent never takes the money: the
+    business tells us, however the customer paid (cash, mobile money, a bank transfer...).
+
+    True when this call marked the order paid. Changed under a row lock, so a double click
+    or two teammates at once mark it paid exactly once, and an order that is already paid,
+    refunded or cancelled is left as it is. Marking it paid again after "Mark as not paid"
+    restores the sale but doesn't re-run workflows or repeat the conversation note.
     """
-    from apps.billing.flutterwave import FlutterwaveError, get_fw_client
+    from apps.accounts import profile
 
-    # Checked and changed under a row lock on the current row, never on the caller's copy:
-    # a payment webhook may have marked the order paid since it was loaded. If the webhook
-    # commits first, this sees PAID and refuses; if this holds the lock, the webhook's PAID
-    # is written after it and wins. Everything the link charges comes from this row too.
+    allowed = {
+        *profile.PAYMENT_METHODS,
+        PAYMENT_METHODS_OTHER,
+        _custom_method(order.account),
+    }
+    method = method if method in allowed - {""} else ""
     with transaction.atomic():
-        locked = (
-            Order.objects.select_for_update().select_related("contact").get(pk=order.pk)
-        )
-        order.status = locked.status
+        locked = Order.objects.select_for_update().get(pk=order.pk)
         if locked.status in _SETTLED:
-            raise PaymentNotRequestable(
-                f"This order is already {locked.get_status_display().lower()}."
-            )
-        pending = list(locked.payments.filter(status=Payment.Status.PENDING))
-        for live in pending:
-            if (
-                live.checkout_url
-                and live.amount == locked.total
-                and live.currency == locked.currency
-            ):
-                return live
-        # Older links for another amount (the order changed) or that never got a link
-        # are withdrawn, so only one link is ever live.
-        for stale in pending:
-            stale.status = Payment.Status.FAILED
-            stale.raw_payload = {**(stale.raw_payload or {}), "error": "superseded"}
-            stale.save(update_fields=["status", "raw_payload", "updated_at"])
-        payment = Payment.objects.create(
-            account=locked.account,
-            order=locked,
-            amount=locked.total,
-            currency=locked.currency,
+            order.status, order.paid_at = locked.status, locked.paid_at
+            return False
+        first_time = not _was_paid_before(locked)
+        _set_paid_state(
+            order,
+            locked,
+            paid=True,
+            method=method,
+            reference=(reference or "").strip()[:120],
         )
-        locked.status = Order.Status.AWAITING_PAYMENT
-        locked.save(update_fields=["status", "updated_at"])
-    order.status = locked.status
-
-    try:
-        link = get_fw_client().initialize_payment(
-            tx_ref=f"order-{locked.public_id}-{uuid.uuid4().hex[:8]}",
-            amount=payment.amount,
-            currency=payment.currency,
-            customer_email=locked.contact.email or "customer@example.com",
-            customer_name=locked.contact.full_name or str(locked.contact),
-            redirect_url=redirect_url,
-            meta={"order_id": locked.public_id, "payment_id": payment.public_id},
-        )
-        payment.checkout_url = link
-        payment.save(update_fields=["checkout_url", "updated_at"])
-    except FlutterwaveError:
-        logger.exception(
-            "request_payment: Flutterwave initialization failed for order=%s", order.pk
-        )
-
-    return payment
+    if first_time:
+        _after_order_paid(locked, actor=actor)
+    else:
+        _record_order_paid_outcome_signal(locked)
+    return True
 
 
-def mark_paid(
-    payment: Payment, *, transaction_id: str, raw_payload: dict | None = None
-) -> Order:
-    """Idempotently mark a Payment succeeded and its Order paid.
-
-    Safe to call twice for the same payment (e.g. a replayed webhook that
-    slipped past the outer ``ProcessedWebhookEvent`` dedupe) — a
-    already-succeeded Payment is a no-op.
-
-    The money is always recorded on the Payment (it was taken), but the order only becomes
-    PAID from an open state. A charge on an order that is already paid, refunded or
-    cancelled (an old link paid late, or paid twice) leaves the order as it is, keeps its
-    first ``paid_at``, and is flagged in the customer's conversation for a refund.
-    """
+def mark_order_unpaid(order: Order, *, actor=None) -> bool:
+    """Undo "Mark as paid" when it was a mistake: the order is open again and leaves revenue,
+    including an insight's attributed revenue. Workflows that already ran on ``order.paid``
+    aren't undone. True when it changed; raises PaidOnline when the money was really taken
+    online through a retired payment link."""
+    if paid_online(order) is not None:
+        raise PaidOnline("This order was paid online, so it can't be marked unpaid.")
     with transaction.atomic():
-        payment = Payment.objects.select_for_update().get(pk=payment.pk)
-        if payment.status == Payment.Status.SUCCEEDED:
-            return payment.order
-        order = Order.objects.select_for_update().get(pk=payment.order_id)
-        payment.status = Payment.Status.SUCCEEDED
-        payment.transaction_id = transaction_id
-        payment.raw_payload = raw_payload or {}
-        payment.save(
+        locked = Order.objects.select_for_update().get(pk=order.pk)
+        if locked.status != Order.Status.PAID:
+            return False
+        _set_paid_state(order, locked, paid=False)
+    emit_event(
+        account=locked.account,
+        type="order.unpaid",
+        occurred_at=timezone.now(),
+        source="commerce",
+        actor=getattr(actor, "username", "") or "",
+        subject_type="order",
+        subject_id=locked.public_id,
+        payload={"contact_id": locked.contact.public_id},
+    )
+    _retract_order_paid_outcome_signal(locked)
+    return True
+
+
+def record_retired_link_charge(
+    payment, *, transaction_id: str, raw_payload: dict | None = None
+) -> bool:
+    """A customer paid an order payment link sent before links were retired, so Akilent holds
+    money that belongs to the business. The charge is recorded on its Payment (the money was
+    taken) and flagged in the customer's conversation and the error log for a refund. The
+    order is left as it is: the business collects payment itself. True the first time."""
+    from apps.commerce.models import Payment
+
+    with transaction.atomic():
+        locked = Payment.objects.select_for_update().get(pk=payment.pk)
+        if locked.status == Payment.Status.SUCCEEDED:
+            return False
+        locked.status = Payment.Status.SUCCEEDED
+        locked.transaction_id = transaction_id
+        locked.raw_payload = {**(raw_payload or {}), "refund_due": True}
+        locked.save(
             update_fields=["status", "transaction_id", "raw_payload", "updated_at"]
         )
-        settled = order.status in _SETTLED
-        paid_at = timezone.now()
-        if not settled:
-            order.status = Order.Status.PAID
-            order.paid_at = paid_at
-            order.save(update_fields=["status", "paid_at", "updated_at"])
-
-    if settled:
-        logger.warning(
-            "commerce: payment %s succeeded on order %s that is already %s",
-            payment.public_id,
-            order.public_id,
-            order.status,
-        )
-        _note_in_conversation(
-            order,
-            f"A payment of {payment.currency} {payment.amount} arrived for an order "
-            f"that is already {order.get_status_display().lower()}. Check whether the "
-            "customer needs a refund.",
-            {
-                "kind": "payment.on_settled_order",
-                "order_id": order.public_id,
-                "payment_id": payment.public_id,
-            },
-        )
-        return order
-
-    emit_event(
-        account=order.account,
-        type="payment.succeeded",
-        occurred_at=paid_at,
-        source="commerce",
-        source_event_id=transaction_id,
-        subject_type="payment",
-        subject_id=payment.public_id,
-        payload={"order_id": order.public_id, "amount": str(payment.amount)},
+    order = locked.order
+    logger.error(
+        "commerce: payment %s (%s %s) arrived through a retired link for order %s; "
+        "refund it to the customer",
+        locked.public_id,
+        locked.currency,
+        locked.amount,
+        order.public_id,
     )
+    _note_in_conversation(
+        order,
+        f"A payment of {locked.currency} {locked.amount} arrived through an old Akilent "
+        "payment link. Akilent no longer takes payments, so it will be refunded to the "
+        "customer. Ask them to pay you directly, then mark the order paid.",
+        {
+            "kind": "payment.retired_link",
+            "order_id": order.public_id,
+            "payment_id": locked.public_id,
+        },
+    )
+    return True
+
+
+def _was_paid_before(order: Order) -> bool:
+    from apps.conversations.models import Event
+
+    return Event.objects.filter(
+        account_id=order.account_id,
+        type="order.paid",
+        subject_type="order",
+        subject_id=order.public_id,
+    ).exists()
+
+
+def _after_order_paid(order: Order, *, actor=None) -> None:
+    """Everything an order being paid for the first time sets off: the event, ``order.paid``
+    workflows, a note in the customer's conversation, and the insight outcome it may
+    complete."""
     emit_event(
         account=order.account,
         type="order.paid",
-        occurred_at=paid_at,
+        occurred_at=order.paid_at or timezone.now(),
         source="commerce",
+        actor=getattr(actor, "username", "") or "",
         subject_type="order",
         subject_id=order.public_id,
-        payload={"contact_id": order.contact.public_id, "total": str(order.total)},
+        payload={
+            "contact_id": order.contact.public_id,
+            "total": str(order.total),
+            "method": order.paid_method,
+        },
     )
     _enroll_workflows(
         order.account,
@@ -240,20 +316,21 @@ def mark_paid(
         {"order_id": order.public_id},
         subject_key=f"order:{order.public_id}",
     )
+    how = payment_method_label(order.paid_method)
     _note_in_conversation(
         order,
-        f"Payment received — {order.currency} {order.total}",
-        {"kind": "payment.succeeded", "order_id": order.public_id},
+        f"Order marked paid — {order.currency} {order.total}"
+        + (f" ({how})" if how else ""),
+        {"kind": "order.paid", "order_id": order.public_id},
     )
     _record_order_paid_outcome_signal(order)
-    return order
 
 
 def _note_in_conversation(order: Order, body: str, metadata: dict) -> None:
     """Mirror a commercial outcome into the customer's conversation, so the
     thread stays the whole story rather than the business having to go looking
     in Orders. Best-effort: a missing conversation or a failure here must never
-    cost us the payment record."""
+    cost us the order record."""
     from apps.conversations.services import record_system_message
 
     try:
@@ -269,71 +346,60 @@ def _note_in_conversation(order: Order, body: str, metadata: dict) -> None:
         )
 
 
-def mark_failed(payment: Payment, *, error: str = "") -> Order:
-    """Record a failed or rejected charge. The order only becomes FAILED while it is still
-    waiting for this money: a failed old link never undoes a paid, refunded or cancelled
-    order."""
-    with transaction.atomic():
-        payment = Payment.objects.select_for_update().get(pk=payment.pk)
-        order = Order.objects.select_for_update().get(pk=payment.order_id)
-        payment.status = Payment.Status.FAILED
-        payment.raw_payload = {**(payment.raw_payload or {}), "error": error}
-        payment.save(update_fields=["status", "raw_payload", "updated_at"])
-        if order.status not in _SETTLED:
-            order.status = Order.Status.FAILED
-            order.save(update_fields=["status", "updated_at"])
+def _order_rec_log(order):
+    """The accepted recommendation this order is attributed to, through the canonical
+    ConversationAttribution provenance chain (``insight_for_order``, the traversal the UI
+    uses), or None."""
+    from apps.insights.actions import insight_for_order
+    from apps.insights.models import RecommendationLog
 
-    emit_event(
-        account=order.account,
-        type="payment.failed",
-        occurred_at=timezone.now(),
-        source="commerce",
-        subject_type="payment",
-        subject_id=payment.public_id,
-        payload={"order_id": order.public_id, "error": error},
+    insight = insight_for_order(order)
+    if insight is None:
+        return None
+    return (
+        RecommendationLog.objects.filter(
+            insight=insight, status=RecommendationLog.Status.ACCEPTED
+        )
+        .order_by("-acted_at")
+        .first()
     )
-    return order
 
 
 def _record_order_paid_outcome_signal(order) -> None:
-    """Record order_paid_at on any RecommendationLog whose Insight is attributable
-    to this order via the canonical ConversationAttribution provenance chain.
+    """Record order_paid_at, with the revenue, on the recommendation this order is attributed
+    to. Safe to call more than once: record_outcome_signal() is idempotent.
 
-    Uses insight_for_order() — the same traversal the UI uses — so the signal
-    and the display are always consistent. Safe to call multiple times;
-    record_outcome_signal() is idempotent and monotonic.
+    order_created_at is recorded in create_order, at creation time, not here: timestamping
+    it now would be wrong, and a later call couldn't fix it.
     """
-    from apps.insights.actions import insight_for_order, record_outcome_signal
-    from apps.insights.models import RecommendationLog
+    from apps.insights.actions import record_outcome_signal
 
-    # ImportError / AttributeError from the imports above are not caught here —
-    # they indicate a broken install and should propagate so they're visible.
     try:
-        insight = insight_for_order(order)
-        if insight is None:
-            return
-        rec_log = (
-            RecommendationLog.objects.filter(
-                insight=insight, status=RecommendationLog.Status.ACCEPTED
+        rec_log = _order_rec_log(order)
+        if rec_log is not None:
+            record_outcome_signal(
+                rec_log,
+                "order_paid_at",
+                revenue=str(order.total),
+                currency=order.currency or "",
             )
-            .order_by("-acted_at")
-            .first()
-        )
-        if rec_log is None:
-            return
-        record_outcome_signal(
-            rec_log,
-            "order_paid_at",
-            revenue=str(order.total),
-            currency=order.currency or "",
-        )
-        # order_created_at is recorded in create_order, at creation time, not here:
-        # mark_paid fires after the order exists, so timestamping it to now
-        # would be wrong (and record_outcome_signal is monotonic, so a later
-        # call could silently drop it). Wire it at create_order time instead.
     except Exception:
         logger.exception(
             "_record_order_paid_outcome_signal failed for order=%s", order.pk
+        )
+
+
+def _retract_order_paid_outcome_signal(order) -> None:
+    """An order marked paid by mistake no longer counts as a paid conversion."""
+    from apps.insights.actions import retract_outcome_signal
+
+    try:
+        rec_log = _order_rec_log(order)
+        if rec_log is not None:
+            retract_outcome_signal(rec_log, "order_paid_at")
+    except Exception:
+        logger.exception(
+            "_retract_order_paid_outcome_signal failed for order=%s", order.pk
         )
 
 

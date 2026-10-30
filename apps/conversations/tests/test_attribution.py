@@ -7,11 +7,7 @@ import pytest
 from django.utils import timezone
 
 from apps.accounts.models import Account
-from apps.commerce.services import (  # noqa: F401
-    create_order,
-    mark_paid,
-    request_payment,
-)
+from apps.commerce.services import create_order, mark_order_paid
 from apps.contacts.models import Contact
 from apps.conversations.api import funnel, revenue_by_channel
 from apps.conversations.attribution import resolve_conversation
@@ -59,10 +55,7 @@ def item(price="50.00"):
 
 
 def pay(order):
-    payment = order.payments.create(
-        account=order.account, amount=order.total, currency=order.currency
-    )
-    mark_paid(payment, transaction_id=f"tx{order.pk}")
+    mark_order_paid(order, method="cash")
     return order
 
 

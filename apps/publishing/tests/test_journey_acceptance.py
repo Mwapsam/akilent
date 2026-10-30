@@ -2,11 +2,11 @@
 composer to a paid order in the reports, plus the negative controls.
 
 Only external HTTP is mocked: Meta's Graph API for publishing (``FacebookPublishProvider``
-``_post``/``_get``) and Flutterwave's client. Everything else runs for real:
+``_post``/``_get``). Everything else runs for real:
 - the composer and review views;
 - the Celery publish task (run eagerly in tests) and the ``/go/<code>`` redirect;
 - the signed WhatsApp webhook through ``process_whatsapp_event``;
-- the lead and order views, the payment request and the signed Flutterwave webhook.
+- the lead and order views, and the business marking the order paid.
 
 Each step checks the saved rows and the reports, so a failure names the link that broke.
 Passing this gate is code correctness only; the real staging journey is a separate
@@ -248,59 +248,31 @@ class Shop:
             },
         )
 
-    def pay(self, order, tx_id, *, replay=False):
-        """Request a payment link, then deliver Flutterwave's signed charge webhook.
+    def pay(self, order, tx_id=None, *, replay=False):
+        """The business marks the order paid on its page (Akilent never takes the payment).
 
-        ``replay`` only redelivers the webhook, as Flutterwave does when it retries.
+        ``replay`` posts the same click again, as a double click or a teammate would.
+        ``tx_id`` is kept as the customer's payment reference.
         """
-        if not replay:
-            self.request_payment(order)
-        return self.charge_webhook(order, tx_id)
+        with self.capture(execute=True):
+            response = self.reviewer_client.post(
+                reverse("commerce:detail", args=[order.public_id]),
+                {
+                    "action": "mark_paid",
+                    "method": "mtn_momo",
+                    "reference": str(tx_id or ""),
+                },
+            )
+        order.refresh_from_db()
+        return response
 
     def request_payment(self, order):
-        with (
-            patch("apps.billing.flutterwave.get_fw_client") as fw,
-            self.capture(execute=True),
-        ):
-            fw.return_value.initialize_payment.return_value = (
-                "https://checkout.example/1"
-            )
+        """A stale form or script still posting the retired "request payment" action."""
+        with self.capture(execute=True):
             self.reviewer_client.post(
                 reverse("commerce:detail", args=[order.public_id]),
                 {"action": "request_payment"},
             )
-
-    def charge_webhook(self, order, tx_id):
-        payment = order.payments.order_by("-created_at").first()
-        payload = {
-            "event": "charge.completed",
-            "data": {
-                "id": tx_id,
-                "status": "successful",
-                "amount": str(order.total),
-                "currency": order.currency,
-                "customer": {"email": "buyer@example.com"},
-                "meta": {"order_id": order.public_id, "payment_id": payment.public_id},
-            },
-        }
-        verified = {
-            "status": "successful",
-            "amount": str(order.total),
-            "currency": order.currency,
-        }
-        with (
-            patch("apps.billing.providers.flutterwave.get_fw_client") as fw,
-            self.capture(execute=True),
-        ):
-            fw.return_value.verify_transaction.return_value = verified
-            response = Client().post(
-                reverse("billing:webhook"),
-                data=json.dumps(payload),
-                content_type="application/json",
-                HTTP_VERIF_HASH="test-hash",
-            )
-        order.refresh_from_db()
-        return response
 
     # -- reports ---------------------------------------------------------------------------
     def card(self, post):
@@ -463,8 +435,8 @@ def test_the_journey_from_post_to_paid_order(shop):
     j = shop.journey()
     assert (j["orders"], j["revenue"]) == (1, [])
 
-    # 8. Paid through Flutterwave's webhook: revenue appears once, in its own currency.
-    assert shop.pay(order, tx_id=9001).status_code == 200
+    # 8. The business marks it paid: revenue appears once, in its own currency.
+    assert shop.pay(order, tx_id=9001).status_code == 302
     assert order.status == Order.Status.PAID and order.paid_at is not None
     assert _revenue(shop.card(post)["revenue"]) == {"ZMW": Decimal("45.00")}
     assert _revenue(shop.journey()["revenue"]) == {"ZMW": Decimal("45.00")}
@@ -540,14 +512,16 @@ def test_repeated_and_duplicate_events_never_inflate_the_numbers(shop, published
     shop.create_lead(CUSTOMER, conversation)  # one open lead per customer
     order = shop.create_order(CUSTOMER, Decimal("45.00"), "ZMW", conversation)
     shop.pay(order, tx_id=9201)
-    shop.pay(order, tx_id=9201, replay=True)  # Flutterwave retries the same charge
-    shop.request_payment(order)  # someone asks a paid customer to pay again
+    shop.pay(order, tx_id=9201, replay=True)  # a double click, or a teammate at once
+    shop.request_payment(order)  # a stale form still posting the retired action
 
     order.refresh_from_db()
     assert order.status == Order.Status.PAID, "a paid order is never reopened"
     assert Lead.objects.filter(contact=contact).count() == 1
-    assert order.payments.count() == 1
-    assert order.payments.filter(status="succeeded").count() == 1
+    assert (
+        order.payments.count() == 0
+    )  # Akilent records the payment; it never takes one
+    assert order.paid_reference == "9201"
     card = shop.card(published)
     assert (card["chats"], card["leads"], card["orders"]) == (1, 1, 1)
     assert _revenue(card["revenue"]) == {"ZMW": Decimal("45.00")}

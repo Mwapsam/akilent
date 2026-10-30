@@ -30,7 +30,7 @@ def test_activate_via_view_creates_workflows_and_redirects(logged_in):
     assert resp.status_code == 302
     assert (
         Workflow.objects.filter(account=account, slug__startswith="restaurant-").count()
-        == 2
+        == 1
     )
 
     resp = client.get("/automations/templates/")

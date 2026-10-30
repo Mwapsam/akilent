@@ -1,7 +1,7 @@
-{% comment %}Illustration (journey, Convert): an interested customer, their order and its payment
-link (crm.set_lead_status, commerce.request_payment), and a follow-up for the team. Sample data.{% endcomment %}
+{% comment %}Illustration (journey, Convert): an interested customer, their order marked paid
+(crm.set_lead_status, commerce.mark_order_paid), and a follow-up for the team. Sample data.{% endcomment %}
 <figure class="lp-art" data-art="order" data-claim-exempt>
-  <div role="img" aria-label="Illustration: a customer marked as interested, with an order for a linen dress, a payment link sent and a follow-up reminder set for the team.">
+  <div role="img" aria-label="Illustration: a customer marked as interested, with an order for a linen dress marked paid by mobile money, and a follow-up reminder set for the team.">
     <div class="lp-window lp-order" aria-hidden="true">
       <div class="lp-order-top">
         <span class="who"><span class="lp-av t">TM</span><span><strong>Thandi Mwale</strong><em>Order #1042</em></span></span>
@@ -14,10 +14,10 @@ link (crm.set_lead_status, commerce.request_payment), and a follow-up for the te
         <div><span>Total</span><span>K450</span></div>
       </div>
       <div class="lp-order-foot">
-        <span>Payment link sent · Follow-up set for tomorrow</span>
-        <span class="lp-chip lp-chip-amber">Awaiting payment</span>
+        <span>Paid by MTN MoMo · Follow-up set for tomorrow</span>
+        <span class="lp-chip lp-chip-teal">Paid</span>
       </div>
     </div>
   </div>
-  <figcaption class="lp-art-cap">Illustration of an order with a payment link.</figcaption>
+  <figcaption class="lp-art-cap">Illustration of an order marked paid.</figcaption>
 </figure>

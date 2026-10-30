@@ -1,5 +1,8 @@
 """Phase 3 minimal Commerce: Product catalog + Order + payment status tracking.
 
+An order is a record of what a customer bought, marked paid by the business. ``Payment``
+rows are history from the retired Flutterwave payment links: nothing creates them now.
+
 Deliberately thin per the plan: no inventory, variants, multi-warehouse, or
 tax rules yet. ``OrderItem`` snapshots ``name``/``unit_price`` at order time
 so a later Product price change never rewrites history. Every object carries
@@ -81,6 +84,11 @@ class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     paid_at = models.DateTimeField(blank=True, null=True)
+    # How the customer paid the business, as the business told us when it marked the order
+    # paid (a key of apps.accounts.profile.PAYMENT_METHODS, or "other"). Akilent never takes
+    # the payment itself.
+    paid_method = models.CharField(max_length=40, blank=True, default="")
+    paid_reference = models.CharField(max_length=120, blank=True, default="")
 
     class Meta:
         indexes = [

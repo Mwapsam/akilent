@@ -1,4 +1,4 @@
-"""Orders: a thin projection over Order/Payment, following the same UX
+"""Orders: a thin projection over Order, following the same UX
 rules as Inbox/Sales — one primary action per screen, teaching empty states.
 """
 
@@ -11,11 +11,19 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 
 from apps.accounts.utils import get_current_account
 from apps.commerce.models import Order
+from apps.commerce.services import (
+    PaidOnline,
+    mark_order_paid,
+    mark_order_unpaid,
+    paid_online,
+    payment_method_choices,
+    payment_method_label,
+    refund_due,
+)
 from apps.contacts.models import Contact
 from apps.conversations import attribution
 from apps.core.actions import ActionError, run_action
@@ -151,20 +159,27 @@ def order_detail(request, public_id: str):
         return redirect("dashboard")
     order = get_object_or_404(Order, account=account, public_id=public_id)
 
-    if request.method == "POST" and request.POST.get("action") == "request_payment":
-        try:
-            redirect_url = request.build_absolute_uri(
-                reverse("commerce:detail", args=[order.public_id])
-            )
-            run_action(
-                "request_payment",
-                {"account": account},
-                order=order,
-                redirect_url=redirect_url,
-            )
-            messages.success(request, "Payment link created.")
-        except ActionError as exc:
-            messages.error(request, str(exc))
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "mark_paid":
+            if mark_order_paid(
+                order,
+                method=request.POST.get("method", ""),
+                reference=request.POST.get("reference", ""),
+                actor=request.user,
+            ):
+                messages.success(request, "Order marked paid.")
+            else:
+                messages.info(
+                    request,
+                    f"This order is already {order.get_status_display().lower()}.",
+                )
+        elif action == "mark_unpaid":
+            try:
+                if mark_order_unpaid(order, actor=request.user):
+                    messages.success(request, "Order marked as not paid.")
+            except PaidOnline as exc:
+                messages.error(request, str(exc))
         return redirect("commerce:detail", public_id=public_id)
 
     origin_insight = None
@@ -182,7 +197,12 @@ def order_detail(request, public_id: str):
             "account": account,
             "order": order,
             "items": order.items.all(),
-            "payment": order.payments.order_by("-created_at").first(),
+            # A payment taken through a retired payment link, shown as history; such an
+            # order can't be marked unpaid (mark_order_unpaid refuses it too).
+            "online_payment": paid_online(order),
+            "refund_payment": refund_due(order),
+            "method_choices": payment_method_choices(account),
+            "paid_method_label": payment_method_label(order.paid_method),
             "origin_insight": origin_insight,
         },
     )

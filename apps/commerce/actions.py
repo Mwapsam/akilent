@@ -36,24 +36,6 @@ class CreateOrderAction(Action):
         return {"order_id": order.public_id, "total": str(order.total)}
 
 
-class RequestPaymentAction(Action):
-    name = "request_payment"
-    module = "orders"
-    scope_kwarg = "order"
-
-    def input_schema(self) -> dict:
-        return {"required": ["order", "redirect_url"]}
-
-    def execute(self, context: dict, *, order, redirect_url: str) -> dict:  # type: ignore[override]
-        from apps.commerce.services import PaymentNotRequestable, request_payment
-
-        try:
-            payment = request_payment(order, redirect_url=redirect_url)
-        except PaymentNotRequestable as exc:
-            raise ActionError(str(exc)) from None
-        return {"payment_id": payment.public_id, "checkout_url": payment.checkout_url}
-
-
 class LookupProductsAction(Action):
     """Read-only: active catalog products whose name matches the words in ``query`` (at most 5).
 
@@ -102,5 +84,4 @@ class LookupProductsAction(Action):
 
 
 register(CreateOrderAction())
-register(RequestPaymentAction())
 register(LookupProductsAction())

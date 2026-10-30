@@ -167,8 +167,8 @@ FEATURES: tuple[Feature, ...] = (
     ),
     Feature(
         "orders",
-        "Orders & payment links",
-        "Record what a customer bought and send them a payment link.",
+        "Orders",
+        "Record what a customer bought and mark it paid once they've paid you.",
         "Commerce",
         optional=True,
         nav_paths=("/orders/",),

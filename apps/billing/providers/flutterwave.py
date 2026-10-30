@@ -163,7 +163,7 @@ class FlutterwaveProvider(PaymentProvider):
             return [ProviderEvent(key=key)]
 
         if (data.get("meta") or {}).get("order_id"):
-            return [ProviderEvent(key=key, handler=lambda: _commerce_charge(data))]
+            return [ProviderEvent(key=key, handler=lambda: _retired_link_charge(data))]
 
         # Verify before acting; a failure raises, the view answers 500 and Flutterwave retries.
         try:
@@ -219,18 +219,23 @@ class FlutterwaveProvider(PaymentProvider):
 # --- events that aren't our subscription payments -----------------------------------------------
 
 
-def _commerce_charge(data: dict) -> None:
-    """A Flutterwave charge for a commerce order (apps.commerce shares this webhook)."""
+def _retired_link_charge(data: dict) -> None:
+    """A charge on an order payment link sent before links were retired: Akilent no longer
+    takes payments for businesses, but a customer can still pay an old link. A verified
+    charge is recorded and flagged for a refund (apps.commerce.services); the order is left
+    for the business to mark paid when the customer pays it directly."""
     from apps.billing.money import covers
     from apps.commerce.models import Payment
-    from apps.commerce.services import mark_failed, mark_paid
+    from apps.commerce.services import record_retired_link_charge
 
     meta = data.get("meta") or {}
     payment = Payment.objects.filter(
         public_id=meta.get("payment_id"), order__public_id=meta.get("order_id")
     ).first()
     if payment is None:
-        logger.warning("flutterwave commerce: no payment for meta=%s", meta)
+        logger.warning(
+            "flutterwave: retired link charge with no payment, meta=%s", meta
+        )
         return
     try:
         verified = get_fw_client().verify_transaction(data.get("id"))
@@ -242,18 +247,15 @@ def _commerce_charge(data: dict) -> None:
         payment.amount,
         payment.currency,
     ):
-        logger.error(
-            "flutterwave commerce: rejected payment=%s status=%s amount=%s %s",
+        logger.warning(
+            "flutterwave: retired link charge not taken, payment=%s status=%s",
             payment.public_id,
             verified.get("status"),
-            verified.get("amount"),
-            verified.get("currency"),
-        )
-        mark_failed(
-            payment, error=f"verification rejected: status={verified.get('status')}"
         )
         return
-    mark_paid(payment, transaction_id=str(data.get("id")), raw_payload=verified)
+    record_retired_link_charge(
+        payment, transaction_id=str(data.get("id")), raw_payload=verified
+    )
 
 
 def _legacy_charge(verified: dict) -> None:

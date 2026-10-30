@@ -268,16 +268,21 @@ def test_another_workspaces_link_still_works_for_its_customers(mine, theirs):
 # --- Sales --------------------------------------------------------------------------------
 
 
-def test_another_workspaces_order_cannot_be_opened_or_billed(mine, theirs):
+def test_another_workspaces_order_cannot_be_opened_or_marked_paid(mine, theirs):
     _, _, client = mine
-    url = reverse("commerce:detail", args=[theirs["order"].public_id])
+    order = theirs["order"]
+    url = reverse("commerce:detail", args=[order.public_id])
+    before = (order.status, order.paid_at, order.paid_method, order.updated_at)
 
-    with patch("apps.billing.flutterwave.get_fw_client") as fw:
-        assert client.get(url).status_code == 404
-        assert client.post(url, {"action": "request_payment"}).status_code == 404
-        fw.assert_not_called()
+    assert client.get(url).status_code == 404
+    assert (
+        client.post(url, {"action": "mark_paid", "method": "cash"}).status_code == 404
+    )
+    assert client.post(url, {"action": "mark_unpaid"}).status_code == 404
 
-    assert Payment.objects.filter(order=theirs["order"]).count() == 0
+    order.refresh_from_db()
+    assert (order.status, order.paid_at, order.paid_method, order.updated_at) == before
+    assert Payment.objects.filter(order=order).count() == 0
 
 
 @pytest.mark.parametrize("view", ["commerce:create-order", "crm:create-lead"])

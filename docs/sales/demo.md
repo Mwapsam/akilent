@@ -55,7 +55,7 @@ Open in one line (the primary angle):
 | **Screen** | Sales (`/sales/`), then Orders (`/orders/`) and Thandi's paid order |
 | **Show** | The leads were opened from the conversations, with no typing into a CRM. Joseph's order is recorded but not paid yet (Pending); Thandi's and Grace's are paid. When creating an order you pick the conversation it came from, and that link is what the post results use in step 4 |
 | **Say** | "The moment someone is ready to buy, they're on your sales list. You record the order and send a link to pay, and Akilent remembers which chat it came from." |
-| **Boundary** | Payment links need a payment provider set up. The demo workspace has none, so show the existing orders rather than creating a payment link live |
+| **Boundary** | Akilent doesn't take payments for the business. The business marks an order paid once the customer has paid them (cash, mobile money, bank transfer); open Joseph's order and use **Mark as paid** to show it |
 
 - [x] Screens render with the seeded data (checked 2026-10-24)
 - [ ] Walked through live in a browser, on ____ (date), by ____
@@ -91,7 +91,6 @@ Close with the promise and a next step:
 |---|---|---|
 | Publishing a post live | The demo workspace has no Instagram or Facebook Page connection. Instagram/Facebook permissions are in Meta App Review, so only accounts with a role on the Akilent Meta app can connect | A test workspace connected to a test Page and IG account with an app role |
 | Sending a reply live | No WhatsApp number in the demo workspace | A workspace with your own connected test number |
-| Creating a payment link and paying | No payment provider in the demo workspace | A test workspace with the provider in test mode |
 | Fresh post metrics | Collection is off for demo posts (they don't exist on Meta) | A real published post in a connected workspace |
 | Website chatbot, Support, HubSpot, custom fields | Not released | Mention only as "coming soon" if asked |
 

@@ -46,11 +46,11 @@
 {% comment %}Orders exist; none of them need anything. Not the first-run empty state, which would
 tell a business with orders to create its first one.{% endcomment %}
 <div class="table-wrap" data-orders="none-need-attention">
-  {% include "components/empty_state.html" with icon="check-circle" title="Nothing needs your attention" message="Every order is paid or closed. New orders waiting on payment show up here." action_url="?view=all" action_label="See all orders" %}
+  {% include "components/empty_state.html" with icon="check-circle" title="Nothing needs your attention" message="Every order is paid or closed. New orders that aren't paid yet show up here." action_url="?view=all" action_label="See all orders" %}
 </div>
 {% else %}
 <div class="table-wrap">
-  {% include "components/empty_state.html" with icon="layout-template" title="Turn conversations into orders" message="When a customer decides to buy, create the order here and send them a payment link. Orders from Inbox, a workflow, or the API also show up here." %}
+  {% include "components/empty_state.html" with icon="layout-template" title="Turn conversations into orders" message="When a customer decides to buy, record the order here, and mark it paid once they've paid you. Orders from Inbox, a workflow, or the API also show up here." %}
   <div class="text-center pb-8 -mt-6">
     <button class="btn btn-primary btn-sm" @click="$dispatch('modal-open', 'new-order')">
       {% include "components/icon.html" with name="plus" class="w-4 h-4" %} Create your first order

@@ -16,7 +16,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.accounts.models import Account, Membership
-from apps.commerce.services import create_order, mark_paid
+from apps.commerce.services import create_order, mark_order_paid
 from apps.contacts.models import Contact
 from apps.conversations.models import (
     Conversation,
@@ -239,10 +239,7 @@ def test_lead_and_order_from_the_chat_carry_the_post(shop, receive):
         conversation_id=conversation.public_id,
     )
     assert order.attribution.source_variant == variant
-    payment = order.payments.create(
-        account=account, amount=order.total, currency=order.currency
-    )
-    mark_paid(payment, transaction_id="tx1")
+    mark_order_paid(order, method="cash")
 
     LinkClick.objects.create(link=link)
     [row] = [r for r in results_for(post) if r["variant"] == variant]

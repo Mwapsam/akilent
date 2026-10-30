@@ -112,6 +112,27 @@ def record_outcome_signal(
     rec_log.save(update_fields=update_fields)
 
 
+def retract_outcome_signal(rec_log, signal: str) -> None:
+    """Take back a signal recorded in error, e.g. an order marked paid by mistake.
+
+    The one exception to signals never being overwritten: only a person correcting a record
+    calls this. Revenue goes with ``order_paid_at``, the only signal that carries it.
+    """
+    if signal not in OUTCOME_SIGNAL_ORDER:
+        raise ValueError(
+            f"Unknown outcome signal: {signal!r}. Must be one of {OUTCOME_SIGNAL_ORDER}"
+        )
+    signals = dict(rec_log.outcome_summary)
+    if not signals.get(signal):
+        return
+    signals.pop(signal)
+    if signal == "order_paid_at":
+        signals.pop("revenue", None)
+        signals.pop("currency", None)
+    rec_log.outcome_summary = signals
+    rec_log.save(update_fields=["outcome_summary"])
+
+
 def attach_attribution_provenance(attribution, rec_log) -> None:
     """Wire an existing ConversationAttribution back to its originating recommendation.
 

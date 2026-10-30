@@ -93,9 +93,20 @@ class TestOrders:
         order = _order(account, contact, status)
         html = owner_client.get(f"/orders/{order.public_id}/").content.decode()
         assert marker in html
-        assert ("Request payment" in html) is offers_request
+        assert ("Mark as paid" in html) is offers_request
 
-    def test_a_failed_payment_is_not_called_a_link_to_share(
+    def test_an_open_order_is_marked_paid_never_sent_a_link(
+        self, account, contact, owner_client
+    ):
+        order = _order(account, contact, Order.Status.PENDING)
+        html = owner_client.get(f"/orders/{order.public_id}/").content.decode()
+        assert "Mark as paid" in html
+        assert 'for="id_method"' in html and 'for="id_reference"' in html
+        assert "Request payment" not in html
+        assert "Payment link" not in html
+        assert 'aria-current="page"' in html  # the breadcrumb
+
+    def test_an_order_left_waiting_on_an_old_link_can_still_be_marked_paid(
         self, account, contact, owner_client
     ):
         order = _order(account, contact, Order.Status.AWAITING_PAYMENT)
@@ -107,22 +118,8 @@ class TestOrders:
             checkout_url="https://pay.example/old",
         )
         html = owner_client.get(f"/orders/{order.public_id}/").content.decode()
-        assert 'data-payment="failed"' in html
-        assert "Request payment again" in html
-        assert "Payment link created" not in html
-
-    def test_a_pending_link_is_offered_to_share(self, account, contact, owner_client):
-        order = _order(account, contact, Order.Status.AWAITING_PAYMENT)
-        Payment.objects.create(
-            account=account,
-            order=order,
-            amount=order.total,
-            status=Payment.Status.PENDING,
-            checkout_url="https://pay.example/abc",
-        )
-        html = owner_client.get(f"/orders/{order.public_id}/").content.decode()
-        assert 'data-payment="link-pending"' in html
-        assert 'aria-current="page"' in html  # the breadcrumb
+        assert "Mark as paid" in html
+        assert "pay.example" not in html
 
     def test_a_customers_order_count_opens_their_orders(
         self, account, contact, owner_client

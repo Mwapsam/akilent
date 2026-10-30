@@ -34,7 +34,7 @@ def test_activate_vertical_enables_modules_and_publishes_workflows(account):
         account=account, module="commerce", enabled=True
     ).exists()
     workflows = Workflow.objects.filter(account=account, slug__startswith="restaurant-")
-    assert workflows.count() == 2
+    assert workflows.count() == 1
     assert all(wf.status == Workflow.Status.PUBLISHED for wf in workflows)
 
 
@@ -45,7 +45,7 @@ def test_activate_vertical_is_idempotent(account):
 
     assert (
         Workflow.objects.filter(account=account, slug__startswith="restaurant-").count()
-        == 2
+        == 1
     )
     assert (
         VerticalActivation.objects.filter(account=account, key="restaurant").count()
@@ -139,6 +139,18 @@ def test_activate_vertical_rolls_back_entirely_when_the_automation_limit_is_hit(
         plan=plan,
         status=Subscription.ACTIVE,
         current_period_start=timezone.now(),
+    )
+
+    # The plan's one automation is already in use, so the pack's automation is over the limit.
+    Workflow.objects.create(
+        account=account,
+        name="Existing",
+        slug="existing",
+        status=Workflow.Status.PUBLISHED,
+        definition={
+            "trigger": {"type": "order.created"},
+            "steps": [{"id": "s", "type": "stop"}],
+        },
     )
 
     with pytest.raises(AutomationLimitReached):

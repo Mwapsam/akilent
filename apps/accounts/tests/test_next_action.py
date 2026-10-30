@@ -118,7 +118,7 @@ def test_the_suggestions_follow_the_journey(owner, monkeypatch):
         ],
     )
     action = ob.next_action(owner)
-    assert action["key"] == "payment_link"
+    assert action["key"] == "mark_paid"
     assert action["url"] == f"/orders/{order.public_id}/"
 
 
@@ -167,9 +167,8 @@ def test_the_card_shows_on_the_inbox_and_in_content_studio(owner, client, monkey
         assert 'data-next-action="mark_lead"' in html, url
 
 
-def test_a_paid_order_elsewhere_does_not_hide_the_payment_link(owner, monkeypatch):
-    from apps.commerce.models import Payment
-    from apps.commerce.services import create_order
+def test_a_paid_order_elsewhere_does_not_hide_the_mark_paid_nudge(owner, monkeypatch):
+    from apps.commerce.services import create_order, mark_order_paid
     from apps.conversations.models import FollowUp
     from apps.crm.models import Lead
 
@@ -183,8 +182,8 @@ def test_a_paid_order_elsewhere_does_not_hide_the_payment_link(owner, monkeypatc
         {"product": None, "name": "Dress", "unit_price": Decimal("45"), "quantity": 1}
     ]
     paid = create_order(owner, contact, item)
-    Payment.objects.create(account=owner, order=paid, amount=paid.total)
+    mark_order_paid(paid, method="cash")
     waiting = create_order(owner, contact, item)
     action = ob.next_action(owner)
-    assert action["key"] == "payment_link"
+    assert action["key"] == "mark_paid"
     assert action["url"] == f"/orders/{waiting.public_id}/"

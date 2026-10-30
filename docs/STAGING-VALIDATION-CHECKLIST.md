@@ -518,13 +518,14 @@ This is the second half of the journey release gate. The first half is the autom
 - [ ] The order page shows the same.
 - [ ] Evidence: in `attributions`, two rows (lead and order) with `method=explicit` and `credits_post=true`. The order `status` is `pending` and `paid_at` is null. `reports.post_card[0].revenue` is `[]`.
 
-### J5. Pay through the configured payment flow
-1. On the order page, click "Request payment" and open the checkout link.
-2. Pay with a Flutterwave **test** card.
+### J5. Mark the order paid
+Akilent doesn't take payments for businesses; the business marks the order paid once the customer has paid them.
+1. On the order page, choose how they paid (e.g. MTN MoMo), add a reference, and click **Mark as paid**.
 
-- [ ] The order shows Paid with a time.
-- [ ] Evidence: the order `status` is `paid`; `paid_at` ______; one payment with `status=succeeded` and `transaction_id` ______.
-- [ ] Clicking "Request payment" again is not offered. A forced repeat must not reopen the order.
+- [ ] The order shows "Paid on <date> · MTN MoMo · Ref. <reference>", and the conversation shows "Order marked paid".
+- [ ] Evidence: the order `status` is `paid`; `paid_at` ______; `paid_method` is `mtn_momo`; no new `Payment` row.
+- [ ] Clicking **Mark as paid** twice (or a forced repeat POST) leaves one `order.paid` event.
+- [ ] **Mark as not paid** returns it to Pending and takes it out of revenue.
 
 ### J6. The reports agree, with currencies kept apart
 - [ ] The post's Results card, the Insights "Your customer journey" panel and `reports.revenue` all show the same paid amount, in its own currency, with no combined total.

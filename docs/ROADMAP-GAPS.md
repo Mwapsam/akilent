@@ -42,8 +42,7 @@ Evidence for "Implemented (static)" means a file and test name were read. The au
 | Conversation notes (UI) | Implemented but incomplete | Model exists; only the internal-note action creates one, and no view does |
 | Support internal notes | Implemented (static) | `apps/support/models/message.py:59` |
 | Deals and leads pipeline | Implemented (static) | `apps/crm/services.py`, `test_crm.py` |
-| Order to payment (Flutterwave) | Implemented (static) | `apps/commerce/services.py:82,121`; `billing/views.py:611-660` checks amount and status |
-| Payment link in chat | Implemented but incomplete | `apps/commerce/actions.py:40-51`; Flutterwave only |
+| Order marked paid by the business | Implemented | `apps/commerce/services.py::mark_order_paid`. Payment links were retired on 2026-10-30: Akilent doesn't take payments for businesses (`docs/design/onboarding-spec.md` §11.1) |
 | Refunds | Missing | `Order.Status.REFUNDED` exists but nothing sets it |
 | Invoices and receipts | Missing | Stripe invoice webhooks only |
 | Usage metering | Implemented (static) | `apps/billing/metering.py:300-432`, `test_metering.py` |
@@ -153,7 +152,7 @@ Tiers: **T0** current commitments and pilot-critical; **T1** evidence-gated (nam
 
 | ID | Item | Metric to justify | Gate |
 |---|---|---|---|
-| T1-1 | Payment link closing conversion to attributed revenue | Share of conversations ending in a paid order | Pilot names revenue as the blocker |
+| T1-1 | ~~Payment link closing conversion to attributed revenue~~ Retired 2026-10-30 (no payments for businesses); orders are marked paid by hand | Share of conversations ending in a paid order | Pilot names revenue as the blocker |
 | T1-2 | Conversation search | Time to find a conversation (pilot report) | Pilot reports search friction |
 | T1-3 | Contact merge and import UI | Duplicate contact count per pilot | Pilot reports duplicates |
 | T1-4 | Notes UI on conversations | Notes used per conversation | Pilot asks for handover notes |

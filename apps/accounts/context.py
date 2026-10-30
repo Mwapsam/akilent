@@ -70,8 +70,8 @@ OBJECTIVES: tuple[Objective, ...] = (
     ),
     Objective(
         key="manage_orders",
-        label="Manage orders and payments",
-        description="Record orders and send payment links directly in WhatsApp.",
+        label="Keep track of orders",
+        description="Record what customers buy from a conversation, and mark orders paid.",
         features=("orders", "sales"),
     ),
 )

@@ -17,7 +17,7 @@
 <ol>
   {% if "instagram" in enabled_channels or "facebook" in enabled_channels %}<li><strong>Attract:</strong> write a post in Content Studio{% if "whatsapp" in enabled_channels %} and add a WhatsApp chat link{% endif %}. See <a href="{% url 'help-article' 'content-studio' %}">Plan and publish posts in Content Studio</a>.</li>{% endif %}
   {% if "whatsapp" in enabled_channels or "instagram" in enabled_channels %}<li><strong>Engage:</strong> answer the customer from the shared inbox. Assign the chat to a teammate if someone else should handle it.</li>{% endif %}
-  <li><strong>Convert:</strong> mark them as interested, set a follow-up, then record the order and send a payment link.</li>
+  <li><strong>Convert:</strong> mark them as interested, set a follow-up, then record the order and mark it paid once they've paid you.</li>
   <li><strong>Measure:</strong> see what your conversations turned into on <strong>Insights</strong>{% if "whatsapp" in enabled_channels %}, and on each post, the chats, leads and paid orders it brought in (<a href="{% url 'help-article' 'post-results' %}">how it's counted</a>){% endif %}.</li>
 </ol>
 

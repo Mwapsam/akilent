@@ -755,7 +755,7 @@ STEPS: tuple[StepDef, ...] = (
         key="orders",
         section="sell",
         title="Create your first order",
-        desc="Record an order and send the customer a payment link.",
+        desc="Record what a customer bought, and mark it paid once they've paid you.",
         icon="credit-card",
         cta="New order",
         url="commerce:orders",
@@ -1011,7 +1011,7 @@ def _build_state(ctx, essentials_only: bool) -> dict:
 # --- The next useful action -------------------------------------------------
 #
 # Once a business is using Akilent, one suggestion at a time for the next step in the
-# journey (conversation -> lead -> follow-up -> paid order -> post results), from what
+# journey (conversation -> lead -> follow-up -> order marked paid -> post results), from what
 # it has already done. Never an upgrade prompt: a suggestion only appears when the
 # feature is usable. Dismissed per workspace ("Not now"), for good.
 
@@ -1083,18 +1083,14 @@ NEXT_ACTIONS: tuple[NextActionDef, ...] = (
         feature="follow_ups",
     ),
     NextActionDef(
-        key="payment_link",
-        title="Send a payment link for your order",
-        desc="The customer pays online and the order is marked paid on its own.",
+        key="mark_paid",
+        title="Mark your order paid when the customer pays",
+        desc="However they pay you, marking it paid counts the sale in your results.",
         cta="Open the order",
         url=_latest_url(
-            "commerce.Order",
-            "commerce:detail",
-            "public_id",
-            status="pending",
-            payments__isnull=True,
+            "commerce.Order", "commerce:detail", "public_id", status="pending"
         ),
-        when=_has("commerce.Order", status="pending", payments__isnull=True),
+        when=_has("commerce.Order", status="pending"),
         feature="orders",
     ),
     NextActionDef(
