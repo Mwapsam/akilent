@@ -523,8 +523,9 @@ function registerChat() {
       const p = this.ai.proposal;
       if (!p || !p.templateId) return;
       this.aiUsedId = p.id;
-      if (this.$refs.tplPicker) this.$refs.tplPicker.open = true;
-      window.dispatchEvent(new CustomEvent('ai-template-apply', { detail: { templateId: p.templateId, values: p.values } }));
+      // The picker is a dialog outside this component: it takes the proposal from the event.
+      window.dispatchEvent(new CustomEvent('modal-open', { detail: 'chat-template' }));
+      window.dispatchEvent(new CustomEvent('ai-template-apply', { detail: { templateId: p.templateId, values: p.values, proposal: p.id } }));
     },
 
     // ── media: files and voice notes ─────────────────────────────

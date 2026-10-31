@@ -265,15 +265,9 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
     <template x-if="open">
       <div class="cv-footer">
         {% comment %}
-          The AI panel's own send_template card (below) says the same thing this banner does,
-          with more context (the actual template name) — showing both would repeat the message
-          in two boxes stacked on top of each other, so the banner steps aside when that card
-          is the one on screen.
-        {% endcomment %}
-        {% comment %}
-          One line, no button: the template picker below already force-opens whenever the
-          window is closed (x-effect on .cv-tpl), so a "Use a template" button here would only
-          ever point at something already open — pure height with no function of its own.
+          The closed-window notice is only for a chat with no approved templates. With them,
+          the one-line "Send a template · Required" button under the input says the same and
+          opens the picker, so a notice too would repeat it.
         {% endcomment %}
         <p class="cv-presence" x-show="presenceText()" x-cloak role="status" aria-live="polite">
           <span class="cv-dots" x-show="presence.typing.length" aria-hidden="true"><span></span><span></span><span></span></span>
@@ -298,23 +292,23 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
           <p>It's more than 24 hours since their last message, so only a reply you type yourself can go — automations and auto-replies can't.</p>
         </details>
         {% endif %}{% endwith %}{% endif %}
-        <details class="cv-window" x-show="!windowOpen && !(ai.enabled && ai.proposal && ai.proposal.status === 'ready' && ai.proposal.action === 'send_template')" x-cloak role="status">
+        {% if not approved_templates %}{# with templates, the Send a template line below says it #}
+        <details class="cv-window" x-show="!windowOpen" x-cloak role="status">
           <summary>
             <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
             <span class="flex-1 truncate">
-              {% if approved_templates %}Window closed · send a template
-              {% elif conversation.channel == "facebook" %}{% with fb=conversation.facebook_conversation %}{% if fb and not fb.last_inbound_at %}Waiting for their reply{% else %}Reply window closed{% endif %}{% endwith %}
+              {% if conversation.channel == "facebook" %}{% with fb=conversation.facebook_conversation %}{% if fb and not fb.last_inbound_at %}Waiting for their reply{% else %}Reply window closed{% endif %}{% endwith %}
               {% else %}24-hour window closed{% endif %}
             </span>
             <svg class="cv-chev w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
           </summary>
           <p>
-            {% if approved_templates %}The 24-hour window is closed — send an approved template below.
-            {% elif conversation.channel == "instagram" %}The 24-hour window is closed. Instagram won't deliver a reply until the customer messages again.
+            {% if conversation.channel == "instagram" %}The 24-hour window is closed. Instagram won't deliver a reply until the customer messages again.
             {% elif conversation.channel == "facebook" %}{% with fb=conversation.facebook_conversation %}{% if fb and not fb.last_inbound_at %}You've sent a private reply to their comment. Messenger lets you write again once they reply — it will appear here.{% else %}The reply window is closed. Messenger won't deliver a reply until the customer messages again.{% endif %}{% endwith %}
             {% else %}The 24-hour window is closed. WhatsApp may reject a plain reply until the customer writes again.{% endif %}
           </p>
         </details>
+        {% endif %}
 
         {% comment %}
           AI proposals (apps.ai). AI never sends: a person reviews, edits and sends through the
@@ -486,6 +480,12 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
               </button>
             </form>
             {% endif %}
+            {% if approved_templates %}
+            <button type="button" class="cv-menu-item" role="menuitem" @click="menuOpen = false; $dispatch('modal-open', 'chat-template')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3.5" width="16" height="17" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+              Send a template
+            </button>
+            {% endif %}
             {% if "sales" in usable_features %}
             <div class="cv-menu-sep" role="separator"></div>
               {% if open_lead %}
@@ -548,7 +548,7 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
               <button type="button" class="cv-rec-cancel" @click="stopRecording(false)">Cancel</button>
             </div>
             <textarea x-show="!recording" name="body" rows="1" x-ref="input" x-model="draft" class="input cv-input"
-                      placeholder="Type a message" :placeholder="windowOpen ? 'Type a message' : {% if approved_templates %}'Window closed: send a template below'{% else %}'Window closed: a reply may not be delivered'{% endif %}" aria-label="Reply"
+                      placeholder="Type a message" :placeholder="windowOpen ? 'Type a message' : {% if approved_templates %}'Window closed: send a template'{% else %}'Window closed: a reply may not be delivered'{% endif %}" aria-label="Reply"
                       @input="grow($event.target)" @keydown.enter="onEnter($event)"
                       {% if request.GET.reply %}x-init="setTimeout(() => $el.focus(), 50)"{% endif %}
                       x-on:saved-reply-insert.window="draft = $event.detail; $nextTick(() => { grow($refs.input); $refs.input.focus(); })"></textarea>
@@ -571,43 +571,15 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
         </div>
 
         {% if approved_templates %}
-        <details class="cv-tpl" :class="{ 'cv-tpl--required': !windowOpen }" x-ref="tplPicker" x-effect="if (!windowOpen) $el.open = true">
-          <summary>
-            <svg class="w-4 h-4 text-ink-subtle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3.5" width="16" height="17" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
-            Send a template
-            <span class="cv-badge" x-show="!windowOpen" x-cloak>Required</span>
-            <svg class="cv-chev w-4 h-4 ml-auto text-ink-subtle transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
-          </summary>
-          <form method="post" class="p-3 space-y-3" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %} x-data="{ tpl: '' }"
-                x-on:ai-template-apply.window="tpl = String($event.detail.templateId); $nextTick(() => { for (const [k, v] of Object.entries($event.detail.values || {})) { const el = $el.querySelector('[name=&quot;var__' + $event.detail.templateId + '__' + k + '&quot;]'); if (el) el.value = v; } })">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="send_template" />
-            <input type="hidden" name="ai_proposal" :value="aiUsedId || ''" />
-            <div>
-              <label class="label" for="template-select">Template</label>
-              <select id="template-select" name="template_id" class="select" required x-model="tpl">
-                <option value="" disabled selected>Choose an approved template…</option>
-                {% for t in approved_templates %}
-                <option value="{{ t.pk }}">{{ t.name }} ({{ t.language_code }})</option>
-                {% endfor %}
-              </select>
-            </div>
-            {% for t in approved_templates %}
-            {% if t.variables %}
-            <div x-show="tpl === '{{ t.pk }}'" x-cloak class="grid sm:grid-cols-2 gap-2">
-              {% for v in t.variables %}
-              <label class="block text-xs text-ink-subtle">{{ v }}
-                <input class="input input-sm w-full mt-1" name="var__{{ t.pk }}__{{ v }}" :required="tpl === '{{ t.pk }}'" />
-              </label>
-              {% endfor %}
-            </div>
-            {% endif %}
-            {% endfor %}
-            <div class="flex justify-end">
-              <button class="btn btn-primary btn-sm" :disabled="!tpl">Send template</button>
-            </div>
-          </form>
-        </details>
+        {% comment %}Window closed: a template is the only reply WhatsApp delivers, so it is one
+        line here and the picker opens as a dialog (chat-template, below), instead of a form
+        force-opened under the input. While the window is open it lives in Next steps.{% endcomment %}
+        <button type="button" class="cv-tpl-cta" x-show="!windowOpen" x-cloak @click="$dispatch('modal-open', 'chat-template')">
+          <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3.5" width="16" height="17" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+          <span class="flex-1 min-w-0 truncate text-left">Send a template<span class="hidden sm:inline text-ink-subtle font-normal"> · the 24-hour window is closed</span></span>
+          <span class="cv-badge">Required</span>
+          <svg class="w-4 h-4 shrink-0 text-ink-subtle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
         {% endif %}
       </div>
     </template>
@@ -985,6 +957,49 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
   </aside>
 </div>
 </div>
+
+{% if approved_templates %}
+{% comment %}The template picker, opened from the composer (window closed), Next steps, or
+an AI suggestion (chat.js aiReviewTemplate). It is teleported out of the chat component,
+so the AI proposal it answers comes in on the ai-template-apply event, not from aiUsedId.
+It closes as it submits: in the pane the conversation re-renders behind it.{% endcomment %}
+{% modal "chat-template" title="Send a template" %}
+  <form method="post" class="space-y-4" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}
+        x-data="{ tpl: '', proposal: '' }"
+        @submit="$dispatch('modal-close', 'chat-template')"
+        @modal-open.window="if ($event.detail === 'chat-template') proposal = ''"
+        x-on:ai-template-apply.window="tpl = String($event.detail.templateId); proposal = String($event.detail.proposal || ''); $nextTick(() => { for (const [k, v] of Object.entries($event.detail.values || {})) { const el = $el.querySelector('[name=&quot;var__' + $event.detail.templateId + '__' + k + '&quot;]'); if (el) el.value = v; } })">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="send_template" />
+    <input type="hidden" name="ai_proposal" :value="proposal" />
+    <p class="text-sm text-ink-subtle">Once 24 hours have passed since {{ display_name }}'s last message, WhatsApp only delivers an approved template. A reply they send opens the window again.</p>
+    <div>
+      <label class="label" for="template-select">Template</label>
+      <select id="template-select" name="template_id" class="select" required x-model="tpl">
+        <option value="" disabled selected>Choose an approved template…</option>
+        {% for t in approved_templates %}
+        <option value="{{ t.pk }}">{{ t.name }} ({{ t.language_code }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% for t in approved_templates %}
+    {% if t.variables %}
+    <div x-show="tpl === '{{ t.pk }}'" x-cloak class="grid sm:grid-cols-2 gap-3">
+      {% for v in t.variables %}
+      <label class="block text-xs text-ink-subtle">{{ v }}
+        <input class="input mt-1" name="var__{{ t.pk }}__{{ v }}" :required="tpl === '{{ t.pk }}'" />
+      </label>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% endfor %}
+    <div class="flex justify-end gap-2 pt-1">
+      <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close', 'chat-template')">Cancel</button>
+      <button class="btn btn-primary btn-sm" :disabled="!tpl">Send template</button>
+    </div>
+  </form>
+{% endmodal %}
+{% endif %}
 
 {% with contact_identifier=conversation.contact.phone|default:conversation.contact.email %}
 {% if "sales" in usable_features and not open_lead and not open_deal %}

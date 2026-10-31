@@ -4,15 +4,17 @@ Closes on: backdrop click, the Close button, Esc (topmost dialog only), or
            $dispatch('modal-close'): with this modal's id as detail it closes this one;
            with no detail it closes whichever dialog is on top.
 Focus, Esc and background inertness are owned by window.akDialog (static/js/app.js);
-x-trap only keeps Tab inside and locks scroll.
+x-trap only keeps Tab inside and locks scroll. show/hide hand akDialog $root, never $el:
+called from the backdrop's or Close button's @click, $el is that element, the stack
+never found the dialog, and the page stayed inert after it closed.
 Below sm it is a bottom sheet: full width, footer pinned above the home indicator so
 the actions stay reachable on a short screen or with the keyboard up.
 {% endcomment %}
 <template x-teleport="body">
   <div x-data="{
          open: false,
-         show() { if (this.open) return; this.open = true; akDialog.open(this.$el, { close: () => this.hide() }); },
-         hide() { if (!this.open) return; this.open = false; akDialog.close(this.$el); },
+         show() { if (this.open) return; this.open = true; akDialog.open(this.$root, { close: () => this.hide() }); },
+         hide() { if (!this.open) return; this.open = false; akDialog.close(this.$root); },
        }"
        x-show="open"
        x-cloak

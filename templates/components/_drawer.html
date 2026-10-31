@@ -2,15 +2,16 @@
 (apps/core/templatetags/ui.py). Same contract as the modal, so there is one API to learn:
 opens on window event "modal-open" with this drawer's id as detail; closes on the backdrop,
 the Close button, Esc (topmost dialog only) or $dispatch('modal-close'[, id]).
-Focus, Esc and background inertness come from window.akDialog (static/js/app.js).
+Focus, Esc and background inertness come from window.akDialog (static/js/app.js), handed
+$root, never $el (see _modal.html).
 Right-hand sheet from sm up; full screen below, with the header pinned and the body
 scrolling, so a long pane never pushes its Close button off a phone screen.
 {% endcomment %}
 <template x-teleport="body">
   <div x-data="{
          open: false,
-         show() { if (this.open) return; this.open = true; akDialog.open(this.$el, { close: () => this.hide() }); },
-         hide() { if (!this.open) return; this.open = false; akDialog.close(this.$el); },
+         show() { if (this.open) return; this.open = true; akDialog.open(this.$root, { close: () => this.hide() }); },
+         hide() { if (!this.open) return; this.open = false; akDialog.close(this.$root); },
        }"
        x-show="open"
        x-cloak

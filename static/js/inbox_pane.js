@@ -68,6 +68,7 @@
       window.htmx.trigger(pane, "htmx:abort");
       delete split.dataset.open;
       split.classList.remove("has-conversation", "is-loading");
+      fit();
       pane.innerHTML = "";
       selectRow(null);
       document.title = inboxTitle;
@@ -101,6 +102,7 @@
       split.dataset.open = url;
       selectRow(rowFor(url));
       split.classList.add("has-conversation", "is-loading");
+      fit(); // the inbox header is shorter while a conversation is open
       var failed = false;
       var status = 0;
       // Only this load's own failure: a form inside the pane (assign, tags, snooze) also

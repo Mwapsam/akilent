@@ -10,6 +10,47 @@ clock, while they are waiting on us), what they said (preview), and anything
 else worth knowing (a badge only when it adds something). "Waiting" used to be
 said three times per row: the amber time, a badge, and the tab itself.{% endcomment %}
 <div class="inbox-toolbar">
+  {% url 'conversations:inbox' as inbox_url %}
+  {% comment %}Narrow toolbar (the list column beside an open conversation, a phone): six
+  tabs need ~690px and the column has ~370, so only one or two showed and the rest sat
+  off-screen with nothing to say so. There the tabs give way to this menu (container
+  query on .inbox-toolbar, assets/app.css): the current view on the button, every view
+  and its count one tap away, and a missed count on the button so it never hides.{% endcomment %}
+  <div class="cv-menu inbox-tools inbox-views" x-data="cvMenu">
+    <button type="button" class="inbox-views-btn" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="menuOpen" aria-label="Inbox view: {% if view == 'needs_attention' %}Needs attention{% elif view == 'unassigned' %}Unassigned{% elif view == 'missed' %}Missed{% elif view == 'assigned' %}Assigned to me{% elif view == 'closed' %}Closed{% else %}All{% endif %}. Change">
+      <span class="truncate">{% if view == 'needs_attention' %}Needs attention{% elif view == 'unassigned' %}Unassigned{% elif view == 'missed' %}Missed{% elif view == 'assigned' %}Assigned to me{% elif view == 'closed' %}Closed{% else %}All{% endif %}</span>
+      {% if view == 'needs_attention' and needs_attention_count %}<span class="inbox-tab-count">{{ needs_attention_count }}</span>
+      {% elif view == 'unassigned' and unassigned_count %}<span class="inbox-tab-count">{{ unassigned_count }}</span>
+      {% elif view == 'missed' and missed_count %}<span class="inbox-tab-count inbox-tab-count--danger">{{ missed_count }}</span>
+      {% elif view == 'assigned' and assigned_count %}<span class="inbox-tab-count">{{ assigned_count }}</span>
+      {% elif view == 'all' and all_count %}<span class="inbox-tab-count">{{ all_count }}</span>
+      {% elif view == 'closed' and closed_count %}<span class="inbox-tab-count">{{ closed_count }}</span>{% endif %}
+      {% if view != 'missed' and missed_count %}<span class="inbox-tab-count inbox-tab-count--danger" title="{{ missed_count }} missed">{{ missed_count }} missed</span>{% endif %}
+      {% include "components/icon.html" with name="chevron-down" class="w-4 h-4 ml-auto shrink-0 text-ink-subtle" %}
+    </button>
+    <div class="cv-menu-panel cv-menu-panel--start" x-ref="menu" x-show="menuOpen" x-cloak x-transition.opacity role="menu" aria-label="Inbox views">
+      <a href="{{ inbox_url }}{% querystring view='needs_attention' page=None h=None %}" class="cv-menu-item" role="menuitemradio" aria-checked="{% if view == 'needs_attention' %}true{% else %}false{% endif %}">
+        Needs attention{% if needs_attention_count %}<span class="inbox-tab-count ml-auto">{{ needs_attention_count }}</span>{% endif %}
+      </a>
+      <a href="{{ inbox_url }}{% querystring view='unassigned' page=None h=None %}" class="cv-menu-item" role="menuitemradio" aria-checked="{% if view == 'unassigned' %}true{% else %}false{% endif %}">
+        Unassigned{% if unassigned_count %}<span class="inbox-tab-count ml-auto">{{ unassigned_count }}</span>{% endif %}
+      </a>
+      <a href="{{ inbox_url }}{% querystring view='missed' page=None h=None %}" class="cv-menu-item" role="menuitemradio" aria-checked="{% if view == 'missed' %}true{% else %}false{% endif %}">
+        Missed{% if missed_count %}<span class="inbox-tab-count inbox-tab-count--danger ml-auto">{{ missed_count }}</span>{% endif %}
+      </a>
+      <a href="{{ inbox_url }}{% querystring view='assigned' page=None h=None %}" class="cv-menu-item" role="menuitemradio" aria-checked="{% if view == 'assigned' %}true{% else %}false{% endif %}">
+        Assigned to me{% if assigned_count %}<span class="inbox-tab-count ml-auto">{{ assigned_count }}</span>{% endif %}
+      </a>
+      <a href="{{ inbox_url }}{% querystring view='all' page=None h=None %}" class="cv-menu-item" role="menuitemradio" aria-checked="{% if view == 'all' %}true{% else %}false{% endif %}">
+        All{% if all_count %}<span class="inbox-tab-count ml-auto">{{ all_count }}</span>{% endif %}
+      </a>
+      <div class="cv-menu-sep" role="separator"></div>
+      <a href="{{ inbox_url }}{% querystring view='closed' page=None h=None %}" class="cv-menu-item" role="menuitemradio" aria-checked="{% if view == 'closed' %}true{% else %}false{% endif %}">
+        Closed{% if closed_count %}<span class="inbox-tab-count ml-auto">{{ closed_count }}</span>{% endif %}
+      </a>
+    </div>
+  </div>
+
   {% comment %}x-init scrolls the current tab into view. On a phone the tabs
   overflow, and landing on "All" showed a row in which nothing looked selected
   because the selected tab was off-screen. scrollLeft rather than scrollIntoView,
@@ -20,7 +61,6 @@ said three times per row: the amber time, a badge, and the tab itself.{% endcomm
     querystring): once a conversation is open in the two-pane view the address bar shows
     that conversation, and a bare "?view=" would resolve against it. channel and overdue
     carry across tabs; the page and the poll's digest (h) never do.{% endcomment %}
-    {% url 'conversations:inbox' as inbox_url %}
     <a href="{{ inbox_url }}{% querystring view='needs_attention' page=None h=None %}" class="inbox-tab" {% if view == 'needs_attention' %}aria-current="page"{% endif %}>
       Needs attention{% if needs_attention_count %}<span class="inbox-tab-count">{{ needs_attention_count }}</span>{% endif %}
     </a>

@@ -687,8 +687,6 @@
   /* With a conversation open (any width) the title row shrinks to one line and the
      suggestion card steps aside, so the conversation gets the height. */
   .inbox-chrome:has(~ .inbox-split.has-conversation) .inbox-header { @apply mb-3 items-center; }
-  .inbox-chrome:has(~ .inbox-split.has-conversation) .inbox-header p,
-  .inbox-chrome:has(~ .inbox-split.has-conversation) [data-next-action] { display: none; }
 
   /* Two-pane at lg: list + the conversation opened from it, side by side, so switching
      conversations never re-loads the shell or loses the list. Below lg there's only room
@@ -768,7 +766,17 @@
     .inbox-split:not(.has-conversation) .inbox-pane-empty { display: flex; }
   }
 
-  .inbox-toolbar { @apply flex items-center gap-2 mb-3 sm:mb-4; }
+  .inbox-toolbar { @apply flex items-center gap-2 mb-3 sm:mb-4; container: inboxbar / inline-size; }
+  /* The view menu that stands in for the tabs on a narrow toolbar (see the container
+     query after the filter rules). Hidden while the tabs fit. */
+  .inbox-views { display: none; flex: 1 1 auto; min-width: 0; }
+  .inbox-views-btn {
+    @apply flex items-center gap-1.5 w-full rounded-full border border-border bg-surface px-3.5
+      text-sm font-medium text-ink transition-colors hover:border-border-strong;
+    min-height: 2.25rem;
+  }
+  .inbox-views-btn:focus-visible { @apply outline-none ring-2 ring-brand-500; }
+  .inbox-views .cv-menu-item .inbox-tab-count { margin-left: auto; }
   /* The tabs scroll sideways with a fade on the trailing edge, because four
      labelled tabs do not fit on a phone and the old row simply cut the last
      two off with nothing to say there was more. Full-bleed on the left only:
@@ -872,8 +880,16 @@
     background-color: var(--color-accent); box-shadow: 0 0 0 2px var(--color-surface);
   }
   .inbox-filter:focus-within .inbox-filter-icon { @apply ring-2 ring-brand-500; }
-  @media (max-width: 639px) {
-    .inbox-filter .select-sm { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; opacity: 0; }
+  /* Narrow toolbar - the list column beside an open conversation, a phone, a narrow
+     tablet: the six tabs (~690px) and the channel select (~200px) don't fit, so the
+     tabs become one view menu and the filter shrinks to its icon, with the real
+     select laid transparently over it. Measured on the toolbar, not the viewport:
+     at lg the list column is narrow on the widest screen. */
+  @container inboxbar (max-width: 47.99rem) {
+    .inbox-toolbar .inbox-tabs { display: none; }
+    .inbox-toolbar .inbox-views { display: block; }
+    .inbox-toolbar .inbox-filter-icon { display: inline-flex; }
+    .inbox-toolbar .inbox-filter .select-sm { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; opacity: 0; }
   }
   .inbox-filter-note { @apply -mt-1 mb-3 text-sm; color: var(--color-ink-subtle); }
   .inbox-filter-note a { @apply underline text-accent; }
@@ -1042,7 +1058,7 @@
     .btn-icon, .btn-icon.btn-sm { min-height: 2.75rem; min-width: 2.75rem; }
     .nav-link { min-height: 2.75rem; }
     .tab { min-height: 2.75rem; }
-    .select-sm, .inbox-tab { min-height: 2.75rem; }
+    .select-sm, .inbox-tab, .inbox-views-btn { min-height: 2.75rem; }
     .inbox-filter-icon { width: 2.75rem; height: 2.75rem; }
   }
 
@@ -1896,6 +1912,7 @@
 /* A menu in the composer opens upwards from its button's left edge. On a phone the footer
    scrolls (max-height, below) and would clip it, so it sits fixed above the composer. */
 .cv-menu-panel--up { top: auto; right: auto; bottom: calc(100% + .375rem); left: 0; }
+.cv-menu-panel--start { right: auto; left: 0; }
 @media (max-width: 639px) {
   .cv-menu-panel--up { position: fixed; left: .75rem; right: .75rem; bottom: calc(5rem + env(safe-area-inset-bottom)); max-width: none; }
 }
@@ -1988,6 +2005,11 @@
 }
 .cv-fail { display: flex; align-items: center; gap: .25rem; margin-top: .25rem; font-size: .75rem; color: var(--tone-coral-fg); }
 
+/* The inbox's subtitle and suggestion card step aside while a conversation is open (see
+   .inbox-chrome in the components layer). Unlayered, so it beats their own flex / sm:block. */
+.inbox-chrome:has(~ .inbox-split.has-conversation) .inbox-header p,
+.inbox-chrome:has(~ .inbox-split.has-conversation) [data-next-action] { display: none; }
+
 /* Composer */
 .cv-footer { border-top: 1px solid var(--cv-line); background: var(--cv-surface-muted); padding: .625rem .75rem .75rem; }
 .cv-window { margin-bottom: .5rem; border-radius: .625rem; background: var(--cv-warn-bg); border: 1px solid var(--cv-warn-border);
@@ -2039,17 +2061,12 @@
 .cv-sr-item { display: flex; flex-direction: column; gap: .125rem; width: 100%; padding: .5rem; text-align: left; border-radius: .5rem; font-size: .875rem; }
 .cv-sr-item:hover, .cv-sr-item:focus-visible { background: var(--cv-hover); outline: none; }
 
-/* Template picker */
-.cv-tpl { margin-top: .5rem; background: var(--cv-surface); border: 1px solid var(--cv-line); border-radius: .75rem; }
-.cv-tpl > summary { display: flex; align-items: center; gap: .5rem; padding: .625rem .75rem; cursor: pointer; list-style: none;
-                    font-size: .875rem; font-weight: 500; color: var(--cv-ink); }
-.cv-tpl > summary::-webkit-details-marker { display: none; }
-.cv-tpl > summary:focus-visible { outline: 2px solid var(--cv-accent); border-radius: .75rem; }
-.cv-tpl[open] > summary { border-bottom: 1px solid var(--cv-line); }
-.cv-tpl[open] .cv-chev { transform: rotate(180deg); }
-/* Force-opened when the window is closed (see x-effect below); once the AI/window banner
-   above no longer competes with it, this is the one thing to do — an accent border says so. */
-.cv-tpl--required { border-color: var(--cv-accent); }
+/* Window closed with approved templates: one line that opens the picker dialog (chat-template). */
+.cv-tpl-cta { display: flex; align-items: center; gap: .5rem; width: 100%; min-height: 2.5rem; margin-top: .5rem; padding: .375rem .75rem;
+              background: var(--cv-surface); border: 1px solid var(--cv-accent); border-radius: .75rem;
+              font-size: .875rem; font-weight: 500; color: var(--cv-ink); }
+.cv-tpl-cta:hover { background: var(--cv-hover); }
+.cv-tpl-cta:focus-visible { outline: 2px solid var(--cv-accent); outline-offset: 2px; }
 .cv-badge { padding: .125rem .5rem; border-radius: 999px; font-size: .6875rem; font-weight: 600; color: var(--cv-warn-fg); background: var(--cv-warn-bg); }
 .cv-closed { display: flex; align-items: center; justify-content: center; gap: .5rem; padding: .875rem 1rem; font-size: .875rem; color: var(--cv-ink-muted);
              border-top: 1px solid var(--cv-line); background: var(--cv-surface-muted); }
