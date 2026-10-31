@@ -52,3 +52,41 @@ def send_verification_email(self, user_id: int, site_name: str, link: str) -> No
     except Exception as exc:
         logger.exception("send_verification_email: failed for user %s", user_id)
         raise self.retry(exc=exc) from exc
+
+
+_CODE_MAX_RETRIES = 2
+_CODE_RETRY_DELAY = 15  # seconds; a code only lives ten minutes
+
+
+@shared_task(
+    bind=True,
+    max_retries=_CODE_MAX_RETRIES,
+    default_retry_delay=_CODE_RETRY_DELAY,
+    queue="celery",
+)
+def send_email_code(self, code_id: int) -> None:
+    """Pick and email the code for a row ``email_mfa.send_code`` queued.
+
+    A row that was replaced, used or expired meanwhile is skipped. If every try fails
+    the row is deleted, so a failed send starts no cooldown and uses up no limit.
+    """
+    from django.utils import timezone
+
+    from apps.accounts import email_mfa
+    from apps.accounts.models import EmailLoginCode
+
+    row = (
+        EmailLoginCode.objects.select_related("user")
+        .filter(pk=code_id, used_at__isnull=True, expires_at__gt=timezone.now())
+        .first()
+    )
+    if row is None:
+        return
+    try:
+        email_mfa.deliver_code(row)
+    except Exception as exc:
+        logger.exception("send_email_code: failed for user %s", row.user_id)
+        if self.request.retries >= self.max_retries:
+            EmailLoginCode.objects.filter(pk=code_id).delete()
+            raise
+        raise self.retry(exc=exc) from exc

@@ -500,6 +500,9 @@ EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "False").lower() == "true"
 # would crash on startup, so force SSL off when TLS is on.
 if EMAIL_USE_TLS and EMAIL_USE_SSL:
     EMAIL_USE_SSL = False
+# Seconds before an SMTP connect/read gives up. Without it a stalled relay holds the
+# request (or worker) until gunicorn's own timeout.
+EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "10"))
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@localhost")
 
 if not DEBUG:

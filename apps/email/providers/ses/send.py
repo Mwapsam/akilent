@@ -11,6 +11,7 @@ import os
 from typing import TYPE_CHECKING, Any
 
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from apps.email.exceptions import ConfigurationError, EmailProviderError
@@ -22,6 +23,11 @@ if TYPE_CHECKING:
     from mypy_boto3_sesv2 import SESv2Client
 
 logger = logging.getLogger(__name__)
+
+# Bounded so a slow SES endpoint can't hold a web worker or a sign-in code send.
+SES_CLIENT_CONFIG = Config(
+    connect_timeout=5, read_timeout=10, retries={"max_attempts": 2, "mode": "standard"}
+)
 
 
 class SesSendProvider(EmailSendProvider):
@@ -63,7 +69,9 @@ class SesSendProvider(EmailSendProvider):
                 "setup_ses_reputation_monitoring` to provision them."
             )
 
-        self.client: SESv2Client = boto3.client("sesv2", region_name=region)
+        self.client: SESv2Client = boto3.client(
+            "sesv2", region_name=region, config=SES_CLIENT_CONFIG
+        )
 
         if self.configuration_set:
             self._ensure_configuration_set()

@@ -40,6 +40,9 @@ RECENT = "recent"  # cooldown: a code went out moments ago
 CAPPED = "capped"  # hourly limit on emailed codes reached
 UNAVAILABLE = "unavailable"  # no address on file, or delivery failed
 
+# Stored until the task picks the code. Not hex, so no digest can ever equal it.
+PENDING_HASH = "pending"
+
 
 def is_enrolled(user):
     return EmailMfaEnrolment.objects.filter(user=user).exists()
@@ -59,8 +62,14 @@ def _lock_user(user):
 
 
 def send_code(user, purpose):
-    """Email a fresh code. Returns SENT, RECENT, CAPPED or UNAVAILABLE."""
-    from apps.email.services.send import send_system_email
+    """Queue a fresh code. Returns SENT, RECENT, CAPPED or UNAVAILABLE.
+
+    The row is created here, under the lock, so the cooldown and hourly limit hold. It
+    starts with a hash that matches nothing; the Celery task picks the code, stores its
+    hash and sends it. The page never waits on the mail server, and the plaintext code
+    never passes through the broker.
+    """
+    from apps.accounts.tasks import send_email_code
 
     if not user.email:
         return UNAVAILABLE
@@ -80,32 +89,42 @@ def send_code(user, purpose):
         if recent.count() >= MAX_SENDS_PER_HOUR:
             logger.warning("email_mfa: send limit reached for user %s", user.pk)
             return CAPPED
-        code = f"{secrets.randbelow(10**6):06d}"
         EmailLoginCode.objects.filter(
             user=user, purpose=purpose, used_at__isnull=True
         ).update(used_at=now)
         row = EmailLoginCode.objects.create(
             user=user,
             purpose=purpose,
-            code_hash=_digest(user, purpose, code),
+            code_hash=PENDING_HASH,
             expires_at=now + CODE_TTL,
         )
+    # Queued after the block so the worker sees the committed row.
     try:
-        send_system_email(
-            to_email=user.email,
-            subject="Your sign-in code",
-            text_body=(
-                f"Your code is {code}. It expires in 10 minutes. "
-                "If you did not ask for it, ignore this email and change your password."
-            ),
-        )
+        send_email_code.delay(row.pk)
     except Exception:
-        # Nothing was delivered, so the code must not stay usable.
+        # The broker is down (or, in eager mode, the send failed for good). Nothing will
+        # be delivered: drop the row so it starts no cooldown and uses up no limit.
         logger.exception("email_mfa: could not send code to user %s", user.pk)
-        # Delete the row: a failed send must not start a cooldown or use up the hourly limit.
         EmailLoginCode.objects.filter(pk=row.pk).delete()
         return UNAVAILABLE
     return SENT
+
+
+def deliver_code(row):
+    """Pick the code for a queued row, store its hash and email it. Run by the task."""
+    from apps.email.services.send import send_system_email
+
+    code = f"{secrets.randbelow(10**6):06d}"
+    row.code_hash = _digest(row.user, row.purpose, code)
+    row.save(update_fields=["code_hash"])
+    send_system_email(
+        to_email=row.user.email,
+        subject="Your sign-in code",
+        text_body=(
+            f"Your code is {code}. It expires in 10 minutes. "
+            "If you did not ask for it, ignore this email and change your password."
+        ),
+    )
 
 
 def guess_limit_reached(user):

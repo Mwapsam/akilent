@@ -27,6 +27,7 @@ from apps.email.types import (
 )
 
 from ..base import EmailProvider
+from .send import SES_CLIENT_CONFIG
 
 if TYPE_CHECKING:
     from mypy_boto3_sesv2 import SESv2Client
@@ -57,7 +58,9 @@ class SesProvider(EmailProvider):
 
         # Kept for the MAIL FROM MX target, which is region-specific.
         self.region: str = region
-        self.client: SESv2Client = boto3.client("sesv2", region_name=region)
+        self.client: SESv2Client = boto3.client(
+            "sesv2", region_name=region, config=SES_CLIENT_CONFIG
+        )
         self._identity_cache: dict[str, dict] = {}
 
     def _get_email_identity(self, domain: str) -> dict:

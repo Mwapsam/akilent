@@ -32,8 +32,10 @@
     })();
   </script>
   {% if cdn_origin %}<link rel="preconnect" href="{{ cdn_origin }}" crossorigin>{% endif %}
+  {% if ga_id %}
   <link rel="preconnect" href="https://www.googletagmanager.com">
   <link rel="dns-prefetch" href="https://www.googletagmanager.com">
+  {% endif %}
   <link rel="preload" href="{% static 'fonts/inter-variable.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="icon" type="image/svg+xml" href="{% static 'img/brand/icon-color.svg' %}">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
@@ -44,6 +46,13 @@
     <body>, which all descendants inherit.
   {% endcomment %}
   <script defer src="{% static 'js/htmx.min.js' %}"></script>
+  {% comment %}
+    Signed-out pages (sign-in, 2FA, signup, password reset) skip the scripts below that only
+    the signed-in shell uses: <body> turns on preload/sse only for signed-in users, and leaving
+    a signed-out page is always a full page load (sign-in redirects, logout is hx-boost="false"),
+    so the app shell loads them fresh. This keeps the first, often mobile, visit light.
+  {% endcomment %}
+  {% if user.is_authenticated %}
   {% comment %}
     Warms a sidebar link's page on hover so the click that follows often finds it already in the
     browser's HTTP cache (see apps/core/htmx.py's Cache-Control on boosted GETs). Vendored from
@@ -57,12 +66,14 @@
     navigation; a page opts in to a specific event with hx-trigger="sse:<name>" or sse-swap.
   {% endcomment %}
   <script defer src="{% static 'js/vendor/htmx-ext-sse.js' %}"></script>
+  {% endif %}
 
   <script defer src="{% static 'js/alpine-focus.min.js' %}"></script>
   <script defer src="{% static 'js/session-tracker.js' %}"></script>
   <script defer src="{% static 'js/app.js' %}"></script>
   {% comment %}Before Alpine, like app.js: it defines the chartHover() factory
   that charts reference in x-data.{% endcomment %}
+  {% if user.is_authenticated %}
   <script defer src="{% static 'js/chart-hover.js' %}"></script>
   {% comment %}
     Two-pane inbox (assets/app.css .inbox-split, apps/conversations/views.py's HX-Target
@@ -83,6 +94,7 @@
   {% endcomment %}
   <script defer src="{% static 'js/chat.js' %}"></script>
   <script defer src="{% static 'js/ai_draft.js' %}"></script>
+  {% endif %}
   <script defer src="{% static 'js/alpine.min.js' %}"></script>
   {% block extra_head %}{% endblock %}
 </head>
