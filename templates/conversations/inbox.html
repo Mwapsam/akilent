@@ -27,22 +27,29 @@ The links are icon buttons on a phone with their labels kept for screen readers
       <span class="sr-only sm:not-sr-only">Follow-ups</span>
       <span hx-get="{% url 'conversations:followups_badge' %}" hx-swap="innerHTML" data-auto-refresh="followup-changed" hx-trigger="load, every 120s, sse:followup.due, sse:followup.updated, followup-changed from:body"></span>
     </a>
-    <a href="{% url 'conversations:saved_replies' %}" class="btn btn-ghost btn-sm inbox-header-link" title="Saved replies">
-      {% include "components/icon.html" with name="book-open" class="w-4 h-4" %}
-      <span class="sr-only sm:not-sr-only">Saved replies</span>
-    </a>
-    <a href="{% url 'conversations:teams' %}" class="btn btn-ghost btn-sm inbox-header-link" title="Teams">
-      {% include "components/icon.html" with name="users" class="w-4 h-4" %}
-      <span class="sr-only sm:not-sr-only">Teams</span>
-    </a>
-    <a href="{% url 'conversations:routing_rules' %}" class="btn btn-ghost btn-sm inbox-header-link" title="Routing rules">
-      {% include "components/icon.html" with name="workflow" class="w-4 h-4" %}
-      <span class="sr-only sm:not-sr-only">Routing rules</span>
-    </a>
-    <a href="{% url 'conversations:forms_list' %}" class="btn btn-ghost btn-sm inbox-header-link" title="Forms">
-      {% include "components/icon.html" with name="list" class="w-4 h-4" %}
-      <span class="sr-only sm:not-sr-only">Forms</span>
-    </a>
+    {% comment %}The set-up pages, opened now and then rather than all day: one menu
+    (cvMenu, static/js/chat.js) instead of four buttons beside the title.{% endcomment %}
+    <div class="cv-menu inbox-tools" x-data="cvMenu">
+      <button type="button" class="btn btn-ghost btn-sm inbox-header-link" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="menuOpen" title="Inbox settings">
+        {% include "components/icon.html" with name="settings" class="w-4 h-4" %}
+        <span class="sr-only sm:not-sr-only">Set-up</span>
+        {% include "components/icon.html" with name="chevron-down" class="hidden sm:block w-3.5 h-3.5 text-ink-subtle" %}
+      </button>
+      <div class="cv-menu-panel" x-ref="menu" x-show="menuOpen" x-cloak x-transition.opacity role="menu" aria-label="Inbox set-up">
+        <a href="{% url 'conversations:saved_replies' %}" class="cv-menu-item" role="menuitem">
+          {% include "components/icon.html" with name="book-open" class="w-4 h-4" %}Saved replies
+        </a>
+        <a href="{% url 'conversations:teams' %}" class="cv-menu-item" role="menuitem">
+          {% include "components/icon.html" with name="users" class="w-4 h-4" %}Teams
+        </a>
+        <a href="{% url 'conversations:routing_rules' %}" class="cv-menu-item" role="menuitem">
+          {% include "components/icon.html" with name="workflow" class="w-4 h-4" %}Routing rules
+        </a>
+        <a href="{% url 'conversations:forms_list' %}" class="cv-menu-item" role="menuitem">
+          {% include "components/icon.html" with name="list" class="w-4 h-4" %}Forms
+        </a>
+      </div>
+    </div>
   </div>
 </header>
 {% next_action_card %}

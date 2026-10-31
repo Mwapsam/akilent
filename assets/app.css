@@ -681,6 +681,14 @@
   .inbox-header { @apply flex items-start justify-between gap-3 mb-4 sm:mb-6; }
   /* Square 44px icon buttons on a phone; icon + label from sm up. */
   .inbox-header-link { @apply w-11 h-11 !p-0 justify-center gap-1.5 sm:w-auto sm:h-auto sm:!px-3 sm:!py-1.5; }
+  /* The header's Set-up menu reuses the conversation menus (.cv-menu), outside .cv. */
+  .inbox-tools { --cv-line: var(--color-border); --cv-surface: var(--color-surface); --cv-ink: var(--color-ink);
+                 --cv-ink-subtle: var(--color-ink-subtle); --cv-hover: var(--color-hover); --cv-accent: var(--color-accent); }
+  /* With a conversation open (any width) the title row shrinks to one line and the
+     suggestion card steps aside, so the conversation gets the height. */
+  .inbox-chrome:has(~ .inbox-split.has-conversation) .inbox-header { @apply mb-3 items-center; }
+  .inbox-chrome:has(~ .inbox-split.has-conversation) .inbox-header p,
+  .inbox-chrome:has(~ .inbox-split.has-conversation) [data-next-action] { display: none; }
 
   /* Two-pane at lg: list + the conversation opened from it, side by side, so switching
      conversations never re-loads the shell or loses the list. Below lg there's only room
@@ -1885,6 +1893,12 @@
 .cv-menu-item[aria-checked="true"] { font-weight: 600; }
 .cv-menu-item svg { width: 1rem; height: 1rem; flex: none; color: var(--cv-ink-subtle); }
 .cv-menu-sep { height: 1px; margin: .25rem .375rem; background: var(--cv-line); }
+/* A menu in the composer opens upwards from its button's left edge. On a phone the footer
+   scrolls (max-height, below) and would clip it, so it sits fixed above the composer. */
+.cv-menu-panel--up { top: auto; right: auto; bottom: calc(100% + .375rem); left: 0; }
+@media (max-width: 639px) {
+  .cv-menu-panel--up { position: fixed; left: .75rem; right: .75rem; bottom: calc(5rem + env(safe-area-inset-bottom)); max-width: none; }
+}
 /* Narrow pane: the Assign label and the Close menu fold away (Close moves into More),
    so the customer's name keeps its width. */
 .cv-wide-only { display: none; }
@@ -1976,9 +1990,16 @@
 
 /* Composer */
 .cv-footer { border-top: 1px solid var(--cv-line); background: var(--cv-surface-muted); padding: .625rem .75rem .75rem; }
-.cv-window { display: flex; align-items: flex-start; gap: .625rem; margin-bottom: .625rem; padding: .625rem .75rem; border-radius: .625rem;
-             background: var(--cv-warn-bg); border: 1px solid var(--cv-warn-border); color: var(--cv-warn-fg); font-size: .8125rem; }
-.cv-composer { display: flex; align-items: flex-end; gap: .5rem; }
+.cv-window { margin-bottom: .5rem; border-radius: .625rem; background: var(--cv-warn-bg); border: 1px solid var(--cv-warn-border);
+             color: var(--cv-warn-fg); font-size: .8125rem; }
+/* One line (the state) until opened; the explanation is behind the tap. */
+.cv-window > summary { display: flex; align-items: center; gap: .5rem; min-height: 2rem; padding: .25rem .75rem; cursor: pointer; list-style: none; font-weight: 500; }
+.cv-window > summary::-webkit-details-marker { display: none; }
+.cv-window > summary:focus-visible { outline: 2px solid var(--cv-accent); border-radius: .625rem; }
+.cv-window > p { padding: 0 .75rem .5rem 2.25rem; }
+.cv-window[open] .cv-chev { transform: rotate(180deg); }
+.cv-composer-row { display: flex; align-items: flex-end; gap: .25rem; }
+.cv-composer { flex: 1; min-width: 0; display: flex; align-items: flex-end; gap: .5rem; }
 .cv-ai-chip { display: inline-flex; align-items: center; gap: .25rem; min-height: 2rem; padding: .25rem .625rem; border-radius: 999px;
               border: 1px solid var(--color-border-strong); background: var(--cv-surface); color: var(--cv-ink); font-size: .75rem; }
 .cv-ai-chip:hover:not(:disabled) { background: var(--cv-hover); }
@@ -2002,14 +2023,16 @@
 .cv-rec-cancel { margin-left: auto; font-size: .8125rem; color: var(--cv-ink-subtle); text-decoration: underline; }
 @keyframes cv-pulse { 50% { opacity: .3; } }
 @media (prefers-reduced-motion: reduce) { .cv-rec-dot { animation: none; } }
-.cv-hint { margin: .375rem 0 0 .75rem; font-size: .6875rem; color: var(--cv-ink-subtle); }
-.cv-next { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem; margin: .5rem 0 0 .75rem; font-size: .75rem;
-           color: var(--cv-ink-subtle); }
+/* Next steps (follow up, track as interested): a menu button left of the input. */
+.cv-next { align-self: flex-end; margin-bottom: .25rem; }
+.cv-next-trigger { position: relative; }
+.cv-next-dot { position: absolute; top: .3rem; right: .3rem; width: .5rem; height: .5rem; border-radius: 999px; background: var(--cv-accent);
+               box-shadow: 0 0 0 2px var(--cv-surface-muted); }
 .cv-next-btn { display: inline-flex; align-items: center; gap: .3125rem; padding: .25rem .5rem; border-radius: .5rem;
                border: 1px solid var(--cv-line); background: var(--cv-surface); color: var(--cv-ink); font-size: .75rem; }
 .cv-next-btn:hover, .cv-next-btn:focus-visible { background: var(--cv-hover); outline: none; }
-.cv-next-done { display: inline-flex; align-items: center; gap: .3125rem; padding: .25rem .5rem; }
-.cv-next svg { width: .875rem; height: .875rem; flex: none; }
+.cv-next-done { display: flex; align-items: center; gap: .5rem; padding: .5rem .625rem; font-size: .8125rem; color: var(--cv-ink-muted); }
+.cv-next-done svg { width: 1rem; height: 1rem; flex: none; color: var(--cv-ink-subtle); }
 .cv-popover { position: absolute; bottom: calc(100% + .625rem); left: 0; z-index: var(--z-dropdown); width: min(22rem, 80vw); padding: .5rem;
               background: var(--cv-surface); border: 1px solid var(--cv-line); border-radius: .75rem; box-shadow: var(--shadow-pop); }
 .cv-sr-list { max-height: 16rem; overflow-y: auto; margin-top: .375rem; }
@@ -2140,8 +2163,8 @@
   .cv-menu-btn--icon, .cv-header .cv-iconbtn { width: 2.75rem; }
   .cv-h-actions { gap: .25rem; }
   /* The composer's attach / saved-reply buttons and the next-step buttons under it. */
-  .cv-composer .cv-iconbtn { width: 2.75rem; height: 2.75rem; }
-  .cv-next-btn, .cv-next-done { min-height: 2.75rem; }
+  .cv-composer-row .cv-iconbtn { width: 2.75rem; height: 2.75rem; }
+  .cv-next-btn, .cv-next-done, .cv-menu-item { min-height: 2.75rem; }
 }
 /* Follow-up controls in the side panel and on contact and lead pages: thumb-sized (44px)
    on phones, like the composer's. */

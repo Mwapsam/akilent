@@ -286,20 +286,35 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
         </div>
         {% if conversation.channel == "facebook" %}{% with fb=conversation.facebook_conversation %}{% if fb and not fb.window_is_open and fb.human_agent_window_is_open %}
         {% comment %}Messenger's HUMAN_AGENT tag: past 24 hours only a reply a person types here can go, for 7 days after the customer's last message. Automation and AI auto-replies can't.{% endcomment %}
-        <div class="cv-window" x-show="windowOpen" role="status">
-          <svg class="w-4 h-4 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-          <p class="flex-1">Human reply window: {{ fb.human_agent_window_closes_at|timeuntil }} left. It's more than 24 hours since their last message, so only a reply you type yourself can go — automations and auto-replies can't.</p>
-        </div>
+        {% comment %}The reply-window notices are one line: the short state, with the
+        explanation behind a tap (a <details>), so they don't stack two or three lines of
+        text above the input.{% endcomment %}
+        <details class="cv-window" x-show="windowOpen" role="status">
+          <summary>
+            <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            <span class="flex-1 truncate">Human reply window · {{ fb.human_agent_window_closes_at|timeuntil }} left</span>
+            <svg class="cv-chev w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </summary>
+          <p>It's more than 24 hours since their last message, so only a reply you type yourself can go — automations and auto-replies can't.</p>
+        </details>
         {% endif %}{% endwith %}{% endif %}
-        <div class="cv-window" x-show="!windowOpen && !(ai.enabled && ai.proposal && ai.proposal.status === 'ready' && ai.proposal.action === 'send_template')" x-cloak role="status">
-          <svg class="w-4 h-4 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-          <p class="flex-1">
+        <details class="cv-window" x-show="!windowOpen && !(ai.enabled && ai.proposal && ai.proposal.status === 'ready' && ai.proposal.action === 'send_template')" x-cloak role="status">
+          <summary>
+            <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            <span class="flex-1 truncate">
+              {% if approved_templates %}Window closed · send a template
+              {% elif conversation.channel == "facebook" %}{% with fb=conversation.facebook_conversation %}{% if fb and not fb.last_inbound_at %}Waiting for their reply{% else %}Reply window closed{% endif %}{% endwith %}
+              {% else %}24-hour window closed{% endif %}
+            </span>
+            <svg class="cv-chev w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </summary>
+          <p>
             {% if approved_templates %}The 24-hour window is closed — send an approved template below.
             {% elif conversation.channel == "instagram" %}The 24-hour window is closed. Instagram won't deliver a reply until the customer messages again.
             {% elif conversation.channel == "facebook" %}{% with fb=conversation.facebook_conversation %}{% if fb and not fb.last_inbound_at %}You've sent a private reply to their comment. Messenger lets you write again once they reply — it will appear here.{% else %}The reply window is closed. Messenger won't deliver a reply until the customer messages again.{% endif %}{% endwith %}
             {% else %}The 24-hour window is closed. WhatsApp may reject a plain reply until the customer writes again.{% endif %}
           </p>
-        </div>
+        </details>
 
         {% comment %}
           AI proposals (apps.ai). AI never sends: a person reviews, edits and sends through the
@@ -421,6 +436,77 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
             </span>
           </div>
         </template>
+        {% comment %}
+          The composer is where the business decides what happens next, so the
+          two decisions live here rather than only in the side panel: remember
+          this customer, and track them as someone who wants to buy. Both post
+          actions that already exist; the panel keeps the record of each.
+          They sit in one menu beside the input (it was a row of buttons under it),
+          with a dot on the button once a follow-up is set. The menu is a sibling of
+          the reply form, not inside it: the follow-up is a form of its own.
+          A follow-up is work for the team, never a message to the customer, so
+          the words say so: "Follow up tomorrow" with "Only your team sees this",
+          and once set, the same line the Follow-ups page shows, with Change
+          opening the side panel's Follow-up section.
+        {% endcomment %}
+        <div class="cv-composer-row">
+        <div class="cv-menu cv-next" x-data="cvMenu">
+          <button type="button" class="cv-iconbtn cv-next-trigger" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="menuOpen"
+                  title="Next steps" aria-label="Next steps: follow up{% if 'sales' in usable_features %}, track as interested{% endif %}">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+            <span class="cv-next-dot" {% if not followup %}x-show="followupLabel" x-cloak{% endif %} aria-hidden="true"></span>
+          </button>
+          <div class="cv-menu-panel cv-menu-panel--up" x-ref="menu" x-show="menuOpen" x-cloak x-transition.opacity role="menu" aria-label="Next steps">
+            <p class="cv-menu-label" aria-hidden="true">Next steps</p>
+            {% if followup %}
+            <span class="cv-next-done" title="{{ followup_copy.INTERNAL_ONLY }}" data-composer-followup>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              {{ followup.composer }}
+            </span>
+            <button type="button" class="cv-menu-item" role="menuitem" data-composer-change
+                    @click="menuOpen = false; infoOpen = true; setTimeout(() => { const s = document.getElementById('cv-followup'); s.scrollIntoView({ block: 'nearest' }); s.focus({ preventScroll: true }); }, 120)">
+              {% include "components/icon.html" with name="pencil" class="w-4 h-4" %}{{ followup_copy.CHANGE }}
+            </button>
+            {% else %}
+            {# A follow-up the AI suggested and someone applied: shown at once (chat.js aiApply). #}
+            <span class="cv-next-done" x-show="followupLabel" x-cloak title="{{ followup_copy.INTERNAL_ONLY }}" data-composer-followup-live>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              <span x-text="followupLabel"></span>
+            </span>
+            <form method="post" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %} data-followup-form x-show="!followupLabel">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="create_followup" />
+              <input type="hidden" name="when" value="tomorrow" />
+              <button class="cv-menu-item" type="submit" role="menuitem" aria-describedby="cv-followup-promise">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                <span class="flex flex-col">
+                  {{ followup_copy.FOLLOW_UP_TOMORROW }}
+                  <span id="cv-followup-promise" class="text-xs text-ink-subtle" data-followup-promise>{{ followup_copy.INTERNAL_ONLY_SHORT }}</span>
+                </span>
+              </button>
+            </form>
+            {% endif %}
+            {% if "sales" in usable_features %}
+            <div class="cv-menu-sep" role="separator"></div>
+              {% if open_lead %}
+              <a class="cv-menu-item" role="menuitem" href="{% url 'crm:lead-detail' open_lead.public_id %}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+                Tracked as interested
+              </a>
+              {% elif open_deal %}
+              <a class="cv-menu-item" role="menuitem" href="{% url 'crm:deal-detail' open_deal.public_id %}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+                Tracked as interested
+              </a>
+              {% else %}
+              <button type="button" class="cv-menu-item" role="menuitem" @click="menuOpen = false; $dispatch('modal-open', 'chat-new-lead')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                Track as interested
+              </button>
+              {% endif %}
+            {% endif %}
+          </div>
+        </div>
         <form method="post" action="{{ detail_url }}" class="cv-composer" x-ref="composer" @submit.prevent="send()">
           {% csrf_token %}
           <input type="hidden" name="action" value="reply" />
@@ -462,7 +548,7 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
               <button type="button" class="cv-rec-cancel" @click="stopRecording(false)">Cancel</button>
             </div>
             <textarea x-show="!recording" name="body" rows="1" x-ref="input" x-model="draft" class="input cv-input"
-                      placeholder="Type a message" :placeholder="windowOpen ? 'Type a message' : {% if approved_templates %}'Window closed: send a template below'{% else %}'Window closed: a reply may not be delivered'{% endif %}" aria-label="Reply" aria-describedby="composer-hint"
+                      placeholder="Type a message" :placeholder="windowOpen ? 'Type a message' : {% if approved_templates %}'Window closed: send a template below'{% else %}'Window closed: a reply may not be delivered'{% endif %}" aria-label="Reply"
                       @input="grow($event.target)" @keydown.enter="onEnter($event)"
                       {% if request.GET.reply %}x-init="setTimeout(() => $el.focus(), 50)"{% endif %}
                       x-on:saved-reply-insert.window="draft = $event.detail; $nextTick(() => { grow($refs.input); $refs.input.focus(); })"></textarea>
@@ -482,61 +568,6 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
             <svg x-show="sending" x-cloak class="w-5 h-5 animate-spin motion-reduce:animate-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"/></svg>
           </button>
         </form>
-        <p id="composer-hint" class="cv-hint hidden sm:block">Enter to send, Shift + Enter for a new line</p>
-
-        {% comment %}
-          The composer is where the business decides what happens next, so the
-          two decisions live here rather than only in the side panel: remember
-          this customer, and track them as someone who wants to buy. Both post
-          actions that already exist; the panel keeps the record of each.
-          A follow-up is work for the team, never a message to the customer, so
-          the words say so: "Follow up tomorrow" with "Only your team sees this",
-          and once set, the same line the Follow-ups page shows, with Change
-          opening the side panel's Follow-up section.
-        {% endcomment %}
-        <div class="cv-next">
-          {% if followup %}
-          <span class="cv-next-done" title="{{ followup_copy.INTERNAL_ONLY }}" data-composer-followup>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-            {{ followup.composer }}
-          </span>
-          <button type="button" class="cv-next-btn" data-composer-change
-                  @click="infoOpen = true; setTimeout(() => { const s = document.getElementById('cv-followup'); s.scrollIntoView({ block: 'nearest' }); s.focus({ preventScroll: true }); }, 120)">{{ followup_copy.CHANGE }}</button>
-          {% else %}
-          {# A follow-up the AI suggested and someone applied: shown at once (chat.js aiApply). #}
-          <span class="cv-next-done" x-show="followupLabel" x-cloak title="{{ followup_copy.INTERNAL_ONLY }}" data-composer-followup-live>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-            <span x-text="followupLabel"></span>
-          </span>
-          <form method="post" class="contents" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %} data-followup-form x-show="!followupLabel">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="create_followup" />
-            <input type="hidden" name="when" value="tomorrow" />
-            <button class="cv-next-btn" type="submit" aria-describedby="cv-followup-promise">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-              {{ followup_copy.FOLLOW_UP_TOMORROW }}
-            </button>
-            <span id="cv-followup-promise" data-followup-promise>{{ followup_copy.INTERNAL_ONLY_SHORT }}</span>
-          </form>
-          {% endif %}
-          {% if "sales" in usable_features %}
-            {% if open_lead %}
-            <a class="cv-next-done text-accent" href="{% url 'crm:lead-detail' open_lead.public_id %}">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
-              Tracked as interested
-            </a>
-            {% elif open_deal %}
-            <a class="cv-next-done text-accent" href="{% url 'crm:deal-detail' open_deal.public_id %}">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
-              Tracked as interested
-            </a>
-            {% else %}
-            <button type="button" class="cv-next-btn" @click="$dispatch('modal-open', 'chat-new-lead')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-              Track as interested
-            </button>
-            {% endif %}
-          {% endif %}
         </div>
 
         {% if approved_templates %}
