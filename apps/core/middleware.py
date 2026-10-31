@@ -330,6 +330,22 @@ class RequestIdMiddleware:
         return response
 
 
+class ReleaseGateMiddleware:
+    """404 the pages of a built-but-unreleased feature (see ``apps.core.releases``)."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from django.http import Http404
+
+        from apps.core.releases import gated_feature_for_path
+
+        if gated_feature_for_path(request.path_info.lstrip("/")):
+            raise Http404("Not available yet.")
+        return self.get_response(request)
+
+
 class ChannelGateMiddleware:
     """404 the pages of a switched-off channel (see ``apps.core.channels``).
 

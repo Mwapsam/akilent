@@ -22,7 +22,9 @@ Arrow Up/Down move through every link in the nav; groups are labelling only.{% e
     {% include "components/_nav_item.html" with href="/inbox/comments/" label="Comments" icon="chat" match="inbox/comments instagram/rules" collapsible=collapsible %}
     {% endif %}
     {% include "components/_nav_item.html" with href="/inbox/followups/" label="Follow-ups" icon="bell" match="inbox/followups" collapsible=collapsible badge_url="/inbox/followups/badge/" %}
+    {% if released.support %}
     {% include "components/_nav_item.html" with href="/support/" label="Support" icon="life-buoy" match="support" collapsible=collapsible %}
+    {% endif %}
     {% include "components/_nav_item.html" with href="/publishing/" label="Content Studio" icon="image" match="publishing" feature="content_studio" collapsible=collapsible %}
     {% include "components/_nav_item.html" with href="/automations/" label="Automations" icon="workflow" feature="automations" collapsible=collapsible %}
     {% include "components/_nav_item.html" with href="/build/" label="Build" icon="sparkles" match="build" feature="automations" collapsible=collapsible %}

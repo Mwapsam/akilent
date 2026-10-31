@@ -110,6 +110,7 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
               </form>
               <div class="cv-menu-sep" role="separator"></div>
             </div>
+            {% if released.support %}
             <form method="post" action="{% url 'conversations:create_ticket' conversation.public_id %}">
               {% csrf_token %}
               <button type="submit" class="cv-menu-item" role="menuitem">
@@ -117,6 +118,7 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
                 Create support ticket
               </button>
             </form>
+            {% endif %}
             <a href="{% url 'contacts:detail' conversation.contact.public_id %}" class="cv-menu-item" role="menuitem">
               {% include "components/icon.html" with name="user" class="w-4 h-4" %}View customer profile
             </a>

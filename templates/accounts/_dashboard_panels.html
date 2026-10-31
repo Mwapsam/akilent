@@ -91,7 +91,8 @@ hx-trigger of its own, so it loads exactly once.
   </div>
 
   {# ── Chatbot ───────────────────────────────────────────────────────── #}
-  {% if chatbots %}
+  {% if not released.chatbot %}
+  {% elif chatbots %}
   <div class="card overflow-hidden">
     <div class="flex items-center justify-between card-pad pb-3">
       <div class="flex items-center gap-2">

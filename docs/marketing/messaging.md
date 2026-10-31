@@ -45,13 +45,15 @@ The truth rule (§6) is checked against this table. A row that isn't **Live** is
 
 | Capability | Status | How copy handles it |
 |---|---|---|
-| WhatsApp inbox, automations, campaigns | Live | Shown while the WhatsApp channel is on |
+| WhatsApp inbox, automations, campaigns | Live | Shown while the WhatsApp channel is on. Campaigns and Templates are shared pages, so the Campaigns menu shows while WhatsApp **or** Email is on |
 | Email sending, templates, campaigns, API/SMTP | Live | Shown while the Email channel is on. Never "email conversations" |
 | Instagram DMs, comment rules, publishing | Live | Shown, by what it does, while the Instagram channel is on. Customer-facing copy doesn't mention Meta's app review. Who can sign up with it is a separate switch: Operator Console → Settings → Channels → "Offer to new customers" (`public_channels()`), which only controls signup and plan cards |
 | Facebook Page publishing | Live | Same as Instagram. Never "Facebook messages" |
+| Facebook Page inbox (Messenger messages, Page comments and comment rules) | Live | Shown while the Facebook channel is on and the plan has the `facebook` feature. Always "Facebook Page messages" or "your Facebook Page's messages and comments" |
 | Content Studio | Live (needs Instagram or a Facebook Page to publish to) | Shown when at least one publishing channel is on |
 | Leads, orders (marked paid by the business), Business Health, AI answers + knowledge | Live, depending on the plan | "Some features depend on your plan" nearby |
-| Website chatbot, Support tickets, HubSpot, custom fields | **Not released** (open release gates) | Only "Coming soon" via `ComingSoonFeature` |
+| Customer details you keep (custom fields on contacts) | Live (in-app) | No public claim yet. Add a register row before any page mentions it |
+| Website chatbot, Support tickets, HubSpot, custom fields on leads and deals | **Not released** (open release gates) | Only "Coming soon" via `ComingSoonFeature`. In the product, `apps/core/releases.py` hides their entry points and 404s their pages until the key is in `RELEASED_FEATURES`. Lead and deal fields have no UI |
 
 ## 5. The pattern
 

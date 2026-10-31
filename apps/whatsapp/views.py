@@ -147,7 +147,7 @@ def _data_fields_json(account) -> str:
 
     Client-side autofill only, keyed as "<group>.<field>" (e.g.
     "contact.first_name", "contact.membership_number", "order.number",
-    "payment.link") — a custom field's group ("contact_custom") carries an
+    "payment.amount") — a custom field's group ("contact_custom") carries an
     explicit "prefix" of "contact" since it's still a Contact field, just
     shown under its own picker heading. Picking one just fills in a
     variable/button row's label/example text with a realistic sample, it
@@ -197,12 +197,8 @@ def _data_fields_json(account) -> str:
                     "key": "payment",
                     "label": "Payment",
                     "icon": "card",
+                    # No payment link: Akilent never collects money for businesses.
                     "fields": [
-                        {
-                            "key": "link",
-                            "label": "Payment link",
-                            "sample": "https://pay.example.com/1029",
-                        },
                         {"key": "amount", "label": "Payment amount", "sample": "49.99"},
                     ],
                 },

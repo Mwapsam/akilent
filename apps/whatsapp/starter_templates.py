@@ -151,7 +151,9 @@ STARTER_CATEGORIES: list[dict] = [
         "key": "payments",
         "label": "Payments",
         "icon": "card",
-        "blurb": "Reminders, payment links",
+        # Akilent never collects money for businesses (docs/marketing/messaging.md), so these
+        # remind and confirm; none carries a link to pay.
+        "blurb": "Reminders and receipts",
         "templates": [
             {
                 "slug": "payment_reminder",
@@ -162,13 +164,6 @@ STARTER_CATEGORIES: list[dict] = [
                 "variables": [
                     {"label": "Customer name", "example": "Ada"},
                     {"label": "Order number", "example": "1029"},
-                ],
-                "buttons": [
-                    {
-                        "text": "Pay now",
-                        "url": "https://pay.example.com/{{2}}",
-                        "example": "https://pay.example.com/1029",
-                    },
                 ],
             },
             {
@@ -187,29 +182,10 @@ STARTER_CATEGORIES: list[dict] = [
                 "name": "Payment failed",
                 "use_case": "Failed payment",
                 "meta_category": "utility",
-                "body": "Hi {{1}}, your payment for order {{2}} didn't go through.\n\nYou can try again here:\n{{3}}",
+                "body": "Hi {{1}}, your payment for order {{2}} didn't go through.\n\nReply to this message and we'll help you complete it.",
                 "variables": [
                     {"label": "Customer name", "example": "Ada"},
                     {"label": "Order number", "example": "1029"},
-                    {
-                        "label": "Payment link",
-                        "example": "https://pay.example.com/1029",
-                    },
-                ],
-            },
-            {
-                "slug": "payment_link",
-                "name": "Payment link",
-                "use_case": "Send payment request",
-                "meta_category": "utility",
-                "body": "Hi {{1}}, here's your payment link for {{2}}:\n{{3}}",
-                "variables": [
-                    {"label": "Customer name", "example": "Ada"},
-                    {"label": "What it's for", "example": "your order"},
-                    {
-                        "label": "Payment link",
-                        "example": "https://pay.example.com/1029",
-                    },
                 ],
             },
             {
@@ -217,14 +193,10 @@ STARTER_CATEGORIES: list[dict] = [
                 "name": "Payment overdue",
                 "use_case": "Outstanding payment",
                 "meta_category": "utility",
-                "body": "Hi {{1}}, your payment for order {{2}} is now overdue.\n\nPlease complete it as soon as possible: {{3}}",
+                "body": "Hi {{1}}, your payment for order {{2}} is now overdue.\n\nPlease reply to this message to arrange it.",
                 "variables": [
                     {"label": "Customer name", "example": "Ada"},
                     {"label": "Order number", "example": "1029"},
-                    {
-                        "label": "Payment link",
-                        "example": "https://pay.example.com/1029",
-                    },
                 ],
             },
         ],
@@ -633,7 +605,6 @@ _VAR_NUM_RE = re.compile(r"\{\{(\d+)\}\}")
 _LABEL_SOURCES = {
     "Customer name": "contact.first_name",
     "Order number": "order.number",
-    "Payment link": "payment.link",
 }
 
 

@@ -101,3 +101,7 @@ MIDDLEWARE = [
 # Campaign quiet hours depend on the time of day; off by default so tests don't.
 # Tests of quiet hours save a CampaignSendWindow explicitly.
 WHATSAPP_CAMPAIGN_QUIET_HOURS_DEFAULT = False
+
+# The unreleased features' own tests exercise their pages; tests of the gate itself
+# override this to an empty set.
+RELEASED_FEATURES = frozenset({"chatbot", "support", "hubspot"})

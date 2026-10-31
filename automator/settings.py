@@ -87,6 +87,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.core.middleware.RequestIdMiddleware",
     "apps.core.middleware.ChannelGateMiddleware",
+    "apps.core.middleware.ReleaseGateMiddleware",
     "apps.core.middleware.BrowserSessionMiddleware",
     "apps.core.middleware.SuspendedAccountMiddleware",
     "apps.core.middleware.ViewAsReadOnlyMiddleware",
@@ -374,6 +375,12 @@ EMAIL_ENABLED = os.getenv("EMAIL_ENABLED", "True").lower() == "true"
 # A Facebook Page: Content Studio publishing, and Messenger + Page comments in the inbox.
 # An empty value keeps the default.
 FACEBOOK_ENABLED = (os.getenv("FACEBOOK_ENABLED") or "True").lower() == "true"
+
+# Built-but-unreleased features (apps.core.releases): chatbot, support, hubspot.
+# Each stays hidden and 404s until listed here, e.g. RELEASED_FEATURES=support,hubspot.
+RELEASED_FEATURES = frozenset(
+    k.strip() for k in (os.getenv("RELEASED_FEATURES") or "").split(",") if k.strip()
+)
 
 # --- WhatsApp ---
 

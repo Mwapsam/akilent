@@ -188,6 +188,7 @@ Tiers: **T0** current commitments and pilot-critical; **T1** evidence-gated (nam
 - Public outbound webhook marketplace and a richer event catalogue.
 - Vertical-specific automation templates beyond starter packs.
 - Multi-language AI replies and knowledge.
+- Global competitive positioning (adopted 2026-10-31): USA, UK and EU first; differentiation is attribution rigour, not merely having attribution; an evidence-gated build roadmap (§13), exempt from the freeze but one plan per step: `docs/strategy/global-positioning.md`. The messaging guide audit (5 blockers, fixes await approval) is in `docs/audits/MESSAGING-AUDIT-2026-10-31.md`.
 - Meta growth optimisation engine (organic first, then a read-only paid engine; experiment engine with human approval as the end state). Direction only, nothing authorised: `docs/strategy/meta-growth-optimisation.md`. Gated on Phase 0: the journey acceptance test and staging verification from the 2026-10-25 capability audit (`~/.claude/plans/explore-and-audit-if-mighty-sundae.md`).
 
 ## 5. Execution sequence (respects the freeze)

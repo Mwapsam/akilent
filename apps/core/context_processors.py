@@ -14,6 +14,7 @@ def site_context(request):
         pass
 
     from apps.core.channels import enabled_channels
+    from apps.core.releases import released_flags
 
     ec = enabled_channels()
     # Restricted channels work for businesses that can connect them but are never offered
@@ -27,6 +28,7 @@ def site_context(request):
         # Campaigns and Templates are shared pages under /email/ that WhatsApp also uses.
         "CAMPAIGNS_ENABLED": bool(ec & {"email", "whatsapp"}),
         "SIGNUPS_ENABLED": signups,
+        "released": released_flags(),
         "REALTIME_SSE_ENABLED": settings.REALTIME_SSE_ENABLED,
     }
 

@@ -54,7 +54,7 @@ Open in one line (the primary angle):
 |---|---|
 | **Screen** | Sales (`/sales/`), then Orders (`/orders/`) and Thandi's paid order |
 | **Show** | The leads were opened from the conversations, with no typing into a CRM. Joseph's order is recorded but not paid yet (Pending); Thandi's and Grace's are paid. When creating an order you pick the conversation it came from, and that link is what the post results use in step 4 |
-| **Say** | "The moment someone is ready to buy, they're on your sales list. You record the order and send a link to pay, and Akilent remembers which chat it came from." |
+| **Say** | "The moment someone is ready to buy, they're on your sales list. You record the order, mark it paid when they pay you, and Akilent remembers which chat it came from." |
 | **Boundary** | Akilent doesn't take payments for the business. The business marks an order paid once the customer has paid them (cash, mobile money, bank transfer); open Joseph's order and use **Mark as paid** to show it |
 
 - [x] Screens render with the seeded data (checked 2026-10-24)

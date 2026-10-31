@@ -36,5 +36,30 @@ def test_no_template_offers_a_payment_link():
     assert not found, "payment-link copy is back:\n" + "\n".join(found)
 
 
+def test_no_whatsapp_starter_or_field_offers_a_payment_link():
+    import json
+
+    from apps.whatsapp.starter_templates import STARTER_CATEGORIES
+
+    starters = json.dumps(STARTER_CATEGORIES).lower()
+    assert "payment link" not in starters
+    assert "pay.example.com" not in starters
+    picker = (Path(settings.BASE_DIR) / "apps" / "whatsapp" / "views.py").read_text(
+        encoding="utf-8"
+    )
+    assert '"label": "Payment link"' not in picker
+
+
+def test_public_copy_does_not_say_akilent_handles_payments():
+    footer = (
+        Path(settings.BASE_DIR) / "templates" / "accounts" / "landing" / "_footer.html"
+    ).read_text(encoding="utf-8")
+    assert "and payments for small businesses" not in footer
+    demo = (Path(settings.BASE_DIR) / "docs" / "sales" / "demo.md").read_text(
+        encoding="utf-8"
+    )
+    assert "link to pay" not in demo
+
+
 def test_no_action_can_ask_a_customer_for_money():
     assert "request_payment" not in available_actions()

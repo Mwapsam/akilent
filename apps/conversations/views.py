@@ -24,7 +24,7 @@ from django.db.models import (
     Subquery,
     When,
 )
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render, resolve_url
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -2084,6 +2084,10 @@ def create_ticket_from_conversation(request, public_id: str):
       subject    — override the derived subject (optional)
       force      — "1" to create even if an open ticket already exists
     """
+    from apps.core.releases import is_released
+
+    if not is_released("support"):
+        raise Http404("Support tickets are not available yet.")
     from apps.support.services.conversation import (
         DuplicateTicketError,
     )
