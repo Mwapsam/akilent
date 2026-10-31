@@ -37,10 +37,6 @@ said three times per row: the amber time, a badge, and the tab itself.{% endcomm
       third of the screen, and it was the tab that got cut off.{% endcomment %}
       <span class="sm:hidden">Mine</span><span class="hidden sm:inline">Assigned to me</span>{% if assigned_count %}<span class="inbox-tab-count">{{ assigned_count }}</span>{% endif %}
     </a>
-    <a href="{{ inbox_url }}{% querystring view='followups' page=None h=None %}" class="inbox-tab" {% if view == 'followups' %}aria-current="page"{% endif %}
-       title="Conversations with a follow-up reminder still open">
-      Reminders
-    </a>
     <a href="{{ inbox_url }}{% querystring view='all' page=None h=None %}" class="inbox-tab" {% if view == 'all' %}aria-current="page"{% endif %}>
       All{% if all_count %}<span class="inbox-tab-count">{{ all_count }}</span>{% endif %}
     </a>
@@ -140,7 +136,9 @@ as a hint. Spell it out, with a one-click way back to every channel.{% endcommen
           {% comment %}No badge at all for a conversation with no messages yet
           (state INDETERMINATE) — it used to fall through to "Closed".{% endcomment %}
           {% include "components/channel_tag.html" with channel=c.channel compact=True %}
-          {% if c.has_followup %}<span class="badge badge-neutral" title="A follow-up reminder is open">{% include "components/icon.html" with name="bell" class="w-3 h-3" %}<span class="sr-only">Reminder set</span></span>{% endif %}
+          {% comment %}Follow-ups live on the Follow-ups page; the row only says one is set and
+          when, in the page's words. A missed chat shows its Missed badge instead.{% endcomment %}
+          {% if c.followup_tag %}<span class="badge badge-neutral" data-inbox-followup>{% include "components/icon.html" with name="bell" class="w-3 h-3" %}{{ c.followup_tag }}</span>{% endif %}
           {% comment %}A teammate in this conversation right now (apps.conversations.presence):
           typing beats viewing, so two people don't open the same customer and both reply.{% endcomment %}
           {% if c.presence %}
@@ -175,8 +173,6 @@ as a hint. Spell it out, with a one-click way back to every channel.{% endcommen
     {% include "components/empty_state.html" with icon="message-circle" title="Nothing assigned to you" message="Open a conversation and choose “Assign to me” to keep track of the ones you own." %}
   {% elif view == 'unassigned' %}
     {% include "components/empty_state.html" with icon="check-circle" title="Nothing unassigned" message="Every open conversation has someone responsible for it." %}
-  {% elif view == 'followups' %}
-    {% include "components/empty_state.html" with icon="check-circle" title="No reminders open" message="Set one from a conversation with “Remind me”, and it shows here until it's done." %}
   {% elif view == 'closed' %}
     {% include "components/empty_state.html" with icon="message-circle" title="No closed conversations" message="Conversations move here once they're resolved or go quiet for a day." %}
   {% elif view == 'all' %}

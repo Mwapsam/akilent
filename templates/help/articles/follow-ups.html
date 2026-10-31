@@ -1,23 +1,37 @@
-{% comment %}Body for the "Follow-ups: reminders for your team" guide.{% endcomment %}
-<p>A follow-up is a reminder <strong>for your team</strong> to get back to a customer. It never sends anything to the customer.</p>
+{% comment %}Body for the "Follow-ups for your team" guide. Words follow
+docs/design/followups-interaction-contract.md: a follow-up is work for the team, never a
+message to the customer.{% endcomment %}
+<p>A follow-up is work <strong>for your team</strong>: a customer someone needs to get back to. <strong>Only your team sees it. Nothing is sent to the customer</strong>, not when you set it and not when it's due. To message the customer, reply in the chat as usual.</p>
+<p>Older versions of Akilent called these "reminders". They are the same thing.</p>
 
 <h2>Set one</h2>
 <ul>
-  <li>In a conversation, press <strong>Remind me tomorrow</strong> under the message box (tomorrow at 9:00 your time).</li>
-  <li>For another time or a note, open the side panel's <strong>Follow-up</strong> section.</li>
-  <li>Automations can add one with the <strong>Remind your team to follow up</strong> step.</li>
+  <li>In a chat, press <strong>Follow up tomorrow</strong> under the message box (tomorrow at 9:00 your time).</li>
+  <li>For another time or a note for your team, use the <strong>Follow-up</strong> section of the chat's side panel, or the <strong>Follow-ups</strong> card on a customer's page or an interested customer's page. A customer with no chat yet can have one too; it opens their customer page.</li>
+  <li>When AI suggests one, it shows as <strong>Suggested follow-up</strong>. Nothing happens until someone presses it, and it is still for your team only.</li>
+  <li>Automations can set one with the <strong>Set a follow-up for your team</strong> step, for whoever is assigned to the chat, the whole team, or a teammate.</li>
 </ul>
+<p>A chat keeps one follow-up of each kind. Setting another on the same chat keeps the one already there: an earlier time replaces a later one, and a new note is added to its note on a line of its own.</p>
 <p>Times are in your business's timezone, the one set with your <a href="/settings/hours/">opening hours</a>.</p>
 
-<h2>When it's due</h2>
-<p>Due reminders show on the <a href="/inbox/followups/">Follow-ups</a> page, with a count next to Follow-ups in the menu. You'll also see a message on screen. The person whose list it's on gets an email, at most once an hour; turn these emails off on the Follow-ups page.</p>
-
-<h2>Snooze, pass on, done</h2>
+<h2>The Follow-ups page</h2>
+<p>The <a href="/inbox/followups/">Follow-ups</a> page lists each customer once, in three parts:</p>
 <ul>
-  <li><strong>Snooze</strong> it for an hour, three hours, tomorrow morning, next week, or a time you pick.</li>
-  <li>Under <strong>More</strong>, move it to a teammate's list, change the note, or remove it.</li>
-  <li><strong>Done</strong> when you've followed up. Your Insights show how many you completed, and how many on time.</li>
+  <li><strong>Waiting for your reply</strong>: the customer wrote and nobody has answered for a day. Replying in the chat clears it.</li>
+  <li><strong>Due</strong>: due now or late.</li>
+  <li><strong>Coming up</strong>: due later.</li>
+</ul>
+<p><strong>Mine</strong> shows follow-ups given to you and those for the whole team; <strong>Whole team</strong> shows everyone's. The number beside Follow-ups in the menu is the Mine count. The dashboard and Business Health count the whole team, and say so.</p>
+
+<h2>When it's due</h2>
+<p>It moves to Due and the count goes up. If it is given to you and <strong>Email me</strong> is on (on the Follow-ups page), you get an email, at most once an hour. Whole-team follow-ups and customers waiting for a reply aren't emailed. Your team may get an email about it; the customer never does.</p>
+
+<h2>Done, Later, Not needed</h2>
+<ul>
+  <li><strong>Done</strong> when it's handled. Your Insights show how many were done, and how many on time.</li>
+  <li><strong>Later</strong> moves it to in 1 hour, tomorrow morning, next week, or a date you pick.</li>
+  <li>Under <strong>More</strong>: <strong>Give to…</strong> a teammate or the whole team, <strong>Edit note</strong>, or <strong>Not needed</strong>, which cancels it and keeps it in the history.</li>
 </ul>
 
-<h2>Automatic reminders</h2>
-<p>If a customer has waited a day without a reply, Akilent adds a <strong>Waiting for a reply</strong> reminder. These close themselves when anyone on your team replies in that conversation. Reminders a person set stay open until someone marks them done; if the customer writes again, the side panel asks whether it's still needed.</p>
+<h2>Set by Akilent</h2>
+<p>When a customer has waited a day without a reply, Akilent adds a <strong>Waiting for your reply</strong> follow-up. It closes itself when anyone on your team replies in that chat. Follow-ups a person set stay open until someone marks them done; if the customer writes again, the side panel asks whether it's still needed.</p>

@@ -113,7 +113,7 @@ def test_inbox_links_are_absolute_and_never_carry_the_digest(logged_in, conversa
         assert href.startswith("/inbox/?"), href
         assert "h=" not in href
     tabs = [h for h in inbox_links if "channel=whatsapp" in h]
-    assert len(tabs) == 7  # every tab keeps the channel filter
+    assert len(tabs) == 6  # every tab keeps the channel filter (Reminders tab removed)
     clear = [h for h in inbox_links if "channel=" not in h]
     assert len(clear) == 1, "expected one absolute Clear filter link"
     assert (
@@ -145,7 +145,7 @@ def test_pagination_links_are_absolute(logged_in):
         ({"action": "assign", "assignee": "none"}, "Unassigned."),
         ({"action": "add_note", "body": "Call back after 5"}, "Note added."),
         ({"action": "close", "resolution": ""}, "Closed."),
-        ({"action": "create_followup", "when": "tomorrow"}, "Follow-up scheduled."),
+        ({"action": "create_followup", "when": "tomorrow"}, "Follow-up set for "),
     ],
 )
 def test_pane_action_returns_the_pane_with_a_toast(

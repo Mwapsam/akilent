@@ -284,7 +284,7 @@ def _run(
     if t == "create_followup":
         hours = float(step.get("due_in_hours") or 24)
         act(
-            f"Would remind your team to follow up in {_duration(int(hours * 3600))}: "
+            f"Would set a follow-up for your team, due in {_duration(int(hours * 3600))}: "
             f"“{_say(account, person, step.get('note') or 'Follow up')}”."
         )
         return {"next": nxt}

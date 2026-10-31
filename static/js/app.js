@@ -959,6 +959,22 @@
     if (own || pushed) xhr._akAuto = true;
   });
 
+  // A follow-up form (data-followup-form) that went through tells the page, so the nav badge
+  // and the inbox's Follow-ups link re-read the shared count at once. In-place navigation
+  // only swaps <main>, and live updates may be off, so they'd otherwise wait for their timer.
+  // The request is marked as it starts: by the time it ends the form has been swapped away.
+  document.addEventListener("htmx:beforeRequest", function (e) {
+    const el = e.detail.elt;
+    if (el && el.hasAttribute && el.hasAttribute("data-followup-form") && e.detail.xhr) {
+      e.detail.xhr._akFollowup = true;
+    }
+  });
+  document.addEventListener("htmx:afterRequest", function (e) {
+    if (e.detail.successful && e.detail.xhr && e.detail.xhr._akFollowup) {
+      htmx.trigger(document.body, "followup-changed");
+    }
+  });
+
   // --- In-place navigation (shell swaps) ---------------------------------
   // <body hx-boost> makes links and forms inside the signed-in shell load the next page into
   // <main> instead of reloading everything. The server half is apps/core/htmx.py: it answers

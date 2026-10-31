@@ -321,8 +321,9 @@ ARTICLES = [
     ),
     Article(
         "follow-ups",
-        "Follow-ups: reminders for your team",
-        "Set a reminder on a conversation, get told when it's due, snooze it or pass it to a teammate.",
+        "Follow-ups for your team",
+        "Set a follow-up from a chat, a customer or a lead, see it when it's due, move it to later "
+        "or give it to a teammate. Only your team sees it.",
         "Automate",
         icon="bell",
         keywords=(

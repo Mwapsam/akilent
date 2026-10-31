@@ -791,6 +791,7 @@ def at_risk(account, now: datetime | None = None) -> dict:
     from apps.accounts import business_hours
     from apps.ai import api as ai_api
     from apps.automation import api as automation_api
+    from apps.conversations import followup_copy, followups
     from apps.conversations.state import missed, needs_attention
     from apps.crm.models import Lead
 
@@ -807,9 +808,8 @@ def at_risk(account, now: datetime | None = None) -> dict:
     counts = {
         "waiting": needs_attention(account, now).count(),
         "missed": missed(account, now).count(),
-        "followups_due": FollowUp.objects.filter(
-            account=account, done_at__isnull=True, due_at__lte=now
-        ).count(),
+        # Customers with a follow-up due for anyone: the Whole team tab's own number.
+        "followups_due": followups.due_for_team(account, now=now),
         "new_leads": open_leads.filter(status=Lead.Status.NEW).count(),
         "quiet_leads": open_leads.filter(created_at__lte=now - QUIET_AFTER)
         .annotate(talked=Exists(recent_talk))
@@ -849,8 +849,8 @@ def at_risk(account, now: datetime | None = None) -> dict:
             {
                 "key": "followups_due",
                 "count": n,
-                "text": f"{n} follow-up{plural(n, '', 's')} due",
-                "url": "/inbox/followups/",
+                "text": followup_copy.due_count(n, team=True),
+                "url": "/inbox/followups/?list=team",
                 "cta": "Open follow-ups",
             }
         )

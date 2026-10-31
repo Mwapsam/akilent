@@ -1,62 +1,66 @@
 {% extends "base.html" %}
-{% block title %}Follow-ups — {{ site.app_name|default:"Akilent" }}{% endblock %}
+{% block title %}{{ copy.PAGE_TITLE }} — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
-<header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
-  <div>
-    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Follow-ups</h1>
-    <p class="mt-1 text-sm text-ink-subtle">Reminders for your team to get back to a customer. Nothing here is sent to customers. Times are {{ zone_name }}. <a href="{% url 'help-article' 'follow-ups' %}" class="underline">How follow-ups work</a></p>
-  </div>
-  <form method="post" action="{% url 'conversations:followup_emails' %}" hx-boost="false" class="flex items-center gap-2 text-sm">
-    {% csrf_token %}
-    <input type="hidden" name="on" value="{% if emails_on %}0{% else %}1{% endif %}">
-    <span class="text-ink-subtle">Email me when mine are due:</span>
-    <button class="btn btn-ghost btn-sm" aria-pressed="{{ emails_on|yesno:'true,false' }}">{% if emails_on %}On{% else %}Off{% endif %}</button>
-  </form>
+<style>
+  /* Phones: thumb-sized buttons (44px) in a 2x2 grid (main + Done, then Later + More), and
+     each menu opens into the screen: Later's from the left edge, More's from the right.
+     From the sm breakpoint: one row of normal buttons with right-aligned menus. */
+  .fu-actions .btn { min-height: 2.75rem; }
+  @media (max-width: 639.98px) {
+    .fu-actions { display: grid; grid-template-columns: 1fr 1fr; }
+    .fu-actions > *, .fu-actions > div > .btn, .fu-actions form .btn { width: 100%; justify-content: center; }
+    .fu-actions > div:nth-of-type(1) [role="menu"] { left: 0; right: auto; }
+  }
+  @media (min-width: 640px) { .fu-actions .btn { min-height: 0; } }
+</style>
+{% comment %}
+The Follow-ups page: customers your team needs to get back to, one row per customer, in
+Waiting / Due / Coming up. Behaviour and words: docs/design/followups-interaction-contract.md.
+It is a to-do list, not a dashboard: no metrics beyond the two tab counts.
+{% endcomment %}
+<header class="mb-5">
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">{{ copy.PAGE_TITLE }}</h1>
+  <p class="mt-1 text-sm text-ink-muted">{{ copy.PAGE_INTRO }}</p>
+  <p class="mt-1 text-sm text-ink-subtle" data-followup-promise>{{ copy.INTERNAL_ONLY }}</p>
 </header>
 
-<nav class="tabs mb-4" aria-label="Whose reminders">
-  <a href="?list=mine" class="tab {% if list == 'mine' %}tab-active{% endif %}">Mine{% if mine_count %} <span class="badge badge-danger ml-1">{{ mine_count }}</span>{% endif %}</a>
-  <a href="?list=team" class="tab {% if list == 'team' %}tab-active{% endif %}">Whole team{% if team_count %} <span class="badge badge-neutral ml-1">{{ team_count }}</span>{% endif %}</a>
+<nav class="tabs mb-5" aria-label="Whose follow-ups">
+  <a href="?list=mine" class="tab {% if list == 'mine' %}tab-active{% endif %}" {% if list == 'mine' %}aria-current="page"{% endif %}>{{ copy.TAB_MINE }}{% if mine_count %} ({{ mine_count }}){% endif %}</a>
+  <a href="?list=team" class="tab {% if list == 'team' %}tab-active{% endif %}" {% if list == 'team' %}aria-current="page"{% endif %}>{{ copy.TAB_TEAM }}{% if team_count %} ({{ team_count }}){% endif %}</a>
 </nav>
 
+{% if contact %}
+<div class="alert alert-info mb-5 flex flex-wrap items-center justify-between gap-2" role="status" data-followup-filter>
+  <span>Showing follow-ups for <strong>{{ contact.display_name }}</strong> only.</span>
+  <a href="?list={{ list }}" class="btn btn-ghost btn-sm">Show everyone</a>
+</div>
+{% endif %}
+
 {% with next_url=request.get_full_path %}
-<section class="mb-8" aria-labelledby="due-title">
-  <h2 id="due-title" class="text-lg font-semibold text-ink mb-3">Due now</h2>
-  {% if due.object_list %}
+{% for section in sections %}
+<section class="mb-8" aria-labelledby="fu-{{ section.key }}" data-section="{{ section.key }}">
+  <h2 id="fu-{{ section.key }}" class="text-lg font-semibold text-ink mb-3">{{ section.title }}{% if section.rows %} <span class="text-ink-subtle font-normal">({{ section.rows|length }})</span>{% endif %}</h2>
+  {% if section.rows %}
   <ul class="card divide-y divide-border">
-    {% for f in due.object_list %}{% include "conversations/_followup_row.html" with overdue=True %}{% endfor %}
+    {% for row in section.rows %}{% include "conversations/_followup_row.html" %}{% endfor %}
   </ul>
-  {% if due.has_other_pages %}
-  <nav class="mt-3 flex items-center justify-between text-sm" aria-label="Pages">
-    {% if due.has_previous %}<a class="btn btn-ghost btn-sm" href="?list={{ list }}&page={{ due.previous_page_number }}">Previous</a>{% else %}<span></span>{% endif %}
-    <span class="text-ink-subtle">Page {{ due.number }} of {{ due.paginator.num_pages }}</span>
-    {% if due.has_next %}<a class="btn btn-ghost btn-sm" href="?list={{ list }}&page={{ due.next_page_number }}">Next</a>{% else %}<span></span>{% endif %}
-  </nav>
-  {% endif %}
   {% else %}
-  <div class="card">
-    {% include "components/empty_state.html" with icon="check" title="Nothing due" message="You're all caught up. Reminders you set from a conversation show up here when they're due." %}
-  </div>
+  <p class="card card-pad text-sm text-ink-subtle" data-empty="{{ section.key }}">{{ section.empty }}</p>
   {% endif %}
 </section>
-
-{% if today %}
-<section class="mb-8" aria-labelledby="today-title">
-  <h2 id="today-title" class="text-lg font-semibold text-ink mb-3">Later today</h2>
-  <ul class="card divide-y divide-border">
-    {% for f in today %}{% include "conversations/_followup_row.html" %}{% endfor %}
-  </ul>
-</section>
-{% endif %}
-
-{% if upcoming %}
-<section aria-labelledby="upcoming-title">
-  <h2 id="upcoming-title" class="text-lg font-semibold text-ink mb-3">Coming up</h2>
-  <ul class="card divide-y divide-border">
-    {% for f in upcoming %}{% include "conversations/_followup_row.html" %}{% endfor %}
-  </ul>
-</section>
-{% endif %}
+{% endfor %}
 {% endwith %}
+
+{% comment %}The email switch sits on the left, with room below (pb-24): the floating setup
+launcher sits in the bottom-right corner and covered it there.{% endcomment %}
+<footer class="mt-2 pb-24 flex flex-col items-start gap-2 text-sm text-ink-subtle" data-followup-footer>
+  <form method="post" action="{% url 'conversations:followup_emails' %}" hx-boost="false" class="flex flex-wrap items-center gap-2">
+    {% csrf_token %}
+    <input type="hidden" name="on" value="{% if emails_on %}0{% else %}1{% endif %}">
+    <span>{{ copy.EMAILS_TOGGLE_LABEL }}</span>
+    <button class="btn btn-ghost btn-sm" aria-pressed="{{ emails_on|yesno:'true,false' }}">{% if emails_on %}On{% else %}Off{% endif %}</button>
+  </form>
+  <p>Times are {{ zone_name }}. <a href="{% url 'help-article' 'follow-ups' %}" class="underline">How follow-ups work</a></p>
+</footer>
 {% endblock %}

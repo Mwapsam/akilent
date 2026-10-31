@@ -508,6 +508,20 @@ def workflow_create(request):
     return redirect("automation:editor", slug=wf.slug)
 
 
+def _followup_owners(account) -> list:
+    """Teammates a follow-up step can be for, as ``(email, name)``: the step stores the email,
+    which is what the engine resolves (``assign_to``)."""
+    from apps.accounts.models import Membership
+
+    return [
+        (m.user.email, m.user.get_full_name() or m.user.email)
+        for m in Membership.objects.filter(account=account, user__is_active=True)
+        .select_related("user")
+        .order_by("user__first_name", "user__email")
+        if m.user.email
+    ]
+
+
 @login_required
 @module_required("automations")
 @full_page_load  # rich editor: its scripts expect a fresh page
@@ -585,6 +599,8 @@ def workflow_editor(request, slug: str):
                     )
                 ]
             ),
+            "followup_owners": (owners := _followup_owners(account)),
+            "followup_owner_emails_json": json.dumps([email for email, _ in owners]),
             "test_contacts": [
                 {"id": c.public_id, "label": c.display_name}
                 for c in Contact.objects.filter(account=account).order_by(

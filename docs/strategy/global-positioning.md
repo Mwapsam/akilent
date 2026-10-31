@@ -13,6 +13,7 @@ Market strategy · 31 October 2026 · Social-commerce SMEs · USA, UK and EU fir
 | `docs/marketing/messaging.md` | What Akilent can truthfully say and demonstrate **today**. It is the only source for customer-facing copy. | Copy changes follow its truth rule and claim register |
 | `docs/strategy/global-positioning.md` (this file) | Which market Akilent pursues, how it competes and differentiates, its commercial model, and what to build next | Owner decisions |
 | `docs/strategy/meta-growth-optimisation.md` | Long-term product direction (organic and paid growth engines, experiment engine) | Owner-authored; preserved as written |
+| `docs/strategy/problem-workflow-framework.md` | The six problems Akilent solves, the connected workflow, transition checkpoints, and data and UX acceptance criteria | Owner decisions |
 
 The audit that checked the messaging guide against the repo is `docs/audits/MESSAGING-AUDIT-2026-10-31.md`.
 
@@ -358,6 +359,8 @@ The freeze no longer applies to this roadmap, but each step still needs its own 
 | 6 | Cross-channel growth intelligence | Evidence and separate approval |
 
 **The autonomous growth agent stays out of scope.**
+
+Workflow priorities, transition checkpoints and acceptance criteria are in `docs/strategy/problem-workflow-framework.md`. Its first build slice is the follow-up redesign (`docs/design/followups-interaction-contract.md`).
 
 What each priority contains, and the gate it needs:
 1. **Pilot foundations and launch readiness.**

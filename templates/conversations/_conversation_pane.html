@@ -384,7 +384,8 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
                 <span class="text-ink-subtle self-center">Also suggested:</span>
                 <template x-for="extra in (ai.proposal.extras || [])" :key="extra.index">
                   <button type="button" class="cv-ai-chip" :disabled="extra.applied" @click="aiApply(extra)"
-                          :aria-label="extra.applied ? extra.label + ' (done)' : extra.label">
+                          :title="extra.hint || null"
+                          :aria-label="(extra.applied ? extra.label + ' (done)' : extra.label) + (extra.hint ? '. ' + extra.hint : '')">
                     <span x-show="extra.applied" aria-hidden="true">✓</span>
                     <span x-show="!extra.applied" aria-hidden="true">+</span>
                     <span x-text="extra.label"></span>
@@ -463,6 +464,7 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
             <textarea x-show="!recording" name="body" rows="1" x-ref="input" x-model="draft" class="input cv-input"
                       placeholder="Type a message" :placeholder="windowOpen ? 'Type a message' : {% if approved_templates %}'Window closed: send a template below'{% else %}'Window closed: a reply may not be delivered'{% endif %}" aria-label="Reply" aria-describedby="composer-hint"
                       @input="grow($event.target)" @keydown.enter="onEnter($event)"
+                      {% if request.GET.reply %}x-init="setTimeout(() => $el.focus(), 50)"{% endif %}
                       x-on:saved-reply-insert.window="draft = $event.detail; $nextTick(() => { grow($refs.input); $refs.input.focus(); })"></textarea>
           </div>
           {% comment %} Empty composer: the round button records a voice note instead (tap to start,
@@ -487,22 +489,34 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
           two decisions live here rather than only in the side panel: remember
           this customer, and track them as someone who wants to buy. Both post
           actions that already exist; the panel keeps the record of each.
+          A follow-up is work for the team, never a message to the customer, so
+          the words say so: "Follow up tomorrow" with "Only your team sees this",
+          and once set, the same line the Follow-ups page shows, with Change
+          opening the side panel's Follow-up section.
         {% endcomment %}
         <div class="cv-next">
-          {% if open_followup %}
-          <span class="cv-next-done">
+          {% if followup %}
+          <span class="cv-next-done" title="{{ followup_copy.INTERNAL_ONLY }}" data-composer-followup>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-            Reminder set for {{ open_followup_due }}
+            {{ followup.composer }}
           </span>
+          <button type="button" class="cv-next-btn" data-composer-change
+                  @click="infoOpen = true; setTimeout(() => { const s = document.getElementById('cv-followup'); s.scrollIntoView({ block: 'nearest' }); s.focus({ preventScroll: true }); }, 120)">{{ followup_copy.CHANGE }}</button>
           {% else %}
-          <form method="post" class="contents" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
+          {# A follow-up the AI suggested and someone applied: shown at once (chat.js aiApply). #}
+          <span class="cv-next-done" x-show="followupLabel" x-cloak title="{{ followup_copy.INTERNAL_ONLY }}" data-composer-followup-live>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <span x-text="followupLabel"></span>
+          </span>
+          <form method="post" class="contents" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %} data-followup-form x-show="!followupLabel">
             {% csrf_token %}
             <input type="hidden" name="action" value="create_followup" />
             <input type="hidden" name="when" value="tomorrow" />
-            <button class="cv-next-btn" type="submit">
+            <button class="cv-next-btn" type="submit" aria-describedby="cv-followup-promise">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-              Remind me tomorrow
+              {{ followup_copy.FOLLOW_UP_TOMORROW }}
             </button>
+            <span id="cv-followup-promise" data-followup-promise>{{ followup_copy.INTERNAL_ONLY_SHORT }}</span>
           </form>
           {% endif %}
           {% if "sales" in usable_features %}
@@ -823,64 +837,85 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
       {% endif %}
 
       {# Follow-up #}
-      <div class="cv-section">
-        <h2 class="cv-h">Follow-up</h2>
-        {% if open_followup %}
-        <div class="cv-reminder">
-          <svg class="w-4 h-4 mt-0.5 shrink-0 text-ink-subtle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>
-          <div class="min-w-0 flex-1 text-sm">
-            <p class="font-medium text-ink">{{ open_followup_due }}</p>
-            {% if open_followup.note %}<p class="text-ink-subtle mt-0.5">{{ open_followup.note }}</p>{% endif %}
-            <p class="text-xs text-ink-subtle mt-0.5">{% if open_followup.assigned_to %}On {{ open_followup.assigned_to.get_full_name|default:open_followup.assigned_to.email }}'s list{% else %}On the whole team's list{% endif %}</p>
-          </div>
+      {% comment %}
+        The customer's follow-up, described exactly as the Follow-ups page row describes it
+        (followup_card): why, when, note, for whom, which chat. Done, Later and Not needed
+        post to the page's own actions and say what happened in the page's words. The
+        composer's Change brings focus here. Other follow-ups for this customer are counted
+        and one tap away on the page, filtered to them.
+      {% endcomment %}
+      <div class="cv-section" id="cv-followup" tabindex="-1" data-panel-followup>
+        <h2 class="cv-h">Follow-up <span class="cv-h-sub">{{ followup_copy.INTERNAL_ONLY_SHORT }}</span></h2>
+        {% if followup %}
+        {% with f=followup.followup %}
+        <div class="text-sm">
+          <p class="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span class="badge {{ followup.badge }}">{{ followup.why }}</span>
+            <span class="{% if followup.late %}text-ink font-medium{% else %}text-ink-muted{% endif %}">{{ followup.when }}</span>
+          </p>
+          {% if followup.note %}<p class="mt-1 text-ink-muted break-words whitespace-pre-line">“{{ followup.note }}”</p>{% endif %}
+          <p class="mt-1 text-xs text-ink-subtle">{{ followup.owner }}{% if f.conversation_id != conversation.pk %} · <a href="{{ followup.url }}" class="underline">{{ followup.channel }}</a>{% endif %}</p>
         </div>
         {% if followup_still_needed %}
         <div class="alert alert-info mt-2 text-xs" role="status">
-          <span>{{ conversation.contact.display_name }} wrote since you set this. If it's handled, mark it done.</span>
+          <span>{{ followup.wrote_since }}</span>
         </div>
         {% endif %}
-        {% url 'conversations:followup_complete' open_followup.pk as tag_url %}
-        {% url 'conversations:followup_action' open_followup.pk 'snooze' as snooze_url %}
+        {% url 'conversations:followup_complete' f.pk as done_url %}
+        {% url 'conversations:followup_action' f.pk 'snooze' as later_url %}
+        {% url 'conversations:followup_action' f.pk 'cancel' as cancel_url %}
         <div class="mt-2 grid grid-cols-2 gap-2">
-          <form method="post" action="{{ tag_url }}" {% if in_pane %}hx-post="{{ tag_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
+          <form method="post" action="{{ done_url }}" data-followup-form {% if in_pane %}hx-post="{{ done_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}>
             {% csrf_token %}
             <input type="hidden" name="next" value="{{ detail_url }}" />
-            <button class="btn btn-secondary btn-sm w-full">Done</button>
+            <button class="btn btn-secondary btn-sm w-full">{{ followup_copy.DONE }}</button>
           </form>
-          <form method="post" action="{{ snooze_url }}" {% if in_pane %}hx-post="{{ snooze_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML" hx-trigger="change"{% endif %}>
+          <form method="post" action="{{ later_url }}" data-followup-form {% if in_pane %}hx-post="{{ later_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}
+                x-data="{ later: '' }" class="contents">
             {% csrf_token %}
             <input type="hidden" name="next" value="{{ detail_url }}" />
-            <label class="sr-only" for="pane-snooze">Snooze</label>
-            <select id="pane-snooze" name="when" class="select select-sm w-full" {% if not in_pane %}onchange="this.form.requestSubmit()"{% endif %}>
-              <option value="">Snooze…</option>
-              {% for value, label in snooze_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+            <label class="sr-only" for="pane-later">{{ followup_copy.LATER }}</label>
+            <select id="pane-later" name="when" class="select select-sm w-full" x-model="later"
+                    @change="if (later && later !== 'custom') $el.form.requestSubmit()">
+              <option value="">{{ followup_copy.LATER }}…</option>
+              {% for value, label in later_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+              <option value="custom">{{ followup_copy.PICK_A_DATE }}</option>
             </select>
+            <div class="col-span-2 flex gap-2" x-show="later === 'custom'" x-cloak data-panel="date">
+              <label class="sr-only" for="pane-later-at">New time</label>
+              <input id="pane-later-at" type="datetime-local" name="custom_due_at" class="input flex-1 min-w-0" :required="later === 'custom'" />
+              <button class="btn btn-primary btn-sm">Save</button>
+            </div>
+          </form>
+          <form method="post" action="{{ cancel_url }}" class="col-span-2" data-followup-form
+                {% if in_pane %}hx-post="{{ cancel_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML" hx-confirm="{{ followup_copy.NOT_NEEDED_CONFIRM }}" hx-confirm-label="{{ followup_copy.NOT_NEEDED }}"{% else %}data-confirm="{{ followup_copy.NOT_NEEDED_CONFIRM }}" data-confirm-label="{{ followup_copy.NOT_NEEDED }}"{% endif %}>
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ detail_url }}" />
+            <button class="btn btn-ghost btn-sm w-full">{{ followup_copy.NOT_NEEDED }}</button>
           </form>
         </div>
-        <a href="{% url 'conversations:followups_due' %}" class="mt-2 block text-xs text-ink-subtle hover:underline">All follow-ups</a>
+        <a href="{% url 'conversations:followups_due' %}?list=team&amp;contact={{ conversation.contact.public_id }}" class="mt-2 block text-xs text-ink-subtle hover:underline" data-followup-all>
+          {{ followup.all_label }}
+        </a>
+        {% endwith %}
         {% else %}
         {% comment %}
-          The composer's own "Remind me tomorrow" (below the message box) covers the common
-          case with one click; this form offers the same action with more control (1h / custom
-          time / a note), so it's tucked behind a disclosure instead of always taking up panel
-          space for the less common path.
+          The composer's "Follow up tomorrow" covers the common case in one tap; this sets one
+          for another time or with a note for the team. Same choices as Later on the page.
         {% endcomment %}
-        <details class="cv-followup-more">
-          <summary class="text-sm text-ink-subtle cursor-pointer">Set a custom reminder</summary>
-          <form method="post" class="space-y-2 mt-2" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %} x-data="{ when: '1h' }">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="create_followup" />
-            <div class="cv-pills" role="radiogroup" aria-label="Remind me">
-              <label><input type="radio" name="when" value="1h" x-model="when" />In 1 hour</label>
-              <label><input type="radio" name="when" value="tomorrow" x-model="when" />Tomorrow morning</label>
-              <label><input type="radio" name="when" value="custom" x-model="when" />Pick a time</label>
-            </div>
-            <input type="datetime-local" name="custom_due_at" class="input" aria-label="Reminder time"
-                   x-show="when === 'custom'" x-cloak :required="when === 'custom'" />
-            <input type="text" name="note" placeholder="Note (optional)" class="input" aria-label="Reminder note" />
-            <button class="btn btn-ghost btn-sm w-full">Set reminder</button>
-          </form>
-        </details>
+        <form method="post" class="space-y-2" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %} x-data="{ when: 'tomorrow' }" data-panel-set data-followup-form>
+          {% csrf_token %}
+          <input type="hidden" name="action" value="create_followup" />
+          <div class="cv-pills" role="radiogroup" aria-label="When">
+            {% for value, label in later_choices %}<label><input type="radio" name="when" value="{{ value }}" x-model="when" />{{ label }}</label>{% endfor %}
+            <label><input type="radio" name="when" value="custom" x-model="when" />{{ followup_copy.PICK_A_DATE }}</label>
+          </div>
+          <input type="datetime-local" name="custom_due_at" class="input" aria-label="Follow-up time"
+                 x-show="when === 'custom'" x-cloak :required="when === 'custom'" />
+          <input type="text" name="note" maxlength="255" placeholder="Note for your team (optional)" class="input" aria-label="Note for your team" />
+          <button class="btn btn-secondary btn-sm w-full">{{ followup_copy.SET_FOLLOWUP }}</button>
+          <p class="text-xs text-ink-subtle" data-followup-promise>{{ followup_copy.INTERNAL_ONLY }}</p>
+        </form>
         {% endif %}
       </div>
 

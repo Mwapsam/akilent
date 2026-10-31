@@ -39,8 +39,8 @@
     <span>{{ label }}</span>
   {% endif %}
   {% if badge_url %}
-  <span class="ml-auto" hx-get="{{ badge_url }}" hx-swap="innerHTML" data-auto-refresh
-        hx-trigger="load, every 120s, sse:followup.due, sse:followup.updated"></span>
+  <span class="ml-auto" hx-get="{{ badge_url }}" hx-swap="innerHTML" data-auto-refresh="followup-changed"
+        hx-trigger="load, every 120s, sse:followup.due, sse:followup.updated, followup-changed from:body"></span>
   {% endif %}
 </a>
 {% endif %}

@@ -64,7 +64,8 @@ def conversation(logged_in):
 def test_the_composer_offers_both_decisions(logged_in, conversation):
     client, _, _ = logged_in
     body = client.get(f"/inbox/{conversation.public_id}/").content.decode()
-    assert "Remind me tomorrow" in body
+    assert "Follow up tomorrow" in body
+    assert "Only your team sees this" in body
     assert "Track as interested" in body
 
 
@@ -86,8 +87,8 @@ def test_remind_me_tomorrow_is_one_click(logged_in, conversation):
 
 
 @pytest.mark.django_db
-def test_the_reminder_replaces_the_button_once_set(logged_in, conversation):
-    """No second reminder on offer for a customer already being chased."""
+def test_the_followup_replaces_the_button_once_set(logged_in, conversation):
+    """No second follow-up on offer for a customer already being chased."""
     client, _, _ = logged_in
     client.post(
         f"/inbox/{conversation.public_id}/",
@@ -97,8 +98,9 @@ def test_the_reminder_replaces_the_button_once_set(logged_in, conversation):
         },
     )
     body = client.get(f"/inbox/{conversation.public_id}/").content.decode()
-    assert "Reminder set for" in body
-    assert "Remind me tomorrow" not in body
+    assert "Follow-up tomorrow 09:00" in body
+    assert "Reminder" not in body
+    assert "Follow up tomorrow" not in body
 
 
 @pytest.mark.django_db

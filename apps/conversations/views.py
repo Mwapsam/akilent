@@ -15,14 +15,10 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import (
-    Case,
     Count,
-    Exists,
-    IntegerField,
     OuterRef,
     Q,
     Subquery,
-    When,
 )
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render, resolve_url
@@ -89,6 +85,12 @@ def _last_handled_by(conversation) -> str:
     return HANDLED_LABELS.get(last["handled_by"], "")
 
 
+def followup_card(f, viewer, *, now, zone, reply=False) -> dict:
+    from apps.conversations import followups
+
+    return followups.card(f, viewer, now=now, zone=zone, reply=reply)
+
+
 def get_visible_conversation(account, public_id):
     """A conversation the inbox may show: 404 for one on a channel the admin switched off."""
     return get_object_or_404(
@@ -101,9 +103,13 @@ def get_visible_conversation(account, public_id):
 def _inbox_context(request, account) -> dict:
     now = timezone.now()
     view = (request.GET.get("view") or "all").strip()
-    _open_followups = FollowUp.objects.filter(
-        conversation=OuterRef("pk"), done_at__isnull=True
-    ).order_by("due_at")
+    # The row's "Follow-up {day}" tag. A missed-chat follow-up is left out: the row's own
+    # Missed badge already says it, and two labels for one fact read as two problems.
+    _open_followups = (
+        FollowUp.objects.filter(conversation=OuterRef("pk"), done_at__isnull=True)
+        .exclude(source=FollowUp.Source.MISSED)
+        .order_by("due_at")
+    )
     if view == "needs_reply":  # legacy name for the same tab
         view = "needs_attention"
 
@@ -132,14 +138,6 @@ def _inbox_context(request, account) -> dict:
         ).order_by("-last_any", "-id")
     elif view == "needs_attention":
         qs = needs_attention(account, now)
-    elif view == "followups":
-        # Conversations with a reminder still open, soonest due first.
-        qs = (
-            with_activity(Conversation.objects.filter(account=account))
-            .filter(Exists(_open_followups))
-            .annotate(next_due=Subquery(_open_followups.values("due_at")[:1]))
-            .order_by("next_due", "-id")
-        )
     else:
         view = "all"
         qs = with_activity(Conversation.objects.filter(account=account)).order_by(
@@ -167,8 +165,11 @@ def _inbox_context(request, account) -> dict:
     qs = qs.annotate(
         preview_body=Subquery(latest.values("body")[:1]),
         preview_direction=Subquery(latest.values("direction")[:1]),
-        has_followup=Exists(_open_followups),
+        next_followup=Subquery(_open_followups.values("due_at")[:1]),
     )
+    from apps.conversations import followup_copy, followups
+
+    zone = followups.business_zone(account)
 
     page = Paginator(qs, _PAGE_SIZE).get_page(request.GET.get("page"))
     for c in page:
@@ -183,6 +184,11 @@ def _inbox_context(request, account) -> dict:
             and c.snapshot.last_customer_message_at is not None
         )
         c.has_messages = c.preview_direction is not None
+        c.followup_tag = (
+            followup_copy.inbox_tag(c.next_followup, now=now, zone=zone)
+            if c.next_followup
+            else ""
+        )
 
     # Teammates in these conversations right now (one cache read for the page).
     from apps.conversations import presence
@@ -237,6 +243,9 @@ def inbox(request):
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
+    if request.GET.get("view") == "followups":
+        # The old Reminders tab: follow-ups have one home now.
+        return redirect("conversations:followups_due")
     return render(request, "conversations/inbox.html", _inbox_context(request, account))
 
 
@@ -410,10 +419,22 @@ def ai_apply(request, public_id: str):
     )
     if not ok:
         return JsonResponse({"ok": False, "error": message}, status=400)
+    # The composer's own line for the customer's leading follow-up, so a follow-up the AI
+    # suggested shows there at once, in the same words as everywhere else.
+    from apps.conversations import followup_copy, followups
+
+    leading = followups.for_chat(conversation)
     return JsonResponse(
         {
             "ok": True,
             "message": message,
+            "followup_label": followup_copy.composer_label(
+                leading[0],
+                now=timezone.now(),
+                zone=followups.business_zone(account),
+            )
+            if leading
+            else "",
             "proposal": ai_api.serialize(
                 ai_api.current_proposal(account, conversation), conversation
             ),
@@ -558,7 +579,10 @@ def conversation_detail(request, public_id: str):
                     )
                 except ValueError as exc:
                     raise ActionError(str(exc)) from exc
-                run_action(
+                from apps.conversations import followup_copy
+                from apps.conversations.followups import local_label
+
+                result = run_action(
                     "create_followup",
                     ctx,
                     conversation=conversation,
@@ -566,7 +590,18 @@ def conversation_detail(request, public_id: str):
                     note=request.POST.get("note", "").strip(),
                     created_by=request.user,
                 )
-                messages.success(request, "Follow-up scheduled.")
+                created = FollowUp.objects.get(pk=result["followup_id"])
+                when = local_label(created.due_at, account)
+                (
+                    messages.warning
+                    if result.get("note") == "too_long"
+                    else messages.success
+                )(
+                    request,
+                    followup_copy.set_for(when)
+                    if result["created"]
+                    else followup_copy.kept_existing(when, result.get("note", "")),
+                )
             elif action == "assign":
                 assignee = _resolve_assignee(account, request)
                 run_action(
@@ -787,24 +822,31 @@ def conversation_detail(request, public_id: str):
         )
 
     saved_replies = list(SavedReply.objects.filter(account=account).order_by("title"))
+    from apps.conversations import followup_copy
     from apps.conversations import followups as followup_service
 
-    # This conversation's own reminder first, else one for the same customer elsewhere.
-    open_followup = (
-        FollowUp.objects.filter(
-            account=account, contact=conversation.contact, done_at__isnull=True
-        )
-        .select_related("assigned_to")
-        .annotate(
-            elsewhere=Case(
-                When(conversation=conversation, then=0),
-                default=1,
-                output_field=IntegerField(),
-            )
-        )
-        .order_by("elsewhere", "due_at")
-        .first()
+    # The customer's follow-ups, this chat's own first; the composer and the side panel
+    # describe the first exactly as the Follow-ups page does.
+    now = timezone.now()
+    zone = followup_service.business_zone(account)
+    customer_followups = followup_service.for_chat(conversation, now=now)
+    open_followup = customer_followups[0] if customer_followups else None
+    followup = (
+        followup_card(open_followup, request.user, now=now, zone=zone)
+        if open_followup
+        else None
     )
+    if followup:
+        followup["composer"] = followup_copy.composer_label(
+            open_followup, now=now, zone=zone
+        )
+        others = len(customer_followups) - 1
+        name = conversation.contact.display_name
+        followup["others"] = others
+        followup["all_label"] = (
+            f"{followup_copy.others_label(others)} · " if others else ""
+        ) + followup_copy.all_for(name)
+        followup["wrote_since"] = followup_copy.wrote_since(name)
     followup_still_needed = (
         open_followup is not None
         and open_followup in followup_service.open_after_customer_replied(conversation)
@@ -903,11 +945,10 @@ def conversation_detail(request, public_id: str):
         "approved_templates": approved_templates,
         "saved_replies": saved_replies,
         "open_followup": open_followup,
-        "open_followup_due": followup_service.local_label(open_followup.due_at, account)
-        if open_followup
-        else "",
+        "followup": followup,
+        "followup_copy": followup_copy,
         "followup_still_needed": followup_still_needed,
-        "snooze_choices": [c for c in followup_service.CHOICES if c[0] != "custom"],
+        "later_choices": followup_service.LATER_CHOICES,
         "team_members": _team_members(account),
         "active_form_response": active_form_response,
         "published_forms": published_forms,
@@ -992,36 +1033,58 @@ def conversation_delete(request, public_id: str):
 
 @login_required
 def followups_due(request):
-    """The team's reminders: overdue, today and coming up, for "mine" or the whole team."""
-    from datetime import timedelta
+    """The Follow-ups page: one row per customer, in Waiting / Due / Coming up.
 
-    from django.core.paginator import Paginator
-
+    Built from ``followups.rows_for`` and worded by ``followup_copy``
+    (docs/design/followups-interaction-contract.md). Mine or the whole team; ``?contact=``
+    narrows it to one customer.
+    """
     from apps.accounts.models import Membership
+    from apps.contacts.models import Contact
+    from apps.conversations import followup_copy as copy
     from apps.conversations import followups
-    from apps.core.channels import hide_disabled_channels
 
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
     now = timezone.now()
-    which = request.GET.get("list") or "mine"
-    base = hide_disabled_channels(
-        FollowUp.objects.filter(account=account, done_at__isnull=True),
-        field="conversation__channel",
-    ).select_related("contact", "conversation", "assigned_to")
-    mine = base.filter(Q(assigned_to=request.user) | Q(assigned_to__isnull=True))
-    scoped = mine if which == "mine" else base
+    scope = "team" if request.GET.get("list") == "team" else "mine"
+    contact = None
+    if request.GET.get("contact"):
+        contact = get_object_or_404(
+            Contact, account=account, public_id=request.GET["contact"]
+        )
     zone = followups.business_zone(account)
-    local_now = now.astimezone(zone)
-    end_of_today = (local_now + timedelta(days=1)).replace(
-        hour=0, minute=0, second=0, microsecond=0
+    grouped = followups.rows_for(
+        request.user, account, scope=scope, contact=contact, now=now
     )
-    due = Paginator(scoped.filter(due_at__lte=now).order_by("due_at"), 50).get_page(
-        request.GET.get("page")
-    )
-    today = scoped.filter(due_at__gt=now, due_at__lt=end_of_today).order_by("due_at")
-    upcoming = scoped.filter(due_at__gte=end_of_today).order_by("due_at")[:30]
+
+    def card(f, *, reply=False):
+        return followup_card(f, request.user, now=now, zone=zone, reply=reply)
+
+    sections = []
+    for key in followups.SECTION_ORDER:
+        rows = [
+            {
+                "contact": row.contact,
+                "main_label": copy.REPLY_NOW
+                if row.main_action == "reply"
+                else copy.OPEN_CHAT
+                if row.primary.conversation_id
+                else "Open customer",
+                "main": card(row.primary, reply=row.main_action == "reply"),
+                "others": [card(f) for f in row.others],
+            }
+            for row in grouped[key]
+        ]
+        sections.append(
+            {
+                "key": key,
+                "title": copy.SECTION_TITLES[key],
+                "empty": copy.EMPTY_STATES[key],
+                "rows": rows,
+            }
+        )
     membership = Membership.objects.filter(account=account, user=request.user).first()
     teammates = [
         m.user
@@ -1034,19 +1097,81 @@ def followups_due(request):
         "conversations/followups_due.html",
         {
             "account": account,
-            "now": now,
-            "list": which,
-            "due": due,
-            "today": today,
-            "upcoming": upcoming,
-            "mine_count": mine.filter(due_at__lte=now).count(),
-            "team_count": base.filter(due_at__lte=now).count(),
+            "copy": copy,
+            "list": scope,
+            "contact": contact,
+            "sections": sections,
+            "mine_count": followups.due_for(request.user, account, now=now),
+            "team_count": followups.due_for_team(account, now=now),
             "teammates": teammates,
             "emails_on": bool(membership and membership.followup_emails),
-            "zone_name": local_now.tzname(),
-            "snooze_choices": [c for c in followups.CHOICES if c[0] != "custom"],
+            "zone_name": now.astimezone(zone).tzname(),
+            "later_choices": followups.LATER_CHOICES,
         },
     )
+
+
+@login_required
+@require_POST
+def followup_create(request):
+    """Set a follow-up for a customer from their contact or lead page.
+
+    It belongs to the chat named in ``conversation`` (one of theirs, on a channel that's
+    on), or to no chat for a customer who has none; same choices and messages as the chat.
+    """
+    from apps.contacts.models import Contact
+    from apps.conversations import followup_copy, followups
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    contact = get_object_or_404(
+        Contact, account=account, public_id=request.POST.get("contact", "")
+    )
+    conversation = None
+    if request.POST.get("conversation"):
+        conversation = get_object_or_404(
+            hide_disabled_channels(Conversation.objects.all()),
+            account=account,
+            contact=contact,
+            public_id=request.POST["conversation"],
+        )
+    note = request.POST.get("note", "").strip()
+    try:
+        try:
+            due_at = followups.resolve_due_at(
+                request.POST.get("when", "").strip(),
+                request.POST.get("custom_due_at", ""),
+                account=account,
+            )
+        except ValueError as exc:
+            raise ActionError(str(exc)) from exc
+        if conversation is not None:
+            result = run_action(
+                "create_followup",
+                {"account": account},
+                conversation=conversation,
+                due_at=due_at,
+                note=note,
+                created_by=request.user,
+            )
+            followup = FollowUp.objects.get(pk=result["followup_id"])
+            created, note_result = result["created"], result.get("note", "")
+        else:
+            followup, created = followups.create(
+                account, contact, due_at=due_at, note=note, created_by=request.user
+            )
+            note_result = getattr(followup, "note_result", "")
+        when = followups.local_label(followup.due_at, account)
+        (messages.warning if note_result == "too_long" else messages.success)(
+            request,
+            followup_copy.set_for(when)
+            if created
+            else followup_copy.kept_existing(when, note_result),
+        )
+    except ActionError as exc:
+        messages.error(request, str(exc))
+    return _back(request, "conversations:followups_due")
 
 
 @login_required
@@ -1055,19 +1180,27 @@ def followup_complete(request, pk):
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
+    from apps.conversations import followup_copy
+
     followup = get_object_or_404(FollowUp, account=account, pk=pk)
-    run_action(
-        "complete_followup", {"account": account}, followup=followup, by=request.user
-    )
-    messages.success(request, "Follow-up marked done.")
+    try:
+        run_action(
+            "complete_followup",
+            {"account": account},
+            followup=followup,
+            by=request.user,
+        )
+        messages.success(request, followup_copy.MARKED_DONE)
+    except ActionError as exc:
+        messages.error(request, str(exc))
     return _back(request, "conversations:followups_due")
 
 
 @login_required
 @require_POST
 def followup_action(request, pk, action):
-    """Snooze, reassign, edit, cancel or reopen one reminder."""
-    from apps.conversations import followups
+    """Later, Give to…, Edit note, Not needed or reopen, on one follow-up."""
+    from apps.conversations import followup_copy, followups
 
     account = get_current_account(request)
     if account is None:
@@ -1085,7 +1218,7 @@ def followup_action(request, pk, action):
             )
             messages.success(
                 request,
-                f"Snoozed until {followups.local_label(followup.due_at, account)}.",
+                followup_copy.moved_to(followups.local_label(followup.due_at, account)),
             )
         elif action == "reassign":
             from django.contrib.auth import get_user_model
@@ -1101,13 +1234,16 @@ def followup_action(request, pk, action):
             run_action("reassign_followup", ctx, followup=followup, user=user)
             messages.success(
                 request,
-                f"Now on {user.get_full_name() or user.email}'s list."
+                followup_copy.assigned_to(followup_copy.person_name(user))
                 if user
-                else "Now on the whole team's list.",
+                else followup_copy.ASSIGNED_TO_TEAM,
             )
         elif action == "edit":
-            followups.edit(followup, note=request.POST.get("note", "").strip())
-            messages.success(request, "Reminder updated.")
+            try:
+                followups.edit(followup, note=request.POST.get("note", "").strip())
+            except followups.FollowUpClosed as exc:
+                raise ActionError(str(exc)) from exc
+            messages.success(request, followup_copy.NOTE_UPDATED)
         elif action == "cancel":
             run_action(
                 "complete_followup",
@@ -1116,10 +1252,10 @@ def followup_action(request, pk, action):
                 by=request.user,
                 reason=FollowUp.ClosedReason.CANCELLED,
             )
-            messages.success(request, "Reminder removed.")
+            messages.success(request, followup_copy.CANCELLED)
         elif action == "reopen":
             run_action("reopen_followup", ctx, followup=followup)
-            messages.success(request, "Reminder is back on the list.")
+            messages.success(request, followup_copy.REOPENED)
     except ActionError as exc:
         messages.error(request, str(exc))
     return _back(request, "conversations:followups_due")
@@ -1127,38 +1263,34 @@ def followup_action(request, pk, action):
 
 @login_required
 def followups_badge(request):
-    """The nav's count of reminders due for me (mine, or nobody's), and the "it's due" toast."""
+    """The count of customers with a follow-up due for me (mine, or nobody's): the nav
+    badge, the inbox header link and the "it's due" toast. ``followups.due_for``, the same
+    number as the Mine tab, so the badge and the page never disagree."""
     from urllib.parse import quote
 
-    from django.http import HttpResponse
+    from apps.conversations import followup_copy, followups
 
     account = get_current_account(request)
     if account is None:
         return HttpResponse("")
-    due = FollowUp.objects.filter(
-        Q(assigned_to=request.user) | Q(assigned_to__isnull=True),
-        account=account,
-        done_at__isnull=True,
-        due_at__lte=timezone.now(),
-    ).count()
+    due = followups.due_for(request.user, account)
+    label = followup_copy.due_count(due)
     html = (
         f'<span class="inbox-tab-count inbox-tab-count--danger" '
-        f'aria-label="{due} due">{due}</span>'
+        f'aria-label="{label}" title="{label}">{due}</span>'
         if due
         else ""
     )
     response = HttpResponse(html)
     if request.GET.get("toast") and due:
-        response["X-Toast"] = "info|" + quote(
-            f"You have {due} follow-up{'s' if due != 1 else ''} due."
-        )
+        response["X-Toast"] = "info|" + quote(f"{label}.")
     return response
 
 
 @login_required
 @require_POST
 def followup_emails(request):
-    """Turn "email me when my reminders are due" on or off for the current business."""
+    """Turn "email me when follow-ups given to me are due" on or off for this business."""
     from apps.accounts.models import Membership
 
     account = get_current_account(request)
@@ -1168,11 +1300,10 @@ def followup_emails(request):
     Membership.objects.filter(account=account, user=request.user).update(
         followup_emails=on
     )
+    from apps.conversations import followup_copy
+
     messages.success(
-        request,
-        "We'll email you when your reminders are due."
-        if on
-        else "No more reminder emails. They still show here and in the bell.",
+        request, followup_copy.EMAILS_ON if on else followup_copy.EMAILS_OFF
     )
     return redirect("conversations:followups_due")
 

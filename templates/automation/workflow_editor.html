@@ -852,21 +852,30 @@
 
               {# ---- create_followup ---- #}
               <div class="space-y-2" x-show="step.type === 'create_followup'">
-                <p class="text-xs text-ink-subtle">Adds a reminder to your team's follow-up list. Nothing is sent to the customer.</p>
+                <p class="text-xs text-ink-subtle">Sets a follow-up for your team. Only your team sees it; nothing is sent to the customer.</p>
                 <div class="grid gap-2 sm:grid-cols-3">
-                  <label class="text-xs">Remind in (hours)
+                  <label class="text-xs">Due in (hours)
                     <input type="number" min="0.25" max="1440" step="0.25" class="input input-sm w-full mt-0.5" x-model.number="step.due_in_hours"
                            :class="fieldError(step.id, 'due_in_hours') && 'input-error'" />
                     <span class="field-error" x-show="fieldError(step.id, 'due_in_hours')" x-text="fieldError(step.id, 'due_in_hours')"></span>
                   </label>
-                  <label class="text-xs sm:col-span-2">Note
+                  <label class="text-xs sm:col-span-2">Note for your team
                     <input class="input input-sm w-full mt-0.5" x-model="step.note" maxlength="255" placeholder="Check {first_name} got the quote" />
                   </label>
-                  <label class="text-xs sm:col-span-2">Whose list
-                    <input class="input input-sm w-full mt-0.5" x-model="step.assign_to" list="followup-owners" placeholder="Whole team"
-                           :class="fieldError(step.id, 'assign_to') && 'input-error'" />
+                  {% comment %}Who it's for: the same three answers as Give to… on the Follow-ups
+                  page. An address saved earlier that is no longer on the team still shows, marked
+                  "not on your team", rather than silently becoming another choice.{% endcomment %}
+                  <label class="text-xs sm:col-span-2">Who it's for
+                    <select class="select select-sm w-full mt-0.5" x-model="step.assign_to"
+                            :class="fieldError(step.id, 'assign_to') && 'input-error'">
+                      <option value="assignee">Whoever is assigned to the chat</option>
+                      <option value="">Whole team</option>
+                      {% for email, name in followup_owners %}<option value="{{ email }}">{{ name }}</option>{% endfor %}
+                      <template x-for="other in [step.assign_to].filter(v => v && v !== 'assignee' && !{{ followup_owner_emails_json }}.includes(v))" :key="other">
+                        <option :value="other" :selected="step.assign_to === other" x-text="other + ' (not on your team)'"></option>
+                      </template>
+                    </select>
                     <span class="field-error" x-show="fieldError(step.id, 'assign_to')" x-text="fieldError(step.id, 'assign_to')"></span>
-                    <datalist id="followup-owners"><option value="assignee">Whoever the conversation is assigned to</option></datalist>
                   </label>
                   <label class="text-xs">Next step
                     <select class="select select-sm w-full mt-0.5" x-model="step.next">

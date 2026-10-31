@@ -2143,6 +2143,12 @@
   .cv-composer .cv-iconbtn { width: 2.75rem; height: 2.75rem; }
   .cv-next-btn, .cv-next-done { min-height: 2.75rem; }
 }
+/* Follow-up controls in the side panel and on contact and lead pages: thumb-sized (44px)
+   on phones, like the composer's. */
+@media (pointer: coarse), (max-width: 639.98px) {
+  [data-panel-followup] .btn, [data-panel-followup] .select, [data-panel-followup] .input,
+  [data-customer-followups] .btn, [data-customer-followups] .select, [data-customer-followups] .input { min-height: 2.75rem; }
+}
 @container cvpane (max-width: 26rem) {
   .cv-h-avatar { display: none; }
   .cv-header { column-gap: .375rem; }

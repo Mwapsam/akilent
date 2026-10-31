@@ -1,0 +1,76 @@
+{% comment %}
+A customer's follow-ups on their contact or lead page. Needs: fu (followups.customer_panel),
+followup_copy, next_url.
+
+Each follow-up reads exactly as its row on the Follow-ups page (followups.card): why, when,
+note, for whom and which chat, with the chat (or, without one, their customer page) one tap
+away. Done, Later and Not needed are the page's own actions and say what happened in its
+words. Nothing here is sent to the customer, and the card says so.
+{% endcomment %}
+<section class="card card-pad text-sm space-y-3" aria-labelledby="followups-title" data-customer-followups>
+  <div class="flex items-center justify-between gap-2">
+    <h2 id="followups-title" class="font-medium text-ink">Follow-ups</h2>
+    <a href="{{ fu.all_url }}" class="inline-flex items-center min-h-6 text-xs text-ink-subtle hover:underline" data-followup-all>{{ fu.all_label }}</a>
+  </div>
+  <p class="text-xs text-ink-subtle">{{ followup_copy.INTERNAL_ONLY_SHORT }}</p>
+
+  {% for item in fu.items %}
+  {% with f=item.followup %}
+  <div class="border-t border-border pt-3" data-customer-followup="{{ f.pk }}">
+    <p class="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span class="badge {{ item.badge }}">{{ item.why }}</span>
+      <span class="{% if item.late %}text-ink font-medium{% else %}text-ink-muted{% endif %}">{{ item.when }}</span>
+    </p>
+    {% if item.note %}<p class="mt-1 text-ink-muted break-words whitespace-pre-line">“{{ item.note }}”</p>{% endif %}
+    <p class="mt-1 text-xs text-ink-subtle">{{ item.owner }} · <a href="{{ item.url }}" class="underline" data-followup-open>{{ item.channel }}</a></p>
+    {% url 'conversations:followup_complete' f.pk as done_url %}
+    {% url 'conversations:followup_action' f.pk 'snooze' as later_url %}
+    {% url 'conversations:followup_action' f.pk 'cancel' as cancel_url %}
+    <div class="mt-2 grid grid-cols-2 gap-2">
+      <form method="post" action="{{ done_url }}" data-followup-form>{% csrf_token %}
+        <input type="hidden" name="next" value="{{ next_url }}">
+        <button class="btn btn-secondary btn-sm w-full">{{ followup_copy.DONE }}</button>
+      </form>
+      <form method="post" action="{{ later_url }}" data-followup-form x-data="{ later: '' }" class="contents">{% csrf_token %}
+        <input type="hidden" name="next" value="{{ next_url }}">
+        <label class="sr-only" for="fu-later-{{ f.pk }}">{{ followup_copy.LATER }}</label>
+        <select id="fu-later-{{ f.pk }}" name="when" class="select select-sm w-full" x-model="later"
+                @change="if (later && later !== 'custom') $el.form.requestSubmit()">
+          <option value="">{{ followup_copy.LATER }}…</option>
+          {% for value, label in fu.later_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+          <option value="custom">{{ followup_copy.PICK_A_DATE }}</option>
+        </select>
+        <div class="col-span-2 flex gap-2" x-show="later === 'custom'" x-cloak data-panel="date">
+          <label class="sr-only" for="fu-later-at-{{ f.pk }}">New time</label>
+          <input id="fu-later-at-{{ f.pk }}" type="datetime-local" name="custom_due_at" class="input flex-1 min-w-0" :required="later === 'custom'">
+          <button class="btn btn-primary btn-sm">Save</button>
+        </div>
+      </form>
+      <form method="post" action="{{ cancel_url }}" class="col-span-2" data-followup-form>{% csrf_token %}
+        <input type="hidden" name="next" value="{{ next_url }}">
+        <button class="btn btn-ghost btn-sm w-full" data-confirm="{{ followup_copy.NOT_NEEDED_CONFIRM }}" data-confirm-label="{{ followup_copy.NOT_NEEDED }}">{{ followup_copy.NOT_NEEDED }}</button>
+      </form>
+    </div>
+  </div>
+  {% endwith %}
+  {% empty %}
+  <p class="text-ink-subtle" data-empty="customer-followups">{{ fu.empty }}</p>
+  {% endfor %}
+
+  <form method="post" action="{% url 'conversations:followup_create' %}" class="border-t border-border pt-3 space-y-2"
+        x-data="{ when: 'tomorrow' }" data-followup-form data-customer-followup-set>{% csrf_token %}
+    <input type="hidden" name="contact" value="{{ fu.contact.public_id }}">
+    {% if fu.chat %}<input type="hidden" name="conversation" value="{{ fu.chat.public_id }}">{% endif %}
+    <input type="hidden" name="next" value="{{ next_url }}">
+        <label class="block text-xs text-ink-subtle" for="fu-when-{{ fu.contact.pk }}">When</label>
+    <select id="fu-when-{{ fu.contact.pk }}" name="when" class="select select-sm w-full" x-model="when">
+      {% for value, label in fu.later_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+      <option value="custom">{{ followup_copy.PICK_A_DATE }}</option>
+    </select>
+    <input type="datetime-local" name="custom_due_at" class="input w-full" aria-label="Follow-up time"
+           x-show="when === 'custom'" x-cloak :required="when === 'custom'">
+    <input type="text" name="note" maxlength="255" placeholder="Note for your team (optional)" class="input w-full" aria-label="Note for your team">
+    <button class="btn btn-secondary btn-sm w-full">{{ followup_copy.SET_FOLLOWUP }}</button>
+    <p class="text-xs text-ink-subtle" data-followup-promise>{{ followup_copy.INTERNAL_ONLY }}{% if not fu.chat %} {{ followup_copy.NO_CHAT_NOTE }}{% endif %}</p>
+  </form>
+</section>

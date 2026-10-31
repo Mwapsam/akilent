@@ -273,7 +273,7 @@ def test_the_page_and_badge(client, conversation, owner):
         conversation, created_by=owner, due_at=timezone.now() - timedelta(minutes=5)
     )
     page = client.get("/inbox/followups/?list=mine")
-    assert page.status_code == 200 and "Snooze" in page.content.decode()
+    assert page.status_code == 200 and ">Later<" in page.content.decode()
     assert client.get("/inbox/followups/?list=team").status_code == 200
     badge = client.get("/inbox/followups/badge/?toast=1")
     assert ">1<" in badge.content.decode() and "X-Toast" in badge

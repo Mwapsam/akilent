@@ -55,7 +55,10 @@ _STEP_GROUPS: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
         (
             ("assign_conversation", "Give the conversation to a teammate."),
             ("notify_team", "Email your team about this customer."),
-            ("create_followup", "Put a reminder on your team's follow-up list."),
+            (
+                "create_followup",
+                "Set a follow-up for your team. Nothing is sent to the customer.",
+            ),
         ),
     ),
     (

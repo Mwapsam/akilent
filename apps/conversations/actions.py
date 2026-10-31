@@ -674,7 +674,11 @@ class CreateFollowUpAction(Action):
             created_by=created_by,
             assigned_to=assigned_to,
         )
-        return {"followup_id": followup.id, "created": created}
+        return {
+            "followup_id": followup.id,
+            "created": created,
+            "note": getattr(followup, "note_result", ""),
+        }
 
 
 class CompleteFollowUpAction(Action):
@@ -694,7 +698,10 @@ class CompleteFollowUpAction(Action):
 
         if reason not in FollowUp.ClosedReason.values:
             raise ActionError("Unknown reason.")
-        followups.close(followup, by=by, reason=reason)
+        try:
+            followups.close(followup, by=by, reason=reason, strict=True)
+        except followups.FollowUpClosed as exc:
+            raise ActionError(str(exc)) from exc
         return {"followup_id": followup.id}
 
 
@@ -711,9 +718,10 @@ class SnoozeFollowUpAction(Action):
         self, context: dict, *, followup, when: str, custom: str = ""
     ) -> dict:
         from apps.conversations import followups
+        from apps.conversations.followup_copy import ALREADY_DONE
 
         if followup.done_at is not None:
-            raise ActionError("This reminder is already done.")
+            raise ActionError(ALREADY_DONE)
         try:
             followups.snooze(followup, when, custom)
         except ValueError as exc:
@@ -733,6 +741,7 @@ class ReassignFollowUpAction(Action):
     def execute(self, context: dict, *, followup, user=None) -> dict:  # type: ignore[override]
         from apps.accounts.models import Membership
         from apps.conversations import followups
+        from apps.conversations.followup_copy import NOT_ON_TEAM
 
         if (
             user is not None
@@ -740,8 +749,11 @@ class ReassignFollowUpAction(Action):
                 account=followup.account, user=user
             ).exists()
         ):
-            raise ActionError("That person isn't on your team.")
-        followups.reassign(followup, user)
+            raise ActionError(NOT_ON_TEAM)
+        try:
+            followups.reassign(followup, user)
+        except followups.FollowUpClosed as exc:
+            raise ActionError(str(exc)) from exc
         return {"followup_id": followup.id}
 
 

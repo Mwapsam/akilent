@@ -269,19 +269,14 @@ def _activity(contact, events) -> list[dict]:
     return items[:80]
 
 
-def _open_followups(account, contact) -> list:
-    """This customer's open reminders, soonest first, with due times in the business's zone."""
+def _customer_followups(request, account, contact) -> dict:
+    """The Follow-ups card: every open follow-up of theirs, read as on the Follow-ups page
+    (``followups.customer_panel``); a new one belongs to their latest chat."""
     from apps.conversations import followups
-    from apps.conversations.models import FollowUp
 
-    items = list(
-        FollowUp.objects.filter(account=account, contact=contact, done_at__isnull=True)
-        .select_related("conversation", "assigned_to")
-        .order_by("due_at")[:5]
+    return followups.customer_panel(
+        account, contact, request.user, chat=followups.latest_chat(contact)
     )
-    for f in items:
-        f.due_label = followups.local_label(f.due_at, account)  # type: ignore[attr-defined]
-    return items
 
 
 def _contact_automations(account, contact) -> dict | None:
@@ -374,7 +369,7 @@ def contact_detail(request, public_id: str):
             "contact_recs": _contact_recommendations(contact),
             "is_admin": is_account_admin(request.user, account),
             "automations": _contact_automations(account, contact),
-            "open_followups": _open_followups(account, contact),
+            "fu": _customer_followups(request, account, contact),
         },
     )
 

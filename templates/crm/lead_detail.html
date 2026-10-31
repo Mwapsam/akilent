@@ -15,6 +15,7 @@
 </div>
 
 <div class="grid gap-6 lg:grid-cols-3">
+  <div class="space-y-6 min-w-0">
   <section class="card card-pad text-sm space-y-2">
     <div class="flex justify-between"><span class="text-ink-subtle">Where they came from</span><span>{{ lead.source|default:"—" }}</span></div>
     <div class="flex justify-between"><span class="text-ink-subtle">Looked after by</span><span>{{ lead.owner|default:"Unassigned" }}</span></div>
@@ -38,6 +39,10 @@
     {% include "publishing/_source_post.html" with subject=lead %}
     <a href="{% url 'contacts:detail' lead.contact.public_id %}" class="btn btn-ghost btn-sm w-full mt-2">View full profile</a>
   </section>
+
+  {% comment %}Set and act on this customer's follow-ups without leaving the lead.{% endcomment %}
+  {% include "conversations/_customer_followups.html" with next_url=request.get_full_path followup_copy=fu.copy %}
+  </div>
 
   <section class="lg:col-span-2 card card-pad">
     {% if lead.status == 'converted' %}

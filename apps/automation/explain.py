@@ -112,6 +112,11 @@ _ERRORS = (
         "The message hasn't been approved by WhatsApp yet, so it can't be sent.",
     ),
     ("not found", "The message this automation uses no longer exists."),
+    (
+        "no follow-up was set",
+        "The teammate this follow-up was for is no longer on your team, so no follow-up "
+        "was set. Choose someone else in Who it's for.",
+    ),
     ("isn't on your team", "The teammate it should notify is no longer on your team."),
     ("nobody on your team", "There is nobody on your team to hand this to."),
     ("no phone", "This customer has no phone number to send to."),
@@ -172,7 +177,7 @@ def describe_step(
         "lookup_product": lambda: "Looked up a product",
         "publish_post": lambda: "Published a post",
         "action": lambda: f"Ran “{step.get('action', '')}”",
-        "create_followup": lambda: "Added a reminder to your follow-up list",
+        "create_followup": lambda: "Set a follow-up for your team",
         "start_form": lambda: "Sent a form",
         "ai_classify": lambda: (
             f"Sorted it as “{result.get('corrected') or result.get('label')}”"
@@ -300,7 +305,7 @@ def _step_sentence(step: dict) -> str | None:
     if t == "create_followup":
         hours = float(step.get("due_in_hours") or 24)
         when = _duration(int(hours * 3600))
-        return f"reminds your team to follow up in {when}"
+        return f"sets a follow-up for your team, due in {when}"
     if t == "webhook":
         return "notifies another system"
     return None  # stop / exit: nothing worth saying

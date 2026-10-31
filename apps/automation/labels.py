@@ -50,7 +50,7 @@ STEP_LABELS = {
     "lookup_product": "Look up a product",
     "publish_post": "Publish a post",
     "start_form": "Send a form",
-    "create_followup": "Remind your team to follow up",
+    "create_followup": "Set a follow-up for your team",
     "ai_classify": "Sort the message (AI)",
     "ai_extract": "Pick out details (AI)",
     "ai_answer": "Answer from your facts (AI)",

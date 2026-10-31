@@ -222,12 +222,33 @@ def lead_detail(request, public_id: str):
 
     origin_recommendation = _origin_recommendation_for_lead(lead)
 
+    # The customer's follow-ups, read as on the Follow-ups page; a new one belongs to the
+    # chat this interest came from, else their latest one, else none.
+    from apps.conversations import followups
+    from apps.conversations.models import Conversation
+    from apps.core.channels import hide_disabled_channels
+
+    chat = None
+    if lead.conversation_id:
+        chat = (
+            hide_disabled_channels(Conversation.objects.all())
+            .filter(pk=lead.conversation_id)
+            .first()
+        )
+    fu = followups.customer_panel(
+        account,
+        lead.contact,
+        request.user,
+        chat=chat or followups.latest_chat(lead.contact),
+    )
+
     return render(
         request,
         "crm/lead_detail.html",
         {
             "account": account,
             "lead": lead,
+            "fu": fu,
             "status_choices": [(s.value, s.label) for s in SETTABLE_LEAD_STATUSES],
             "origin_recommendation": origin_recommendation,
         },

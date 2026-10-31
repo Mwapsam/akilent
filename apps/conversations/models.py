@@ -860,13 +860,13 @@ class SavedReply(models.Model):
 
 
 class FollowUp(models.Model):
-    """A due-date reminder to return to a customer (R2.2). Deliberately not a
-    general task system — creation is limited to "remind me in 1h / tomorrow /
-    pick a time" from a conversation, per the plan's UX guardrail.
+    """A follow-up: work the team needs to do to get back to a customer (R2.2). Never
+    messages the customer, and deliberately not a general task system.
 
-    ``source`` says who asked for it: a person, or missed-conversation recovery
-    (``recovery``). Insights uses it to measure how many missed conversations were
-    picked back up."""
+    ``source`` says who asked for it: a person (``manual``), missed-conversation recovery
+    (``missed``), a Business Health automation (``policy``) or a workflow step
+    (``workflow``). Insights uses it to measure how many missed conversations were picked
+    back up. User-facing wording lives in ``apps.conversations.followup_copy``."""
 
     class Source(models.TextChoices):
         MANUAL = "manual", "Set by a person"

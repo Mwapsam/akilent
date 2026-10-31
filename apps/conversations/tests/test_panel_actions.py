@@ -86,7 +86,7 @@ def test_panel_renders_the_engagement_actions(logged_in, conversation_without_a_
         f"/inbox/{conversation_without_a_lead.public_id}/"
     ).content.decode()
     assert "Track as interested" in body
-    assert "Set reminder" in body
+    assert "Set follow-up" in body
 
 
 @pytest.mark.django_db

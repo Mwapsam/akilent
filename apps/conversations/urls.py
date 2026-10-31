@@ -26,6 +26,7 @@ urlpatterns = [
         name="comments_moderate",
     ),
     path("followups/", views.followups_due, name="followups_due"),
+    path("followups/new/", views.followup_create, name="followup_create"),
     path(
         "followups/<int:pk>/complete/",
         views.followup_complete,

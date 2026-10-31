@@ -83,10 +83,11 @@ def test_followups_due_lists_only_due_and_open(logged_in, conversation):
 
     resp = client.get("/inbox/followups/")
     assert resp.status_code == 200
-    resp.content.decode()
-    due_ids = [f.pk for f in resp.context["due"]]
-    assert due_ids == [due.pk]
-    assert len(resp.context["upcoming"]) == 1
+    sections = {s["key"]: s["rows"] for s in resp.context["sections"]}
+    # One customer, one row: led by the due follow-up; the later one rides along.
+    assert [r["main"]["followup"].pk for r in sections["due"]] == [due.pk]
+    assert len(sections["due"][0]["others"]) == 1
+    assert sections["waiting"] == [] and sections["coming_up"] == []
 
 
 @pytest.mark.django_db

@@ -75,6 +75,7 @@ function registerChat() {
     windowOpen: cfg.windowOpen !== false,
     statusHtml: cfg.statusHtml || '',
     infoOpen: false,
+    followupLabel: '',  // set when an AI-suggested follow-up is applied (aiApply)
     // True while the details are open as a drawer (narrow pane), not as a column.
     infoDrawer: false,
     draft: '',
@@ -484,6 +485,12 @@ function registerChat() {
       try {
         const data = await this.aiPost(this.ai.applyUrl, { proposal: p.id, index: extra.index });
         if (data.proposal) this.ai.proposal = data.proposal;
+        // A suggested follow-up now exists: the composer says so in the page's words, and
+        // the badges re-read the shared count.
+        if (extra.kind === 'follow_up' && data.followup_label) {
+          this.followupLabel = data.followup_label;
+          if (window.htmx) htmx.trigger(document.body, 'followup-changed');
+        }
         if (window.toast) window.toast('success', data.message);
       } catch (e) {
         extra.applied = false;

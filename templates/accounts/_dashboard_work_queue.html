@@ -37,12 +37,14 @@ The poll is gated on document visibility — a backgrounded tab stops asking.
     <span class="work-tile-label">new lead{{ leads|pluralize }}</span>
   </a>
 
-  <a href="/inbox/followups/"
+  {% comment %}Customers with a follow-up due for anyone, like the other tiles count the whole
+  business: the Whole team tab's own number, and it opens that tab.{% endcomment %}
+  <a href="/inbox/followups/?list=team"
      class="work-tile{% if due %} work-tile--active{% endif %}"
-     aria-label="{{ due }} follow-up{{ due|pluralize }} due — open follow-ups">
-    {% include "components/icon.html" with name="clock" class="w-5 h-5 shrink-0" %}
+     aria-label="{{ due }} follow-up{{ due|pluralize }} due for the whole team — open follow-ups" data-tile="followups">
+    {% include "components/icon.html" with name="bell" class="w-5 h-5 shrink-0" %}
     <span class="work-tile-value">{{ due }}</span>
-    <span class="work-tile-label">follow-up{{ due|pluralize }} due</span>
+    <span class="work-tile-label">follow-up{{ due|pluralize }} due · whole team</span>
   </a>
 
   {% if not waiting and not missed and not leads and not due %}

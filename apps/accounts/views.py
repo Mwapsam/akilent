@@ -992,15 +992,15 @@ def _work_queue(account):
     """
     from django.utils import timezone
 
-    from apps.conversations.models import FollowUp
+    from apps.conversations import followups
     from apps.conversations.state import missed, needs_attention
 
     now = timezone.now()
     waiting_count = needs_attention(account, now).count()
     missed_count = missed(account, now).count()
-    followups_due_count = FollowUp.objects.filter(
-        account=account, done_at__isnull=True, due_at__lte=now
-    ).count()
+    # Business-wide like the other tiles: customers with a follow-up due for anyone, the
+    # Whole team tab's own number (followups.due_for_team), so the tile and the tab agree.
+    followups_due_count = followups.due_for_team(account, now=now)
 
     new_leads_count = 0
     try:

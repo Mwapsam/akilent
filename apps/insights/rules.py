@@ -115,7 +115,9 @@ def rule_lead_followup_gap(account):
         evidence_count=count,
         suggested_action={
             "action": "create_followup",
-            "label": f"Follow up with {count} waiting conversation{'s' if count != 1 else ''}",
+            # It opens the inbox at those conversations; it creates no follow-ups, so the
+            # label doesn't say it does.
+            "label": f"See {count} waiting conversation{'s' if count != 1 else ''}",
         },
     )
 

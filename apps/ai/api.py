@@ -264,11 +264,14 @@ def serialize(proposal, conversation) -> dict | None:
         )
     elif proposal.action == "handoff":
         out["note"] = payload.get("note", "")
+    from apps.conversations.followup_copy import INTERNAL_ONLY
+
     out["extras"] = [
         {
             "index": i,
             "kind": e.get("kind"),
             "label": extra_label(e),
+            "hint": INTERNAL_ONLY if e.get("kind") == "follow_up" else "",
             "applied": bool(e.get("applied_at")),
         }
         for i, e in enumerate(proposal.extras or [])
@@ -389,9 +392,13 @@ def extra_label(extra: dict) -> str:
     if kind == "track_interest":
         return "Track as interested"
     if kind == "follow_up":
+        # "Suggested follow-up", never "Follow up …": it's work for the team, and reads as
+        # one, not as a message the AI will send the customer.
         days = int(extra.get("in_days") or 1)
         when = "tomorrow" if days == 1 else f"in {days} days"
-        return f"Follow up {when}" + (f": {extra['note']}" if extra.get("note") else "")
+        return f"Suggested follow-up {when}" + (
+            f": {extra['note']}" if extra.get("note") else ""
+        )
     return kind or ""
 
 
@@ -443,7 +450,9 @@ def apply_extra(account, conversation, proposal_id, index, user) -> tuple[bool, 
             )
             done = "Tracked as interested."
         elif extra["kind"] == "follow_up":
-            run_action(
+            from apps.conversations import followup_copy, followups
+
+            result = run_action(
                 "create_followup",
                 ctx,
                 conversation=conversation,
@@ -451,7 +460,15 @@ def apply_extra(account, conversation, proposal_id, index, user) -> tuple[bool, 
                 note=extra.get("note", ""),
                 created_by=user,
             )
-            done = "Follow-up scheduled."
+            from apps.conversations.models import FollowUp
+
+            due_at = FollowUp.objects.get(pk=result["followup_id"]).due_at
+            when = followups.local_label(due_at, account)
+            done = (
+                followup_copy.set_for(when)
+                if result["created"]
+                else followup_copy.kept_existing(when, result.get("note", ""))
+            )
         else:
             return False, "That suggestion wasn't found."
     except ActionError as exc:

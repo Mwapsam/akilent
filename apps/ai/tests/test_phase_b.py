@@ -253,12 +253,20 @@ def test_a_person_applies_extras_with_one_click(agent, account):
     assert [e["label"] for e in feed["extras"]] == [
         "Tag “solar-quote”",
         "Track as interested",
-        "Follow up in 2 days: Check they got the quote",
+        "Suggested follow-up in 2 days: Check they got the quote",
     ]
+    # Said to be the team's own work, never a message the AI will send.
+    assert [e["hint"] for e in feed["extras"]][2] == (
+        "Only your team sees this. Nothing is sent to the customer."
+    )
 
     url = f"/inbox/{c.public_id}/ai/apply/"
-    for i in range(3):
+    for i in range(2):
         assert agent.post(url, {"proposal": p.pk, "index": i}).json()["ok"]
+    applied = agent.post(url, {"proposal": p.pk, "index": 2}).json()
+    # The composer shows it at once in the page's words; the message is the shared one.
+    assert applied["ok"] and applied["followup_label"].startswith("Follow-up ")
+    assert applied["message"].startswith("Follow-up set for ")
     assert list(c.contact.tags.values_list("name", flat=True)) == ["solar-quote"]
     assert Lead.objects.filter(contact=c.contact).count() == 1
     assert FollowUp.objects.get().note == "Check they got the quote"

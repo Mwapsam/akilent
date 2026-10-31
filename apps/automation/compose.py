@@ -414,7 +414,7 @@ class _Builder:
             }
         )
         self.reasons.append(
-            "Puts a reminder on your team's follow-up list. Nothing extra is sent to the customer."
+            "Sets a follow-up for your team. Only your team sees it; nothing is sent to the customer."
         )
         return s["id"], [(s, "next")]
 

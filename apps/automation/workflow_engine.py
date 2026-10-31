@@ -566,15 +566,15 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
                 hours = -1
             if not 0.25 <= hours <= 24 * 60:
                 _error(
-                    f"step {sid!r}: remind between 15 minutes and 60 days from now",
+                    f"step {sid!r}: make it due between 15 minutes and 60 days from now",
                     step_id=sid,
                     field="due_in_hours",
                 )
             to = (step.get("assign_to") or "").strip()
             if to and to != "assignee" and "@" not in to:
                 _error(
-                    f"step {sid!r}: put it on the assignee's list, a teammate's (their "
-                    "email), or leave it for the whole team",
+                    f"step {sid!r}: give it to whoever is assigned to the chat, a "
+                    "teammate, or the whole team",
                     step_id=sid,
                     field="assign_to",
                 )
@@ -2190,7 +2190,9 @@ def _run_create_followup(run: WorkflowRun, step: dict) -> dict:
         try:
             assigned_to = notifications.recipients(run.workflow.account, to)[0]
         except notifications.NotifyError as exc:
-            raise ValueError(f"create_followup step {step.get('id')!r}: {exc}") from exc
+            raise ValueError(
+                f"create_followup step {step.get('id')!r}: {exc} No follow-up was set."
+            ) from exc
     hours = float(step.get("due_in_hours") or 24)
     followup, created = followups.create(
         run.workflow.account,
@@ -2200,6 +2202,7 @@ def _run_create_followup(run: WorkflowRun, step: dict) -> dict:
         note=note or "Follow up",
         source="workflow",
         assigned_to=assigned_to,
+        for_team=not to,  # "Whole team" in the editor: nobody in particular
     )
     return {"followup_id": followup.pk, "created": created}
 

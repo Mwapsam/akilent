@@ -704,7 +704,7 @@ STEPS: tuple[StepDef, ...] = (
         key="hours",
         section="know",
         title="Set your business hours",
-        desc="Akilent uses them for out-of-hours replies and reminders.",
+        desc="Akilent uses them for out-of-hours replies and follow-up times.",
         icon="clock",
         cta="Set hours",
         url="settings-hours",
@@ -1086,7 +1086,7 @@ NEXT_ACTIONS: tuple[NextActionDef, ...] = (
     NextActionDef(
         key="set_followup",
         title="Set a follow-up for an interested customer",
-        desc="A reminder on the conversation makes sure they hear back from you.",
+        desc="A follow-up makes sure your team gets back to them. Nothing is sent to the customer.",
         cta="Open the inbox",
         url=lambda ctx: reverse("conversations:inbox"),
         when=_all(_has("crm.Lead"), _no("conversations.FollowUp", source="manual")),

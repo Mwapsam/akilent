@@ -29,6 +29,9 @@ CHOICES = (
     ("next_week", "Next week"),
     ("custom", "Pick a time"),
 )
+# What Later offers wherever a follow-up is moved (the page and the side panel), beside
+# "Pick a date".
+LATER_CHOICES = tuple(c for c in CHOICES if c[0] in ("1h", "tomorrow", "next_week"))
 
 
 def business_zone(account) -> ZoneInfo:
@@ -67,7 +70,9 @@ def resolve_due_at(
         if parsed <= now:
             raise ValueError("Pick a time in the future.")
         return parsed
-    raise ValueError("Choose when to be reminded.")
+    from apps.conversations.followup_copy import CHOOSE_WHEN
+
+    raise ValueError(CHOOSE_WHEN)
 
 
 def local_label(dt: datetime.datetime, account) -> str:
@@ -86,16 +91,21 @@ def create(
     source: str = "manual",
     created_by=None,
     assigned_to=None,
+    for_team: bool = False,
 ):
     """Make a reminder, or return the open one of the same kind on this conversation.
 
-    Returns ``(followup, created)``. An existing open reminder is kept as it is (a second
-    click, a repeated AI suggestion or the next sweep must not stack copies), except that
-    an earlier due time wins, so asking again "sooner" works.
+    With no ``assigned_to`` it goes to whoever made it, else the chat's assignee; with
+    ``for_team`` it stays for the whole team (an automation step set to "Whole team").
+
+    Returns ``(followup, created)``. An existing open reminder is kept (a second click, a
+    repeated AI suggestion or the next sweep must not stack copies), except that an earlier
+    due time wins, so asking again "sooner" works, and a new note is added to its note
+    rather than dropped (``append_note``). ``followup.note_result`` says what became of it.
     """
     from apps.conversations.models import FollowUp
 
-    if assigned_to is None:
+    if assigned_to is None and not for_team:
         if created_by is not None:
             assigned_to = created_by
         elif conversation is not None:
@@ -110,10 +120,18 @@ def create(
                 .first()
             )
             if existing is not None:
+                fields = []
                 if due_at < existing.due_at:
                     existing.due_at = due_at
                     existing.notified_at = None
-                    existing.save(update_fields=["due_at", "notified_at"])
+                    fields += ["due_at", "notified_at"]
+                note_result = append_note(existing, note)
+                existing.note_result = note_result  # type: ignore[attr-defined]
+                if note_result == NOTE_ADDED:
+                    fields.append("note")
+                if fields:
+                    existing.save(update_fields=fields)
+                    _announce(existing)
                 return existing, False
         try:
             with transaction.atomic():
@@ -132,42 +150,118 @@ def create(
             followup = FollowUp.objects.get(
                 conversation=conversation, source=source, done_at__isnull=True
             )
+            note_result = append_note(followup, note)
+            followup.note_result = note_result  # type: ignore[attr-defined]
+            if note_result == NOTE_ADDED:
+                followup.save(update_fields=["note"])
             return followup, False
     _announce(followup)
     return followup, True
 
 
+NOTE_MAX = 255
+NOTE_ADDED, NOTE_ALREADY_THERE, NOTE_TOO_LONG = "added", "already_there", "too_long"
+
+
+def append_note(followup, note: str) -> str:
+    """Add ``note`` to ``followup.note`` on a line of its own (unsaved), never replacing or
+    cutting what's there. Returns ``""`` for a blank note (nothing to add),
+    ``NOTE_ALREADY_THERE`` when that exact line is already in it (an automation repeating
+    itself), ``NOTE_TOO_LONG`` when the two won't fit in the note (left as it was, so the
+    person can be told), else ``NOTE_ADDED``."""
+    note = (note or "").strip()
+    if not note:
+        return ""
+    current = followup.note or ""
+    if note in (line.strip() for line in current.splitlines()):
+        return NOTE_ALREADY_THERE
+    combined = f"{current}\n{note}" if current else note
+    if len(combined) > NOTE_MAX:
+        return NOTE_TOO_LONG
+    followup.note = combined
+    return NOTE_ADDED
+
+
+class FollowUpClosed(ValueError):
+    """The follow-up was closed (by someone else, a moment ago) before this change landed."""
+
+    def __init__(self):
+        from apps.conversations.followup_copy import ALREADY_DONE
+
+        super().__init__(ALREADY_DONE)
+
+
+def _write_open(followup, fields: dict) -> None:
+    """Apply ``fields`` to the row only while it is still open, under a row lock.
+
+    Two people acting at once (Done and Later, say) must leave one consistent state: the
+    second change sees the row closed and is refused instead of resurrecting it. The caller's
+    instance is updated to what was saved.
+    """
+    from apps.conversations.models import FollowUp
+
+    with transaction.atomic():
+        locked = FollowUp.objects.select_for_update().get(pk=followup.pk)
+        if locked.done_at is not None:
+            followup.done_at = locked.done_at
+            followup.closed_reason = locked.closed_reason
+            raise FollowUpClosed()
+        for name, value in fields.items():
+            setattr(locked, name, value)
+        locked.save(update_fields=list(fields))
+    for name, value in fields.items():
+        setattr(followup, name, value)
+
+
 def snooze(followup, choice: str, custom_value: str = "") -> None:
-    followup.due_at = resolve_due_at(choice, custom_value, account=followup.account)
-    followup.notified_at = None
-    followup.snoozed_count += 1
-    followup.save(update_fields=["due_at", "notified_at", "snoozed_count"])
+    """Later: move it to a new time. Refused (``FollowUpClosed``) once it's closed."""
+    due_at = resolve_due_at(choice, custom_value, account=followup.account)
+    _write_open(
+        followup,
+        {
+            "due_at": due_at,
+            "notified_at": None,
+            "snoozed_count": followup.snoozed_count + 1,
+        },
+    )
     _announce(followup)
 
 
 def reassign(followup, user) -> None:
-    followup.assigned_to = user
-    followup.save(update_fields=["assigned_to"])
+    _write_open(followup, {"assigned_to": user})
     _announce(followup)
 
 
 def edit(followup, *, note: str | None = None, due_at=None) -> None:
-    fields = []
+    fields: dict = {}
     if note is not None:
-        followup.note = note[:255]
-        fields.append("note")
+        # A textarea sends "\r\n"; stored as "\n" so a line break costs one character.
+        fields["note"] = note.replace("\r\n", "\n")[:NOTE_MAX]
     if due_at is not None:
-        followup.due_at = due_at
-        followup.notified_at = None
-        fields += ["due_at", "notified_at"]
+        fields["due_at"] = due_at
+        fields["notified_at"] = None
     if fields:
-        followup.save(update_fields=fields)
+        _write_open(followup, fields)
         _announce(followup)
 
 
-def close(followup, *, by=None, reason: str = "done") -> None:
-    followup.mark_done(by=by, reason=reason)
+def close(followup, *, by=None, reason: str = "done", strict: bool = False) -> bool:
+    """Done or Not needed (``reason="cancelled"``). The row is kept either way.
+
+    Returns whether this call closed it. With ``strict`` (a person pressing a button), a
+    follow-up someone else already closed raises ``FollowUpClosed`` so they're told so.
+    """
+    try:
+        _write_open(
+            followup,
+            {"done_at": timezone.now(), "closed_reason": reason, "done_by": by},
+        )
+    except FollowUpClosed:
+        if strict:
+            raise
+        return False
     _announce(followup)
+    return True
 
 
 def reopen(followup) -> None:
@@ -184,7 +278,9 @@ def reopen(followup) -> None:
             done_at__isnull=True,
         ).exists()
     ):
-        raise ValueError("There's already an open reminder like this one.")
+        from apps.conversations.followup_copy import ALREADY_OPEN
+
+        raise ValueError(ALREADY_OPEN)
     followup.done_at = None
     followup.closed_reason = ""
     followup.done_by = None
@@ -229,6 +325,231 @@ def open_after_customer_replied(conversation):
         conversation=conversation, done_at__isnull=True
     ).exclude(source__in=WAITING_SOURCES)
     return list(qs.filter(created_at__lt=last_inbound))
+
+
+# ── What's waiting on the team: one count and one grouping (interaction contract §2-§5) ──
+
+SECTION_ORDER = ("waiting", "due", "coming_up")
+
+
+def _open_followups(account):
+    from apps.conversations.models import FollowUp
+    from apps.core.channels import hide_disabled_channels
+
+    return hide_disabled_channels(
+        FollowUp.objects.filter(account=account, done_at__isnull=True),
+        field="conversation__channel",
+    )
+
+
+def _mine_q(user):
+    from django.db.models import Q
+
+    return Q(assigned_to=user) | Q(assigned_to__isnull=True)
+
+
+def due_customers(account, *, user=None, now=None):
+    """The customers with a follow-up due now or overdue: open (not done, not cancelled),
+    on a channel that's switched on, and, with ``user``, theirs or unassigned.
+
+    The one definition behind every count. They are the customers in Waiting and Due on
+    the Follow-ups page, so a count and the page can't describe different work.
+    """
+    now = now or timezone.now()
+    qs = _open_followups(account).filter(due_at__lte=now)
+    if user is not None:
+        qs = qs.filter(_mine_q(user))
+    # order_by() clears the model's default ordering, which DISTINCT would otherwise
+    # include (contact + due time), listing a customer with two due follow-ups twice.
+    return qs.order_by().values_list("contact_id", flat=True).distinct()
+
+
+def due_for(user, account, *, now=None) -> int:
+    """Customers with a follow-up due now or overdue for ``user`` (theirs or unassigned).
+
+    The one count behind the nav badge, the dashboard tile and Business Health. It counts
+    customers, not rows: two follow-ups for one customer are one piece of work.
+    """
+    return due_customers(account, user=user, now=now).count()
+
+
+def due_for_team(account, *, now=None) -> int:
+    """Customers with a follow-up due now or overdue for anyone in the business."""
+    return due_customers(account, now=now).count()
+
+
+def section_for(followup, now) -> str:
+    """Waiting (a customer who wrote and got no reply), Due, or Coming up.
+
+    A missed-chat follow-up someone moved Later waits in Coming up like any other.
+    """
+    if followup.due_at > now:
+        return "coming_up"
+    if followup.source == "missed":
+        return "waiting"
+    return "due"
+
+
+def _urgency(followup, now):
+    return (SECTION_ORDER.index(section_for(followup, now)), followup.due_at)
+
+
+class FollowUpRow:
+    """One customer on the Follow-ups page: their most urgent follow-up leads the row."""
+
+    def __init__(self, contact, primary, others, section):
+        self.contact = contact
+        self.primary = primary
+        self.others = others
+        self.section = section
+
+    @property
+    def main_action(self) -> str:
+        """``"reply"`` (open the chat, ready to answer) or ``"open"``. Never completes."""
+        return "reply" if self.section == "waiting" else "open"
+
+    @property
+    def target_url(self) -> str:
+        return target_url(self.primary, reply=self.main_action == "reply")
+
+
+def target_url(followup, *, reply: bool = False) -> str:
+    """Where acting on a follow-up starts: its chat (ready to answer when ``reply``), or the
+    customer's page when it has no chat."""
+    from django.urls import reverse
+
+    if followup.conversation_id:
+        url = reverse("conversations:detail", args=[followup.conversation.public_id])
+        return url + ("?reply=1" if reply else "")
+    return reverse("contacts:detail", args=[followup.contact.public_id])
+
+
+def rows_for(user, account, *, scope: str = "mine", contact=None, now=None):
+    """The Follow-ups page as rows, grouped by section, one row per customer.
+
+    A customer qualifies for ``mine`` when one of their open follow-ups is theirs or
+    unassigned, and for ``team`` when they have any. Once in, the row carries every open
+    follow-up of theirs (each shows its real owner); the most urgent qualifying one decides
+    the section and the main action. Identity is the contact, never a name or a phone.
+    """
+    now = now or timezone.now()
+    base = _open_followups(account)
+    if contact is not None:
+        base = base.filter(contact=contact)
+    qualifying = base.filter(_mine_q(user)) if scope == "mine" else base
+    contact_ids = set(qualifying.values_list("contact_id", flat=True))
+    items = (
+        base.filter(contact_id__in=contact_ids)
+        .select_related("contact", "conversation", "assigned_to", "created_by")
+        .order_by("due_at", "pk")
+    )
+    groups: dict = {}
+    for f in items:
+        key = f.contact_id or ("conversation", f.conversation_id)
+        groups.setdefault(key, []).append(f)
+
+    def eligible(f) -> bool:
+        return scope != "mine" or f.assigned_to_id in (None, user.pk)
+
+    sections: dict[str, list[FollowUpRow]] = {name: [] for name in SECTION_ORDER}
+    for group in groups.values():
+        candidates = [f for f in group if eligible(f)] or group
+        primary = min(candidates, key=lambda f: _urgency(f, now))
+        others = sorted(
+            (f for f in group if f.pk != primary.pk), key=lambda f: _urgency(f, now)
+        )
+        section = section_for(primary, now)
+        sections[section].append(FollowUpRow(primary.contact, primary, others, section))
+    for rows in sections.values():
+        rows.sort(key=lambda r: (r.primary.due_at, r.primary.pk))
+    return sections
+
+
+def for_customer(account, contact, *, conversation=None, now=None) -> list:
+    """A customer's open follow-ups as every customer-level surface shows them (the chat,
+    the contact page, the lead page): ``conversation``'s own first when given, then the
+    rest in the page's order of urgency. Nothing is cut off; the first one leads."""
+    now = now or timezone.now()
+    items = (
+        _open_followups(account)
+        .filter(contact_id=contact.pk)
+        .select_related("contact", "conversation", "assigned_to", "created_by")
+    )
+    first = conversation.pk if conversation is not None else None
+    return sorted(
+        items,
+        key=lambda f: (
+            first is not None and f.conversation_id != first,
+            *_urgency(f, now),
+        ),
+    )
+
+
+def for_chat(conversation, *, now=None) -> list:
+    """The customer's open follow-ups as a chat shows them: this chat's own first."""
+    return for_customer(
+        conversation.account, conversation.contact, conversation=conversation, now=now
+    )
+
+
+def latest_chat(contact):
+    """The customer's most recent chat on a channel that's switched on, or None. A follow-up
+    set from their contact page belongs to it, so Open chat has somewhere to go."""
+    from django.db.models import F
+
+    from apps.conversations.models import Conversation
+    from apps.core.channels import hide_disabled_channels
+
+    return (
+        hide_disabled_channels(Conversation.objects.filter(contact=contact))
+        .order_by(F("last_message_at").desc(nulls_last=True), "-pk")
+        .first()
+    )
+
+
+def card(f, viewer, *, now, zone, reply: bool = False) -> dict:
+    """One follow-up as every surface shows it (the Follow-ups page, the composer, the side
+    panel, the contact and lead pages): the same why, when, note, owner and chat."""
+    from apps.conversations import followup_copy as copy
+
+    return {
+        "followup": f,
+        "why": copy.why_label(f, viewer),
+        "badge": "badge-warning" if f.source == "missed" else "badge-neutral",
+        "when": copy.when_label(f, now=now, zone=zone),
+        "note": copy.note_for(f),
+        "late": f.due_at <= now,
+        "owner": copy.owner_label(f, viewer),
+        "channel": copy.channel_label(f),
+        "url": target_url(f, reply=reply),
+    }
+
+
+def customer_panel(account, contact, viewer, *, chat=None, now=None) -> dict:
+    """The Follow-ups card on a customer's contact or lead page: every open follow-up of
+    theirs as a card, the link to the page filtered to them, and the chat a new one would
+    belong to (None: it opens their customer page instead)."""
+    from django.urls import reverse
+
+    from apps.conversations import followup_copy as copy
+
+    now = now or timezone.now()
+    zone = business_zone(account)
+    name = contact.display_name
+    return {
+        "contact": contact,
+        "chat": chat,
+        "items": [
+            card(f, viewer, now=now, zone=zone)
+            for f in for_customer(account, contact, now=now)
+        ],
+        "all_url": reverse("conversations:followups_due")
+        + f"?list=team&contact={contact.public_id}",
+        "all_label": copy.all_for(name),
+        "empty": copy.no_followups_for(name),
+        "later_choices": LATER_CHOICES,
+        "copy": copy,
+    }
 
 
 def _announce(followup) -> None:
@@ -321,9 +642,12 @@ def _email_due(items) -> None:
     from apps.accounts import notifications
 
     first = items[0]
+    from apps.conversations import followup_copy as copy
+
     lines = [
-        f"• {f.contact.display_name}: {f.note or 'follow up'} "
-        f"(due {local_label(f.due_at, f.account)})"
+        f"• {f.contact.display_name}: "
+        + (" / ".join(f.note.splitlines()) if f.note else copy.why_label(f))
+        + f" (due {local_label(f.due_at, f.account)}, {copy.channel_label(f)})"
         for f in items[:10]
     ]
     if len(items) > 10:
@@ -335,11 +659,9 @@ def _email_due(items) -> None:
             subject=(
                 f"Akilent: {len(items)} follow-up{'s' if len(items) != 1 else ''} due"
             ),
-            text="These reminders on your follow-up list are due now:\n\n"
-            + "\n".join(lines),
+            text=copy.EMAIL_INTRO + "\n\n" + "\n".join(lines),
             path=reverse("conversations:followups_due") + "?list=mine",
-            reason="You're getting this because these reminders are on your follow-up "
-            "list. Turn these emails off on the Follow-ups page.",
+            reason=copy.EMAIL_REASON,
         )
     except Exception:
         import logging
