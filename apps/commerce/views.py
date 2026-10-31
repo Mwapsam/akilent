@@ -127,6 +127,7 @@ def create_order_view(request):
                 messages.error(request, "That interested customer wasn't found.")
                 return redirect(next_url or "commerce:orders")
 
+        contact: Contact | None
         if lead is not None:
             contact = lead.contact
             conversation = lead.conversation

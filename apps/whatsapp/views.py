@@ -498,7 +498,9 @@ def template_create(request):
 
     from apps.ai import api as ai_api
 
-    form, variables, ai_draft = {}, [], None
+    form: dict = {}
+    variables: list = []
+    ai_draft = None
     draft = (
         ai_api.get_draft(account, request.GET.get("draft"), kind="template")
         if request.GET.get("draft")

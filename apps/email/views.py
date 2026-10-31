@@ -949,7 +949,7 @@ def templates_list(request):
             .order_by("name", "language_code")
         )
         for t in whatsapp_templates:
-            t.can_edit = can_edit(t)
+            t.can_edit = can_edit(t)  # type: ignore[attr-defined]
 
     return render(
         request,
