@@ -835,6 +835,8 @@ def onboarding(request):
     account = get_current_account(request)
     if account is None:
         return redirect("signup")
+    if ob.awaiting_first_payment(account):
+        return redirect("billing:pay")  # setup comes after payment
 
     # Keep the persisted resume-state in step with reality on each visit.
     ob.advance_onboarding(account)
@@ -862,6 +864,9 @@ def dashboard(request):
     from django.utils import timezone
 
     from apps.accounts import onboarding as ob
+
+    if ob.awaiting_first_payment(account):
+        return redirect("billing:pay")  # setup comes after payment
 
     hour = timezone.localtime().hour
     greeting = (

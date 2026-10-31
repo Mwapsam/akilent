@@ -138,7 +138,6 @@ class PayPalProvider(PaymentProvider):
     card_label = "Pay with debit or credit card"
     # With PAYPAL_SUBSCRIPTIONS on, the PayPal button starts a subscription that renews itself.
     subscribe_label = "Subscribe with PayPal"
-    card_once_label = "Pay once with debit or credit card"
 
     @property
     def supported_currencies(self) -> frozenset:
@@ -184,11 +183,10 @@ class PayPalProvider(PaymentProvider):
 
     def checkout_options(self) -> list[dict]:
         if subs.enabled():
-            # The card button stays a one-off payment (renewed by pay link).
-            return [
-                {"code": self.code, "name": self.subscribe_label},
-                {"code": self.card_method, "name": self.card_once_label},
-            ]
+            # Subscribing is the only way to pay: no one-off card payment beside it, so a new
+            # paid signup goes straight on to PayPal (billing.views.pay starts checkout by
+            # itself when there's one way to pay).
+            return [{"code": self.code, "name": self.subscribe_label}]
         return [
             {"code": self.code, "name": self.checkout_label},
             {"code": self.card_method, "name": self.card_label},

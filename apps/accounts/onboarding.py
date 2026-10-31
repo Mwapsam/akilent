@@ -157,6 +157,16 @@ def advance_onboarding(account) -> str:
     return url
 
 
+def awaiting_first_payment(account) -> bool:
+    """A new paid signup that hasn't paid yet (only signup leaves a subscription INCOMPLETE).
+    Setup comes after payment, so nothing prompts it until then."""
+    from apps.billing.models import Subscription
+
+    return Subscription.objects.filter(
+        account=account, status=Subscription.INCOMPLETE
+    ).exists()
+
+
 def first_setup_url(account) -> str:
     """Where to send a freshly created account for its first setup step."""
     return advance_onboarding(account) or "/onboarding/"

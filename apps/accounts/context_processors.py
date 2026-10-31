@@ -92,7 +92,8 @@ def onboarding_status(request):
         from apps.accounts.utils import get_current_account
 
         account = get_current_account(request)
-        if account is None:
+        if account is None or ob.awaiting_first_payment(account):
+            # Setup comes after payment: no widget or tour over the payment page.
             return {}
         # Shared with the view on the same request (the dashboard asks too).
         state = ob.get_state(account, essentials_only=True, request=request)

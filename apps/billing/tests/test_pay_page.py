@@ -180,3 +180,29 @@ def test_plans_page_finishes_an_unpaid_signup_here(
     client.force_login(owner)
     html = client.get("/billing/plans/").content.decode()
     assert f'href="{PAY_URL}" class="btn btn-primary btn-sm">Complete payment' in html
+
+
+# --- Setup comes after payment ----------------------------------------------------------
+
+
+def test_no_setup_prompt_over_the_payment_page(
+    client, owner, unpaid, payments_on, fake_provider
+):
+    html = _get(client, owner).content.decode()
+    assert "ob-widget" not in html  # the floating setup checklist
+    assert "open-welcome-tour" not in html  # the welcome tour
+
+
+def test_setup_pages_wait_until_the_plan_is_paid(
+    client, owner, unpaid, payments_on, fake_provider
+):
+    client.force_login(owner)
+    for url in ("/dashboard/", "/onboarding/"):
+        resp = client.get(url)
+        assert resp.status_code == 302 and resp.url == PAY_URL, url
+
+    unpaid.status = Subscription.ACTIVE
+    unpaid.save(update_fields=["status"])
+    assert client.get("/dashboard/").status_code == 200
+    onboarding = client.get("/onboarding/")
+    assert getattr(onboarding, "url", "") != PAY_URL

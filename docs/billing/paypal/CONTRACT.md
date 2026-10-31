@@ -232,8 +232,10 @@ only from a completed payment. Code: `apps/billing/providers/paypal_subscription
 `apps/billing/recurring.py`. Off by default; with it off nothing changes.
 
 **Checkout.** "Subscribe with PayPal" (`method=paypal`, and pay links, which carry no method)
-creates a subscription; "Pay once with debit or credit card" (`method=paypal-card`) stays a
-one-off Orders v2 payment renewed by pay link.
+creates a subscription, and it's the only button offered (2026-10-30): no one-off card payment
+beside it, so a new paid signup goes straight from "Create account and pay" to PayPal. A
+request that still carries `method=paypal-card` is handled as before (a one-off Orders v2
+payment).
 
 - **Plans** (`PayPalPlan`): one PayPal plan per merchant account, Akilent plan, term, currency
   and price, made on first checkout and reused. A price change makes a new one; subscribers

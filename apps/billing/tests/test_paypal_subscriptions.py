@@ -200,13 +200,37 @@ def _sale_event(sale_id, kind="PAYMENT.SALE.COMPLETED", event_id=None):
 
 
 @pytest.mark.django_db
-def test_the_paypal_button_subscribes_and_the_card_button_pays_once(paypal):
+def test_subscribing_is_the_only_way_to_pay(paypal):
     from apps.billing.views import checkout_options
 
-    assert checkout_options() == [
-        {"code": "paypal", "name": "Subscribe with PayPal"},
-        {"code": "paypal-card", "name": "Pay once with debit or credit card"},
-    ]
+    assert checkout_options() == [{"code": "paypal", "name": "Subscribe with PayPal"}]
+
+
+@pytest.mark.django_db
+def test_create_account_and_pay_goes_straight_to_the_paypal_subscription(
+    client, owner, account, plan, paypal
+):
+    """Straight after a paid signup, the pay page starts the PayPal subscription by itself:
+    there is one way to pay, so nobody has to pick it."""
+    from apps.billing.views import PAY_AUTOSTART
+
+    Subscription.objects.create(
+        account=account,
+        plan=plan,
+        status=Subscription.INCOMPLETE,
+        current_period_start=timezone.now(),
+    )
+    client.force_login(owner)
+    session = client.session
+    session[PAY_AUTOSTART] = True
+    session.save()
+
+    html = client.get("/billing/pay/").content.decode()
+    assert "Pay once with debit or credit card" not in html
+    assert "location.assign" in html
+    assert (
+        "/billing/checkout/?plan=starter&amp;period=monthly&amp;method=paypal" in html
+    )
 
 
 @pytest.mark.django_db
