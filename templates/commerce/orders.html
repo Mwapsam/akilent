@@ -27,15 +27,24 @@
 {% if page %}
 <div class="table-wrap">
   <table class="table table--cards">
-    <thead><tr><th>Order</th><th>Customer</th><th>Total</th><th>Status</th><th>Placed</th></tr></thead>
+    {% comment %}Who and what, not the order's id: "Grace Phiri · 2 × Sandals". The id is on the
+    order's own page.{% endcomment %}
+    <thead><tr><th>Customer</th><th>What</th><th>Total</th><th>Status</th><th>Placed</th><th><span class="sr-only">Chat</span></th></tr></thead>
     <tbody>
       {% for order in page %}
       <tr>
-        <td data-label="Order"><a href="{% url 'commerce:detail' order.public_id %}" class="text-accent hover:text-accent-strong font-mono text-xs">{{ order.public_id }}</a></td>
-        <td data-label="Customer">{{ order.contact.full_name|default:order.contact.phone|default:order.contact.email }}</td>
-        <td data-label="Total">{{ order.currency }} {{ order.total }}</td>
+        <td data-label="Customer"><a href="{% url 'commerce:detail' order.public_id %}" class="text-accent hover:text-accent-strong font-medium">{{ order.contact.full_name|default:order.contact.phone|default:order.contact.email }}</a></td>
+        <td data-label="What">{% with items=order.items.all %}{% if items %}{{ items.0.quantity }} &times; {{ items.0.name }}{% if items|length > 1 %} <span class="text-ink-subtle">+{{ items|length|add:"-1" }} more</span>{% endif %}{% else %}<span class="text-ink-subtle">—</span>{% endif %}{% endwith %}</td>
+        <td data-label="Total" class="tabular-nums">{{ order.currency }} {{ order.total }}</td>
         <td data-label="Status">{% include "commerce/_order_status.html" %}</td>
-        <td data-label="Placed" class="text-ink-subtle tabular-nums">{{ order.created_at|date:"Y-m-d H:i" }}</td>
+        <td data-label="Placed" class="text-ink-subtle tabular-nums" title="{{ order.created_at|date:'j M Y, H:i' }}">{{ order.created_at|date:"j M Y" }}</td>
+        <td data-label="Chat" class="text-right">
+          {% if order.conversation %}
+          <a href="{% url 'conversations:detail' order.conversation.public_id %}" class="btn btn-ghost btn-sm" aria-label="Open the chat with {{ order.contact.full_name|default:order.contact.phone|default:order.contact.email }}">
+            {% include "components/icon.html" with name="message-circle" class="w-4 h-4" %}<span>Open chat</span>
+          </a>
+          {% endif %}
+        </td>
       </tr>
       {% endfor %}
     </tbody>
@@ -64,7 +73,7 @@ tell a business with orders to create its first one.{% endcomment %}
     {% csrf_token %}
     <div>
       <label class="label" for="order-contact">Customer</label>
-      <input id="order-contact" name="contact" class="input" placeholder="Phone number or email" />
+      <input id="order-contact" name="contact" class="input" placeholder="Phone number or email"{% if for_contact %} value="{{ for_contact.phone|default:for_contact.email }}"{% endif %} />
       <p class="text-xs text-ink-subtle mt-1">Must already be a contact (or pick their conversation below). <a href="/contacts/" class="underline">Find or add one first</a>.</p>
     </div>
     {% include "conversations/_attribution_picker.html" with pid="order-conversation" %}
@@ -83,7 +92,7 @@ tell a business with orders to create its first one.{% endcomment %}
       </div>
       <div>
         <label class="label" for="order-currency">Currency</label>
-        <input id="order-currency" name="currency" class="input" value="USD" required />
+        <input id="order-currency" name="currency" class="input" value="{{ default_currency }}" maxlength="8" required />
       </div>
     </div>
     <div class="flex justify-end gap-2 pt-1">

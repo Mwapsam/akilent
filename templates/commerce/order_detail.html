@@ -1,15 +1,28 @@
 {% extends "base.html" %}
-{% block title %}{{ order.public_id }} — Orders{% endblock %}
+{% block title %}Order for {{ order.contact.full_name|default:order.contact.phone|default:order.contact.email }} — Orders{% endblock %}
 
 {% block content %}
 <div class="mb-6">
   <nav class="text-xs text-ink-subtle" aria-label="Breadcrumb">
     <a href="{% url 'commerce:orders' %}" class="hover:text-ink">Orders</a>
     <span aria-hidden="true">/</span>
-    <span class="text-ink" aria-current="page">{{ order.public_id }}</span>
+    <span class="text-ink" aria-current="page">Order for {{ order.contact.full_name|default:order.contact.phone|default:order.contact.email }}</span>
   </nav>
-  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink mt-1 font-mono break-all">{{ order.public_id }}</h1>
-  <p class="mt-1">{% include "commerce/_order_status.html" %}</p>
+  <div class="mt-1 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+    <div class="min-w-0">
+      {% comment %}Titled by who it's for; the id stays, small, for matching it to a payment.{% endcomment %}
+      <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Order for {{ order.contact.full_name|default:order.contact.phone|default:order.contact.email }}</h1>
+      <p class="mt-1 flex flex-wrap items-center gap-2">{% include "commerce/_order_status.html" %}<span class="text-xs text-ink-subtle font-mono break-all">{{ order.public_id }}</span></p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      {% if order.conversation %}
+      <a href="{% url 'conversations:detail' order.conversation.public_id %}" class="btn btn-secondary btn-sm" data-order-open-chat>
+        {% include "components/icon.html" with name="message-circle" class="w-4 h-4" %} Open chat
+      </a>
+      {% endif %}
+      <a href="{% url 'contacts:detail' order.contact.public_id %}" class="btn btn-ghost btn-sm">View customer</a>
+    </div>
+  </div>
 </div>
 
 <div class="grid gap-6 lg:grid-cols-3">
@@ -18,8 +31,12 @@
     <div class="flex justify-between"><span class="text-ink-subtle">Total</span><span>{{ order.currency }} {{ order.total }}</span></div>
     <div class="flex justify-between"><span class="text-ink-subtle">Placed</span><span>{{ order.created_at|date:"Y-m-d H:i" }}</span></div>
     {% if order.paid_at %}<div class="flex justify-between"><span class="text-ink-subtle">Paid</span><span>{{ order.paid_at|date:"Y-m-d H:i" }}</span></div>{% endif %}
+    {% if from_lead %}
+    <div class="flex justify-between"><span class="text-ink-subtle">From</span>
+      <a href="{% url 'crm:lead-detail' from_lead.public_id %}" class="text-accent hover:text-accent-strong" data-order-from-lead>An interested customer</a>
+    </div>
+    {% endif %}
     {% include "publishing/_source_post.html" with subject=order %}
-    <a href="{% url 'contacts:detail' order.contact.public_id %}" class="btn btn-ghost btn-sm w-full mt-2">View full profile</a>
   </section>
 
   {% if origin_insight %}
@@ -55,24 +72,7 @@
   {% endif %}
 
   <section class="lg:col-span-2 space-y-6">
-    <div class="card card-pad">
-      <h2 class="text-lg font-semibold text-ink mb-3">Items</h2>
-      <div class="table-scroll">
-        <table class="table table--cards">
-          <tbody>
-            {% for item in items %}
-            <tr>
-              <td data-label="Item">{{ item.quantity }} &times; {{ item.name }}</td>
-              <td data-label="Line total" class="text-right">{{ order.currency }} {{ item.line_total }}</td>
-            </tr>
-            {% empty %}
-            <tr><td data-label="Item" class="text-ink-subtle">This order has no line items.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
+    {% comment %}Payment first: marking it paid is what's left to do on most orders.{% endcomment %}
     <div class="card card-pad">
       <h2 class="text-lg font-semibold text-ink mb-3">Payment</h2>
       {% comment %}Akilent never takes the payment: the business marks the order paid once the
@@ -120,6 +120,24 @@
         </form>
       {% endif %}
     </div>
+    <div class="card card-pad">
+      <h2 class="text-lg font-semibold text-ink mb-3">Items</h2>
+      <div class="table-scroll">
+        <table class="table table--cards">
+          <tbody>
+            {% for item in items %}
+            <tr>
+              <td data-label="Item">{{ item.quantity }} &times; {{ item.name }}</td>
+              <td data-label="Line total" class="text-right">{{ order.currency }} {{ item.line_total }}</td>
+            </tr>
+            {% empty %}
+            <tr><td data-label="Item" class="text-ink-subtle">This order has no line items.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </section>
 </div>
 {% endblock %}

@@ -32,6 +32,20 @@ from apps.core.module_gate import module_required
 ORDERS_PER_PAGE = 50
 
 
+def default_currency(account) -> str:
+    """What a new order's currency starts as: the business's latest order's, else USD.
+
+    Still shown and editable on every order form, so the currency is always explicit."""
+    latest = (
+        Order.objects.filter(account=account)
+        .exclude(currency="")
+        .order_by("-created_at", "-pk")
+        .values_list("currency", flat=True)
+        .first()
+    )
+    return latest or "USD"
+
+
 @login_required
 @module_required("orders")
 def orders(request):
@@ -42,7 +56,8 @@ def orders(request):
     view = (request.GET.get("view") or "needs_attention").strip()
     qs = (
         Order.objects.filter(account=account)
-        .select_related("contact")
+        .select_related("contact", "conversation")
+        .prefetch_related("items")
         .order_by("-created_at", "-pk")
     )
     # ?contact=<public_id>: one customer's orders (the profile's "Orders" count links here).
@@ -76,6 +91,7 @@ def orders(request):
             ).count(),
             "all_count": Order.objects.filter(account=account).count(),
             "recent_conversations": attribution.recent_choices(account),
+            "default_currency": default_currency(account),
         },
     )
 
@@ -98,21 +114,38 @@ def create_order_view(request):
         ):
             next_url = None
 
-        query = (request.POST.get("contact") or "").strip()
-        contact = (
-            Contact.objects.filter(account=account)
-            .filter(Q(phone=query) | Q(email__iexact=query))
-            .first()
-            if query
-            else None
-        )
-        try:
-            conversation, contact = attribution.picked_conversation(
-                account, contact, request.POST.get("conversation", "")
+        # From a lead's page ("Ready to buy? Create their order"): the order is for that
+        # customer and their chat, and the lead is marked bought once it exists.
+        lead = None
+        if request.POST.get("lead"):
+            from apps.crm.models import Lead
+
+            lead = Lead.objects.filter(
+                account=account, public_id=request.POST["lead"]
+            ).first()
+            if lead is None:
+                messages.error(request, "That interested customer wasn't found.")
+                return redirect(next_url or "commerce:orders")
+
+        if lead is not None:
+            contact = lead.contact
+            conversation = lead.conversation
+        else:
+            query = (request.POST.get("contact") or "").strip()
+            contact = (
+                Contact.objects.filter(account=account)
+                .filter(Q(phone=query) | Q(email__iexact=query))
+                .first()
+                if query
+                else None
             )
-        except attribution.PickerError as exc:
-            messages.error(request, str(exc))
-            return redirect(next_url or "commerce:orders")
+            try:
+                conversation, contact = attribution.picked_conversation(
+                    account, contact, request.POST.get("conversation", "")
+                )
+            except attribution.PickerError as exc:
+                messages.error(request, str(exc))
+                return redirect(next_url or "commerce:orders")
         if contact is None:
             messages.error(
                 request,
@@ -143,6 +176,11 @@ def create_order_view(request):
             messages.error(request, str(exc))
             return redirect(next_url or "commerce:orders")
 
+        if lead is not None:
+            from apps.crm.services import mark_lead_bought
+
+            order = Order.objects.get(account=account, public_id=result["order_id"])
+            mark_lead_bought(lead, order, actor=request.user)
         messages.success(request, "Order created.")
         if next_url:
             return redirect(next_url)
@@ -182,6 +220,15 @@ def order_detail(request, public_id: str):
                 messages.error(request, str(exc))
         return redirect("commerce:detail", public_id=public_id)
 
+    # The interested customer this order was created from (mark_lead_bought).
+    from apps.crm.models import Lead
+
+    from_lead = (
+        Lead.objects.filter(account=account, attributes__order=order.public_id)
+        .select_related("contact")
+        .first()
+    )
+
     origin_insight = None
     try:
         from apps.insights.actions import insight_for_order
@@ -204,5 +251,6 @@ def order_detail(request, public_id: str):
             "method_choices": payment_method_choices(account),
             "paid_method_label": payment_method_label(order.paid_method),
             "origin_insight": origin_insight,
+            "from_lead": from_lead,
         },
     )

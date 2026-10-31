@@ -65,17 +65,36 @@ def sales(request):
     if account is None:
         return redirect("dashboard")
 
+    # One list, three views: still deciding (the default), bought, lost. Bought covers both
+    # ways a lead closes: an order created from it, or (older) a deal it was turned into.
+    open_statuses = [Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED]
+    views_by_key = {
+        "open": open_statuses,
+        "bought": [Lead.Status.CONVERTED],
+        "lost": [Lead.Status.LOST],
+    }
+    view = request.GET.get("view") or "open"
+    if view not in views_by_key:
+        view = "open"
+    mine = Lead.objects.filter(account=account)
+    counts = {
+        key: mine.filter(status__in=st).count() for key, st in views_by_key.items()
+    }
     leads = Paginator(
-        Lead.objects.filter(
-            account=account,
-            status__in=[Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED],
-        )
-        .select_related("contact")
+        mine.filter(status__in=views_by_key[view])
+        .select_related("contact", "conversation", "converted_to_deal")
         .order_by("-created_at", "-pk"),
         LEADS_PER_PAGE,
     ).get_page(request.GET.get("page"))
 
-    pipeline = Pipeline.objects.filter(account=account, is_default=True).first()
+    # The stage board is the secondary way to track someone (a deal). Shown only to a
+    # business that has deals, rather than an empty board beside every lead list.
+    has_deals = Deal.objects.filter(account=account).exists()
+    pipeline = (
+        Pipeline.objects.filter(account=account, is_default=True).first()
+        if has_deals
+        else None
+    )
     stages = list(pipeline.stages.all()) if pipeline else []
     for stage in stages:
         # Attached here (rather than a template dict-lookup filter) so the
@@ -90,6 +109,8 @@ def sales(request):
         {
             "account": account,
             "leads": leads,
+            "view": view,
+            "counts": counts,
             "stages": stages,
             "has_pipeline": pipeline is not None,
             "recent_conversations": attribution.recent_choices(account),
@@ -242,12 +263,25 @@ def lead_detail(request, public_id: str):
         chat=chat or followups.latest_chat(lead.contact),
     )
 
+    # Bought: the order it became (mark_lead_bought keeps its id on the lead).
+    from apps.commerce.models import Order
+    from apps.commerce.views import default_currency
+
+    order = None
+    if (lead.attributes or {}).get("order"):
+        order = Order.objects.filter(
+            account=account, public_id=lead.attributes["order"]
+        ).first()
+
     return render(
         request,
         "crm/lead_detail.html",
         {
             "account": account,
             "lead": lead,
+            "chat": chat,
+            "order": order,
+            "default_currency": default_currency(account),
             "fu": fu,
             "status_choices": [(s.value, s.label) for s in SETTABLE_LEAD_STATUSES],
             "origin_recommendation": origin_recommendation,
@@ -276,12 +310,16 @@ def deal_detail(request, public_id: str):
                 messages.error(request, str(exc))
         return redirect("crm:deal-detail", public_id=public_id)
 
+    # Where it came from: the interested customer it was turned into a deal from, and their chat.
+    from_lead = deal.originating_leads.select_related("conversation").first()
+
     return render(
         request,
         "crm/deal_detail.html",
         {
             "account": account,
             "deal": deal,
+            "from_lead": from_lead,
             "stages": deal.pipeline.stages.all(),
         },
     )

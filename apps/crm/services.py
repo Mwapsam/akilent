@@ -120,6 +120,8 @@ def set_lead_status(lead: Lead, status: str, *, actor=None) -> bool:
     if status not in SETTABLE_LEAD_STATUSES:
         raise ValueError("Choose new, contacted, qualified or lost.")
     if lead.status == Lead.Status.CONVERTED:
+        if (lead.attributes or {}).get("order"):
+            raise ValueError("This customer already bought. See their order instead.")
         raise ValueError(
             "This customer is already in your pipeline. Move their deal instead."
         )
@@ -172,6 +174,71 @@ def set_lead_status(lead: Lead, status: str, *, actor=None) -> bool:
         _enroll_workflows(lead.account, "lead.qualified", lead.contact, context)
     elif status == Lead.Status.LOST:
         _enroll_workflows(lead.account, "lead.lost", lead.contact, context)
+    return True
+
+
+def mark_lead_bought(lead: Lead, order, *, actor=None) -> bool:
+    """The interested customer bought: ``order`` was created from their lead.
+
+    The lead becomes converted, pointing at the order (``attributes["order"]``, no model
+    change) instead of a deal, so it leaves the open list and nobody chases someone who has
+    already bought. Same record as ``set_lead_status``: a durable event, a stage transition
+    and ``lead.status_changed`` workflows. Returns False if the lead was no longer open.
+    """
+    if lead.status not in _OPEN_LEAD_STATUSES:
+        return False
+
+    previous = lead.status
+    owner_before = lead.owner
+    now = timezone.now()
+    attributes = {**(lead.attributes or {}), "order": order.public_id}
+
+    with transaction.atomic():
+        moved = Lead.objects.filter(pk=lead.pk, status=previous).update(
+            status=Lead.Status.CONVERTED,
+            converted_at=now,
+            attributes=attributes,
+            updated_at=now,
+        )
+        if not moved:
+            lead.refresh_from_db(fields=["status", "updated_at"])
+            return False
+        lead.status = Lead.Status.CONVERTED
+        lead.converted_at = now
+        lead.attributes = attributes
+        lead.updated_at = now
+        event = emit_event(
+            account=lead.account,
+            type="lead.status_changed",
+            occurred_at=now,
+            source="crm",
+            subject_type="lead",
+            subject_id=lead.public_id,
+            payload={
+                "contact_id": lead.contact.public_id,
+                "from": previous,
+                "to": Lead.Status.CONVERTED,
+                "order_id": order.public_id,
+            },
+        )
+        StageTransition.objects.create(
+            account=lead.account,
+            lead=lead,
+            from_value=previous or "",
+            to_value=Lead.Status.CONVERTED,
+            occurred_at=now,
+            actor=actor,
+            owner_at_transition=owner_before,
+            provenance=StageTransition.Provenance.OBSERVED,
+            source_event_id=f"evt:{event.public_id}" if event else "",
+        )
+    context = {
+        "lead_id": lead.public_id,
+        "status": Lead.Status.CONVERTED,
+        "previous_status": previous,
+        "order_id": order.public_id,
+    }
+    _enroll_workflows(lead.account, "lead.status_changed", lead.contact, context)
     return True
 
 

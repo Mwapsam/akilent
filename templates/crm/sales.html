@@ -14,27 +14,46 @@
 </header>
 
 <section class="mb-8">
-  {% comment %}Only open leads are listed (new, contacted, qualified); people who bought or were
-  lost are on their own pages and in their profile.{% endcomment %}
-  <h2 class="text-lg font-semibold text-ink">Still deciding</h2>
-  <p class="text-sm text-ink-muted mb-3">Interested customers who haven't bought yet or been marked lost.</p>
+  {% comment %}One list, three views. Still deciding is where the work is; Bought and Lost used
+  to have no list at all, so a customer who had bought simply disappeared from here.{% endcomment %}
+  <nav class="tabs mb-4" aria-label="Interested customer views">
+    <a href="?view=open" class="tab {% if view == 'open' %}tab-active{% endif %}" {% if view == 'open' %}aria-current="page"{% endif %}>Still deciding{% if counts.open %} <span class="tabular-nums">{{ counts.open }}</span>{% endif %}</a>
+    <a href="?view=bought" class="tab {% if view == 'bought' %}tab-active{% endif %}" {% if view == 'bought' %}aria-current="page"{% endif %}>Bought{% if counts.bought %} <span class="tabular-nums">{{ counts.bought }}</span>{% endif %}</a>
+    <a href="?view=lost" class="tab {% if view == 'lost' %}tab-active{% endif %}" {% if view == 'lost' %}aria-current="page"{% endif %}>Lost{% if counts.lost %} <span class="tabular-nums">{{ counts.lost }}</span>{% endif %}</a>
+  </nav>
   {% if leads %}
   <div class="table-wrap">
     <table class="table table--cards">
-      <thead><tr><th>Customer</th><th>Where they came from</th><th>Where they stand</th><th>First interested</th></tr></thead>
+      <thead><tr><th>Customer</th><th>Where they came from</th><th>Where they stand</th><th>Last message</th><th><span class="sr-only">Chat</span></th></tr></thead>
       <tbody>
         {% for lead in leads %}
         <tr>
-          <td data-label="Customer"><a href="{% url 'crm:lead-detail' lead.public_id %}" class="text-accent hover:text-accent-strong">{{ lead.contact.full_name|default:lead.contact.phone|default:lead.contact.email }}</a></td>
+          <td data-label="Customer"><a href="{% url 'crm:lead-detail' lead.public_id %}" class="text-accent hover:text-accent-strong font-medium">{{ lead.contact.full_name|default:lead.contact.phone|default:lead.contact.email }}</a>
+            <span class="block text-xs text-ink-subtle">Interested since {{ lead.created_at|date:"j M" }}</span></td>
           <td data-label="Where they came from">{{ lead.source|default:"—" }}</td>
           <td data-label="Where they stand">{% include "crm/_lead_status.html" %}</td>
-          <td data-label="First interested" class="text-ink-subtle">{{ lead.created_at|date:"j M Y" }}</td>
+          <td data-label="Last message" class="text-ink-subtle">{% if lead.conversation.last_message_at %}<span title="{{ lead.conversation.last_message_at|date:'j M Y, H:i' }}">{{ lead.conversation.last_message_at|timesince }} ago</span>{% else %}—{% endif %}</td>
+          <td data-label="Chat" class="text-right">
+            {% if lead.conversation %}
+            <a href="{% url 'conversations:detail' lead.conversation.public_id %}" class="btn btn-ghost btn-sm" aria-label="Open the chat with {{ lead.contact.full_name|default:lead.contact.phone|default:lead.contact.email }}">
+              {% include "components/icon.html" with name="message-circle" class="w-4 h-4" %}<span>Open chat</span>
+            </a>
+            {% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
   {% include "components/pagination.html" with page=leads %}
+  {% elif view == 'bought' %}
+  <div class="table-wrap">
+    {% include "components/empty_state.html" with icon="check-circle" title="Nobody has bought yet" message="When an interested customer decides to buy, create their order from their page. They move here, with the order they placed." %}
+  </div>
+  {% elif view == 'lost' %}
+  <div class="table-wrap">
+    {% include "components/empty_state.html" with icon="check-circle" title="Nobody marked lost" message="Customers you mark lost stay here, so you can see who didn't buy." %}
+  </div>
   {% else %}
   <div class="table-wrap">
     {% include "components/empty_state.html" with icon="building" title="See who's considering buying" message="When a customer asks about buying, keep track of them here so nobody is forgotten. Akilent adds people automatically when they ask about price or availability — or you can add someone yourself." %}
@@ -47,9 +66,12 @@
   {% endif %}
 </section>
 
+{% if has_pipeline %}
 <section>
-  <h2 class="text-lg font-semibold text-ink mb-3">Where each one stands</h2>
-  {% if has_pipeline %}
+  {% comment %}The secondary way to track someone: by stage, once turned into a deal. Shown only
+  to a business that has deals (views.sales), not as an empty board beside every list.{% endcomment %}
+  <h2 class="text-lg font-semibold text-ink">Tracked by stage</h2>
+  <p class="text-sm text-ink-muted mb-3">Customers you chose to track through stages instead of straight to an order.</p>
   {% comment %}One column per stage only where there's room; on a phone each stage is a full-width
   card, two per row on a tablet.{% endcomment %}
   <div class="pipeline-grid" style="--stages: {{ stages|length }}">
@@ -69,12 +91,8 @@
     </div>
     {% endfor %}
   </div>
-  {% else %}
-  <div class="table-wrap">
-    {% include "components/empty_state.html" with icon="building" title="Nothing to show yet" message="Once you give someone an estimated value, they move through New, Contacted, Won and Lost — so you can see at a glance who still needs chasing." %}
-  </div>
-  {% endif %}
 </section>
+{% endif %}
 
 {% modal "new-lead" title="Add an interested customer" %}
   <form method="post" action="{% url 'crm:create-lead' %}" class="space-y-4">

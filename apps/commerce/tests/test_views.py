@@ -169,3 +169,105 @@ def test_request_payment_post_does_nothing_now(logged_in, order):
     order.refresh_from_db()
     assert order.status == Order.Status.PENDING
     assert not order.payments.exists()
+
+
+# --- Sales UI pass 2026-10-31: lead → order, the list, the order page ----------------------
+
+
+@pytest.mark.django_db
+def test_create_order_from_a_lead_marks_it_bought(logged_in, contact):
+    """The lead page's "Create order": the order is for the lead's customer and chat, the
+    lead moves to Bought pointing at the order, and the next stop is the order page."""
+    from apps.conversations.models import Conversation, Event
+    from apps.crm.models import Lead, StageTransition
+    from apps.crm.services import create_lead
+
+    client, account, _ = logged_in
+    chat = Conversation.objects.create(account=account, contact=contact)
+    lead = create_lead(account, contact, conversation_id=chat.public_id)
+
+    resp = client.post(
+        "/orders/create/",
+        {
+            "lead": lead.public_id,
+            "name": "Leather sandals",
+            "unit_price": "40",
+            "quantity": "2",
+            "currency": "ZMW",
+        },
+    )
+
+    order = Order.objects.get(account=account)
+    assert resp.status_code == 302 and resp.url == f"/orders/{order.public_id}/"
+    assert order.contact == contact and order.conversation == chat
+    assert order.total == Decimal("80.00") and order.currency == "ZMW"
+    lead.refresh_from_db()
+    assert lead.status == Lead.Status.CONVERTED
+    assert lead.attributes["order"] == order.public_id
+    assert lead.converted_to_deal is None
+    assert StageTransition.objects.filter(lead=lead, to_value="converted").exists()
+    assert Event.objects.filter(
+        type="lead.status_changed", subject_id=lead.public_id
+    ).exists()
+
+    page = client.get(f"/orders/{order.public_id}/").content.decode()
+    assert "data-order-from-lead" in page
+
+
+@pytest.mark.django_db
+def test_create_order_refuses_another_accounts_lead(logged_in):
+    from apps.crm.services import create_lead
+
+    client, account, _ = logged_in
+    other = Account.objects.create(company_name="Other Co")
+    theirs = create_lead(other, Contact.objects.create(account=other, phone="+1555"))
+
+    client.post(
+        "/orders/create/",
+        {"lead": theirs.public_id, "name": "X", "unit_price": "1", "quantity": "1"},
+    )
+
+    assert not Order.objects.exists()
+    theirs.refresh_from_db()
+    assert theirs.status == "new"
+
+
+@pytest.mark.django_db
+def test_orders_list_says_what_was_bought_and_links_the_chat(logged_in, contact):
+    from apps.conversations.models import Conversation
+
+    client, account, _ = logged_in
+    chat = Conversation.objects.create(account=account, contact=contact)
+    create_order(
+        account,
+        contact,
+        items=[
+            {"name": "Sandals", "unit_price": Decimal("40"), "quantity": 2},
+            {"name": "Belt", "unit_price": Decimal("10"), "quantity": 1},
+        ],
+        conversation_id=chat.public_id,
+    )
+    body = client.get("/orders/").content.decode()
+    assert "2 &times; Sandals" in body and "+1 more" in body
+    assert f"/inbox/{chat.public_id}/" in body
+
+
+@pytest.mark.django_db
+def test_order_page_puts_payment_before_items(logged_in, order):
+    client, _, _ = logged_in
+    body = client.get(f"/orders/{order.public_id}/").content.decode()
+    assert body.index(">Payment</h2>") < body.index(">Items</h2>")
+    assert "Order for" in body
+
+
+@pytest.mark.django_db
+def test_new_orders_start_in_the_latest_orders_currency(logged_in, contact):
+    client, account, _ = logged_in
+    create_order(
+        account,
+        contact,
+        items=[{"name": "A", "unit_price": Decimal("1"), "quantity": 1}],
+        currency="ZMW",
+    )
+    body = client.get("/orders/?view=all").content.decode()
+    assert 'name="currency" class="input" value="ZMW"' in body

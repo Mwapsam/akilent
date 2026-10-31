@@ -20,21 +20,30 @@
     <div class="flex justify-between"><span class="text-ink-subtle">Customer</span><span>{{ deal.contact.full_name|default:deal.contact.phone }}</span></div>
     <div class="flex justify-between"><span class="text-ink-subtle">What it could be worth</span><span>{{ deal.currency }} {{ deal.value }}</span></div>
     <div class="flex justify-between"><span class="text-ink-subtle">Looked after by</span><span>{{ deal.owner|default:"Unassigned" }}</span></div>
+    {% if from_lead %}
+    <div class="flex justify-between"><span class="text-ink-subtle">Interested since</span>
+      <a href="{% url 'crm:lead-detail' from_lead.public_id %}" class="text-accent hover:text-accent-strong" data-deal-from-lead>{{ from_lead.created_at|date:"j M Y" }}</a>
+    </div>
+    {% endif %}
+    {% if from_lead.conversation %}
+    <a href="{% url 'conversations:detail' from_lead.conversation.public_id %}" class="btn btn-secondary btn-sm w-full mt-2" data-deal-open-chat>
+      {% include "components/icon.html" with name="message-circle" class="w-4 h-4" %} Open chat
+    </a>
+    {% endif %}
     <a href="{% url 'contacts:detail' deal.contact.public_id %}" class="btn btn-ghost btn-sm w-full mt-2">View full profile</a>
   </section>
 
   <section class="lg:col-span-2 card card-pad">
     <h2 class="text-lg font-semibold text-ink mb-3">Where do they stand now?</h2>
-    <form method="post" class="flex flex-wrap gap-2">
+    <form method="post">
       {% csrf_token %}
       <input type="hidden" name="action" value="move_stage" />
-      {% for stage in stages %}
-      <button type="submit" name="stage_id" value="{{ stage.id }}"
-        class="btn btn-sm {% if stage.id == deal.stage_id %}btn-secondary ring-2 ring-accent{% else %}btn-ghost{% endif %}"
-        aria-pressed="{% if stage.id == deal.stage_id %}true{% else %}false{% endif %}">
-        {{ stage.name }}
-      </button>
-      {% endfor %}
+      <div class="segmented flex-wrap" role="group" aria-label="Stage">
+        {% for stage in stages %}
+        <button type="submit" name="stage_id" value="{{ stage.id }}"
+          aria-pressed="{% if stage.id == deal.stage_id %}true{% else %}false{% endif %}">{{ stage.name }}</button>
+        {% endfor %}
+      </div>
     </form>
   </section>
 </div>
