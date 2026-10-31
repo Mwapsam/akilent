@@ -18,7 +18,10 @@
 <div class="alert alert-info mb-4">{% include "components/icon.html" with name="info" %}<span>You can prepare and save campaigns. Only the business owner or an admin can send them.</span></div>
 {% endif %}
 
-{% if not lists and not segments or not templates %}
+{% comment %}The first-run checklist instead of the form while anything a send needs is missing,
+a connected number included: with lists and templates but no number the form used to show,
+and the send could only fail.{% endcomment %}
+{% if not readiness.number_connected or not lists and not segments or not templates %}
   {% include "whatsapp/_campaign_readiness.html" with readiness=readiness %}
 {% else %}
 {{ state.picks|json_script:"composer-picks" }}
@@ -123,7 +126,7 @@
                 {% if t.is_marketing %}<span class="badge badge-warning">Promotion</span>{% elif t.category == 'utility' %}<span class="badge badge-info">Update</span>{% else %}<span class="badge badge-neutral">{{ t.get_category_display }}</span>{% endif %}
                 <span class="text-xs text-ink-subtle uppercase">{{ t.language_code }}</span>
               </span>
-              <span class="mt-1 block text-sm text-gray-600 line-clamp-2">{{ t.content }}</span>
+              <span class="mt-1 block text-sm text-gray-600 line-clamp-2">{{ t.display_content }}</span>
               {% if not t.sendable %}<span class="mt-1 block text-xs text-ink-subtle">Has a picture or file at the top — campaigns can't send those yet.</span>
               {% elif t.is_marketing %}<span class="mt-1 block text-xs text-ink-subtle">Promotions only go to people who opted in.</span>{% endif %}
             </span>
@@ -228,8 +231,11 @@
     </aside>
   </div>
 
-  {% comment %}Sticky footer: Back / Save draft / Continue / Send.{% endcomment %}
-  <div class="fixed inset-x-0 bottom-0 border-t border-border bg-surface/95 backdrop-blur lg:pl-64" style="z-index: var(--z-dropdown)">
+  {% comment %}Sticky footer: Back / Save draft / Continue / Send. app-shell-left starts it where
+  the sidebar ends, at its current width, collapsed or not: lg:pl-64 assumed it open and laid
+  the footer's background over the sidebar's Collapse button. The right padding leaves room
+  for the floating onboarding widget.{% endcomment %}
+  <div class="fixed right-0 bottom-0 app-shell-left border-t border-border bg-surface/95 backdrop-blur transition-[left] duration-200" style="z-index: var(--z-dropdown)">
     <div class="max-w-7xl mx-auto pl-4 pr-20 sm:pl-6 lg:pl-8 py-3 flex items-center justify-between gap-3">
       <div>
         <button type="button" class="btn btn-ghost btn-sm" x-show="step > 1" @click="go(step - 1)">Back</button>
@@ -238,9 +244,10 @@
       <div class="flex items-center gap-2">
         <button type="submit" name="action" value="draft" class="btn btn-secondary btn-sm" x-show="audience && template" x-cloak formnovalidate>Save draft</button>
         <button type="button" class="btn btn-primary btn-sm" x-show="step < 4" :disabled="!canContinue" @click="go(step + 1)">Continue</button>
-        <div x-show="step === 4" x-cloak id="send-slot">
-          {% comment %}The send button lives in the estimate partial so its label carries the real count.{% endcomment %}
-        </div>
+        {% comment %}The send button lives in the estimate partial so its label carries the real
+        count. The partial fills #send-slot (innerHTML); this wrapper, which the swap never
+        replaces, is what keeps it to the Review step.{% endcomment %}
+        <div x-show="step === 4" x-cloak><div id="send-slot"></div></div>
       </div>
     </div>
   </div>

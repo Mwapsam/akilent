@@ -649,7 +649,7 @@ def _composer_state(request, account, templates, src=None):
 
 def _composer_templates(account):
     from apps.automation import variables as wa_variables
-    from apps.whatsapp.campaign_ui import template_options
+    from apps.whatsapp.campaign_ui import render_body, template_options
 
     templates = template_options(account)
     for t in templates:
@@ -657,6 +657,10 @@ def _composer_templates(account):
             {"name": v, "default": wa_variables.default_choice(v)}
             for v in (t.variables or [])
         ]
+        # The card's text with each blank named, "Hi [name], …", not Meta's "Hi {{1}}, …".
+        t.display_content = render_body(  # type: ignore[attr-defined]
+            t, {v: f"[{v}]" for v in (t.variables or [])}
+        )
     return templates
 
 
@@ -868,8 +872,33 @@ def campaign_estimate(request):
         pk=request.GET.get("template_id") or 0,
         approval_status=MessageTemplate.ApprovalStatus.APPROVED,
     ).first()
-    if (contact_list is None and segment is None) or template is None:
+    if contact_list is None and segment is None:
         return render(request, "whatsapp/_campaign_estimate.html", {"est": None})
+    if template is None:
+        # Audience chosen, message not yet: say who it reaches now rather than leave the
+        # panel blank until step 2.
+        from apps.contacts import reachability
+
+        try:
+            qs = audience_contacts(account, contact_list=contact_list, segment=segment)
+        except CampaignError as exc:
+            return render(
+                request,
+                "whatsapp/_campaign_estimate.html",
+                {"est": None, "audience_error": str(exc)},
+            )
+        return render(
+            request,
+            "whatsapp/_campaign_estimate.html",
+            {
+                "est": None,
+                "reach": reachability.counts(
+                    qs.model.objects.filter(pk__in=qs.values("pk"))
+                ),
+                "segment": segment,
+                "audience_name": segment.name if segment else contact_list.name,  # type: ignore[union-attr]
+            },
+        )
 
     mapping, fallbacks, missing = _campaign_variable_mapping_from_post(
         _GetAsPost(request.GET), template

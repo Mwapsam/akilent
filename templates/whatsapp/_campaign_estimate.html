@@ -1,13 +1,29 @@
 {% load tz %}{% comment %}Composer side panel (HTMX): the message as a customer will see it, and who it reaches.
 Also refreshes, out of band, the review summary (#review-summary) and the send button
-(#send-slot), so the button always says how many people it will actually reach.{% endcomment %}
+(#send-slot), so the button always says how many people it will actually reach. Only their
+contents are swapped (innerHTML): the page's wrappers hold x-show="step === 4", which a
+swapped-in copy lost, so the Send button showed from step 2.{% endcomment %}
 {% if not est %}
   {% if audience_error %}
   <div class="alert alert-warning" role="alert">{% include "components/icon.html" with name="alert-triangle" %}<span>{{ audience_error }}</span></div>
+  {% elif reach %}
+  {% comment %}Audience chosen, message not yet (step 1): who it reaches now. The exact count
+  waits for the message, because a promotion only reaches people who opted in.{% endcomment %}
+  <section class="card card-pad text-sm" aria-labelledby="reach-title">
+    <h2 id="reach-title" class="text-sm font-medium text-ink">Who gets it</h2>
+    <p class="mt-2 text-2xl font-semibold text-ink tabular-nums">{{ reach.total }} <span class="text-sm font-normal text-ink-subtle">customer{{ reach.total|pluralize }} {% if segment %}in{% else %}on{% endif %} {{ audience_name }}{% if segment %} right now{% endif %}</span></p>
+    <ul class="mt-3 space-y-1.5 text-xs text-gray-600">
+      <li><span class="inline-block h-2 w-2 rounded-full bg-teal-500 mr-1.5" aria-hidden="true"></span>{{ reach.opted_in }} opted in — can get offers and updates</li>
+      <li><span class="inline-block h-2 w-2 rounded-full bg-blue-400 mr-1.5" aria-hidden="true"></span>{{ reach.updates }} updates only</li>
+      {% if reach.opted_out %}<li><span class="inline-block h-2 w-2 rounded-full bg-coral-500 mr-1.5" aria-hidden="true"></span>{{ reach.opted_out }} opted out — won't get it</li>{% endif %}
+      {% if reach.none %}<li><span class="inline-block h-2 w-2 rounded-full bg-gray-300 mr-1.5" aria-hidden="true"></span>{{ reach.none }} not on WhatsApp</li>{% endif %}
+    </ul>
+    <p class="mt-3 text-xs text-ink-subtle">Pick a message next to see the preview and exactly how many it reaches.</p>
+  </section>
   {% else %}
   <div class="card card-pad text-sm text-ink-subtle">Choose who gets it and a message to see a preview.</div>
   {% endif %}
-  <div id="send-slot" hx-swap-oob="true" x-show="step === 4" x-cloak></div>
+  <div id="send-slot" hx-swap-oob="innerHTML"></div>
 {% else %}
   <section class="card card-pad" aria-labelledby="preview-title">
     <div class="flex items-baseline justify-between gap-2 mb-3">
@@ -54,7 +70,7 @@ Also refreshes, out of band, the review summary (#review-summary) and the send b
     {% endif %}
   </section>
 
-  <div id="review-summary" hx-swap-oob="true" class="mt-4">
+  <div id="review-summary" hx-swap-oob="innerHTML">
     <dl class="card card-pad text-sm space-y-2">
       <div class="flex justify-between gap-4"><dt class="text-ink-subtle">To</dt><dd class="text-right text-ink">{{ audience_name }} · {{ est.will_receive }} of {{ est.total }}</dd></div>
       <div class="flex justify-between gap-4"><dt class="text-ink-subtle">Message</dt><dd class="text-right text-ink">{{ template.name }} · {% if is_marketing %}Promotion{% else %}Update{% endif %}</dd></div>
@@ -66,13 +82,13 @@ Also refreshes, out of band, the review summary (#review-summary) and the send b
     {% endif %}
   </div>
 
-  <div id="send-slot" hx-swap-oob="true" x-show="step === 4" x-cloak>
+  <div id="send-slot" hx-swap-oob="innerHTML">
     {% if can_send %}
     <button name="action" value="send" class="btn btn-primary btn-sm" {% if not est.will_receive or blanks_missing or when_error %}disabled{% endif %}
             :aria-busy="busy" :disabled="busy{% if not est.will_receive or blanks_missing or when_error %} || true{% endif %}">
       <span class="btn-spinner" x-show="busy"></span>
-      <span>{% include "components/icon.html" with name="send" class="w-4 h-4" %}
-        {% if send_at %}Schedule for {{ send_at|timezone:send_tz|date:"D j M, H:i" }}{% else %}Send to {{ est.will_receive }} customer{{ est.will_receive|pluralize }}{% endif %}</span>
+      {% include "components/icon.html" with name="send" class="w-4 h-4" %}
+      {% if send_at %}Schedule for {{ send_at|timezone:send_tz|date:"D j M, H:i" }}{% else %}Send to {{ est.will_receive }} customer{{ est.will_receive|pluralize }}{% endif %}
     </button>
     {% endif %}
   </div>

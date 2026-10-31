@@ -323,6 +323,12 @@ def test_member_can_draft_but_not_send(client, account, template, vips):
 @_wa_urls
 @pytest.mark.django_db
 def test_draft_opens_in_the_composer_and_sends(owner_client, template, vips):
+    from apps.whatsapp.models import WhatsAppBusinessNumber
+
+    # A connected number, or the composer shows the setup checklist instead of the draft.
+    WhatsAppBusinessNumber.objects.create(
+        account=vips.account, phone_number_id="PN1", waba_id="WABA1", is_active=True
+    )
     draft = svc.save_draft(
         account=vips.account,
         name="December",

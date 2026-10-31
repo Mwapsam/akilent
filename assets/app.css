@@ -318,6 +318,13 @@
 @media (min-width: 1024px) {
   .app-shell-pl { padding-left: var(--sidebar-current-w); }
 }
+/* A fixed bar along the bottom of the page (the campaign composer's footer) starts where the
+   sidebar ends. Padding it instead, as before, left its background over the sidebar's foot,
+   covering the Collapse sidebar button. */
+.app-shell-left { left: 0; }
+@media (min-width: 1024px) {
+  .app-shell-left { left: var(--sidebar-current-w); }
+}
 
 /* Self-hosted variable font — swap to avoid invisible text / CLS. */
 @font-face {
@@ -2323,6 +2330,12 @@
   .wa-phone-bar { background: var(--wa-green); color: #fff; }
   .wa-chat { background-color: #efeae2; min-height: 360px;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' fill='none' stroke='%23000' stroke-opacity='.06' stroke-width='1.5' stroke-linecap='round'%3E%3Ccircle cx='20' cy='20' r='6'/%3E%3Cpath d='M60 12l6 10H54z'/%3E%3Crect x='92' y='14' width='14' height='10' rx='3'/%3E%3Cpath d='M14 70c6-8 14-8 20 0'/%3E%3Ccircle cx='70' cy='66' r='3'/%3E%3Cpath d='M96 60l8 8m0-8l-8 8'/%3E%3Cpath d='M20 104h14M27 97v14'/%3E%3Crect x='56' y='98' width='16' height='12' rx='2'/%3E%3Ccircle cx='100' cy='104' r='7'/%3E%3C/svg%3E"); }
+  /* The campaign composer's side preview: as tall as the message, not a phone screen. Its
+     bubble isn't pre-wrap (.wa-bubble is): the template's own line breaks between the <p>s
+     rendered as blank lines and made it four times taller. The body keeps the message's
+     line breaks itself (whitespace-pre-line). */
+  .wa-chat--compact { min-height: 0; }
+  .wa-chat--compact .wa-bubble { white-space: normal; }
   .wa-daychip { display: inline-block; padding: .2rem .6rem; border-radius: .375rem; background: #fff; color: #54656f; font-size: .6875rem; box-shadow: 0 1px .5px rgba(11,20,26,.13); }
   .wa-bubble { position: relative; max-width: 92%; background: #fff; border-radius: 0 .5rem .5rem .5rem; box-shadow: 0 1px .5px rgba(11,20,26,.13); color: #111b21; }
   .wa-bubble::before { content: ""; position: absolute; left: -7px; top: 0; width: 8px; height: 13px; background: #fff; clip-path: polygon(0 0, 100% 0, 100% 100%); }

@@ -33,6 +33,17 @@ def approved_template(logged_in):
 
 
 @pytest.fixture
+def number(logged_in):
+    """A connected number: without one the composer shows the setup checklist instead."""
+    from apps.whatsapp.models import WhatsAppBusinessNumber
+
+    _, account = logged_in
+    return WhatsAppBusinessNumber.objects.create(
+        account=account, phone_number_id="PN1", waba_id="WABA1", is_active=True
+    )
+
+
+@pytest.fixture
 def contact_list(logged_in):
     _, account = logged_in
     contact_list = ContactList.objects.create(account=account, name="VIPs")
@@ -49,7 +60,7 @@ def contact_list(logged_in):
 
 @_wa_urls
 @pytest.mark.django_db
-def test_campaign_new_page_renders(logged_in, approved_template, contact_list):
+def test_campaign_new_page_renders(logged_in, approved_template, contact_list, number):
     client, _ = logged_in
     resp = client.get("/whatsapp/campaigns/new/")
     assert resp.status_code == 200
@@ -185,13 +196,79 @@ def test_campaign_new_explains_a_missing_template(logged_in, contact_list):
 @_wa_urls
 @pytest.mark.django_db
 def test_campaign_new_shows_the_form_when_both_exist(
-    logged_in, approved_template, contact_list
+    logged_in, approved_template, contact_list, number
 ):
     client, _ = logged_in
     body = client.get("/whatsapp/campaigns/new/").content.decode()
     assert 'name="audience"' in body
     assert 'name="template_id"' in body
     assert "Make a list of people to send to" not in body
+
+
+# --- Composer polish 2026-10-31 -----------------------------------------------
+
+
+@_wa_urls
+@pytest.mark.django_db
+def test_campaign_new_needs_a_connected_number(
+    logged_in, approved_template, contact_list
+):
+    """Lists and templates but no number: the checklist, not a form whose send can only fail."""
+    client, _ = logged_in
+    body = client.get("/whatsapp/campaigns/new/").content.decode()
+    assert "Connect your WhatsApp number" in body
+    assert 'name="audience"' not in body
+
+
+@_wa_urls
+@pytest.mark.django_db
+def test_template_cards_name_their_blanks(logged_in, contact_list, number):
+    client, account = logged_in
+    MessageTemplate.objects.create(
+        account=account,
+        name="Ready",
+        whatsapp_template_name="ready",
+        content="Hi {{1}}, your order is ready.",
+        variables=["name"],
+        approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+    )
+    body = client.get("/whatsapp/campaigns/new/").content.decode()
+    assert "Hi [name], your order is ready." in body
+    assert "Hi {{1}}" not in body
+
+
+@_wa_urls
+@pytest.mark.django_db
+def test_send_button_stays_on_the_review_step(
+    logged_in, approved_template, contact_list, number
+):
+    """The estimate refreshes the send button out of band. It fills the slot (innerHTML) and
+    the page's own wrapper keeps it to step 4: a replaced slot lost that and showed from
+    step 2, so a campaign could be sent before choosing when or seeing the review."""
+    client, _ = logged_in
+    page = client.get("/whatsapp/campaigns/new/").content.decode()
+    assert '<div x-show="step === 4" x-cloak><div id="send-slot"></div></div>' in page
+
+    est = client.get(
+        "/whatsapp/campaigns/estimate/",
+        {"audience": f"list:{contact_list.pk}", "template_id": approved_template.pk},
+    ).content.decode()
+    assert '<div id="send-slot" hx-swap-oob="innerHTML">' in est
+    assert "Send to 1 customer" in est
+    assert 'id="send-slot" hx-swap-oob="true"' not in est
+
+
+@_wa_urls
+@pytest.mark.django_db
+def test_estimate_shows_reach_once_an_audience_is_picked(logged_in, contact_list):
+    """Step 1: who the list reaches, before a message is chosen, and no send button."""
+    client, _ = logged_in
+    est = client.get(
+        "/whatsapp/campaigns/estimate/", {"audience": f"list:{contact_list.pk}"}
+    ).content.decode()
+    assert "Who gets it" in est and "on VIPs" in est
+    assert "1 opted in" in est
+    assert "<button" not in est
 
 
 # --- Audit 2026-10-19: the stepped composer and the results page -------------
@@ -270,7 +347,7 @@ def test_double_submitting_the_composer_creates_one_campaign(
 @_wa_urls
 @pytest.mark.django_db
 def test_composer_opens_on_the_message_step_when_linked_from_a_list(
-    logged_in, approved_template, contact_list
+    logged_in, approved_template, contact_list, number
 ):
     client, _ = logged_in
     body = client.get(
@@ -282,7 +359,9 @@ def test_composer_opens_on_the_message_step_when_linked_from_a_list(
 
 @_wa_urls
 @pytest.mark.django_db
-def test_media_header_templates_are_shown_but_not_choosable(logged_in, contact_list):
+def test_media_header_templates_are_shown_but_not_choosable(
+    logged_in, contact_list, number
+):
     client, account = logged_in
     MessageTemplate.objects.create(
         account=account,
