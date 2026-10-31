@@ -7,7 +7,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.decorators import method_decorator
@@ -291,6 +291,160 @@ def _flow_forms(account) -> list:
     )
 
 
+def _starters_json(account) -> str:
+    """The starter templates, with the business's own name in place of "Acme Store"."""
+    company = (getattr(account, "company_name", "") or "").strip()
+    starters = STARTER_CATEGORIES
+    if company:
+        starters = json.loads(
+            json.dumps(STARTER_CATEGORIES).replace("Acme Store", company)
+        )
+    return json.dumps(starters)
+
+
+def _template_fields_from_post(request, account) -> dict:
+    """The builder form's fields as create/update_and_resubmit_template take them."""
+    labels = [v.strip() for v in request.POST.getlist("variable_label") if v.strip()]
+    examples = [
+        v.strip() for v in request.POST.getlist("variable_example") if v.strip()
+    ]
+
+    button_type = request.POST.get("button_type", "url").strip().lower()
+    button_text = request.POST.get("button_text", "").strip()
+    buttons = []
+    if (
+        button_text
+        or request.POST.get("button_url")
+        or request.POST.get("button_phone_number")
+    ):
+        button = {"type": button_type, "text": button_text}
+        if button_type == "url":
+            button["url"] = request.POST.get("button_url", "").strip()
+            button["example"] = request.POST.get("button_url_example", "").strip()
+        elif button_type == "phone_number":
+            button["phone_number"] = request.POST.get("button_phone_number", "").strip()
+        elif button_type == "copy_code":
+            button["example"] = request.POST.get("button_code_example", "").strip()
+        elif button_type == "flow":
+            from apps.conversations.models import ConversationForm
+
+            flow_form = ConversationForm.objects.filter(
+                account=account,
+                public_id=request.POST.get("button_flow_form", ""),
+                flow_status=ConversationForm.FlowStatus.PUBLISHED,
+            ).first()
+            button["flow_id"] = flow_form.flow_id if flow_form else ""
+        buttons = [button]
+
+    header = request.POST.get("header", "")
+    header_format = request.POST.get("header_format", "text").strip().lower() or "text"
+    if header_format == "none":  # the form's "None" option: a text header left empty
+        header_format, header = "text", ""
+    header_media = None
+    asset_id = request.POST.get("header_media_asset_id", "").strip()
+    if header_format != "text" and asset_id.isdigit():
+        header_media = MessageTemplateAsset.objects.filter(
+            account=account, pk=int(asset_id)
+        ).first()
+    return {
+        "category": request.POST.get("category", ""),
+        "body": request.POST.get("body", ""),
+        "header": header,
+        "footer": request.POST.get("footer", ""),
+        "variable_labels": labels,
+        "variable_examples": examples,
+        "buttons": buttons,
+        "header_format": header_format,
+        "header_media": header_media,
+    }
+
+
+_BUTTON_FORM_TYPES = {
+    "URL": "url",
+    "PHONE_NUMBER": "phone_number",
+    "COPY_CODE": "copy_code",
+    "VOICE_CALL": "voice_call",
+    "FLOW": "flow",
+}
+
+
+def _form_from_template(template, account) -> tuple[dict, list]:
+    """A saved template as the builder's form values and blanks, for Edit and Duplicate."""
+    form = {
+        "name": template.whatsapp_template_name or template.name,
+        "category": template.category,
+        "language": template.language_code,
+        "body": template.content,
+        "header": template.header,
+        "footer": template.footer,
+        "header_format": (
+            template.header_format
+            if template.header_format != "text" or template.header
+            else "none"
+        ),
+        "header_media_asset_id": template.header_media_id or "",
+    }
+    button = (template.buttons or [None])[0]
+    if button:
+        form["button_type"] = _BUTTON_FORM_TYPES.get(
+            (button.get("type") or "").upper(), "url"
+        )
+        form["button_text"] = button.get("text", "")
+        form["button_url"] = button.get("url", "")
+        example = button.get("example")
+        if isinstance(example, list):
+            example = example[0] if example else ""
+        if form["button_type"] == "copy_code":
+            form["button_code_example"] = example or ""
+        else:
+            form["button_url_example"] = example or ""
+        form["button_phone_number"] = button.get("phone_number", "")
+        if form["button_type"] == "flow" and button.get("flow_id"):
+            from apps.conversations.models import ConversationForm
+
+            flow_form = ConversationForm.objects.filter(
+                account=account, flow_id=button["flow_id"]
+            ).first()
+            form["button_flow_form"] = flow_form.public_id if flow_form else ""
+    examples = list(template.variable_examples or [])
+    variables = [
+        [label, examples[i] if i < len(examples) else ""]
+        for i, label in enumerate(template.variables or [])
+    ]
+    return form, variables
+
+
+def _render_builder(
+    request, account, *, form, variables, template=None, ai_draft=None, status=200
+):
+    """The template builder, for a new template (template=None) or editing one."""
+    from apps.ai import api as ai_api
+
+    editing = template is not None
+    return render(
+        request,
+        "whatsapp/template_create.html",
+        {
+            "account": account,
+            "categories": MessageTemplate.Category.choices,
+            "form": form,
+            "starters_json": _starters_json(account),
+            "initial_variables_json": json.dumps(variables),
+            "data_fields_json": _data_fields_json(account),
+            "custom_field_types": CustomAttributeDef.Type.choices,
+            "media_upload_url": reverse("whatsapp-template-media-upload"),
+            "flow_forms": _flow_forms(account),
+            "languages": _languages(form.get("language")),
+            "ai_on": ai_api.is_available(account) and not editing,
+            "ai_draft": ai_draft,
+            "editing": template,
+            "category_locked": editing
+            and template.approval_status == MessageTemplate.ApprovalStatus.APPROVED,
+        },
+        status=status,
+    )
+
+
 @login_required
 def template_create(request):
     account = get_current_account(request)
@@ -298,57 +452,7 @@ def template_create(request):
         return redirect("dashboard")
 
     if request.method == "POST":
-        labels = [
-            v.strip() for v in request.POST.getlist("variable_label") if v.strip()
-        ]
-        examples = [
-            v.strip() for v in request.POST.getlist("variable_example") if v.strip()
-        ]
-
-        button_type = request.POST.get("button_type", "url").strip().lower()
-        button_text = request.POST.get("button_text", "").strip()
-        buttons = []
-        if (
-            button_text
-            or request.POST.get("button_url")
-            or request.POST.get("button_phone_number")
-        ):
-            button = {"type": button_type, "text": button_text}
-            if button_type == "url":
-                button["url"] = request.POST.get("button_url", "").strip()
-                button["example"] = request.POST.get("button_url_example", "").strip()
-            elif button_type == "phone_number":
-                button["phone_number"] = request.POST.get(
-                    "button_phone_number", ""
-                ).strip()
-            elif button_type == "copy_code":
-                button["example"] = request.POST.get("button_code_example", "").strip()
-            elif button_type == "flow":
-                from apps.conversations.models import ConversationForm
-
-                flow_form = ConversationForm.objects.filter(
-                    account=account,
-                    public_id=request.POST.get("button_flow_form", ""),
-                    flow_status=ConversationForm.FlowStatus.PUBLISHED,
-                ).first()
-                button["flow_id"] = flow_form.flow_id if flow_form else ""
-            buttons = [button]
-
-        header = request.POST.get("header", "")
-        header_format = (
-            request.POST.get("header_format", "text").strip().lower() or "text"
-        )
-        if (
-            header_format == "none"
-        ):  # the form's "None" option: a text header left empty
-            header_format, header = "text", ""
-        header_media = None
-        asset_id = request.POST.get("header_media_asset_id", "").strip()
-        if header_format != "text" and asset_id.isdigit():
-            header_media = MessageTemplateAsset.objects.filter(
-                account=account, pk=int(asset_id)
-            ).first()
-
+        fields = _template_fields_from_post(request, account)
         try:
             if request.POST.get("category") == "authentication":
                 from apps.whatsapp.template_builder import (
@@ -370,16 +474,8 @@ def template_create(request):
             create_and_submit_template(
                 account,
                 name=request.POST.get("name", "").strip().lower(),
-                category=request.POST.get("category", ""),
                 language=request.POST.get("language", "en"),
-                body=request.POST.get("body", ""),
-                header=header,
-                footer=request.POST.get("footer", ""),
-                variable_labels=labels,
-                variable_examples=examples,
-                buttons=buttons,
-                header_format=header_format,
-                header_media=header_media,
+                **fields,
             )
         except TemplateBuilderError as exc:
             logger.warning(
@@ -389,24 +485,13 @@ def template_create(request):
                 exc,
             )
             messages.error(request, str(exc))
-            from apps.ai import api as ai_api
-
-            return render(
+            return _render_builder(
                 request,
-                "whatsapp/template_create.html",
-                {
-                    "account": account,
-                    "categories": MessageTemplate.Category.choices,
-                    "languages": _languages(request.POST.get("language")),
-                    "ai_on": ai_api.is_available(account),
-                    "form": request.POST,
-                    "starters_json": json.dumps(STARTER_CATEGORIES),
-                    "initial_variables_json": json.dumps(list(zip(labels, examples))),
-                    "data_fields_json": _data_fields_json(account),
-                    "custom_field_types": CustomAttributeDef.Type.choices,
-                    "media_upload_url": reverse("whatsapp-template-media-upload"),
-                    "flow_forms": _flow_forms(account),
-                },
+                account,
+                form=request.POST,
+                variables=list(
+                    zip(fields["variable_labels"], fields["variable_examples"])
+                ),
             )
         messages.success(request, "Template submitted to WhatsApp for approval.")
         return redirect("/email/templates/?channel=whatsapp")
@@ -419,7 +504,18 @@ def template_create(request):
         if request.GET.get("draft")
         else None
     )
-    if draft is not None and draft.status in ("ready", "used"):
+    source = None
+    if request.GET.get("from", "").isdigit():
+        # Duplicate: a copy of one of this business's templates, under a new name.
+        source = (
+            MessageTemplate.objects.filter(account=account, pk=int(request.GET["from"]))
+            .exclude(approval_status=MessageTemplate.ApprovalStatus.DELETED)
+            .first()
+        )
+    if source is not None:
+        form, variables = _form_from_template(source, account)
+        form["name"] = f"{form['name']}_copy"[:512]
+    elif draft is not None and draft.status in ("ready", "used"):
         fields = draft.result or {}
         form = {
             k: fields.get(k, "")
@@ -439,24 +535,111 @@ def template_create(request):
         form = {
             "category": request.GET["category"]
         }  # e.g. from the One-time codes page
+    return _render_builder(
+        request, account, form=form, variables=variables, ai_draft=ai_draft
+    )
+
+
+def _account_template(request, pk: int):
+    account = get_current_account(request)
+    if account is None:
+        return None, None
+    return account, get_object_or_404(MessageTemplate, account=account, pk=pk)
+
+
+@login_required
+def template_detail(request, pk: int):
+    """One template: how it looks, its status and why, where it's used, and what to do."""
+    from apps.whatsapp.template_builder import can_edit, template_usage
+
+    account, template = _account_template(request, pk)
+    if account is None:
+        return redirect("dashboard")
+    from apps.whatsapp.campaign_ui import preview_parts
+
+    examples = list(template.variable_examples or [])
+    params = {
+        v: (examples[i] if i < len(examples) else f"[{v}]")
+        for i, v in enumerate(template.variables or [])
+    }
     return render(
         request,
-        "whatsapp/template_create.html",
+        "whatsapp/template_detail.html",
         {
             "account": account,
-            "categories": MessageTemplate.Category.choices,
-            "form": form,
-            "starters_json": json.dumps(STARTER_CATEGORIES),
-            "initial_variables_json": json.dumps(variables),
-            "data_fields_json": _data_fields_json(account),
-            "custom_field_types": CustomAttributeDef.Type.choices,
-            "media_upload_url": reverse("whatsapp-template-media-upload"),
-            "flow_forms": _flow_forms(account),
-            "languages": _languages(form.get("language")),
-            "ai_on": ai_api.is_available(account),
-            "ai_draft": ai_draft,
+            "template": template,
+            "preview": preview_parts(template, params),
+            "usage": template_usage(template),
+            "can_edit": can_edit(template),
+            "deleted": template.approval_status
+            == MessageTemplate.ApprovalStatus.DELETED,
+            "open_delete": request.GET.get("delete") == "1",
         },
     )
+
+
+@login_required
+def template_edit(request, pk: int):
+    """Change a template and send it to Meta for review again (Edit)."""
+    from apps.whatsapp.template_builder import can_edit, update_and_resubmit_template
+
+    account, template = _account_template(request, pk)
+    if account is None:
+        return redirect("dashboard")
+    if not can_edit(template):
+        if template.approval_status == MessageTemplate.ApprovalStatus.DELETED:
+            raise Http404
+        messages.info(
+            request,
+            "Meta is still reviewing this template, so it can't be changed yet. "
+            "Duplicate it to make another version."
+            if template.approval_status == MessageTemplate.ApprovalStatus.PENDING
+            else "This template can't be edited. Duplicate it to make a new version.",
+        )
+        return redirect("whatsapp-template-detail", pk=template.pk)
+
+    if request.method == "POST":
+        fields = _template_fields_from_post(request, account)
+        try:
+            update_and_resubmit_template(template, **fields)
+        except TemplateBuilderError as exc:
+            messages.error(request, str(exc))
+            form = request.POST.copy()
+            form["name"] = template.whatsapp_template_name or template.name
+            form["language"] = template.language_code
+            return _render_builder(
+                request,
+                account,
+                form=form,
+                variables=list(
+                    zip(fields["variable_labels"], fields["variable_examples"])
+                ),
+                template=template,
+            )
+        messages.success(request, "Changes sent to WhatsApp for review.")
+        return redirect("whatsapp-template-detail", pk=template.pk)
+
+    form, variables = _form_from_template(template, account)
+    return _render_builder(
+        request, account, form=form, variables=variables, template=template
+    )
+
+
+@login_required
+@require_POST
+def template_delete(request, pk: int):
+    from apps.whatsapp.template_builder import delete_template
+
+    account, template = _account_template(request, pk)
+    if account is None:
+        return redirect("dashboard")
+    try:
+        delete_template(template)
+    except TemplateBuilderError as exc:
+        messages.error(request, str(exc))
+        return redirect("whatsapp-template-detail", pk=template.pk)
+    messages.success(request, f"Template “{template.name}” deleted.")
+    return redirect("/email/templates/?channel=whatsapp")
 
 
 _LANGUAGES = [

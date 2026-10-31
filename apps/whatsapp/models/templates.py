@@ -33,6 +33,9 @@ class MessageTemplate(models.Model):
         APPROVED = "approved", "Approved"
         REJECTED = "rejected", "Rejected"
         PAUSED = "paused", "Paused by Meta"
+        # Deleted at Meta from Akilent. The row stays so past campaigns still show what was
+        # sent; it is hidden from every list and picker (template_builder.delete_template).
+        DELETED = "deleted", "Deleted"
 
     class Category(models.TextChoices):
         MARKETING = "marketing", "Marketing"
@@ -54,6 +57,11 @@ class MessageTemplate(models.Model):
     approval_status = models.CharField(
         max_length=20, choices=ApprovalStatus.choices, default=ApprovalStatus.DRAFT
     )
+    # Meta's id for this template (one language). Editing goes through it, and deleting one
+    # language needs it. Stored on create and filled in by sync for older rows.
+    meta_template_id = models.CharField(max_length=64, blank=True, default="")
+    # Why Meta rejected or paused it, in words an owner can act on (tasks.REJECTION_REASONS).
+    rejection_reason = models.CharField(max_length=255, blank=True, default="")
 
     content = models.TextField()
     variables = models.JSONField(default=list)  # ["name", "company"]
@@ -90,6 +98,7 @@ class MessageTemplate(models.Model):
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
 
     class Meta:
         unique_together = ("account", "whatsapp_template_name", "language_code")

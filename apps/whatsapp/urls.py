@@ -6,6 +6,15 @@ from apps.whatsapp.views import WhatsAppWebhookView
 urlpatterns = [
     path("templates/sync/", views.templates_sync, name="whatsapp-templates-sync"),
     path("templates/new/", views.template_create, name="whatsapp-template-create"),
+    path("templates/<int:pk>/", views.template_detail, name="whatsapp-template-detail"),
+    path(
+        "templates/<int:pk>/edit/", views.template_edit, name="whatsapp-template-edit"
+    ),
+    path(
+        "templates/<int:pk>/delete/",
+        views.template_delete,
+        name="whatsapp-template-delete",
+    ),
     path("templates/lint/", views.template_lint, name="whatsapp-template-lint"),
     path(
         "templates/media/upload/",

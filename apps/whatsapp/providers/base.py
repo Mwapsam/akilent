@@ -162,6 +162,25 @@ class WhatsAppProvider(ABC):
             f"{type(self).__name__} does not support template creation"
         )
 
+    def edit_template(self, template_id: str, payload: dict) -> dict:
+        """Change a submitted template by Meta's id; Meta reviews it again.
+
+        Optional capability. ``payload`` carries ``components`` (and ``category`` while the
+        template isn't approved), built by ``apps.whatsapp.template_builder``.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support template editing"
+        )
+
+    def delete_template(self, waba_id: str, name: str, template_id: str = "") -> dict:
+        """Delete a template: one language when ``template_id`` is given, else all of them.
+
+        Optional capability.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support template deletion"
+        )
+
     def create_flow(self, waba_id: str, name: str, categories: list[str]) -> dict:
         """Create a new, empty (draft, no screens yet) WhatsApp Flow against a WABA.
 

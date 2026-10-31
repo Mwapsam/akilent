@@ -49,28 +49,27 @@
   {% if whatsapp_templates %}
   <div class="table-wrap">
     <table class="table table--cards">
-      <thead><tr><th>Name</th><th>Category</th><th>Language</th><th>Status</th><th>Variables</th></tr></thead>
+      {% comment %}Each name opens the template (preview, why it was rejected, where it's used). Delete
+      opens the template's page with its confirmation, which lists the campaigns and automations
+      that use it.{% endcomment %}
+      <thead><tr><th>Name</th><th>Category</th><th>Language</th><th>Status</th><th>Blanks</th><th><span class="sr-only">Actions</span></th></tr></thead>
       <tbody>
         {% for t in whatsapp_templates %}
         <tr>
-          <td data-label="Name" class="font-medium text-ink">{{ t.name }}</td>
+          <td data-label="Name"><a href="{% url 'whatsapp-template-detail' t.pk %}" class="font-medium text-accent hover:text-accent-strong break-all">{{ t.name }}</a></td>
           <td data-label="Category">{{ t.get_category_display }}</td>
           <td data-label="Language">{{ t.language_code }}</td>
-          {% comment %}Meta's own status (MessageTemplate.ApprovalStatus), with what it means
-          for sending. Meta's rejection reason isn't stored, so it isn't shown.{% endcomment %}
-          <td data-label="Status">
-            {% if t.approval_status == 'approved' %}<span class="badge badge-success">Approved</span>
-              <span class="block mt-1 text-xs text-ink-subtle">Ready to send.</span>
-            {% elif t.approval_status == 'rejected' %}<span class="badge badge-danger">Rejected</span>
-              <span class="block mt-1 text-xs text-ink-subtle">Meta didn't approve it, so it can't be sent. Create a new version with different wording.</span>
-            {% elif t.approval_status == 'paused' %}<span class="badge badge-danger">Paused by Meta</span>
-              <span class="block mt-1 text-xs text-ink-subtle">Meta paused it, usually after customer feedback. It can't be sent while paused.</span>
-            {% elif t.approval_status == 'pending' %}<span class="badge badge-warning">Pending Meta approval</span>
-              <span class="block mt-1 text-xs text-ink-subtle">Meta is reviewing it. Most reviews finish within a day.</span>
-            {% else %}<span class="badge badge-neutral">Draft (local only)</span>
-              <span class="block mt-1 text-xs text-ink-subtle">Not submitted to Meta.</span>{% endif %}
+          <td data-label="Status">{% include "whatsapp/_template_status.html" with explain=True %}</td>
+          <td data-label="Blanks" class="text-ink-subtle">{% if t.variables %}{{ t.variables|join:", " }}{% else %}—{% endif %}</td>
+          <td data-label="Actions" class="text-right">
+            {% comment %}Icon buttons, not a menu: .table-wrap clips overflow, so a dropdown on the
+            last rows would be cut off.{% endcomment %}
+            <div class="inline-flex items-center gap-0.5">
+              {% if t.can_edit %}<a href="{% url 'whatsapp-template-edit' t.pk %}" class="btn btn-ghost btn-sm btn-icon" title="Edit" aria-label="Edit {{ t.name }}">{% include "components/icon.html" with name="pencil" class="w-4 h-4" %}</a>{% endif %}
+              <a href="{% url 'whatsapp-template-create' %}?from={{ t.pk }}" class="btn btn-ghost btn-sm btn-icon" title="Duplicate" aria-label="Duplicate {{ t.name }}">{% include "components/icon.html" with name="copy" class="w-4 h-4" %}</a>
+              <a href="{% url 'whatsapp-template-detail' t.pk %}?delete=1" class="btn btn-ghost btn-sm btn-icon text-coral-700" title="Delete" aria-label="Delete {{ t.name }}">{% include "components/icon.html" with name="trash" class="w-4 h-4" %}</a>
+            </div>
           </td>
-          <td data-label="Variables" class="text-ink-subtle">{% if t.variables %}{{ t.variables|join:", " }}{% else %}—{% endif %}</td>
         </tr>
         {% endfor %}
       </tbody>

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}New WhatsApp template — {{ site.app_name|default:"Akilent" }}{% endblock %}
+{% block title %}{% if editing %}Edit {{ editing.name }}{% else %}New WhatsApp template{% endif %} — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
 
@@ -10,13 +10,20 @@
     <div>
       <nav class="mb-1 flex items-center gap-1.5 text-xs text-ink-subtle" aria-label="Breadcrumb">
         <a href="/email/templates/?channel=whatsapp" class="hover:text-ink">Templates</a>
+        {% if editing %}
+        <span aria-hidden="true">/</span><a href="{% url 'whatsapp-template-detail' editing.pk %}" class="hover:text-ink">{{ editing.name }}</a>
+        <span aria-hidden="true">/</span><span class="text-ink">Edit</span>
+        {% else %}
         <span aria-hidden="true">/</span><span class="text-ink">New WhatsApp template</span>
+        {% endif %}
       </nav>
-      <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">New WhatsApp template</h1>
-      <p class="mt-1 text-sm text-gray-600">Akilent submits this to WhatsApp for approval — no need to open Meta Business Manager.</p>
+      <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">{% if editing %}Edit template{% else %}New WhatsApp template{% endif %}</h1>
+      <p class="mt-1 text-sm text-gray-600">{% if editing %}Your changes go to WhatsApp for review again.{% else %}Akilent submits this to WhatsApp for approval — no need to open Meta Business Manager.{% endif %}</p>
     </div>
 
-    <ol class="wa-steps" aria-label="Progress">
+    {% comment %}Editing has no starter step: the stepper and starter card stay in the page (the
+    script below expects them) but hidden.{% endcomment %}
+    <ol class="wa-steps" aria-label="Progress"{% if editing %} hidden{% endif %}>
       <li class="wa-step" data-step="1" data-state="active">
         <span class="wa-step-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L19 7"/></svg></span>
         Set up template
@@ -57,12 +64,12 @@
   {% endif %}
 
   {# ── Step 1: set up (starter picker). Collapses once a starter is applied. ── #}
-  <section id="wa-setup" class="mb-6">
+  <section id="wa-setup" class="mb-6"{% if editing %} hidden{% endif %}>
     <div class="card">
       <div class="flex items-start justify-between gap-4 px-5 pt-5">
         <div>
           <h2 class="text-lg font-semibold text-ink">Set up your template</h2>
-          <p class="mt-0.5 text-sm text-gray-600">Choose a common use case to get started, or start from scratch.</p>
+          <p id="wa-setup-desc" class="mt-0.5 text-sm text-gray-600">Choose a common use case to get started, or start from scratch.</p>
         </div>
         <button type="button" id="wa-setup-toggle" class="btn btn-ghost btn-sm shrink-0" hidden>Change starter</button>
       </div>
@@ -79,10 +86,10 @@
         </div>
       </div>
 
-      <div id="wa-setup-summary" class="px-5 pb-5 pt-3" hidden>
+      <div id="wa-setup-summary" class="px-5 pb-4 pt-1" hidden>
         <p class="flex items-center gap-2 text-sm text-gray-600">
           <svg class="w-4 h-4 text-teal-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L19 7"/></svg>
-          Starter applied. Adjust anything below before you submit.
+          <span id="wa-setup-summary-text">Adjust anything below before you submit.</span>
         </p>
       </div>
     </div>
@@ -95,6 +102,18 @@
     the reload throws away both what was typed and the error message.{% endcomment %}
     <form method="post" id="wa-form" class="space-y-5 min-w-0" hx-boost="false" x-data="dirtyGuard">
       {% csrf_token %}
+      {% if editing.approval_status == 'approved' %}
+      {% comment %}Meta's rules for editing an approved template (template_builder.update_and_resubmit_template).{% endcomment %}
+      <div class="alert alert-warning" role="note" data-edit-approved>
+        {% include "components/icon.html" with name="alert-triangle" %}
+        <div>
+          <p class="font-medium">This template is approved. Changing it sends it back to Meta for review.</p>
+          <p class="mt-0.5">Meta allows one edit a day and ten a month for an approved template. If a campaign or automation needs it right now, duplicate it instead.</p>
+        </div>
+      </div>
+      {% elif editing %}
+      <div class="alert alert-info" role="note">{% include "components/icon.html" with name="info" %}<span>{% if editing.rejection_reason %}Meta's reason: {{ editing.rejection_reason }} {% endif %}Fix it below and send it for review again.</span></div>
+      {% endif %}
       {% if ai_draft %}
       <section class="rounded-xl border border-border p-4 text-sm" aria-label="Why I built it this way">
         <p class="font-medium text-ink">Drafted by AI. Why I built it this way:</p>
@@ -115,7 +134,8 @@
           <div class="wa-seg" role="radiogroup" aria-labelledby="wa-cat-label">
             {% for value, label in categories %}
             <button type="button" role="radio" class="wa-cat-btn{% if form.category == value %} is-active{% endif %}"
-                    data-value="{{ value }}" aria-checked="{% if form.category == value %}true{% else %}false{% endif %}">
+                    data-value="{{ value }}" aria-checked="{% if form.category == value %}true{% else %}false{% endif %}"
+                    {% if category_locked and form.category != value or editing and value == 'authentication' %}disabled{% endif %}>
               {% if 'MARKET' in value|upper %}
                 <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 10v4a1 1 0 0 0 1 1h2l1.5 5h2.5l-1.3-5H9l8 4V5L9 9H4a1 1 0 0 0-1 1zm16-.5v5a2.5 2.5 0 0 0 0-5z"/></svg>
               {% elif 'AUTH' in value|upper %}
@@ -128,6 +148,7 @@
             {% endfor %}
           </div>
           <p id="wa-cat-desc" class="mt-2 text-xs text-ink-subtle"></p>
+          {% if category_locked %}<p class="mt-1 text-xs text-ink-subtle">Meta doesn't let an approved template change category.</p>{% endif %}
           {# The real field. Kept in the DOM so the starter picker and form POST keep working. #}
           <div class="sr-only">
             <label for="tpl-category">Category</label>
@@ -144,14 +165,18 @@
             <label class="label" for="tpl-name">Template name</label>
             <div class="wa-counted">
               <input id="tpl-name" name="name" class="input" placeholder="e.g. payment_reminder" autocomplete="off" spellcheck="false"
-                     pattern="[a-z0-9_]+" maxlength="512" value="{{ form.name|default:'' }}" required />
+                     pattern="[a-z0-9_]+" maxlength="512" value="{{ form.name|default:'' }}" required{% if editing %} readonly aria-describedby="tpl-name-locked"{% endif %} />
               <span class="wa-count" data-count-for="tpl-name" data-max="512">0/512</span>
             </div>
+            {% if editing %}
+            <p id="tpl-name-locked" class="text-xs text-ink-subtle mt-1">Meta doesn't allow changing the name or language. Duplicate the template to use different ones.</p>
+            {% else %}
             <p class="text-xs text-ink-subtle mt-1">Spaces become underscores as you type. The name can't be changed after submission.</p>
+            {% endif %}
           </div>
           <div>
             <label class="label" for="tpl-language">Language</label>
-            <select id="tpl-language" name="language" class="select" required>
+            <select id="tpl-language" name="language" class="select" required{% if editing %} disabled{% endif %}>
               {% for code, label in languages %}
               <option value="{{ code }}" {% if form.language == code or not form.language and code == "en" %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
@@ -306,7 +331,7 @@
         <div class="flex items-start justify-between gap-3">
           <div>
             <h2 id="wa-personalize-h" class="text-base font-semibold text-ink">Personalize</h2>
-            <p class="text-sm text-ink-subtle">Connect each variable to Akilent data, or leave it as free text.</p>
+            <p class="text-sm text-ink-subtle">Connect each variable to Akilent data, or leave it as free text. Meta uses the example values to review your template; they aren't sent to customers.</p>
           </div>
           <button type="button" id="wa-personalize-create-field" class="btn btn-ghost btn-sm shrink-0">
             {% include "components/icon.html" with name="plus" class="w-4 h-4" %} Create custom field
@@ -417,11 +442,11 @@
 
       {# Sticky action bar #}
       <div class="wa-actionbar flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <a href="/email/templates/?channel=whatsapp" class="btn btn-ghost btn-sm">Discard</a>
+        <a href="{% if editing %}{% url 'whatsapp-template-detail' editing.pk %}{% else %}/email/templates/?channel=whatsapp{% endif %}" class="btn btn-ghost btn-sm">{% if editing %}Cancel{% else %}Discard{% endif %}</a>
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
           <p id="wa-submit-error" class="hidden text-xs text-coral-700" role="alert"></p>
           <p id="wa-submit-hint" class="text-xs text-ink-subtle">Meta reviews it before you can send. Most reviews finish within a day.</p>
-          <button type="submit" id="wa-submit-btn" class="btn btn-primary btn-sm">Submit for review</button>
+          <button type="submit" id="wa-submit-btn" class="btn btn-primary btn-sm">{% if editing %}Resubmit for review{% else %}Submit for review{% endif %}</button>
         </div>
       </div>
     </form>
@@ -434,8 +459,8 @@
           <div class="wa-phone-bar px-3 py-2.5 flex items-center gap-2.5">
             {% include "components/icon.html" with name="user" class="w-8 h-8 rounded-full bg-white/20 p-1.5" %}
             <div class="leading-tight min-w-0">
-              <p class="text-sm font-medium flex items-center gap-1">
-                Your business
+              <p class="text-sm font-medium flex items-center gap-1 min-w-0">
+                <span class="truncate">{{ account.company_name|default:"Your business" }}</span>
                 <svg class="w-3.5 h-3.5 wa-verified" viewBox="0 0 24 24" fill="currentColor" aria-label="Verified"><path d="M12 2l2.4 2.1 3.2-.3.9 3.1 2.8 1.6-1.1 3 1.1 3-2.8 1.6-.9 3.1-3.2-.3L12 22l-2.4-2.1-3.2.3-.9-3.1-2.8-1.6 1.1-3-1.1-3 2.8-1.6.9-3.1 3.2.3z"/><path d="M8.5 12.2l2.3 2.3 4.7-4.7" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </p>
               <p class="text-xs text-white/75">Business account</p>
@@ -494,9 +519,11 @@
       if (i === n) el.setAttribute('aria-current', 'step'); else el.removeAttribute('aria-current');
     });
   }
+  const setupDesc = $('#wa-setup-desc');
   function setSetupCollapsed(collapsed) {
     setupBody.hidden = collapsed;
     setupSummary.hidden = !collapsed;
+    if (setupDesc) setupDesc.hidden = collapsed;
     setupToggle.textContent = collapsed ? 'Change starter' : 'Hide starters';
   }
   let wasVisible = isVisible();
@@ -593,7 +620,14 @@
 
   /* Starters fill fields programmatically (no input events), so resync after a pick.
      Also covers re-picking a starter while the form is already open. */
-  document.addEventListener('wa:starter-applied', () => {
+  document.addEventListener('wa:starter-applied', (e) => {
+    const starter = e.detail && e.detail.starter;
+    const summary = $('#wa-setup-summary-text');
+    if (summary) {
+      summary.textContent = starter
+        ? 'Started from “' + starter.name + '”. Adjust anything below before you submit.'
+        : 'Starting from scratch.';
+    }
     refreshAll();
     setStep(2);
     setupToggle.hidden = false;

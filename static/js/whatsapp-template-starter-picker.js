@@ -123,6 +123,15 @@
       nameEl.focus({ preventScroll: true });
     }
 
+    // "Hi {{1}}, …" as "Hi [Customer name], …", using the starter's own blank labels.
+    function readableBody(tpl) {
+      var labels = (tpl.variables || []).map(function (v) { return v.label || ""; });
+      return String(tpl.body || "").replace(/\{\{(\d+)\}\}/g, function (m, n) {
+        var label = labels[Number(n) - 1];
+        return label ? "[" + label + "]" : m;
+      });
+    }
+
     function tile(iconPath, title, subtitle, extraClass) {
       var el = document.createElement("button");
       el.type = "button";
@@ -171,7 +180,10 @@
         info.className = "min-w-0";
         info.innerHTML =
           '<p class="text-sm font-medium text-ink">' + escapeHtml(tpl.name) + "</p>" +
-          '<p class="text-xs text-ink-subtle">' + escapeHtml(tpl.use_case) + "</p>";
+          '<p class="text-xs text-ink-subtle">' + escapeHtml(tpl.use_case) + "</p>" +
+          // The message itself, blanks named, so starters can be compared before picking.
+          '<p class="mt-1 text-xs text-ink-muted line-clamp-2 whitespace-pre-line">' +
+            escapeHtml(readableBody(tpl)) + "</p>";
         var btn = document.createElement("button");
         btn.type = "button";
         btn.className = "btn btn-secondary btn-sm shrink-0";

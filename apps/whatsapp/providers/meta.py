@@ -293,22 +293,17 @@ class MetaCloudAPIProvider(WhatsAppProvider):
                 f"Failed to list templates for {waba_id}: {e}"
             ) from e
 
-    def create_template(self, waba_id: str, payload: dict) -> dict:
-        """Submit a new message template for approval."""
-        url = self._url(f"{waba_id}/message_templates")
-        try:
-            response = self._session.post(url, json=payload, timeout=30)
-        except requests.RequestException as e:
-            raise WhatsAppProviderError(f"Failed to create template: {e}") from e
+    def _template_response(self, response) -> dict:
+        """Meta's answer to a template create/edit/delete, or the error with its reason.
 
+        Template rejections carry the useful reason in error_user_title/_msg; the plain
+        message is usually just "Invalid parameter"."""
         if response.status_code >= 400:
             try:
                 body = response.json()
             except ValueError:
                 body = {}
             code, message, _ = _classify_meta_error(response.status_code, body)
-            # Template rejections carry the useful reason in error_user_title/_msg;
-            # the plain message is usually just "Invalid parameter".
             err_body = body.get("error", {}) if isinstance(body, dict) else {}
             user_msg = " ".join(
                 p
@@ -323,7 +318,42 @@ class MetaCloudAPIProvider(WhatsAppProvider):
             )
             err.code = code
             raise err
-        return response.json()
+        try:
+            return response.json()
+        except ValueError:
+            return {}
+
+    def create_template(self, waba_id: str, payload: dict) -> dict:
+        """Submit a new message template for approval."""
+        url = self._url(f"{waba_id}/message_templates")
+        try:
+            response = self._session.post(url, json=payload, timeout=30)
+        except requests.RequestException as e:
+            raise WhatsAppProviderError(f"Failed to create template: {e}") from e
+        return self._template_response(response)
+
+    def edit_template(self, template_id: str, payload: dict) -> dict:
+        """Change a submitted template (its components, and category while not approved).
+        Meta reviews it again."""
+        url = self._url(str(template_id))
+        try:
+            response = self._session.post(url, json=payload, timeout=30)
+        except requests.RequestException as e:
+            raise WhatsAppProviderError(f"Failed to edit template: {e}") from e
+        return self._template_response(response)
+
+    def delete_template(self, waba_id: str, name: str, template_id: str = "") -> dict:
+        """Delete a template at Meta: one language when its id is known, else every
+        language with that name."""
+        url = self._url(f"{waba_id}/message_templates")
+        params = {"name": name}
+        if template_id:
+            params["hsm_id"] = str(template_id)
+        try:
+            response = self._session.delete(url, params=params, timeout=30)
+        except requests.RequestException as e:
+            raise WhatsAppProviderError(f"Failed to delete template: {e}") from e
+        return self._template_response(response)
 
     def create_flow(self, waba_id: str, name: str, categories: list) -> dict:
         """Create a new, empty (draft) Flow against a WABA."""

@@ -123,6 +123,8 @@
     var noVariablesHint = document.getElementById("wa-no-variables-hint");
     var variableWarningEl = document.getElementById("wa-variable-warning");
     var submitBtn = document.getElementById("wa-submit-btn");
+    // The label the page rendered ("Submit for review", or "Resubmit for review" when editing).
+    var submitLabel = submitBtn ? submitBtn.textContent.trim() : "";
 
     var previewHeader = document.getElementById("wa-preview-header");
     var previewBody = document.getElementById("wa-preview-body");
@@ -240,7 +242,7 @@
     window.addEventListener("pageshow", function () {
       if (submitBtn) {
         submitBtn.disabled = false;
-        submitBtn.textContent = "Submit for review";
+        submitBtn.textContent = submitLabel;
       }
     });
 
@@ -263,8 +265,8 @@
             '<label class="text-xs text-ink-subtle block mb-1" for="wa-var-example-' + n + '">Example value</label>' +
             '<input class="input" id="wa-var-example-' + n + '" name="variable_example" placeholder="e.g. Ada" />' +
           '</div>' +
-        '</div>' +
-        '<p class="text-xs text-ink-subtle">Meta uses the example to review your template. It isn’t sent to customers.</p>';
+        '</div>';
+      // "Meta uses the example…" is said once, above the cards (Personalize), not on each.
 
       var labelInput = card.querySelector('[name="variable_label"]');
       var exampleInput = card.querySelector('[name="variable_example"]');

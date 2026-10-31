@@ -2302,6 +2302,15 @@
   .wa-tile:hover { border-color: color-mix(in srgb, var(--wa-accent) 40%, var(--wa-surface)); background: color-mix(in srgb, var(--wa-accent) 3%, var(--wa-surface)); }
   .wa-tile:focus-visible { outline: 2px solid var(--wa-accent); outline-offset: 2px; }
   .wa-tile-dashed { border-style: dashed; }
+  /* A grid item won't shrink below its content by default, which pushed the starter grid's
+     last column past the card. */
+  .wa-tile { min-width: 0; }
+  /* Edit mode: a category Meta won't let this template move to. */
+  .wa-cat-btn:disabled { opacity: .45; cursor: not-allowed; }
+  /* The builder's preview bubble: the body keeps the message's line breaks itself
+     (whitespace-pre-wrap); the bubble's own pre-wrap turned the markup's line breaks into
+     blank lines and made it several times taller than the message. */
+  #wa-preview-bubble { white-space: normal; }
   .wa-tile-icon { display: inline-flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; flex-shrink: 0;
                   border-radius: .5rem; color: var(--wa-accent); background: color-mix(in srgb, var(--wa-accent) 10%, var(--wa-surface)); }
   .wa-row { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .75rem 1rem;

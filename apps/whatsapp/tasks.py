@@ -1,5 +1,6 @@
 import logging
 import mimetypes
+import re
 from datetime import UTC, datetime, timedelta
 
 from django.conf import settings
@@ -1372,6 +1373,32 @@ _META_TEMPLATE_STATUS_MAP = {
 }
 
 _META_TEMPLATE_STATUS_MAP["FLAGGED"] = MessageTemplate.ApprovalStatus.PAUSED
+_META_TEMPLATE_STATUS_MAP["DELETED"] = MessageTemplate.ApprovalStatus.DELETED
+
+# Meta's rejection codes, in words an owner can act on. Unknown codes are shown as Meta
+# sends them, tidied ("SOME_CODE" -> "Some code").
+REJECTION_REASONS = {
+    "ABUSIVE_CONTENT": "Meta found content that breaks its rules.",
+    "INCORRECT_CATEGORY": "The category doesn't match the message. An offer is "
+    "Marketing; an update about something the customer started is Utility.",
+    "INVALID_FORMAT": "Meta couldn't read the message format, often blanks like "
+    "{{1}} at the very start or end, or next to each other.",
+    "PROMOTIONAL": "It reads like a promotion, so it needs the Marketing category.",
+    "TAG_CONTENT_MISMATCH": "The words don't match the category or language you chose.",
+    "SCAM": "Meta thought it could mislead customers.",
+    "NONE": "",
+}
+
+
+def rejection_reason_text(code) -> str:
+    code = (code or "").strip()
+    if not code:
+        return ""
+    known = REJECTION_REASONS.get(code.upper())
+    if known is not None:
+        return known
+    return code.replace("_", " ").capitalize()[:255]
+
 
 _VALID_TEMPLATE_CATEGORIES = {c[0] for c in MessageTemplate.Category.choices}
 
@@ -1516,10 +1543,24 @@ def _process_template_status_change(entry: dict, change: dict) -> None:
     if not account_ids:
         raise TenantResolutionError(f"No WhatsApp account owns WABA id {waba_id!r}")
 
-    scoped = MessageTemplate.objects.filter(account_id__in=account_ids)
+    scoped = MessageTemplate.objects.filter(account_id__in=account_ids).exclude(
+        approval_status=MessageTemplate.ApprovalStatus.DELETED
+    )
     exact = scoped.filter(whatsapp_template_name=name, language_code=language)
     affected = list(exact.values_list("pk", flat=True))
-    updated = exact.update(approval_status=mapped)
+    changes: dict = {"approval_status": mapped}
+    if mapped in (
+        MessageTemplate.ApprovalStatus.REJECTED,
+        MessageTemplate.ApprovalStatus.PAUSED,
+    ):
+        changes["rejection_reason"] = rejection_reason_text(
+            value.get("reason") or value.get("other_info", {}).get("title")
+        )
+    else:
+        changes["rejection_reason"] = ""
+    if value.get("message_template_id"):
+        changes["meta_template_id"] = str(value["message_template_id"])
+    updated = exact.update(**changes)
     if not updated:
         # No exact language match (codes can differ, e.g. "en" vs "en_US"). Only a
         # template with a single language is safe to match by name: with several, a
@@ -1550,7 +1591,45 @@ def _process_template_status_change(entry: dict, change: dict) -> None:
             )
 
 
+def _meta_template_content(tpl: dict) -> dict:
+    """The wording of a template as Meta lists it: body, header, footer, buttons and the
+    body's example values, in MessageTemplate's own fields."""
+    out: dict = {
+        "content": "",
+        "header": "",
+        "header_format": MessageTemplate.HeaderFormat.TEXT,
+        "footer": "",
+        "buttons": [],
+        "variable_examples": [],
+    }
+    for comp in tpl.get("components") or []:
+        kind = (comp.get("type") or "").upper()
+        if kind == "BODY":
+            out["content"] = comp.get("text") or ""
+            examples = (comp.get("example") or {}).get("body_text") or []
+            if examples and isinstance(examples[0], list):
+                out["variable_examples"] = [str(v) for v in examples[0]]
+        elif kind == "HEADER":
+            fmt = (comp.get("format") or "TEXT").lower()
+            if fmt in MessageTemplate.HeaderFormat.values:
+                out["header_format"] = fmt
+            if fmt == "text":
+                out["header"] = (comp.get("text") or "")[:60]
+        elif kind == "FOOTER":
+            out["footer"] = (comp.get("text") or "")[:60]
+        elif kind == "BUTTONS":
+            out["buttons"] = comp.get("buttons") or []
+    return out
+
+
 def _upsert_meta_template(account, tpl: dict) -> None:
+    """One template from Meta's list: its status, id, rejection reason and wording.
+
+    Meta is the source of truth for the wording too (it can be edited in Meta's own
+    manager), so content is refreshed. The blanks keep the names the business gave them
+    when the count still matches; otherwise they are numbered. A template deleted from
+    Akilent is never brought back, and Meta's own deleted ones aren't added.
+    """
     name = tpl.get("name")
     if not name:
         return
@@ -1570,23 +1649,54 @@ def _upsert_meta_template(account, tpl: dict) -> None:
                     otp_button_type = MessageTemplate.OtpButtonType.COPY_CODE
                     break
 
-    MessageTemplate.objects.update_or_create(
-        account=account,
-        whatsapp_template_name=name,
-        language_code=language,
-        defaults={
-            "approval_status": status,
-            "category": category,
-            "otp_button_type": otp_button_type,
-        },
-        create_defaults={
-            "approval_status": status,
-            "category": category,
-            "otp_button_type": otp_button_type,
-            "name": name,
-            "content": "",
-        },
+    content = _meta_template_content(tpl)
+    blanks = len(set(re.findall(r"\{\{(\d+)\}\}", content["content"])))
+    reason = (
+        rejection_reason_text(tpl.get("rejected_reason"))
+        if status
+        in (
+            MessageTemplate.ApprovalStatus.REJECTED,
+            MessageTemplate.ApprovalStatus.PAUSED,
+        )
+        else ""
     )
+    existing = MessageTemplate.objects.filter(
+        account=account, whatsapp_template_name=name, language_code=language
+    ).first()
+    if existing is None:
+        if status == MessageTemplate.ApprovalStatus.DELETED:
+            return
+        MessageTemplate.objects.create(
+            account=account,
+            whatsapp_template_name=name,
+            language_code=language,
+            name=name,
+            approval_status=status,
+            category=category,
+            otp_button_type=otp_button_type,
+            meta_template_id=str(tpl.get("id") or ""),
+            rejection_reason=reason,
+            variables=[str(n) for n in range(1, blanks + 1)],
+            **content,
+        )
+        return
+    if existing.approval_status == MessageTemplate.ApprovalStatus.DELETED:
+        return
+    existing.approval_status = status
+    existing.category = category
+    existing.otp_button_type = otp_button_type
+    existing.rejection_reason = reason
+    if tpl.get("id"):
+        existing.meta_template_id = str(tpl["id"])
+    if content["content"]:
+        if len(existing.variables or []) != blanks:
+            existing.variables = [str(n) for n in range(1, blanks + 1)]
+        # A media header's file stays as Akilent has it; Meta lists only a handle.
+        if content["header_format"] != existing.header_format:
+            existing.header_media = None
+        for field, value in content.items():
+            setattr(existing, field, value)
+    existing.save()
 
 
 def sync_templates_for_account(account) -> dict:

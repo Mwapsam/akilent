@@ -245,7 +245,9 @@ def create_and_submit_auth_template(
         button_text=button_text,
     )
     try:
-        get_whatsapp_provider(account).create_template(number.waba_id or "", payload)
+        result = get_whatsapp_provider(account).create_template(
+            number.waba_id or "", payload
+        )
     except (WhatsAppProviderError, NotImplementedError) as exc:
         raise TemplateBuilderError(f"WhatsApp rejected the template: {exc}") from exc
     body, footer = auth_content(
@@ -258,6 +260,7 @@ def create_and_submit_auth_template(
         language_code=language,
         category=AUTH,
         approval_status=MessageTemplate.ApprovalStatus.PENDING,
+        meta_template_id=str((result or {}).get("id") or ""),
         content=body,
         footer=footer,
         variables=["Verification code"],
@@ -499,7 +502,7 @@ def create_and_submit_template(
     )
     try:
         provider = get_whatsapp_provider(account)
-        provider.create_template(number.waba_id or "", payload)
+        result = provider.create_template(number.waba_id or "", payload)
     except (WhatsAppProviderError, NotImplementedError) as exc:
         raise TemplateBuilderError(f"WhatsApp rejected the template: {exc}") from exc
 
@@ -510,6 +513,7 @@ def create_and_submit_template(
         language_code=language,
         category=category,
         approval_status=MessageTemplate.ApprovalStatus.PENDING,
+        meta_template_id=str((result or {}).get("id") or ""),
         content=body.strip(),
         variables=variable_labels,
         variable_examples=variable_examples,
@@ -519,3 +523,209 @@ def create_and_submit_template(
         header_format=header_format,
         header_media=header_media,
     )
+
+
+# ── Edit, delete and where a template is used ───────────────────────────────────────────
+
+# Meta lets these be edited (and reviews the edit); a pending one is still being reviewed.
+EDITABLE_STATUSES = (
+    MessageTemplate.ApprovalStatus.APPROVED,
+    MessageTemplate.ApprovalStatus.REJECTED,
+    MessageTemplate.ApprovalStatus.PAUSED,
+)
+
+
+def can_edit(template: MessageTemplate) -> bool:
+    """Edit is offered on approved, rejected and paused templates Akilent can rebuild.
+
+    One-time code (authentication) templates use Meta's fixed wording, so they're
+    duplicated or deleted instead. A template synced without its wording can't be
+    rebuilt either."""
+    return (
+        template.approval_status in EDITABLE_STATUSES
+        and template.category != AUTH
+        and bool(template.content)
+    )
+
+
+def _waba_number(account):
+    number = (
+        WhatsAppBusinessNumber.objects.filter(account=account, is_active=True)
+        .exclude(waba_id__isnull=True)
+        .exclude(waba_id="")
+        .first()
+    )
+    if number is None:
+        raise TemplateBuilderError(
+            "Connect a WhatsApp Business number before changing templates."
+        )
+    return number
+
+
+def update_and_resubmit_template(
+    template: MessageTemplate,
+    *,
+    body: str,
+    category: str | None = None,
+    variable_labels: list[str] | None = None,
+    variable_examples: list[str] | None = None,
+    header: str = "",
+    footer: str = "",
+    buttons: list[dict] | None = None,
+    header_format: str = "text",
+    header_media: MessageTemplateAsset | None = None,
+) -> MessageTemplate:
+    """Send an edited template to Meta for review again, and store the edit locally.
+
+    The name and language never change (Meta's rule). The category can change only while
+    the template isn't approved. Raises ``TemplateBuilderError`` for anything the owner can
+    fix, including Meta refusing the edit (for example a second edit the same day).
+    """
+    if template.approval_status == MessageTemplate.ApprovalStatus.PENDING:
+        raise TemplateBuilderError(
+            "Meta is still reviewing this template, so it can't be changed yet. "
+            "Duplicate it to make another version."
+        )
+    if not can_edit(template):
+        raise TemplateBuilderError("This template can't be edited.")
+    approved = template.approval_status == MessageTemplate.ApprovalStatus.APPROVED
+    if approved or not category:
+        category = template.category
+    name = template.whatsapp_template_name or template.name
+    variable_labels = variable_labels or []
+    variable_examples = variable_examples or []
+    buttons = buttons or []
+    header_media_handle = header_media.meta_handle if header_media else ""
+    validate_fields(
+        name=name,
+        category=category,
+        language=template.language_code,
+        body=body,
+        variable_labels=variable_labels,
+        variable_examples=variable_examples,
+        header=header,
+        footer=footer,
+        buttons=buttons,
+        header_format=header_format,
+        header_media_handle=header_media_handle,
+    )
+
+    if not template.meta_template_id:
+        # Made before Akilent kept Meta's id: a sync fills it in.
+        from apps.whatsapp.tasks import sync_templates_for_account
+
+        sync_templates_for_account(template.account)
+        template.refresh_from_db(fields=["meta_template_id"])
+        if not template.meta_template_id:
+            raise TemplateBuilderError(
+                "Akilent doesn't have Meta's id for this template yet. Press "
+                "“Sync from WhatsApp” on the Templates page, then try again."
+            )
+
+    meta_buttons = [_build_button(**buttons[0])] if buttons else []
+    payload = build_meta_payload(
+        name=name,
+        category=category,
+        language=template.language_code,
+        body=body,
+        variable_examples=variable_examples,
+        header=header,
+        footer=footer,
+        buttons=[_meta_button(b) for b in meta_buttons],
+        header_format=header_format,
+        header_media_handle=header_media_handle,
+    )
+    edit = {"components": payload["components"]}
+    if not approved:
+        edit["category"] = payload["category"]
+    try:
+        get_whatsapp_provider(template.account).edit_template(
+            template.meta_template_id, edit
+        )
+    except (WhatsAppProviderError, NotImplementedError) as exc:
+        raise TemplateBuilderError(f"WhatsApp didn't accept the change: {exc}") from exc
+
+    template.category = category
+    template.approval_status = MessageTemplate.ApprovalStatus.PENDING
+    template.rejection_reason = ""
+    template.content = body.strip()
+    template.variables = variable_labels
+    template.variable_examples = variable_examples
+    template.header = header.strip() if header_format == "text" else ""
+    template.footer = footer.strip()
+    template.buttons = meta_buttons
+    template.header_format = header_format
+    template.header_media = header_media
+    template.save()
+    return template
+
+
+# Campaigns that still need the template: deleting it would leave them nothing to send.
+_LIVE_CAMPAIGN_STATUSES = ("scheduled", "queued", "sending", "paused")
+
+
+def _names_template(node, name: str) -> bool:
+    """Whether an automation definition has a step that sends ``name``."""
+    if isinstance(node, dict):
+        if name and name in (node.get("template"), node.get("fallback_template")):
+            return True
+        return any(_names_template(v, name) for v in node.values())
+    if isinstance(node, list):
+        return any(_names_template(v, name) for v in node)
+    return False
+
+
+def template_usage(template: MessageTemplate) -> dict:
+    """Where a template is used: campaigns waiting to send it, past campaigns, and
+    automations (not archived) with a step that sends it by name."""
+    from apps.automation.models import Workflow
+
+    live = list(
+        template.campaigns.filter(status__in=_LIVE_CAMPAIGN_STATUSES).order_by("pk")
+    )
+    past = template.campaigns.exclude(status__in=_LIVE_CAMPAIGN_STATUSES).count()
+    name = template.whatsapp_template_name or ""
+    automations = [
+        w
+        for w in Workflow.objects.filter(account=template.account)
+        .exclude(status=Workflow.Status.ARCHIVED)
+        .only("pk", "name", "slug", "status", "definition")
+        if _names_template(w.definition, name)
+    ]
+    return {"live_campaigns": live, "past_campaigns": past, "automations": automations}
+
+
+def delete_template(template: MessageTemplate) -> MessageTemplate:
+    """Delete the template at Meta and keep it here, marked Deleted.
+
+    Past campaigns keep showing what they sent, so the row stays, hidden from every list
+    and picker. Its WhatsApp name is moved aside so the name can be used again once Meta
+    allows it (30 days). Refused while a campaign is waiting to send it.
+    """
+    if template.approval_status == MessageTemplate.ApprovalStatus.DELETED:
+        return template
+    live = template_usage(template)["live_campaigns"]
+    if live:
+        names = ", ".join(f"“{c.name}”" for c in live[:3])
+        verb = "needs" if len(live) == 1 else "need"
+        raise TemplateBuilderError(
+            f"{names} still {verb} this template. Cancel or finish "
+            f"{'that campaign' if len(live) == 1 else 'those campaigns'} first."
+        )
+    name = template.whatsapp_template_name or template.name
+    if template.approval_status != MessageTemplate.ApprovalStatus.DRAFT:
+        number = _waba_number(template.account)
+        try:
+            get_whatsapp_provider(template.account).delete_template(
+                number.waba_id or "", name, template.meta_template_id
+            )
+        except (WhatsAppProviderError, NotImplementedError) as exc:
+            raise TemplateBuilderError(
+                f"WhatsApp didn't delete the template: {exc}"
+            ) from exc
+    template.approval_status = MessageTemplate.ApprovalStatus.DELETED
+    template.whatsapp_template_name = f"{name}~deleted~{template.pk}"
+    template.save(
+        update_fields=["approval_status", "whatsapp_template_name", "updated_at"]
+    )
+    return template

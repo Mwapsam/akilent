@@ -940,12 +940,16 @@ def templates_list(request):
     whatsapp_templates = []
     if whatsapp_enabled:
         from apps.whatsapp.models import MessageTemplate
+        from apps.whatsapp.template_builder import can_edit
 
+        # Deleted ones stay in the database for past campaigns, never in the list.
         whatsapp_templates = list(
-            MessageTemplate.objects.filter(account=account).order_by(
-                "name", "language_code"
-            )
+            MessageTemplate.objects.filter(account=account)
+            .exclude(approval_status=MessageTemplate.ApprovalStatus.DELETED)
+            .order_by("name", "language_code")
         )
+        for t in whatsapp_templates:
+            t.can_edit = can_edit(t)
 
     return render(
         request,
