@@ -115,7 +115,10 @@ def prepare(campaign: MarketingCampaign) -> Prepared:
         "subject": campaign.subject,
         "preheader": campaign.preheader,
         "heading": campaign.heading,
-        "body": mark_safe(body_html(campaign.body)),
+        # body_html escapes all raw HTML before Markdown runs and keeps only
+        # http/https/mailto links (pinned by test_body_markdown_escapes_html and
+        # test_only_http_https_and_mailto_links_survive).
+        "body": mark_safe(body_html(campaign.body)),  # nosec B703 B308
         "cta_url": campaign.cta_url,
         "cta_label": campaign.cta_label or "Learn more",
         "unsubscribe_url": unsub,
