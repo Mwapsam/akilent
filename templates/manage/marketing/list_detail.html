@@ -1,0 +1,100 @@
+{% extends "manage/base.html" %}
+{% block title %}{{ mlist.name }} — Operator{% endblock %}
+{% block content %}
+{% include "manage/marketing/_tabs.html" %}
+<div class="mb-4">
+  <p class="text-sm"><a href="{% url 'core:marketing-lists' %}" class="text-ink-muted hover:text-ink">Lists</a></p>
+  <h2 class="text-xl font-semibold text-ink">{{ mlist.name }}</h2>
+  <p class="text-sm text-ink-muted mt-1">{{ subscribed }} subscribed {{ subscribed|pluralize:"person,people" }}{% if mlist.kind == "dynamic" %}, worked out from the filter below{% endif %}.</p>
+</div>
+
+{% if report %}
+<div class="alert {% if report.invalid_count %}alert-warning{% else %}alert-success{% endif %} mb-6" role="status">
+  {% include "components/icon.html" with name="check-circle" %}
+  <div class="text-sm">
+    <p><strong>Import finished.</strong> {{ report.added }} new, {{ report.existing }} already subscribed and added to this list, {{ report.kept_opted_out }} left out because they had opted out, {{ report.invalid_count }} rows with problems.</p>
+    {% if report.invalid %}
+      <ul class="mt-2 list-disc list-inside">{% for number, reason in report.invalid %}<li>Row {{ number }}: {{ reason }}</li>{% endfor %}</ul>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<div class="grid gap-6 lg:grid-cols-[1fr_24rem]">
+  <section class="space-y-4" aria-labelledby="h-members">
+    <div class="flex items-center justify-between gap-3 flex-wrap">
+      <h3 id="h-members" class="font-semibold">People</h3>
+      <form method="get" class="flex gap-2" role="search">
+        <label class="sr-only" for="q">Search</label>
+        <input id="q" type="search" name="q" value="{{ q }}" placeholder="Search email or name" class="input sm:w-64">
+      </form>
+    </div>
+    {% if page.object_list %}
+    <div class="table-wrap">
+      <table class="table table--cards">
+        <thead><tr><th>Email</th><th>Name</th><th>Status</th><th>Source</th>{% if mlist.kind == "static" %}<th><span class="sr-only">Actions</span></th>{% endif %}</tr></thead>
+        <tbody>
+          {% for s in page.object_list %}
+          <tr>
+            <td data-label="Email" class="font-medium text-ink">{{ s.email }}</td>
+            <td data-label="Name" class="text-ink-muted">{{ s.name|default:"—" }}</td>
+            <td data-label="Status">{% include "manage/marketing/_subscriber_status.html" with status=s.status %}</td>
+            <td data-label="Source" class="text-ink-subtle">{{ s.get_source_display }}</td>
+            {% if mlist.kind == "static" %}
+            <td data-label="Actions" class="text-right">
+              <form method="post" action="{% url 'core:marketing-list-remove' mlist.pk s.pk %}">{% csrf_token %}<button class="btn btn-ghost btn-sm">Remove</button></form>
+            </td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if page.has_other_pages %}
+    <nav class="flex items-center justify-between text-sm" aria-label="Pages">
+      {% if page.has_previous %}<a href="?page={{ page.previous_page_number }}&q={{ q|urlencode }}" class="btn btn-ghost btn-sm">Previous</a>{% else %}<span></span>{% endif %}
+      <span class="text-ink-subtle">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+      {% if page.has_next %}<a href="?page={{ page.next_page_number }}&q={{ q|urlencode }}" class="btn btn-ghost btn-sm">Next</a>{% else %}<span></span>{% endif %}
+    </nav>
+    {% endif %}
+    {% else %}
+      {% include "components/empty_state.html" with icon="users" title="Nobody here yet" message="Import a CSV or add people one by one." %}
+    {% endif %}
+  </section>
+
+  <div class="space-y-6">
+    {% if mlist.kind == "static" %}
+    <form method="post" action="{% url 'core:marketing-list-import' mlist.pk %}" enctype="multipart/form-data" class="card card-pad space-y-4" hx-boost="false">
+      {% csrf_token %}
+      <h3 class="font-semibold">Import from a CSV</h3>
+      <p class="text-sm text-ink-muted">Export from any CRM. Columns: <code>email</code> (required), <code>name</code>, <code>consent_source</code>, <code>consent_date</code> (YYYY-MM-DD). Anyone who unsubscribed or bounced before is never added back.</p>
+      <div><label class="label" for="id_file">CSV file</label><input id="id_file" type="file" name="file" accept=".csv,text/csv" required class="input"></div>
+      {% include "components/form_field.html" with name="consent_note" label="How did these people agree?" required=True placeholder="e.g. Opted in on the website form, 2025–2026" %}
+      <label class="flex items-start gap-2 text-sm"><input type="checkbox" name="confirm_consent" value="on" required class="mt-0.5"> <span>Everyone in this file agreed to get product emails from Akilent.</span></label>
+      <div class="flex justify-end"><button class="btn btn-primary btn-sm" type="submit">Import</button></div>
+    </form>
+
+    <form method="post" action="{% url 'core:marketing-list-add' mlist.pk %}" class="card card-pad space-y-4">
+      {% csrf_token %}
+      <h3 class="font-semibold">Add one person</h3>
+      <div><label class="label" for="add_email">Email</label><input id="add_email" type="email" name="email" required class="input"></div>
+      <div><label class="label" for="add_name">Name</label><input id="add_name" name="name" maxlength="200" class="input"></div>
+      <div><label class="label" for="add_consent">How did they agree?</label><input id="add_consent" name="consent_note" maxlength="255" required class="input"></div>
+      <div class="flex justify-end"><button class="btn btn-secondary btn-sm" type="submit">Add</button></div>
+    </form>
+    {% endif %}
+
+    <form method="post" class="card card-pad space-y-4" hx-boost="false">
+      {% csrf_token %}
+      <h3 class="font-semibold">List settings</h3>
+      {% include "manage/marketing/_list_fields.html" %}
+      <div class="flex justify-end"><button class="btn btn-secondary btn-sm" type="submit">Save</button></div>
+    </form>
+
+    <form method="post" action="{% url 'core:marketing-list-delete' mlist.pk %}" data-confirm="Delete this list? The people on it stay subscribed." data-confirm-danger data-confirm-label="Delete list">
+      {% csrf_token %}
+      <button class="btn btn-danger-ghost btn-sm">Delete list</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

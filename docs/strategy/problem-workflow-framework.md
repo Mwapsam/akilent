@@ -204,6 +204,6 @@ The existing extension point is `apps/publishing/tests/test_journey_acceptance.p
 | P1 | Share of chats with a known origin | `journey()` `untracked_chats`; `manage.py journey_evidence` |
 | P2 | Share of paid orders linked to a conversation | Orders; `journey_evidence` |
 | P3 | Whether owners read lower bounds correctly | Pilot interviews |
-| P4 | Unanswered and forgotten trend; follow-up completion | Pilot Command Center (`/manage/pilot/`, `pilot_report`); Follow-ups |
+| P4 | Unanswered and forgotten trend; follow-up completion. Metrics, baseline, pilot and gates: [Follow-ups outcome validation](followups-outcome-validation.md) | Pilot Command Center (`/manage/pilot/`, `pilot_report`); Follow-ups |
 | P5 | Whether ranking by outcome changes what owners post | Pilot interviews; post results |
 | P6 | Whether recommendations are acted on and help | `RecommendationLog.outcome_summary` (`apps/insights/models.py:144`) |

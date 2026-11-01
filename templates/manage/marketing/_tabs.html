@@ -1,0 +1,11 @@
+{% comment %}Header + tabs for the Marketing email section. Param: tab.{% endcomment %}
+<header class="mb-6">
+  <h1 class="text-2xl font-semibold tracking-tight text-ink">Marketing email</h1>
+  <p class="mt-1 text-sm text-ink-muted">Akilent's own product updates to people who agreed to get them. Sent through the system mail provider, so it works even when the Email channel is off.</p>
+</header>
+<nav class="flex flex-wrap gap-1 border-b border-border mb-6" aria-label="Marketing email">
+  <a href="{% url 'core:marketing' %}" class="px-3 py-2 text-sm -mb-px border-b-2 {% if tab == 'campaigns' %}border-accent font-semibold text-ink{% else %}border-transparent text-ink-muted hover:text-ink{% endif %}" {% if tab == 'campaigns' %}aria-current="page"{% endif %}>Campaigns</a>
+  <a href="{% url 'core:marketing-lists' %}" class="px-3 py-2 text-sm -mb-px border-b-2 {% if tab == 'lists' %}border-accent font-semibold text-ink{% else %}border-transparent text-ink-muted hover:text-ink{% endif %}" {% if tab == 'lists' %}aria-current="page"{% endif %}>Lists</a>
+  <a href="{% url 'core:marketing-subscribers' %}" class="px-3 py-2 text-sm -mb-px border-b-2 {% if tab == 'subscribers' %}border-accent font-semibold text-ink{% else %}border-transparent text-ink-muted hover:text-ink{% endif %}" {% if tab == 'subscribers' %}aria-current="page"{% endif %}>Subscribers</a>
+  <a href="{% url 'core:marketing-settings' %}" class="px-3 py-2 text-sm -mb-px border-b-2 {% if tab == 'settings' %}border-accent font-semibold text-ink{% else %}border-transparent text-ink-muted hover:text-ink{% endif %}" {% if tab == 'settings' %}aria-current="page"{% endif %}>Settings</a>
+</nav>

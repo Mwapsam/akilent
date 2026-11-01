@@ -1,6 +1,21 @@
 {% extends "email/base_email.html" %}
+{% comment %}
+Built by apps.email.services.html_email.build_transactional_html. Every part except the
+paragraphs is optional; bare URLs in the paragraphs become links.
+{% endcomment %}
 {% block content %}
+  {% if heading %}{% include "email/components/_heading.html" with text=heading eyebrow=eyebrow %}{% endif %}
   {% for paragraph in paragraphs %}
-    <p style="margin:0 0 16px;font-size:14px;color:#12182B;line-height:1.7;">{{ paragraph|linebreaksbr }}</p>
+    {% include "email/components/_paragraph.html" with html=paragraph|urlize|linebreaksbr %}
   {% endfor %}
+  {% if code %}{% include "email/components/_code.html" with code=code %}{% endif %}
+  {% if details %}{% include "email/components/_details.html" with rows=details %}{% endif %}
+  {% if notice %}{% include "email/components/_notice.html" with text=notice tone=notice_tone %}{% endif %}
+  {% if cta_url %}
+    {% include "email/components/_button.html" with url=cta_url label=cta_label|default:"Open Akilent" %}
+  {% endif %}
+  {% if small_print %}
+    {% include "email/components/_divider.html" %}
+    {% include "email/components/_small_print.html" with text=small_print %}
+  {% endif %}
 {% endblock %}

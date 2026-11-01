@@ -71,6 +71,14 @@ def test_every_page_with_a_table_is_covered_by_a_shell_or_its_own_wrapper():
         rel = str(path.relative_to(TEMPLATES_DIR)).replace("\\", "/")
         if 'extends "base.html"' in source:
             continue  # test_responsive_tables.py owns these, in more detail
+        if (
+            rel == "email/base_email.html"
+            or rel.startswith("email/components/")
+            or 'extends "email/base_email.html"' in source
+        ):
+            # Sent emails: fluid role="presentation" layout tables (width 100%, max-width
+            # 600px) that reflow; mail clients ignore the scroll wrappers anyway.
+            continue
         if any(marker in source for marker in local):
             continue
         covered = any(

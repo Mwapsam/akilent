@@ -1,0 +1,100 @@
+{% extends "manage/base.html" %}
+{% block title %}{{ campaign.name }} — Operator{% endblock %}
+{% block content %}
+{% include "manage/marketing/_tabs.html" %}
+<div class="flex items-start justify-between gap-3 flex-wrap mb-4">
+  <div>
+    <p class="text-sm"><a href="{% url 'core:marketing' %}" class="text-ink-muted hover:text-ink">Campaigns</a></p>
+    <h2 class="text-xl font-semibold text-ink flex items-center gap-2 flex-wrap">{{ campaign.name }} {% include "manage/marketing/_status.html" with status=campaign.status %}</h2>
+    {% if campaign.status == "scheduled" %}<p class="text-sm text-ink-muted mt-1">Sends {{ campaign.scheduled_at|date:"d M Y, H:i" }}.</p>{% endif %}
+  </div>
+  <form method="post" action="{% url 'core:marketing-campaign-action' campaign.pk 'duplicate' %}">{% csrf_token %}<button class="btn btn-secondary btn-sm">Duplicate</button></form>
+</div>
+
+{% if campaign.status == "sending" and campaign.last_error %}
+<div class="alert alert-warning mb-6" role="status">
+  {% include "components/icon.html" with name="alert" %}
+  <p class="text-sm"><strong>The mail provider is refusing sends, so the campaign is paused and retries every few minutes.</strong> Nobody is dropped while this lasts. Last error: {{ campaign.last_error }}</p>
+</div>
+{% endif %}
+
+{% if stats %}
+<section class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6" aria-label="Results">
+  <div class="card card-pad"><p class="text-xs text-ink-subtle">Recipients</p><p class="text-2xl font-semibold tabular-nums">{{ stats.total }}</p></div>
+  <div class="card card-pad"><p class="text-xs text-ink-subtle">Sent</p><p class="text-2xl font-semibold tabular-nums">{{ stats.sent }}</p></div>
+  <div class="card card-pad"><p class="text-xs text-ink-subtle">Waiting</p><p class="text-2xl font-semibold tabular-nums">{{ stats.pending }}</p></div>
+  <div class="card card-pad"><p class="text-xs text-ink-subtle">Failed or skipped</p><p class="text-2xl font-semibold tabular-nums">{{ stats.failed|add:stats.skipped }}</p></div>
+  <div class="card card-pad"><p class="text-xs text-ink-subtle">Unsubscribed since</p><p class="text-2xl font-semibold tabular-nums">{{ stats.unsubscribed }}</p></div>
+</section>
+{% endif %}
+
+<div class="grid gap-6 xl:grid-cols-2">
+  <div class="space-y-6">
+    {% if form %}
+    <form method="post" class="card card-pad space-y-5" hx-boost="false">
+      {% csrf_token %}
+      <h3 class="font-semibold">Content</h3>
+      {% include "manage/marketing/_campaign_fields.html" %}
+      <div class="flex justify-end"><button class="btn btn-secondary btn-sm" type="submit">Save</button></div>
+    </form>
+    {% endif %}
+
+    <section class="card card-pad space-y-4" aria-labelledby="h-send">
+      <h3 id="h-send" class="font-semibold">Send</h3>
+      <form method="post" action="{% url 'core:marketing-campaign-action' campaign.pk 'test' %}" class="flex gap-2 items-end flex-wrap">{% csrf_token %}
+        <div class="flex-1 min-w-48">{% include "components/form_field.html" with name="to" label="Send a test to" type="email" value=request.user.email %}</div>
+        <button class="btn btn-secondary btn-sm">Send test</button>
+      </form>
+
+      {% if campaign.is_editable %}
+        {% if problems %}
+          <div class="alert alert-warning" role="note">
+            {% include "components/icon.html" with name="alert" %}
+            <ul class="list-disc list-inside text-sm">{% for p in problems %}<li>{{ p }}</li>{% endfor %}</ul>
+          </div>
+        {% else %}
+          <p class="text-sm text-ink-muted">{{ recipients }} subscribed {{ recipients|pluralize:"person,people" }} on the chosen lists right now. Unsubscribed and bounced addresses are left out.</p>
+          <div class="flex flex-wrap gap-2 items-end">
+            <form method="post" action="{% url 'core:marketing-campaign-action' campaign.pk 'send' %}" data-confirm="Send this campaign to {{ recipients }} {{ recipients|pluralize:"person,people" }} now? This can't be undone." data-confirm-label="Send now">{% csrf_token %}
+              <button class="btn btn-primary btn-sm" {% if not recipients %}disabled{% endif %}>Send now</button>
+            </form>
+            <form method="post" action="{% url 'core:marketing-campaign-action' campaign.pk 'schedule' %}" class="flex gap-2 items-end">{% csrf_token %}
+              <div><label class="label" for="id_when">Or schedule for</label><input id="id_when" type="datetime-local" name="when" class="input" required></div>
+              <button class="btn btn-secondary btn-sm">Schedule</button>
+            </form>
+          </div>
+        {% endif %}
+        {% if campaign.status == "scheduled" %}
+          <form method="post" action="{% url 'core:marketing-campaign-action' campaign.pk 'unschedule' %}">{% csrf_token %}<button class="btn btn-ghost btn-sm">Back to draft</button></form>
+        {% endif %}
+      {% endif %}
+
+      {% if campaign.status == "scheduled" or campaign.status == "sending" %}
+        <form method="post" action="{% url 'core:marketing-campaign-action' campaign.pk 'cancel' %}" data-confirm="Stop this campaign? Emails already sent can't be recalled." data-confirm-danger data-confirm-label="Stop campaign">{% csrf_token %}
+          <button class="btn btn-danger-ghost btn-sm">Cancel campaign</button>
+        </form>
+      {% endif %}
+      {% if campaign.status == "draft" %}
+        <form method="post" action="{% url 'core:marketing-campaign-action' campaign.pk 'delete' %}" data-confirm="Delete this draft?" data-confirm-danger data-confirm-label="Delete">{% csrf_token %}
+          <button class="btn btn-danger-ghost btn-sm">Delete draft</button>
+        </form>
+      {% endif %}
+    </section>
+
+    {% if failures %}
+    <section class="card card-pad" aria-labelledby="h-fail">
+      <h3 id="h-fail" class="font-semibold mb-2">Failed sends</h3>
+      <ul class="text-sm space-y-1">{% for f in failures %}<li><span class="font-medium">{{ f.subscriber.email }}</span> <span class="text-ink-subtle">— {{ f.error }}</span></li>{% endfor %}</ul>
+    </section>
+    {% endif %}
+  </div>
+
+  <section class="card overflow-hidden" aria-labelledby="h-preview">
+    <div class="px-5 py-3 border-b border-border flex items-center justify-between gap-2">
+      <h3 id="h-preview" class="font-semibold">Preview</h3>
+      <a href="{% url 'core:marketing-campaign-preview' campaign.pk %}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">Open on its own</a>
+    </div>
+    <iframe src="{% url 'core:marketing-campaign-preview' campaign.pk %}" title="Campaign preview" class="block w-full bg-canvas" style="height: 820px; border: 0;"></iframe>
+  </section>
+</div>
+{% endblock %}

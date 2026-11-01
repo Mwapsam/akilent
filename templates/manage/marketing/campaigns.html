@@ -1,0 +1,29 @@
+{% extends "manage/base.html" %}
+{% block title %}Marketing email — Operator{% endblock %}
+{% block content %}
+{% include "manage/marketing/_tabs.html" %}
+<div class="flex items-center justify-between gap-3 flex-wrap mb-4">
+  <p class="text-sm text-ink-muted">{{ subscribed|default:0 }} subscribed {{ subscribed|pluralize:"person,people" }}.</p>
+  <a href="{% url 'core:marketing-campaign-new' %}" class="btn btn-primary btn-sm">New campaign</a>
+</div>
+{% if campaigns %}
+<div class="table-wrap">
+  <table class="table table--cards">
+    <thead><tr><th>Campaign</th><th>Subject</th><th>Lists</th><th>Status</th><th>When</th></tr></thead>
+    <tbody>
+      {% for c in campaigns %}
+      <tr>
+        <td data-label="Campaign"><a href="{% url 'core:marketing-campaign' c.pk %}" class="font-medium text-ink hover:text-accent">{{ c.name }}</a></td>
+        <td data-label="Subject" class="text-ink-muted">{{ c.subject|truncatechars:60 }}</td>
+        <td data-label="Lists" class="text-ink-muted">{% for l in c.lists.all %}{{ l.name }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</td>
+        <td data-label="Status">{% include "manage/marketing/_status.html" with status=c.status %}</td>
+        <td data-label="When" class="text-ink-subtle tabular-nums whitespace-nowrap">{% if c.finished_at %}{{ c.finished_at|date:"d M Y H:i" }}{% elif c.scheduled_at %}{{ c.scheduled_at|date:"d M Y H:i" }}{% else %}{{ c.created_at|date:"d M Y" }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+  {% include "components/empty_state.html" with icon="send" title="No campaigns yet" message="Write your first product update. Send yourself a test before sending it to a list." %}
+{% endif %}
+{% endblock %}

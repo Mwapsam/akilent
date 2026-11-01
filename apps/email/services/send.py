@@ -171,6 +171,52 @@ def send_system_email(
         raise
 
 
+def send_platform_marketing_email(
+    to_email: str,
+    subject: str,
+    text_body: str,
+    html_body: str,
+    *,
+    from_name: str,
+    unsubscribe_url: str,
+) -> None:
+    """Send one of Akilent's own marketing emails (apps.platform_mail).
+
+    Same provider as system mail (``get_system_email_provider``), so it does not depend on
+    the tenant Email channel switch. Carries RFC 8058 one-click unsubscribe headers. Hard
+    bounces and complaints block it, like system mail; the caller checks marketing consent.
+    ``PLATFORM_MARKETING_FROM_EMAIL`` lets marketing use its own address for reputation.
+
+    Raises on provider errors (the caller records the failure).
+    """
+    import email.utils
+
+    from apps.email.providers import get_system_email_provider
+    from apps.email.types import OutboundEmail
+
+    raw_from = (
+        getattr(settings, "PLATFORM_MARKETING_FROM_EMAIL", "")
+        or settings.DEFAULT_FROM_EMAIL
+    )
+    from_email = (
+        email.utils.formataddr((from_name, raw_from)) if from_name else raw_from
+    )
+    get_system_email_provider().send(
+        OutboundEmail(
+            from_email=from_email,
+            to_email=to_email,
+            subject=subject,
+            text_body=text_body,
+            html_body=html_body,
+            headers={
+                "List-Unsubscribe": f"<{unsubscribe_url}>",
+                "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+                "X-Auto-Response-Suppress": "OOF, AutoReply",
+            },
+        )
+    )
+
+
 def smtp_send(
     from_email: str,
     to_email: str,

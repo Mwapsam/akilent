@@ -1,0 +1,14 @@
+{% extends "manage/base.html" %}
+{% block title %}New campaign — Operator{% endblock %}
+{% block content %}
+{% include "manage/marketing/_tabs.html" %}
+<form method="post" class="card card-pad space-y-5 max-w-3xl" hx-boost="false">
+  {% csrf_token %}
+  <h2 class="font-semibold">New campaign</h2>
+  {% include "manage/marketing/_campaign_fields.html" %}
+  <div class="flex justify-end gap-2">
+    <a href="{% url 'core:marketing' %}" class="btn btn-ghost btn-sm">Cancel</a>
+    <button class="btn btn-primary btn-sm" type="submit">Save draft</button>
+  </div>
+</form>
+{% endblock %}

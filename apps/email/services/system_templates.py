@@ -9,6 +9,7 @@ yet (or was deliberately deactivated/deleted).
 
 from __future__ import annotations
 
+import functools
 import logging
 
 from django.template.loader import render_to_string
@@ -47,7 +48,18 @@ def render_system_email(
     if row is not None:
         subject = render_string(row.subject, render_ctx).strip()
         text_body = render_string(row.text_body, render_ctx)
-        html_body = render_string(row.html_body, render_ctx) if row.html_body else ""
+        if row.html_body:
+            html_body = render_string(row.html_body, render_ctx)
+        elif fallback_html_template and _is_seeded_text(row):
+            # The seeded rows carry text only. While nobody has edited that text, the
+            # designed file template says the same thing, so it is the HTML part.
+            html_body = render_to_string(fallback_html_template, render_ctx)
+        else:
+            # An operator rewrote the text: their words must be what HTML readers see too,
+            # so wrap that text in the branded shell rather than the file's old copy.
+            from apps.email.services.html_email import build_transactional_html
+
+            html_body = build_transactional_html(text_body, subject)
         return subject, text_body, html_body
 
     logger.warning(
@@ -63,3 +75,19 @@ def render_system_email(
         else ""
     )
     return subject, text_body, html_body
+
+
+def _is_seeded_text(row) -> bool:
+    """Whether the row's subject and text are still exactly what migration 0015 seeded."""
+    seeded = _seeded_rows().get(row.key)
+    return seeded is not None and (
+        row.text_body == seeded["text_body"] and row.subject == seeded["subject"]
+    )
+
+
+@functools.cache
+def _seeded_rows() -> dict[str, dict]:
+    import importlib
+
+    module = importlib.import_module("apps.email.migrations.0015_systememailtemplate")
+    return {r["key"]: r for r in module.SEED_ROWS}

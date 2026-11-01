@@ -1,0 +1,21 @@
+{% extends "manage/base.html" %}
+{% block title %}Marketing settings — Operator{% endblock %}
+{% block content %}
+{% include "manage/marketing/_tabs.html" %}
+<form method="post" class="card card-pad space-y-4 max-w-xl" hx-boost="false">
+  {% csrf_token %}
+  <h2 class="font-semibold">Sender</h2>
+  <div>
+    <label class="label" for="id_postal_address">Postal address <span class="text-red-500" aria-hidden="true">*</span></label>
+    <textarea id="id_postal_address" name="postal_address" rows="3" class="input" aria-describedby="help_postal">{{ form.postal_address.value|default:"" }}</textarea>
+    <p id="help_postal" class="help">Printed at the bottom of every marketing email, as anti-spam law (CAN-SPAM) requires. Nothing can be sent until it's set.</p>
+  </div>
+  {% include "components/form_field.html" with name="from_name" label="From name" value=form.from_name.value error=form.from_name.errors|join:" " help="What inboxes show as the sender." %}
+  <dl class="text-sm grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-ink-muted">
+    <dt>From address</dt><dd class="text-ink">{{ from_email }}</dd>
+    <dt>Sending rate</dt><dd class="text-ink">{{ rate }} emails a minute</dd>
+  </dl>
+  <p class="text-xs text-ink-subtle">The address and rate come from PLATFORM_MARKETING_FROM_EMAIL and PLATFORM_MARKETING_RATE_PER_MINUTE on the server.</p>
+  <div class="flex justify-end"><button class="btn btn-primary btn-sm" type="submit">Save</button></div>
+</form>
+{% endblock %}

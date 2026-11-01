@@ -1,0 +1,33 @@
+{% comment %}Campaign editor fields. Param: form (CampaignForm).{% endcomment %}
+{% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+<div class="grid gap-4 sm:grid-cols-2">
+  {% include "components/form_field.html" with name="name" label="Internal name" required=True value=form.name.value error=form.name.errors|join:" " help="Only operators see this." %}
+  {% include "components/form_field.html" with name="subject" label="Subject line" required=True value=form.subject.value error=form.subject.errors|join:" " %}
+  {% include "components/form_field.html" with name="preheader" label="Preview text" value=form.preheader.value error=form.preheader.errors|join:" " help="Shown after the subject in most inboxes." %}
+  {% include "components/form_field.html" with name="heading" label="Heading" value=form.heading.value error=form.heading.errors|join:" " %}
+</div>
+<div>
+  <label class="label" for="id_body">Body <span class="text-red-500" aria-hidden="true">*</span></label>
+  <textarea id="id_body" name="body" rows="12" required class="input font-mono text-sm{% if form.body.errors %} input-error{% endif %}" aria-describedby="help_body">{{ form.body.value|default:"" }}</textarea>
+  {% if form.body.errors %}<p class="field-error">{{ form.body.errors|join:" " }}</p>{% else %}<p id="help_body" class="help">Markdown: a blank line between paragraphs, **bold**, [link text](https://…), "- " for bullets, "## " for a subheading.</p>{% endif %}
+</div>
+<div class="grid gap-4 sm:grid-cols-2">
+  {% include "components/form_field.html" with name="cta_label" label="Button label" value=form.cta_label.value error=form.cta_label.errors|join:" " help="Optional, e.g. See what's new" %}
+  {% include "components/form_field.html" with name="cta_url" label="Button link" type="url" value=form.cta_url.value error=form.cta_url.errors|join:" " %}
+</div>
+<fieldset>
+  <legend class="label">Send to</legend>
+  {% with chosen=form.lists.value|default_if_none:"" %}
+  <div class="grid gap-2 sm:grid-cols-2">
+    {% for value, label in form.fields.lists.choices %}
+      <label class="flex items-center gap-2 text-sm rounded-lg border border-border px-3 py-2">
+        <input type="checkbox" name="lists" value="{{ value }}" {% for c in chosen %}{% if c|stringformat:"s" == value|stringformat:"s" %}checked{% endif %}{% endfor %}>
+        {{ label }}
+      </label>
+    {% empty %}
+      <p class="text-sm text-ink-muted">No lists yet. <a href="{% url 'core:marketing-lists' %}" class="text-accent underline">Create one</a> first.</p>
+    {% endfor %}
+  </div>
+  {% endwith %}
+  {% if form.lists.errors %}<p class="field-error">{{ form.lists.errors|join:" " }}</p>{% endif %}
+</fieldset>

@@ -15,4 +15,17 @@
     </div>
   </form>
 </div>
+
+<div class="card card-pad max-w-xl mt-6">
+  <h2 class="font-semibold mb-1">Email preferences</h2>
+  <p class="text-sm text-ink-muted mb-4">Account emails, like sign-in codes, password resets and billing notices, always arrive.</p>
+  <form method="post" action="{% url 'settings-product-updates' %}" class="space-y-4">
+    {% csrf_token %}
+    <label class="flex items-start gap-2 text-sm text-ink">
+      <input type="checkbox" name="product_updates" value="on" class="mt-0.5" {% if product_updates %}checked{% endif %}>
+      <span>Send me Akilent product updates and tips</span>
+    </label>
+    <button class="btn btn-secondary btn-sm" type="submit">Save preference</button>
+  </form>
+</div>
 {% endblock %}

@@ -249,14 +249,13 @@ def send_weekly_reports() -> int:
     to report on, and the ``Event`` record below stops a business being emailed twice for the
     same week even if the task overlaps a retry.
     """
-    from django.conf import settings
-    from django.core.mail import EmailMultiAlternatives
     from django.utils import timezone
 
     from apps.accounts.notifications import recipients
     from apps.billing.limits import LimitChecker
     from apps.conversations import weekly_report
     from apps.conversations.models import Event, InsightSettings
+    from apps.email.services.send import send_system_email
     from apps.whatsapp import api as whatsapp_api
 
     now = timezone.now()
@@ -282,15 +281,13 @@ def send_weekly_reports() -> int:
             for user in recipients(account, "owners"):
                 if not user.email:
                     continue
-                msg = EmailMultiAlternatives(
+                send_system_email(
+                    to_email=user.email,
                     subject=email["subject"],
-                    body=email["text_body"],
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    to=[user.email],
+                    text_body=email["text_body"],
+                    html_body=email.get("html_body", ""),
+                    sender_label="Insights",
                 )
-                if email.get("html_body"):
-                    msg.attach_alternative(email["html_body"], "text/html")
-                msg.send()
             Event.objects.create(
                 account=account,
                 type="weekly_report_sent",

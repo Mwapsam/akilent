@@ -31,3 +31,6 @@ the Starting point (unanswered before and after).
   the "from posts" numbers are the least that posts brought in.
 - **Baseline comparison** (before Akilent vs now) exists per enrolled pilot in
   `accounts.pilot.pilot_outcome`, but isn't shown on the Command Center.
+- **Follow-up outcomes** (on-time, overdue, recovery stages) are defined, with what can't be
+  measured yet, in [Follow-ups outcome validation](../strategy/followups-outcome-validation.md)
+  (Appendix A lists the gaps; none is authorised).

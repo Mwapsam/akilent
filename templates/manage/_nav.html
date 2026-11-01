@@ -5,6 +5,7 @@
   {% include "components/_nav_item.html" with href="/manage/payments/" label="Payments" icon="credit-card" match="manage/payments" collapsible=collapsible %}
   {% include "components/_nav_item.html" with href="/manage/plans/" label="Plans" icon="card" match="manage/plans" collapsible=collapsible %}
   {% include "components/_nav_item.html" with href="/manage/chatbots/" label="Chatbots" icon="message-circle" match="manage/chatbots" collapsible=collapsible %}
+  {% include "components/_nav_item.html" with href="/manage/marketing/" label="Marketing email" icon="send" match="manage/marketing" collapsible=collapsible %}
 
   <div role="group" aria-label="Platform">
     <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Platform</p>
@@ -20,6 +21,7 @@
     <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Tools</p>
     {% include "components/_nav_item.html" with href="/admin/" label="Raw data (Django admin)" icon="code-bracket" match="admin" collapsible=collapsible %}
     {% include "components/_nav_item.html" with href="/manage/styleguide/" label="Style guide" icon="sparkles" match="manage/styleguide" collapsible=collapsible %}
+    {% include "components/_nav_item.html" with href="/manage/emails/" label="Email previews" icon="mail" match="manage/emails" collapsible=collapsible %}
     {% include "components/_nav_item.html" with href="/dashboard/" label="Back to my workspace" icon="log-out" match="dashboard" collapsible=collapsible %}
   </div>
 </nav>

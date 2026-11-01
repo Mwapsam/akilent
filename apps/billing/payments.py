@@ -547,7 +547,15 @@ def _succeed(payment, provider_code, result) -> None:
     if result.saved_method and result.saved_method.token:
         save_method(payment.account, provider_code, result.saved_method)
     _activate(payment, provider_code, result.recurring_id)
-    if (
+    if payment.purpose == BillingPayment.CHECKOUT:
+        # Payment confirmation for a purchase or plan change (renewals say "renewed").
+        from .tasks import send_billing_notice
+
+        account_id, payment_id = payment.account_id, payment.pk
+        transaction.on_commit(
+            lambda: send_billing_notice.delay(account_id, "paid", payment_id)
+        )
+    elif (
         payment.purpose == BillingPayment.RENEWAL
         and payment.provider_operation_id
         and Subscription.objects.filter(

@@ -89,6 +89,7 @@ urlpatterns = [
         ),
         name="password_reset_complete",
     ),
+    path("updates/", include("apps.platform_mail.urls")),
     path("help/", core_views.help_index, name="help"),
     path("help/<slug:slug>/", core_views.help_article, name="help-article"),
     path("privacy/", core_views.legal_page, {"slug": "privacy"}, name="privacy"),

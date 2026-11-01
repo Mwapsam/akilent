@@ -1,0 +1,1 @@
+{% comment %}Body paragraph. Params: text (plain, escaped), or html (already safe). muted=True for secondary copy.{% endcomment %}<p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:{% if muted %}#46516B{% else %}#12182B{% endif %};">{% if html %}{{ html }}{% else %}{{ text|linebreaksbr }}{% endif %}</p>

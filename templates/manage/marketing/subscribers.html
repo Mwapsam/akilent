@@ -1,0 +1,56 @@
+{% extends "manage/base.html" %}
+{% block title %}Marketing subscribers — Operator{% endblock %}
+{% block content %}
+{% include "manage/marketing/_tabs.html" %}
+<form method="get" class="flex flex-wrap gap-2 items-end mb-4" role="search">
+  <div>
+    <label class="label" for="q">Search</label>
+    <input id="q" type="search" name="q" value="{{ q }}" placeholder="Email or name" class="input sm:w-64">
+  </div>
+  <div>
+    <label class="label" for="status">Status</label>
+    <select id="status" name="status" class="select" onchange="this.form.submit()">
+      <option value="">All ({{ page.paginator.count }})</option>
+      {% for value, label in statuses %}<option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </div>
+  <button class="btn btn-secondary btn-sm">Filter</button>
+</form>
+<p class="text-sm text-ink-muted mb-4">{{ counts.subscribed }} subscribed · {{ counts.unsubscribed }} unsubscribed · {{ counts.suppressed }} bounced or complained</p>
+
+{% if page.object_list %}
+<div class="table-wrap">
+  <table class="table table--cards">
+    <thead><tr><th>Email</th><th>Name</th><th>Status</th><th>Source</th><th>Since</th><th><span class="sr-only">Actions</span></th></tr></thead>
+    <tbody>
+      {% for s in page.object_list %}
+      <tr>
+        <td data-label="Email" class="font-medium text-ink">{{ s.email }}</td>
+        <td data-label="Name" class="text-ink-muted">{{ s.name|default:"—" }}</td>
+        <td data-label="Status">{% include "manage/marketing/_subscriber_status.html" with status=s.status %}</td>
+        <td data-label="Source" class="text-ink-subtle">{{ s.get_source_display }}</td>
+        <td data-label="Since" class="text-ink-subtle tabular-nums whitespace-nowrap">{% if s.unsubscribed_at %}{{ s.unsubscribed_at|date:"d M Y" }}{% else %}{{ s.consented_at|date:"d M Y" }}{% endif %}</td>
+        <td data-label="Actions" class="text-right">
+          {% if s.status == "subscribed" %}
+          <form method="post" action="{% url 'core:marketing-subscriber-unsubscribe' s.pk %}" data-confirm="Unsubscribe {{ s.email }}? Only they can subscribe again." data-confirm-label="Unsubscribe">{% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <button class="btn btn-ghost btn-sm">Unsubscribe</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if page.has_other_pages %}
+<nav class="flex items-center justify-between text-sm mt-4" aria-label="Pages">
+  {% if page.has_previous %}<a href="?page={{ page.previous_page_number }}&q={{ q|urlencode }}&status={{ status }}" class="btn btn-ghost btn-sm">Previous</a>{% else %}<span></span>{% endif %}
+  <span class="text-ink-subtle">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+  {% if page.has_next %}<a href="?page={{ page.next_page_number }}&q={{ q|urlencode }}&status={{ status }}" class="btn btn-ghost btn-sm">Next</a>{% else %}<span></span>{% endif %}
+</nav>
+{% endif %}
+{% else %}
+  {% include "components/empty_state.html" with icon="users" title="No subscribers found" message="People join from the signup checkbox, their profile settings, or a list import." %}
+{% endif %}
+{% endblock %}

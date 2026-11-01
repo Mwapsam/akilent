@@ -28,6 +28,11 @@ urlpatterns = [
     # Self-service account settings (profile / security / team).
     path("settings/", settings_views.settings_profile, name="settings-profile"),
     path(
+        "settings/product-updates/",
+        settings_views.settings_product_updates,
+        name="settings-product-updates",
+    ),
+    path(
         "settings/business/", settings_views.settings_business, name="settings-business"
     ),
     path("settings/security/2fa/", views._2fa_setup, name="2fa-setup"),

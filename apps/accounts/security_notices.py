@@ -44,6 +44,28 @@ _FOOTER = (
 )
 
 
+def notice_html(kind, *, when, tail=""):
+    """The branded HTML body of one notice (also used by the console preview)."""
+    from apps.email.services.html_email import (
+        build_transactional_html,
+        site_email_context,
+    )
+
+    subject, template = _COPY[kind]
+    return build_transactional_html(
+        template.format(when=when, tail=tail),
+        subject,
+        eyebrow="Security notice",
+        heading=subject,
+        preheader=f"This change was made on {when}.",
+        details=[("When", when)],
+        notice=_FOOTER,
+        notice_tone="warning",
+        cta_url=f"{site_email_context()['base_url']}/settings/security/",
+        cta_label="Review security settings",
+    )
+
+
 def notify_after_commit(user, kind):
     """Schedule the owner's notice for after the current transaction commits."""
     transaction.on_commit(lambda: _send(user.pk, user.email, kind))
@@ -70,7 +92,14 @@ def _send(user_pk, email, kind):
             tail = "Your password is now the only way to sign in."
     body = f"{template.format(when=when, tail=tail)}\n\n{_FOOTER}\n"
     try:
-        send_system_email(to_email=email, subject=subject, text_body=body)
+        html_body = notice_html(kind, when=when, tail=tail)
+        send_system_email(
+            to_email=email,
+            subject=subject,
+            text_body=body,
+            html_body=html_body,
+            sender_label="Security",
+        )
     except Exception:
         # The change is already committed. Record the failure; do not reverse it.
         logger.exception("security notice %s failed for user %s", kind, user_pk)

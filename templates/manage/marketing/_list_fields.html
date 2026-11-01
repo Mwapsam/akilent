@@ -1,0 +1,47 @@
+{% comment %}List editor fields. Param: form (ListForm). Filter fields show for dynamic lists.{% endcomment %}
+<div x-data="{ kind: '{{ form.kind.value|default:'static' }}' }" class="space-y-4">
+  <div class="grid gap-4 sm:grid-cols-2">
+    {% include "components/form_field.html" with name="name" label="Name" required=True value=form.name.value error=form.name.errors|join:" " %}
+    {% include "components/form_field.html" with name="description" label="Description" value=form.description.value error=form.description.errors|join:" " %}
+  </div>
+  <fieldset>
+    <legend class="label">Who is on it</legend>
+    <div class="grid gap-2 sm:grid-cols-2">
+      {% for value, label in form.fields.kind.choices %}
+        <label class="flex items-center gap-2 text-sm rounded-lg border border-border px-3 py-2">
+          <input type="radio" name="kind" value="{{ value }}" x-model="kind" {% if form.kind.value|default:"static" == value %}checked{% endif %}>
+          {{ label }}
+        </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+  <div x-show="kind === 'dynamic'" x-cloak class="space-y-4 rounded-xl border border-border p-4">
+    <p class="text-sm text-ink-muted">Subscribed Akilent users who match all of these. Worked out again each time a campaign sends.</p>
+    <div>
+      <label class="label" for="id_role">People</label>
+      <select id="id_role" name="role" class="select">
+        {% for value, label in form.fields.role.choices %}<option value="{{ value }}" {% if form.role.value == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <fieldset>
+      <legend class="label">On these plans (none ticked = any plan)</legend>
+      <div class="flex flex-wrap gap-3">
+        {% for value, label in form.fields.plans.choices %}
+          <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" name="plans" value="{{ value }}" {% if value in form.plans.value %}checked{% endif %}> {{ label }}</label>
+        {% endfor %}
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend class="label">Subscription status (none ticked = any)</legend>
+      <div class="flex flex-wrap gap-3">
+        {% for value, label in form.fields.statuses.choices %}
+          <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" name="statuses" value="{{ value }}" {% if value in form.statuses.value %}checked{% endif %}> {{ label }}</label>
+        {% endfor %}
+      </div>
+    </fieldset>
+    <div class="grid gap-4 sm:grid-cols-2">
+      {% include "components/form_field.html" with name="joined_after" label="Signed up on or after" type="date" value=form.joined_after.value|default_if_none:"" %}
+      {% include "components/form_field.html" with name="joined_before" label="Signed up on or before" type="date" value=form.joined_before.value|default_if_none:"" %}
+    </div>
+  </div>
+</div>

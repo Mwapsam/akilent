@@ -1,10 +1,10 @@
 """Operator MFA reset: two-person, ticketed, audited, dry-run by default."""
 
 from io import StringIO
+from unittest import mock
 
 from django.contrib.auth.models import User
 from django.contrib.sessions.models import Session
-from django.core import mail
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import Client, TestCase
@@ -24,6 +24,9 @@ def _user(email, staff=False):
 
 class ResetUserMfaTest(TestCase):
     def setUp(self):
+        patcher = mock.patch("apps.email.services.send.send_system_email")
+        self.send = patcher.start()
+        self.addCleanup(patcher.stop)
         self.target = _user("locked@example.com")
         self.approver = _user("ops@example.com", staff=True)
         TOTPDevice.objects.create(user=self.target, name="default", confirmed=True)
@@ -56,7 +59,7 @@ class ResetUserMfaTest(TestCase):
         self.assertIn("Dry run", out)
         self.assertTrue(TOTPDevice.objects.filter(user=self.target).exists())
         self.assertEqual(RecoveryCode.objects.filter(user=self.target).count(), 10)
-        self.assertEqual(len(mail.outbox), 0)
+        self.send.assert_not_called()
 
     def test_confirmed_reset_removes_factors_and_writes_audit(self):
         self._run("--confirm")
@@ -79,9 +82,11 @@ class ResetUserMfaTest(TestCase):
     def test_confirmed_reset_emails_the_user_with_the_ticket(self):
         self._run("--confirm")
 
-        self.assertEqual(len(mail.outbox), 1)
-        self.assertEqual(mail.outbox[0].to, ["locked@example.com"])
-        self.assertIn("SUP-101", mail.outbox[0].body)
+        self.send.assert_called_once()
+        kwargs = self.send.call_args.kwargs
+        self.assertEqual(kwargs["to_email"], "locked@example.com")
+        self.assertIn("SUP-101", kwargs["text_body"])
+        self.assertIn("SUP-101", kwargs["html_body"])
 
     def test_approver_must_be_platform_staff(self):
         _user("plain@example.com", staff=False)

@@ -89,13 +89,20 @@ def notify_team(
     if not text:
         raise NotifyError("Write what the team should be told.")
     body = text[:MAX_TEXT]
+    from apps.email.services.html_email import build_transactional_html
+
+    html_body = build_transactional_html(
+        body,
+        subject[:200],
+        heading=subject[:200],
+        preheader=body[:140],
+        cta_url=absolute_url(path) if path else "",
+        cta_label="Open in Akilent",
+        reason=reason,
+    )
     if path:
         body += f"\n\nOpen it: {absolute_url(path)}"
     body += f"\n\n{reason}"
-
-    from apps.email.services.html_email import build_transactional_html
-
-    html_body = build_transactional_html(body, subject[:200])
 
     sent = 0
     for user in recipients(account, to, conversation=conversation):

@@ -263,6 +263,7 @@ There are no model or migration changes.
   - the departed-teammate run message.
 
   Uncommitted and undeployed pending the owner's review.
+- **Outcome validation (2026-10-31):** whether the redesign reduces lost opportunities is measured separately; see [Follow-ups outcome validation](../strategy/followups-outcome-validation.md) (documents only; no queries run, no instrumentation built).
 - **Kept outside this slice (need separate approval):** the billing plan text "Reminders, follow-ups and replies…"; landing-page "follow-up reminders" (messaging guide); the automation editor accepting any address with "@" without checking the teammate is still active (Stage 7 verifies execution handles it safely).
 - **Unrelated observation (not changed):** on the contact page, the header's **More** menu (Merge / Delete customer) stays open after any form on that page posts and returns to it. It reproduces with the page's own Add note form without the Follow-ups card. Recorded per the owner's decision; outside this slice.
 - **Unrelated observation (not changed):** the automation editor's check accepts any address containing "@" for "Who it's for"; a teammate who has left is only caught when the step runs. The select marks such an address "(not on your team)".

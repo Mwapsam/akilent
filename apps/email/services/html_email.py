@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+from collections.abc import Iterable
 
 
 def site_email_context() -> dict:
@@ -38,12 +39,34 @@ def site_email_context() -> dict:
     }
 
 
-def build_transactional_html(text_body: str, subject: str = "") -> str:
+def build_transactional_html(
+    text_body: str,
+    subject: str = "",
+    *,
+    heading: str = "",
+    eyebrow: str = "",
+    preheader: str = "",
+    cta_url: str = "",
+    cta_label: str = "",
+    details: Iterable[tuple[str, str]] | None = None,
+    code: str = "",
+    notice: str = "",
+    notice_tone: str = "info",
+    small_print: str = "",
+    reason: str = "",
+) -> str:
     """Wrap a plain-text email body in the branded Akilent shell.
 
     Splits ``text_body`` on blank lines into ``<p>`` blocks so the message
-    renders readably. Used for all emails whose body is assembled as an
-    f-string rather than a dedicated HTML template.
+    renders readably; bare URLs become links. Used for all emails whose body is
+    assembled as an f-string rather than a dedicated HTML template.
+
+    The keyword parts are optional and render, in order: ``heading`` (with an
+    ``eyebrow`` label above it), the paragraphs, a one-time ``code`` box, a
+    ``details`` table of (label, value) rows, a ``notice`` callout
+    (``notice_tone`` info/warning/danger), a ``cta_url`` button and closing
+    ``small_print``. ``preheader`` is the inbox preview line and ``reason``
+    replaces the footer's "why you got this" line.
     """
     from django.template.loader import render_to_string
 
@@ -52,5 +75,16 @@ def build_transactional_html(text_body: str, subject: str = "") -> str:
         **site_email_context(),
         "subject": subject,
         "paragraphs": paragraphs,
+        "heading": heading,
+        "eyebrow": eyebrow,
+        "preheader": preheader,
+        "cta_url": cta_url,
+        "cta_label": cta_label,
+        "details": list(details or ()),
+        "code": code,
+        "notice": notice,
+        "notice_tone": notice_tone,
+        "small_print": small_print,
+        "reason": reason,
     }
     return render_to_string("email/generic_transactional.html", ctx)

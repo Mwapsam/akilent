@@ -56,65 +56,97 @@ def _goal_lines(account, week: Period) -> list[str]:
 
 
 def build_email(account, week: Period, *, full: bool) -> dict | None:
-    """``{"subject", "text_body"}`` for this account's report, or None when nothing happened
-    this week — an inactive business isn't emailed a blank report."""
+    """``{"subject", "text_body", "html_body"}`` for this account's report, or None when
+    nothing happened this week — an inactive business isn't emailed a blank report.
+
+    Both bodies are built from the same stats and sections, so they can't drift apart.
+    """
     from apps.accounts.notifications import absolute_url
 
     data = proof(account, week=week, now=week.end)
     if not data["active"]:
         return None
 
-    lines = [f"This week, Akilent helped your business: {data['sentence']}."]
+    intro = f"This week, Akilent helped your business: {data['sentence']}."
 
-    lines.append("")
-    lines.append(f"Median first reply: {duration(data['median']['seconds'])}")
+    # (label, value) rows: "label: value" lines in text, the details table in HTML.
+    stats = [("Median first reply", duration(data["median"]["seconds"]))]
     rec = data["recovered"]
     if rec["missed"]:
-        recovery_line = (
-            f"Recovery rate: {rec['rate_pct']}% "
+        recovery = (
+            f"{rec['rate_pct']}% "
             f"({rec['recovered']} of {rec['missed']} missed conversations recovered)"
         )
         if rec["became_leads"]:
-            recovery_line += f", {rec['became_leads']} became leads"
-        lines.append(recovery_line)
+            recovery += f", {rec['became_leads']} became leads"
+        stats.append(("Recovery rate", recovery))
     paid = data["paid"]
     money = _money_line(paid["revenue"])
-    paid_line = f"Paid orders from conversations: {paid['orders']}"
-    if money:
-        paid_line += f" ({money})"
-    lines.append(paid_line)
+    stats.append(
+        (
+            "Paid orders from conversations",
+            f"{paid['orders']}{f' ({money})' if money else ''}",
+        )
+    )
 
+    # (title or None, lines): a titled bullet list, or plain lines.
+    sections: list[tuple[str | None, list[str]]] = []
     risks = at_risk(account, week.end)["actions"][:TOP_RISKS]
     if risks:
-        lines.append("")
-        lines.append("Opportunities at risk:")
-        lines.extend(f"- {action['text']}" for action in risks)
-
+        sections.append(("Opportunities at risk", [action["text"] for action in risks]))
     goal_lines = _goal_lines(account, week)
     if goal_lines:
-        lines.append("")
-        lines.extend(goal_lines)
-
+        sections.append((None, goal_lines))
     if full:
         rows = team(account, week)
         if rows:
-            lines.append("")
-            lines.append("Team:")
-            for row in rows:
-                lines.append(
-                    f"- {row['name']}: {row['conversations']} conversations, "
-                    f"median reply {duration(row['median_first_reply_seconds'])}"
+            sections.append(
+                (
+                    "Team",
+                    [
+                        f"{row['name']}: {row['conversations']} conversations, "
+                        f"median reply {duration(row['median_first_reply_seconds'])}"
+                        for row in rows
+                    ],
                 )
+            )
 
+    insights_url = absolute_url("/insights/")
+    lines = [intro, ""]
+    lines.extend(f"{label}: {value}" for label, value in stats)
+    for title, items in sections:
+        lines.append("")
+        if title:
+            lines.append(f"{title}:")
+            lines.extend(f"- {item}" for item in items)
+        else:
+            lines.extend(items)
     lines.append("")
-    lines.append(f"Open Insights: {absolute_url('/insights/')}")
+    lines.append(f"Open Insights: {insights_url}")
 
     subject = f"Your week with Akilent: {data['sentence']}"
     text_body = "\n".join(lines)
     try:
         from apps.email.services.html_email import build_transactional_html
 
-        html_body = build_transactional_html(text_body, subject[:200])
+        html_sections = [
+            (f"{title}:\n" + "\n".join(f"• {item}" for item in items))
+            if title
+            else "\n".join(items)
+            for title, items in sections
+        ]
+        html_body = build_transactional_html(
+            "\n\n".join(html_sections),
+            subject[:200],
+            eyebrow="Weekly report",
+            heading=f"This week: {data['sentence']}",
+            preheader=intro,
+            details=stats,
+            cta_url=insights_url,
+            cta_label="Open Insights",
+            reason="You're receiving this weekly report as an owner. "
+            "You can turn it off on the Insights page.",
+        )
     except Exception:
         html_body = ""
     return {"subject": subject[:200], "text_body": text_body, "html_body": html_body}

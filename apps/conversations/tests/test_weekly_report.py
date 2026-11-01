@@ -132,6 +132,38 @@ class TestBuildEmail:
         )
         email = weekly_report.build_email(account, week, full=False)
         assert "Recovery rate" in email["text_body"]
+        assert "Recovery rate" in email["html_body"]
+
+    def test_text_and_html_carry_the_same_numbers(self, account, monkeypatch):
+        """Both bodies come from one set of rows, so detail like "became leads" can't be
+        in one and missing from the other."""
+        week = reporting.week_of(timezone.now()).previous()
+        monkeypatch.setattr(
+            weekly_report,
+            "proof",
+            lambda *a, **k: {
+                "active": True,
+                "sentence": "2 enquiries answered",
+                "median": {"seconds": 90},
+                "recovered": {
+                    "missed": 5,
+                    "recovered": 2,
+                    "rate_pct": 40,
+                    "became_leads": 3,
+                },
+                "paid": {"orders": 1, "revenue": []},
+            },
+        )
+        monkeypatch.setattr(weekly_report, "at_risk", lambda *a, **k: {"actions": []})
+        monkeypatch.setattr(weekly_report, "_goal_lines", lambda *a, **k: [])
+        email = weekly_report.build_email(account, week, full=False)
+        for part in (
+            "3 became leads",
+            "2 of 5 missed conversations recovered",
+            "Paid orders",
+        ):
+            assert part in email["text_body"]
+            assert part in email["html_body"]
 
     def test_opportunities_at_risk_are_included(self, account):
         week = reporting.week_of(timezone.now()).previous()
@@ -191,6 +223,15 @@ def _settled_now():
 
 @pytest.mark.django_db
 class TestSendWeeklyReportsTask:
+    @pytest.fixture(autouse=True)
+    def _system_mail_to_outbox(self, monkeypatch, settings):
+        # The report goes through send_system_email; keep it on the SMTP path (locmem in
+        # tests) and skip the MX lookup.
+        settings.SYSTEM_EMAIL_PROVIDER_BACKEND = "smtp"
+        monkeypatch.setattr(
+            "apps.email.services.validation.validate_recipient", lambda email: True
+        )
+
     @pytest.fixture(autouse=True)
     def _freeze_to_wednesday(self, monkeypatch):
         settled = _settled_now()

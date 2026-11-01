@@ -1,0 +1,38 @@
+{% extends "manage/base.html" %}
+{% block title %}Marketing lists — Operator{% endblock %}
+{% block content %}
+{% include "manage/marketing/_tabs.html" %}
+<div class="grid gap-6 lg:grid-cols-[1fr_24rem]">
+  <section aria-labelledby="h-lists">
+    <h2 id="h-lists" class="sr-only">Lists</h2>
+    {% if rows %}
+    <div class="table-wrap">
+      <table class="table table--cards">
+        <thead><tr><th>List</th><th>Kind</th><th>Subscribed</th></tr></thead>
+        <tbody>
+          {% for mlist, count in rows %}
+          <tr>
+            <td data-label="List">
+              <a href="{% url 'core:marketing-list' mlist.pk %}" class="font-medium text-ink hover:text-accent">{{ mlist.name }}</a>
+              {% if mlist.description %}<p class="text-xs text-ink-subtle">{{ mlist.description }}</p>{% endif %}
+            </td>
+            <td data-label="Kind">{% if mlist.kind == "dynamic" %}<span class="badge badge-info">Dynamic</span>{% else %}<span class="badge badge-neutral">Static</span>{% endif %}</td>
+            <td data-label="Subscribed" class="tabular-nums">{{ count }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+      {% include "components/empty_state.html" with icon="users" title="No lists yet" message="Make a dynamic list of Akilent users, or a static list and import a CSV from your CRM." %}
+    {% endif %}
+  </section>
+
+  <form method="post" class="card card-pad space-y-4 self-start" hx-boost="false">
+    {% csrf_token %}
+    <h2 class="font-semibold">New list</h2>
+    {% include "manage/marketing/_list_fields.html" %}
+    <div class="flex justify-end"><button class="btn btn-primary btn-sm" type="submit">Create list</button></div>
+  </form>
+</div>
+{% endblock %}

@@ -148,3 +148,18 @@ def test_concurrent_create_with_same_reference_returns_existing(
         reference="renew_x",
     )
     assert first.pk == second.pk
+
+
+@pytest.mark.django_db
+def test_a_checkout_payment_sends_one_payment_confirmation(
+    account, plan, subscription, fake_provider, django_capture_on_commit_callbacks
+):
+    from unittest.mock import patch
+
+    payment = payments.create_payment(account, plan, "monthly", provider="fake")
+    with patch("apps.billing.tasks.send_billing_notice.delay") as notice:
+        with django_capture_on_commit_callbacks(execute=True):
+            payments.record_result("fake", fake_provider.paid(payment))
+        with django_capture_on_commit_callbacks(execute=True):
+            payments.record_result("fake", fake_provider.paid(payment))  # replay
+    notice.assert_called_once_with(account.pk, "paid", payment.pk)

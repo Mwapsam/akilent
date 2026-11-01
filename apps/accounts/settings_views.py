@@ -86,21 +86,46 @@ def _send_invitation_email(request, invite):
 
 
 @login_required
+@require_POST
+def settings_product_updates(request):
+    """The person's own marketing choice. Account emails are not affected either way."""
+    from apps.platform_mail.services.consent import set_user_preference
+
+    wants = request.POST.get("product_updates") == "on"
+    set_user_preference(request.user, wants, source="profile", request=request)
+    messages.success(
+        request,
+        "You'll get product updates."
+        if wants
+        else "You won't get product updates any more.",
+    )
+    return redirect("settings-profile")
+
+
+@login_required
 def settings_profile(request):
     account = get_current_account(request)
     if request.method == "POST":
         form = ProfileForm(request.POST, instance=request.user)
         if form.is_valid():
-            form.save()
+            user = form.save()
+            if "email" in form.changed_data:
+                from apps.platform_mail.services.consent import sync_user_email
+
+                # Marketing consent follows the person to the new address.
+                sync_user_email(user)
             messages.success(request, "Profile updated.")
             return redirect("settings-profile")
     else:
         form = ProfileForm(instance=request.user)
+    from apps.platform_mail.services.consent import user_wants_updates
+
     return render(
         request,
         "accounts/settings_profile.html",
         {
             "form": form,
+            "product_updates": user_wants_updates(request.user),
             "account": account,
             "active_tab": "profile",
         },

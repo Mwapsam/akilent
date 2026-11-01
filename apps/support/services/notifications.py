@@ -66,11 +66,31 @@ def _email_submitted_by(ticket) -> None:
             f"We'll be in touch shortly.\n\n"
             f"Akilent Support"
         )
+        from django.urls import reverse
+
+        from apps.email.services.html_email import site_email_context
+
+        portal_url = site_email_context()["base_url"] + reverse(
+            "support:portal-ticket", kwargs={"ticket_number": ticket.ticket_number}
+        )
         send_system_email(
             to_email=email,
             subject=subject,
             text_body=text_body,
-            html_body=build_transactional_html(text_body, subject),
+            html_body=build_transactional_html(
+                "Thanks for getting in touch. We've received your request and will reply "
+                "as soon as we can.",
+                subject,
+                eyebrow="Support",
+                heading="We've received your request",
+                preheader=f"#{ticket.ticket_number}: {ticket.subject}",
+                details=[
+                    ("Ticket", f"#{ticket.ticket_number}"),
+                    ("Subject", ticket.subject),
+                ],
+                cta_url=portal_url,
+                cta_label="View your request",
+            ),
             sender_label="Support",
         )
     except Exception:

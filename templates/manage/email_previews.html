@@ -1,0 +1,37 @@
+{% extends "manage/base.html" %}
+{% block title %}Email previews — {{ site.app_name|default:"Akilent" }}{% endblock %}
+
+{% block content %}
+{% include "components/page_header.html" with title="Email previews" description="Every email Akilent sends on its own behalf, rendered with sample data. Nothing is sent." %}
+
+<div class="grid gap-6 lg:grid-cols-[16rem_1fr]">
+  <nav aria-label="Emails" class="card card-pad">
+    {% regroup samples by 2 as groups %}
+    <ul class="space-y-4">
+      {% for group in groups %}
+        <li>
+          <p class="text-xs font-semibold uppercase tracking-wide text-ink-subtle mb-1.5">{{ group.grouper }}</p>
+          <ul class="space-y-0.5">
+            {% for key, label, _ in group.list %}
+              <li>
+                <a href="?email={{ key }}"
+                   class="block rounded-lg px-3 py-2 text-sm {% if key == selected %}bg-surface-muted font-semibold text-ink{% else %}text-ink-muted hover:bg-surface-muted{% endif %}"
+                   {% if key == selected %}aria-current="page"{% endif %}>{{ label }}</a>
+              </li>
+            {% endfor %}
+          </ul>
+        </li>
+      {% endfor %}
+    </ul>
+  </nav>
+
+  <section class="card overflow-hidden" aria-labelledby="preview-h">
+    <div class="px-5 py-3 border-b border-border flex items-center justify-between gap-3 flex-wrap">
+      <h2 id="preview-h" class="font-semibold">{{ selected_label }}</h2>
+      <a href="{% url 'core:email-preview-frame' selected %}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">Open on its own</a>
+    </div>
+    <iframe src="{% url 'core:email-preview-frame' selected %}" title="{{ selected_label }} preview"
+            class="block w-full bg-canvas" style="height: 900px; border: 0;"></iframe>
+  </section>
+</div>
+{% endblock %}

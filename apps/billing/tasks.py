@@ -1,4 +1,5 @@
 import logging
+import re
 
 from django.conf import settings
 from django.utils import timezone
@@ -82,7 +83,18 @@ def send_limit_warning(account_id: int, key: str, percent: int) -> None:
     try:
         from apps.email.services.html_email import build_transactional_html
 
-        html_body = build_transactional_html(body, subject)
+        html_body = build_transactional_html(
+            _strip_link_lines(body),
+            subject,
+            eyebrow="Usage",
+            heading=subject,
+            details=[
+                ("Used", f"{n:,} of {allowed:,} {lim.unit}"),
+                ("Resets on", f"{resets:%d %B %Y}"),
+            ],
+            cta_url=_absolute_url("/billing/plans/"),
+            cta_label="See usage and plans",
+        )
         send_system_email(
             owner.email,
             subject,
@@ -278,6 +290,19 @@ def _notice(sub, kind, payment) -> tuple[str, str] | None:
         else:
             lines.append(f"The amount due is {format_money(price)}.")
         return f"Your {plan.name} plan renews on {ends}", "\n\n".join(lines)
+    if kind == "paid":
+        paid = ""
+        if payment is not None:
+            paid = f"Paid: {format_money(payment.amount_due, payment.currency)}"
+            if payment.credit_applied:
+                paid += f" (plus {format_money(payment.credit_applied, payment.currency)} credit)"
+            paid += f". Reference: {payment.reference}.\n\n"
+        return (
+            f"Payment confirmed — you're on {plan.name}",
+            f"Thanks — we've received your payment. {account.company_name} is on the "
+            f"{plan.name} plan until {ends}.\n\n{paid}"
+            f"Billing: {_absolute_url('/billing/plans/')}",
+        )
     if kind == "renewed":
         paid = ""
         if payment is not None:
@@ -337,6 +362,135 @@ def _notice(sub, kind, payment) -> tuple[str, str] | None:
     return None
 
 
+# A closing "Label: URL" sentence (the whole paragraph, or after a sentence that ends in
+# . ! ?). The label can't contain sentence punctuation, so only that sentence is matched.
+_TRAILING_LINK_RE = re.compile(
+    r"(?:^|(?<=[.!?]))\s*[^.!?\n:]{1,60}:\s*https?://\S+\s*$"
+)
+
+
+def _strip_link_lines(body: str) -> str:
+    """Drop closing "Label: URL" sentences and "Paid: ..." paragraphs from the text for the
+    HTML version, which shows them as a button and a details table. Anything said before
+    the link in the same paragraph is kept."""
+    keep = []
+    for p in body.split("\n\n"):
+        p = p.strip()
+        if p.startswith("Paid: "):
+            continue
+        p = _TRAILING_LINK_RE.sub("", p).strip()
+        if p:
+            keep.append(p)
+    return "\n\n".join(keep)
+
+
+def _notice_parts(sub, kind, payment) -> dict:
+    """Heading, details and button for the HTML version of a ``_notice`` email."""
+    from apps.billing.money import format_money
+    from apps.billing.providers import registry
+
+    plan = sub.plan
+    billing_url = _absolute_url("/billing/plans/")
+    pay_link = _absolute_url(
+        f"/billing/checkout/?plan={plan.slug}&period={sub.billing_period}"
+    )
+    ends = (
+        f"{timezone.localtime(sub.current_period_end):%d %B %Y}"
+        if sub.current_period_end
+        else ""
+    )
+    recurring = registry.get(sub.recurring_provider) if sub.recurring_id else None
+    parts: dict = {
+        "eyebrow": "Billing",
+        "cta_url": billing_url,
+        "cta_label": "View billing",
+    }
+
+    def money_rows():
+        if payment is None:
+            return []
+        rows = [("Amount paid", format_money(payment.amount_due, payment.currency))]
+        if payment.credit_applied:
+            rows.append(
+                (
+                    "Credit applied",
+                    format_money(payment.credit_applied, payment.currency),
+                )
+            )
+        return rows
+
+    if kind == "paid":
+        details = [("Plan", plan.name), *money_rows()]
+        if payment is not None:
+            details.append(("Reference", payment.reference))
+            if payment.paid_at:
+                details.append(
+                    ("Paid on", f"{timezone.localtime(payment.paid_at):%d %B %Y}")
+                )
+        if ends:
+            details.append(("Active until", ends))
+        parts.update(
+            heading="Payment confirmed",
+            preheader=f"Thanks for your payment. You're on {plan.name} until {ends}.",
+            details=details,
+            small_print="Keep this email for your records.",
+        )
+    elif kind == "renewed":
+        parts.update(
+            heading="Your plan has renewed",
+            preheader=f"{plan.name} is active until {ends}.",
+            details=[("Plan", plan.name), *money_rows(), ("Active until", ends)],
+        )
+    elif kind == "upcoming":
+        parts.update(
+            heading="Your renewal is coming up",
+            preheader=f"{plan.name} renews on {ends}.",
+            details=[("Plan", plan.name), ("Renews on", ends)],
+        )
+    elif kind in ("unpaid", "reminder"):
+        parts.update(
+            heading="Your renewal payment didn't go through",
+            notice="Your features stay on for now. Nothing has been deleted.",
+            notice_tone="warning",
+        )
+        if recurring is None:
+            parts.update(cta_url=pay_link, cta_label="Renew now")
+    elif kind == "provider_changed":
+        parts.update(
+            heading="How you pay is changing",
+            cta_url=pay_link,
+            cta_label="Add payment details",
+        )
+    elif kind == "expired":
+        parts.update(
+            heading="Your plan has ended",
+            notice="Nothing has been deleted. Renew to switch your features back on.",
+            cta_url=pay_link,
+            cta_label="Renew plan",
+        )
+    elif kind == "cancelled":
+        parts.update(
+            heading="Your plan has ended",
+            notice="Nothing has been deleted.",
+            cta_label="See plans",
+        )
+    return parts
+
+
+def notice_email(sub, kind, payment) -> tuple[str, str, str] | None:
+    """(subject, text_body, html_body) for a billing notice, or None for an unknown kind."""
+    from apps.email.services.html_email import build_transactional_html
+
+    built = _notice(sub, kind, payment)
+    if built is None:
+        return None
+    subject, body = built
+    html_body = build_transactional_html(
+        _strip_link_lines(body), subject, **_notice_parts(sub, kind, payment)
+    )
+    return subject, body, html_body
+
+
 @shared_task
 def send_billing_notice(
     account_id: int, kind: str, payment_id: int | None = None
@@ -359,18 +513,16 @@ def send_billing_notice(
     payment = (
         BillingPayment.objects.filter(pk=payment_id).first() if payment_id else None
     )
-    built = _notice(sub, kind, payment)
-    if built is None:
-        return
-    subject, body = built
     try:
-        from apps.email.services.html_email import build_transactional_html
-
+        built = notice_email(sub, kind, payment)
+        if built is None:
+            return
+        subject, body, html_body = built
         send_system_email(
             to,
             subject,
             text_body=body,
-            html_body=build_transactional_html(body, subject),
+            html_body=html_body,
             sender_label="Billing",
         )
     except Exception:

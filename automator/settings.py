@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     "apps.facebook",
     "apps.hubspot",
     "apps.publishing",
+    "apps.platform_mail",
     "django_otp",
     "django_otp.plugins.otp_totp",
     "django.contrib.sitemaps",
@@ -478,6 +479,13 @@ EMAIL_SEND_PROVIDER_BACKEND = os.getenv("EMAIL_SEND_PROVIDER_BACKEND", "smtp")
 # "null". When unset, system mail keeps using the tenant send provider, so existing
 # deployments don't lose password resets.
 SYSTEM_EMAIL_PROVIDER_BACKEND = os.getenv("SYSTEM_EMAIL_PROVIDER_BACKEND", "")
+# Akilent's own marketing campaigns (apps.platform_mail) go through the system mail provider.
+# A separate From address (e.g. updates@news.akilent.com) keeps marketing reputation apart
+# from password resets; empty means DEFAULT_FROM_EMAIL. The rate caps sends per minute.
+PLATFORM_MARKETING_FROM_EMAIL = os.getenv("PLATFORM_MARKETING_FROM_EMAIL", "")
+PLATFORM_MARKETING_RATE_PER_MINUTE = int(
+    os.getenv("PLATFORM_MARKETING_RATE_PER_MINUTE", "120")
+)
 
 # AWS SES — credentials come from the standard AWS_* env vars / IAM role; these
 # name the region and (optional) tracking resources. Also settable live via
@@ -741,6 +749,14 @@ CELERY_TASK_ROUTES = {
 }
 
 CELERY_BEAT_SCHEDULE = {
+    "start-due-marketing-campaigns": {
+        "task": "apps.platform_mail.tasks.send_due_campaigns",
+        "schedule": 60.0,  # Akilent's own scheduled marketing campaigns
+    },
+    "resume-stalled-marketing-campaigns": {
+        "task": "apps.platform_mail.tasks.resume_stalled_campaigns",
+        "schedule": 900.0,  # backstop for a campaign whose queued run was lost
+    },
     "replay-held-webhooks": {
         "task": "apps.core.webhook_replay.replay_held_webhooks",
         "schedule": 120.0,  # backstop for the replay kicked off when a channel is switched on

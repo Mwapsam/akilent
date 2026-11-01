@@ -458,6 +458,20 @@ def signup(request):
                 login(request, user, backend="apps.accounts.backends.EmailBackend")
                 set_current_account(request, account)
                 verification_sent = _send_verification_email(request, user)
+                if cd.get("product_updates"):
+                    try:
+                        from apps.platform_mail.services.consent import (
+                            set_user_preference,
+                        )
+
+                        set_user_preference(
+                            user, True, source="signup", request=request
+                        )
+                    except Exception:
+                        # A consent write must never fail a signup that has committed.
+                        logger.exception(
+                            "signup: product-updates opt-in not saved for %s", user.pk
+                        )
                 logger.info(
                     "signup: created account %s (%s) for user %s",
                     account.pk,

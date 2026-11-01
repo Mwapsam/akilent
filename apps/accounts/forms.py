@@ -122,6 +122,10 @@ class SignupForm(UserCreationForm):
     plan = forms.CharField(required=False, widget=forms.HiddenInput())
     # The term a paid plan is billed for (monthly, annually, ...). Ignored for free plans.
     billing_period = forms.CharField(required=False, widget=forms.HiddenInput())
+    # Marketing consent: unticked unless the person ticks it (apps.platform_mail).
+    product_updates = forms.BooleanField(
+        required=False, label="Send me Akilent product updates and tips"
+    )
 
     class Meta:
         model = User

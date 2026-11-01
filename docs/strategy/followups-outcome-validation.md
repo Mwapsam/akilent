@@ -4,7 +4,8 @@
 
 | | Status |
 |---|---|
-| This document | Approved to write; content pending owner review |
+| This document | Approved to write; content pending owner review. The direction is approved at report level (2026-10-31). Formulas, source references and the Gate 2–3 thresholds are not yet approved |
+| Committed copies | An early draft is in commit `d652392`. **No committed copy is owner-approved documentation**, and the Stage 2–7 code in commit `6543956` is not evidence of business outcomes |
 | Measurement queries | Defined here; **not run** |
 | Instrumentation | Gap register only (Appendix A); **not authorised** |
 | Pilot | Design and proposed thresholds only; **no recruiting, no data collection** |
@@ -120,9 +121,10 @@ This spec uses **no grace period**: on time means `done_at ≤ due_at`. The exis
 
 ### 3.5 Time and periods
 
-- All "due", "today" and period boundaries use the account's business time zone. Use one helper per account for both follow-ups and reports.
-  - `followups.business_zone` (`followups.py:37`) and `reporting.business_zone` (`reporting.py:283`) both read the opening-hours time zone.
-  - Both fall back to UTC (`apps/accounts/business_hours.py:26`, `automator/settings.py:203`).
+- **Time-zone rule:** all "due", "today" and period boundaries use the account's business time zone, which is the time zone set in its opening hours.
+  - The follow-up and reporting helpers both read it: `followups.business_zone` (`followups.py:37`) and `reporting.business_zone` (`reporting.py:283`).
+  - **Fallback:** an account with no opening-hours time zone uses **UTC**. Both helpers resolve to UTC (`apps/accounts/business_hours.py:26`, `automator/settings.py:203`), so they agree.
+  - A business whose figures were computed on the UTC fallback is flagged in its report, because its day and week boundaries may not match its local day.
 - Periods are whole weeks (Monday–Sunday, business time).
 - A cohort is reported only after its **observation window** has closed: due date + 7 days. That gives every item the same chance to be handled.
 
@@ -168,11 +170,28 @@ M1–M5 are reported together, never singly. Together they show whether improvem
 
 The journey is *missed → staff replied → lead → paid order*. Each step is a separate rate, reported separately:
 
-| ID | Stage | Definition | Unit |
-|---|---|---|---|
-| R1 | **Reply recovery** | Missed conversations with a sent reply at or after the missed follow-up's creation, within 7 days ÷ missed conversations in the period | conversations |
-| R2 | **Lead progression** | Recovered conversations with a lead created after the missed follow-up, within 30 days ÷ recovered conversations (R1 numerator) | conversations |
-| R3 | **Paid progression** | Recovered conversations with an order marked paid (`status=paid`, `paid_at` set) after the missed follow-up, within 30 days ÷ recovered conversations | conversations |
+**Time anchors.** Each conversation has two fixed points:
+- **Missed point (M):** the `created_at` of the conversation's **earliest** `missed` follow-up created in the period.
+  - It is about 24 hours after the customer's unanswered message, because of the hourly job's 24h rule.
+  - A conversation counts once per period, even if it was missed again later in the same period.
+- **Recovery point (P):** the timestamp of the **first** reply sent at or after M (outbound message with sent, delivered or read status), if it falls within 7 days of M.
+
+| ID | Stage | Numerator | Denominator | Window | Unit |
+|---|---|---|---|---|---|
+| R1 | **Reply recovery** | Conversations with a recovery point | Conversations with a missed point in the period | P must fall in **[M, M + 7 days]** | conversations |
+| R2 | **Lead progression** | Recovered conversations with at least one lead created in the window | Recovered conversations (R1 numerator) | Lead `created_at` in **[M, P + 30 days]** | conversations |
+| R3 | **Paid progression** | Recovered conversations with at least one order marked paid in the window | Recovered conversations (R1 numerator) | Order `status=paid` and `paid_at` in **[M, P + 30 days]** | conversations |
+
+**Window rules:**
+- **Distinct conversations.** A conversation with two leads or three paid orders counts once in R2 or R3.
+- **Lead and order windows start at M, not P.** A team often records the lead while replying, a moment before the reply is sent. Starting at P would wrongly exclude those.
+  - Anything recorded **before M** belongs to earlier activity and is not counted.
+- **The windows overlap and are cumulative, not exclusive.** R2 and R3 share the same window, so a conversation can count in both. R3 does not require R2: an order can be recorded without a lead.
+- **Incomplete windows are excluded, never counted as failures.** A period's figures are reported only when every conversation in it has had its full window:
+  - R1 when the period end + 7 days has passed;
+  - R2 and R3 when the period end + 37 days has passed (the latest possible P plus 30 days).
+
+  Until then the figure is shown as **"pending (window open)"**, not as a lower rate. Otherwise recent conversations would look worse only because they haven't had time to progress.
 
 **Records:**
 - Missed follow-ups: `FollowUp(source=missed)`.
@@ -185,7 +204,7 @@ The journey is *missed → staff replied → lead → paid order*. Each step is 
 **Limitations (stated with every recovery figure):**
 - The only link is the **shared conversation and time order**. There is no record linking a follow-up to a lead or order (contract §14). Follow-ups set from a contact or lead with no chat can't be followed into sales at all.
 - `reporting.recovery()` (`apps/conversations/reporting.py:210-280`) already counts missed, recovered, leads and paid orders. But it counts lead and order **records**, not conversations, and has no time cap. It is **not** used as-is for R2/R3: a conversation with two orders would count twice.
-- An order can be un-marked as paid later (`apps/commerce/services.py`, the unmark path). Figures use the order's state at report time.
+- An order can be un-marked as paid later (`mark_order_unpaid`, `apps/commerce/services.py:215`). Figures use the order's state at report time.
 - Revenue is reported **per currency** and never summed across currencies. `Order.currency` defaults to "USD" (`apps/commerce/models.py:73`), so a business that never set it may show USD for local money. This is flagged per business.
 - Manual follow-ups (not `missed`) can be traced to sales only through the same conversation-and-time rule, as an exploratory figure.
 
@@ -206,11 +225,25 @@ Collected in moderated sessions (§6). Recorded per task:
 
 ## 5. Baseline
 
-The redesign is **not deployed**. Production data up to the deploy date therefore shows how businesses handled follow-ups under the old experience.
+**Baseline boundary.** The baseline is the **4 complete weeks (business time) immediately before the redesigned workflow is deployed to production**. The boundary is the actual production deploy time, recorded when it happens. It is **not**:
+- the date of commit `6543956` (the Stage 2–7 code);
+- a staging deployment;
+- the first draft commit of this document (`d652392`).
+
+As of 2026-10-31 the redesign is **not deployed**, so the boundary is not yet fixed.
+
+**Baseline status, one per business per metric.** These are different situations and are never merged:
+
+| Status | Meaning |
+|---|---|
+| **Not yet calculated** | The records exist; the authorised queries haven't been run. This is every metric today |
+| **Calculated** | Computed with the §4 formulas over the 4 baseline weeks |
+| **Partial** | Some baseline weeks are *low volume* (§3.6) or fall before the business joined. Computed over the usable weeks, with the count stated |
+| **No historical baseline available** | The records needed don't exist for that period. Examples: the business joined less than 4 weeks before the deploy; a metric is graded **Gap** (M12); or a business hasn't recorded leads or orders (R2/R3). That business is judged on interview evidence and during-pilot trends only |
 
 | Baseline element | Source | When |
 |---|---|---|
-| M1–M11 and R1–R3 for the **4 complete weeks before deploy** | Existing production records, same formulas as §4 | Computed only when separately authorised; queries are defined here, not run |
+| M1–M11 and R1–R3 for the 4 baseline weeks | Existing production records, same formulas as §4 | Computed only when separately authorised; queries are defined here, not run. R2/R3 baseline figures need 37 days after the last baseline week (§4.2) |
 | Current practice, known misses, who handles chats, how they track promises | Pre-pilot interview (§7.2) | Before the business uses the redesign |
 | Session tasks on the **old** experience (optional, if a staging copy is kept) | Moderated session | Before deploy, only if authorised |
 
@@ -241,11 +274,24 @@ The facilitator says what the task is, never how to do it. Help is given only af
 | U7 | "From this customer's page, set a follow-up for Friday." | Does it from the contact or lead page without hunting for the chat |
 | U8 | "When you set that, did the customer get a message?" | Answers "no, only the team sees it" unprompted |
 
-**Proposed Gate 2 thresholds (for owner approval):**
-- U1: unaided by **≥ 80%** of owners.
-- Every other task: unaided by **≥ 70%**.
-- U8: correct for **100%**. A customer-visibility misunderstanding is a trust problem, not a usability one.
-- Median U1 time under **60 seconds**.
+**Gate 2 thresholds:**
+
+| Threshold | Status |
+|---|---|
+| **U1** (headline task) unaided by **≥ 80%** of owners | **Approved as provisional** (2026-10-31) |
+| **U8** (customer isn't messaged) correct for **100%** of owners | **Approved as a safety/comprehension gate** (2026-10-31) |
+| Every other task unaided by **≥ 70%** | Proposed; for owner approval |
+| Median U1 time under **60 seconds** | Proposed; for owner approval |
+
+- **Results are always shown as numerator / denominator** as well as a percentage, for example "U1: 4/5 owners (80%)".
+  - With 5–10 businesses, a percentage is a pilot signal, **not a statistically reliable estimate** for businesses in general.
+  - One owner moves the figure by 10–20 points.
+- **U8 is never averaged.** It is a trust and safety question, not a usability score. Any single owner who believes a follow-up messages the customer triggers:
+  - an investigation of what on the screen led to that belief;
+  - a fix to the wording or layout, if one is needed;
+  - a re-test of U8 with that owner (and, after a fix, with every owner).
+
+  Gate 2 stays unmet until U8 is 100% on the re-test. Other owners' correct answers don't offset one misunderstanding.
 
 **Questions after the session:**
 - What did you do before to keep track?
@@ -277,7 +323,7 @@ Selection is noted per business so that results aren't generalised beyond busine
 |---|---|
 | **Before** | Baseline (§5), pre-pilot interview, session 1 |
 | **During** (weekly) | M1–M11 and R1 for the week; a 5-minute check-in: what got missed, what was confusing; volume and any unusual event |
-| **After** | Final week's metrics; R2/R3 once their 30-day windows close; session 2; exit interview; willingness-to-pay question |
+| **After** | Final week's metrics; R2/R3 once their windows close (37 days after the last pilot week, §4.2); session 2; exit interview; willingness-to-pay question |
 
 ### 7.4 Customer value: kept separate from liking
 - "Would you be disappointed?" is **perceived value** (interview evidence).
@@ -308,14 +354,15 @@ Any of these is a valid finding, not a failed pilot. They tell us whether to imp
 |---|---|---|
 | **1. Technical reliability** | Stage 7: full suite, browser walkthrough, counts, permissions (`docs/design/followups-implementation-checklist.md`, Stage 7 entry) | **Stage 7 evidence reported; pending independent review and owner acceptance.** This is the implementation agent's report and isn't independently verified |
 | **2. Usability** | §6 thresholds met in session 2 | Pending pilot |
-| **3. Behaviour change** | Per business, vs its own baseline, rates not counts. Most pilot businesses (with enough volume) show M3 lower and M2 higher, **without** D2, D3 or D7 | Pending pilot |
+| **3. Behaviour change** | Per business, vs its own baseline (§5), rates not counts. Most pilot businesses (with enough volume) show M3 lower and M2 higher, **without** D2, D3 or D7. **Provisional:** the exact metric thresholds and comparison method are still to be reviewed by the owner | Pending pilot |
 | **4. Commercial value** | R1–R3 sequence evidence over a longer period, **and** willingness-to-pay evidence (§7.4) | Pending longer-term evidence |
 
 Rules:
 - Gates are passed in order.
 - **Gates 1–3** must be passed before claiming the redesign helps businesses handle enquiries and follow-ups more reliably.
 - **Gate 4** must be passed before any claim about recovered sales or revenue.
-- The proposed thresholds in §6 and the Gate 3 rule are **for owner approval**.
+- Gate 2 has two approved thresholds (U1 provisional, U8 safety gate) and two still proposed (§6).
+- **Gate 3 is provisional** until its exact thresholds and comparison method are approved.
 
 ---
 

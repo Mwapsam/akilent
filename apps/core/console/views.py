@@ -1470,3 +1470,42 @@ def ux_events_list(request):
             "filter_to": date_to,
         },
     )
+
+
+@admin_required
+def email_previews(request):
+    """Every system email rendered with sample data, to check the design without sending."""
+    from apps.core.console.email_previews import SAMPLES
+
+    selected = request.GET.get("email") or next(iter(SAMPLES))
+    if selected not in SAMPLES:
+        selected = next(iter(SAMPLES))
+    return render(
+        request,
+        "manage/email_previews.html",
+        {
+            "samples": [
+                (key, label, group) for key, (label, group, _) in SAMPLES.items()
+            ],
+            "selected": selected,
+            "selected_label": SAMPLES[selected][0],
+        },
+    )
+
+
+@admin_required
+def email_preview_frame(request, key):
+    """The raw HTML of one sample, shown inside the preview page's iframe."""
+    from django.http import Http404
+
+    from apps.core.console.email_previews import SAMPLES
+
+    if key not in SAMPLES:
+        raise Http404
+    response = HttpResponse(SAMPLES[key][2]())
+    response["X-Frame-Options"] = "SAMEORIGIN"
+    # Preview HTML never runs script on the console origin; links still open in a new tab.
+    response["Content-Security-Policy"] = (
+        "sandbox allow-popups allow-popups-to-escape-sandbox"
+    )
+    return response

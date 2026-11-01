@@ -1,0 +1,27 @@
+{% extends "public/_base.html" %}
+{% block title %}Product updates — {{ site.app_name|default:"Akilent" }}{% endblock %}
+{% block content %}
+<section class="pub-wrap" style="max-width: 36rem; padding-block: 4rem;">
+  <div class="card card-pad text-center">
+    {% if state == "confirm" %}
+      <h1 class="text-2xl font-semibold text-ink">Unsubscribe from product updates?</h1>
+      <p class="mt-3 text-ink-muted">You'll stop getting product news from {{ site.app_name|default:"Akilent" }}. Account emails, like password resets and billing notices, still arrive.</p>
+      <form method="post" class="mt-5">
+        <button type="submit" class="btn btn-primary">Unsubscribe</button>
+      </form>
+    {% elif state == "done" %}
+      <h1 class="text-2xl font-semibold text-ink">You're unsubscribed</h1>
+      <p class="mt-3 text-ink-muted">You won't get product updates from {{ site.app_name|default:"Akilent" }} any more. Account emails, like password resets and billing notices, still arrive.</p>
+    {% elif state == "already" %}
+      <h1 class="text-2xl font-semibold text-ink">You're already unsubscribed</h1>
+      <p class="mt-3 text-ink-muted">Nothing else to do. Account emails, like password resets and billing notices, still arrive.</p>
+    {% else %}
+      <h1 class="text-2xl font-semibold text-ink">This unsubscribe link isn't valid</h1>
+      <p class="mt-3 text-ink-muted">It may be from a test email. If you have an account, you can turn product updates off in your profile settings.</p>
+    {% endif %}
+    {% if user.is_authenticated %}
+      <p class="mt-5"><a href="{% url 'settings-profile' %}" class="btn btn-secondary btn-sm">Manage email preferences</a></p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

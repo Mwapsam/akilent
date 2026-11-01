@@ -119,10 +119,33 @@ def deliver_code(row):
     row.save(update_fields=["code_hash"])
     send_system_email(
         to_email=row.user.email,
-        subject="Your sign-in code",
+        subject=CODE_SUBJECT,
         text_body=(
             f"Your code is {code}. It expires in 10 minutes. "
             "If you did not ask for it, ignore this email and change your password."
+        ),
+        html_body=code_email_html(code),
+        sender_label="Security",
+    )
+
+
+CODE_SUBJECT = "Your sign-in code"
+
+
+def code_email_html(code: str) -> str:
+    """The branded HTML body of the sign-in code email (also used by the console preview)."""
+    from apps.email.services.html_email import build_transactional_html
+
+    return build_transactional_html(
+        "Enter this code to finish signing in. It expires in 10 minutes.",
+        CODE_SUBJECT,
+        eyebrow="Security",
+        heading="Your sign-in code",
+        preheader="Your code expires in 10 minutes.",
+        code=code,
+        small_print=(
+            "Never share this code. Akilent will never ask you for it. If you didn't "
+            "try to sign in, ignore this email and change your password."
         ),
     )
 

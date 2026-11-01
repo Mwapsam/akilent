@@ -1,54 +1,84 @@
-<!DOCTYPE html>
-<html lang="en">
+{% comment %}
+Shell for every email Akilent sends on its own behalf (system mail and platform marketing).
+Mail clients drop stylesheets, so inline styles are the source of truth; the <style> block only
+tightens padding on phones. Reusable pieces live in email/components/.
+Blocks: title, preheader (inbox preview text only), content, reason, footer_extra.
+{% endcomment %}<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
   <title>{% block title %}{{ subject|default:site_name }}{% endblock %}</title>
   <!--[if mso]>
   <noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>
+  <style>body,table,td,p,a,h1{font-family:Arial,Helvetica,sans-serif !important;}</style>
   <![endif]-->
+  <style>
+    :root { color-scheme: light; supported-color-schemes: light; }
+    @media only screen and (max-width: 620px) {
+      .em-card { padding: 28px 24px !important; }
+      .em-outer { padding: 16px 8px !important; }
+      .em-h1 { font-size: 22px !important; }
+    }
+  </style>
 </head>
-<body style="margin:0;padding:0;background-color:#f4f6f9;font-family:Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+<body style="margin:0;padding:0;background-color:#F3F5F7;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#F3F5F7;opacity:0;">{% block preheader %}{{ preheader|default:"" }}{% endblock %}&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;</div>
 
-  <table class="table-wrap" role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f6f9;min-height:100vh;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F3F5F7;">
     <tr>
-      <td align="center" style="padding:32px 16px;">
-
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
+      <td class="em-outer" align="center" style="padding:40px 16px;">
+        <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;">
 
           <tr>
-            <td style="background-color:#0E1526;border-radius:12px 12px 0 0;padding:24px 32px;text-align:center;">
-              {% if logo_url %}
-                <img src="{{ logo_url }}" alt="{{ site_name }}" height="36" style="display:inline-block;border:0;max-height:36px;width:auto;">
-              {% else %}
-                <span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:0.5px;">{{ site_name }}</span>
-              {% endif %}
+            <td style="background-color:#FFB020;height:3px;line-height:3px;font-size:0;border-radius:12px 12px 0 0;">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="em-card" style="background-color:#ffffff;border:1px solid #E8EDF3;border-top:0;border-radius:0 0 12px 12px;padding:36px 40px 40px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#12182B;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding:0 0 32px;">
+                    {% if logo_url %}
+                      <img src="{{ logo_url }}" alt="{{ site_name }}" height="28" style="display:block;border:0;height:28px;width:auto;">
+                    {% else %}
+                      <span style="font-size:18px;font-weight:700;letter-spacing:-0.2px;color:#12182B;">{{ site_name }}</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size:16px;line-height:1.6;color:#12182B;">
+                    {% block content %}{% endblock %}
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
 
           <tr>
-            <td style="background-color:#ffffff;padding:36px 32px;border-left:1px solid #E8EDF3;border-right:1px solid #E8EDF3;">
-              {% block content %}{% endblock %}
-            </td>
-          </tr>
-
-          <tr>
-            <td style="background-color:#ffffff;border-radius:0 0 12px 12px;border:1px solid #E8EDF3;border-top:1px solid #E8EDF3;padding:20px 32px;text-align:center;">
-              <p style="margin:0;font-size:12px;color:#657089;line-height:1.6;">
-                &copy; {{ year }} {{ site_name }}.{% if support_email %} Questions? <a href="mailto:{{ support_email }}" style="color:#657089;">{{ support_email }}</a>.{% endif %}
+            <td align="center" style="padding:24px 24px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+              <p style="margin:0 0 8px;font-size:13px;line-height:1.6;color:#657089;">
+                <strong style="color:#46516B;">{{ site_name }}</strong>
+                {% if base_url %}&nbsp;&middot;&nbsp;<a href="{{ base_url }}/help/" style="color:#657089;text-decoration:underline;">Help</a>
+                &nbsp;&middot;&nbsp;<a href="{{ base_url }}/privacy/" style="color:#657089;text-decoration:underline;">Privacy</a>{% endif %}
+                {% if support_email %}&nbsp;&middot;&nbsp;<a href="mailto:{{ support_email }}" style="color:#657089;text-decoration:underline;">{{ support_email }}</a>{% endif %}
               </p>
-              <p style="margin:8px 0 0;font-size:11px;color:#9aa3b8;">
-                You're receiving this because you have an account with {{ site_name }}.
+              <p style="margin:0;font-size:12px;line-height:1.6;color:#838EA3;">
+                {% block reason %}{% if reason %}{{ reason }}{% else %}You're receiving this because you have an account with {{ site_name }}.{% endif %}{% endblock %}
               </p>
+              {% block footer_extra %}{% endblock %}
+              <p style="margin:8px 0 0;font-size:12px;line-height:1.6;color:#838EA3;">&copy; {{ year }} {{ site_name }}</p>
             </td>
           </tr>
 
         </table>
-
+        <!--[if mso]></td></tr></table><![endif]-->
       </td>
     </tr>
   </table>
-
 </body>
 </html>

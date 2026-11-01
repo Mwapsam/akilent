@@ -14,7 +14,6 @@ approver's own account.
 
 from django.contrib.auth import get_user_model
 from django.contrib.sessions.models import Session
-from django.core.mail import send_mail
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django_otp.plugins.otp_totp.models import TOTPDevice
@@ -115,15 +114,36 @@ class Command(BaseCommand):
                 },
             )
 
-        send_mail(
-            subject="Your two-factor authentication was reset",
-            message=(
-                "Support reset two-factor authentication on your account "
-                f"(ticket {ticket}). Sign in and set it up again straight away. "
-                "If you did not ask for this, contact support immediately."
+        from apps.email.services.html_email import (
+            build_transactional_html,
+            site_email_context,
+        )
+        from apps.email.services.send import send_system_email
+
+        subject = "Your two-factor authentication was reset"
+        text_body = (
+            "Support reset two-factor authentication on your account "
+            f"(ticket {ticket}). Sign in and set it up again straight away. "
+            "If you did not ask for this, contact support immediately."
+        )
+        send_system_email(
+            to_email=target.email,
+            subject=subject,
+            text_body=text_body,
+            html_body=build_transactional_html(
+                "Support reset two-factor authentication on your account. Sign in and "
+                "set it up again straight away.",
+                subject,
+                eyebrow="Security notice",
+                heading=subject,
+                preheader="Sign in and set up two-factor authentication again.",
+                details=[("Support ticket", ticket)],
+                notice="If you did not ask for this, contact support immediately.",
+                notice_tone="danger",
+                cta_url=f"{site_email_context()['base_url']}/settings/security/",
+                cta_label="Set up two-factor again",
             ),
-            from_email=None,
-            recipient_list=[target.email],
+            sender_label="Security",
         )
         self.stdout.write(
             self.style.SUCCESS(f"Reset MFA for {target.email} (ticket {ticket}).")

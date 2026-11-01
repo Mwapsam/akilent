@@ -16,6 +16,16 @@ rule = "*"
 reason = "Base layout for sent emails: inline hex and table layout are required by mail clients."
 
 [[exception]]
+path = "email/components/*"
+rule = "*"
+reason = "Reusable pieces of sent emails (button, code box, details, notice): inline hex and table layout are required by mail clients."
+
+[[exception]]
+path = "platform_mail/campaign_email.html"
+rule = "hex-style"
+reason = "Sent email body (Akilent marketing campaign, apps/platform_mail/services/render.py)."
+
+[[exception]]
 path = "email/generic_transactional.html"
 rule = "hex-style"
 reason = "Sent email body (apps/email/services/html_email.py)."

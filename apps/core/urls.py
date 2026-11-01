@@ -3,7 +3,7 @@
 from django.urls import path
 
 from apps.billing import views as billing_views
-from apps.core.console import chatbot_views, views
+from apps.core.console import chatbot_views, marketing_views, views
 
 app_name = "core"
 
@@ -131,6 +131,73 @@ urlpatterns = [
         name="chatbot-category-delete",
     ),
     path("styleguide/", views.styleguide, name="styleguide"),
+    # Akilent's own product-marketing email (apps.platform_mail)
+    path("marketing/", marketing_views.campaigns, name="marketing"),
+    path(
+        "marketing/campaigns/new/",
+        marketing_views.campaign_new,
+        name="marketing-campaign-new",
+    ),
+    path(
+        "marketing/campaigns/<int:pk>/",
+        marketing_views.campaign_detail,
+        name="marketing-campaign",
+    ),
+    path(
+        "marketing/campaigns/<int:pk>/preview/",
+        marketing_views.campaign_preview,
+        name="marketing-campaign-preview",
+    ),
+    path(
+        "marketing/campaigns/<int:pk>/do/<slug:action>/",
+        marketing_views.campaign_action,
+        name="marketing-campaign-action",
+    ),
+    path("marketing/lists/", marketing_views.list_index, name="marketing-lists"),
+    path(
+        "marketing/lists/<int:pk>/", marketing_views.list_detail, name="marketing-list"
+    ),
+    path(
+        "marketing/lists/<int:pk>/import/",
+        marketing_views.list_import,
+        name="marketing-list-import",
+    ),
+    path(
+        "marketing/lists/<int:pk>/add/",
+        marketing_views.list_add_member,
+        name="marketing-list-add",
+    ),
+    path(
+        "marketing/lists/<int:pk>/delete/",
+        marketing_views.list_delete,
+        name="marketing-list-delete",
+    ),
+    path(
+        "marketing/lists/<int:pk>/members/<int:subscriber_pk>/remove/",
+        marketing_views.list_remove_member,
+        name="marketing-list-remove",
+    ),
+    path(
+        "marketing/subscribers/",
+        marketing_views.subscribers,
+        name="marketing-subscribers",
+    ),
+    path(
+        "marketing/subscribers/<int:pk>/unsubscribe/",
+        marketing_views.subscriber_unsubscribe,
+        name="marketing-subscriber-unsubscribe",
+    ),
+    path(
+        "marketing/settings/",
+        marketing_views.marketing_settings,
+        name="marketing-settings",
+    ),
+    path("emails/", views.email_previews, name="email-previews"),
+    path(
+        "emails/<slug:key>/frame/",
+        views.email_preview_frame,
+        name="email-preview-frame",
+    ),
     # Old addresses, kept so bookmarks and emails still work
     path("customers/", views.old_customers, name="customers"),
     path("customers/<int:pk>/", views.old_customer_detail, name="customer-detail"),

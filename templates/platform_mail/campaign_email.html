@@ -1,0 +1,15 @@
+{% extends "email/base_email.html" %}
+{% comment %}One Akilent marketing campaign email (apps.platform_mail.services.render).{% endcomment %}
+{% block content %}
+  {% if heading %}{% include "email/components/_heading.html" with text=heading %}{% endif %}
+  {{ body }}
+  {% if cta_url %}{% include "email/components/_button.html" with url=cta_url label=cta_label %}{% endif %}
+{% endblock %}
+{% block reason %}You're receiving this because you signed up for product updates from {{ site_name }}.{% endblock %}
+{% block footer_extra %}
+  <p style="margin:8px 0 0;font-size:12px;line-height:1.6;color:#838EA3;">
+    <a href="{{ unsubscribe_url }}" style="color:#657089;text-decoration:underline;">Unsubscribe from product updates</a>
+    &nbsp;&middot;&nbsp;Account emails like password resets aren't affected.
+  </p>
+  {% if postal_address %}<p style="margin:8px 0 0;font-size:12px;line-height:1.6;color:#838EA3;">{{ postal_address|linebreaksbr }}</p>{% endif %}
+{% endblock %}

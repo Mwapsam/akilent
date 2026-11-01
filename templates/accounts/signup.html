@@ -218,6 +218,10 @@
         <button type="button" class="btn btn-primary" x-show="step < 3" :disabled="!canAdvance" @click="next()">Continue</button>
         <button type="submit" class="btn btn-primary" x-show="step === 3">Create account</button>
       </div>
+      <label class="mt-4 flex items-start gap-2 text-sm text-ink-muted" x-show="step === 3">
+        <input type="checkbox" name="product_updates" value="on" class="mt-0.5" {% if form.product_updates.value %}checked{% endif %}>
+        <span>{{ form.product_updates.label }}. You can unsubscribe at any time.</span>
+      </label>
       <p class="text-xs text-ink-subtle mt-3 text-right" x-show="step === 3">
         By creating an account you agree to the <a href="{% url 'terms' %}" target="_blank" class="text-accent underline">Terms of service</a>
         and <a href="{% url 'privacy' %}" target="_blank" class="text-accent underline">Privacy policy</a>.

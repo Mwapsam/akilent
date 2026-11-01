@@ -1,0 +1,5 @@
+{% comment %}Tinted callout. Params: text, tone = info | warning | danger (default info).{% endcomment %}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 24px;">
+  <tr>
+    <td style="padding:14px 16px;border-radius:8px;font-size:14px;line-height:1.55;{% if tone == 'danger' %}background-color:#FDECEC;border-left:3px solid #D93636;color:#7A1C1C;{% elif tone == 'warning' %}background-color:#FFF6E0;border-left:3px solid #FFB020;color:#6B4A00;{% else %}background-color:#EEF2F7;border-left:3px solid #46516B;color:#26314A;{% endif %}">{{ text }}</td>
+  </tr>
+</table>

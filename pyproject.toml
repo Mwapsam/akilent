@@ -266,6 +266,7 @@ module = [
     "celery.*",
     "django_otp.*",
     "httpx.*",
+    "markdown",
     "mypy_boto3_sesv2.*",
     "rest_framework.*",
     "segno.*",
