@@ -1,0 +1,92 @@
+{% load publishing_filters %}{% comment %}The month view (cs_scheduling, views._month_context).
+
+From lg, a grid of whole weeks. A post whose channels haven't gone out can be dragged to
+another day, keeping its time; dropping fills in and sends the post's own Move form, so
+drag and the keyboard (Move → pick a day) go through the same server check. Published,
+publishing, failed and checking posts have no Move form and can't be dragged.
+Below lg, the month's days with posts as an agenda.
+
+Styles are scoped here rather than added to assets/app.css, which would need a Tailwind
+rebuild.{% endcomment %}
+<style>
+  .cal-month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .cal-m-dow { padding: .5rem .625rem; font-size: .6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--color-ink-subtle); border-bottom: 1px solid var(--color-border); }
+  .cal-m-day { min-height: 7.5rem; padding: .375rem; display: flex; flex-direction: column; gap: .25rem; min-width: 0; border-top: 1px solid var(--color-border); }
+  .cal-m-day:not(:nth-child(7n + 1)) { border-left: 1px solid var(--color-border); }
+  .cal-m-day--out { background: var(--color-surface-muted); }
+  .cal-m-day--out .cal-m-num { color: var(--color-ink-subtle); }
+  .cal-m-day--over { outline: 2px dashed var(--color-accent); outline-offset: -3px; }
+  .cal-m-num { font-size: .75rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--color-ink); }
+  .cal-today .cal-m-num { color: var(--color-accent); }
+  .cal-m-entry { display: block; border: 1px solid var(--color-border); border-radius: .5rem; padding: .25rem .375rem; background: var(--color-surface); }
+  .cal-m-entry[draggable="true"] { cursor: grab; }
+  .cal-m-entry .cal-caption { -webkit-line-clamp: 1; }
+  .cal-m-move summary { font-size: .6875rem; color: var(--color-ink-subtle); cursor: pointer; list-style: none; }
+  .cal-m-move summary::-webkit-details-marker { display: none; }
+  .cal-m-move summary:hover, .cal-m-move summary:focus-visible { color: var(--color-accent); }
+  .cal-m-move form { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .25rem; }
+</style>
+
+<div class="hidden lg:block mb-6">
+  <p class="text-xs text-ink-subtle mb-2" id="cal-month-help">Drag a post that hasn't gone out to another day to move it. It keeps its time. Or use <strong>Move</strong> on the post.</p>
+  <div class="card overflow-hidden cal-month" role="list" aria-label="{{ month_first|date:'F Y' }}" aria-describedby="cal-month-help"
+       x-data="{ dragging: null, over: null }">
+    {% for cell in month_weeks.0 %}<div class="cal-m-dow" aria-hidden="true">{{ cell.date|date:"D" }}</div>{% endfor %}
+    {% for week in month_weeks %}{% for cell in week %}
+    {% with iso=cell.date|date:"Y-m-d" %}
+    <div role="listitem"
+         class="cal-m-day{% if not cell.in_month %} cal-m-day--out{% endif %}{% if cell.date == today %} cal-today{% endif %}"
+         {% if cell.date >= today %}
+         :class="over === '{{ iso }}' && 'cal-m-day--over'"
+         @dragover.prevent="if (dragging) over = '{{ iso }}'"
+         @dragleave="if (over === '{{ iso }}') over = null"
+         @drop.prevent="if (dragging) { const f = document.getElementById(dragging); f.querySelector('[name=date]').value = '{{ iso }}'; dragging = null; over = null; f.requestSubmit(); }"
+         {% endif %}>
+      <span class="cal-m-num">{{ cell.date|date:"j" }}<span class="sr-only"> {{ cell.date|date:"F" }}{% if cell.date == today %}, today{% endif %}</span></span>
+      {% for entry in cell.entries %}
+      <div class="cal-m-entry cal-entry" data-tone="{{ entry.status|status_tone }}"
+           {% if entry.movable %}draggable="true"
+           @dragstart="dragging = '{{ entry.move_id }}'; $event.dataTransfer.effectAllowed = 'move'; $event.dataTransfer.setData('text/plain', '{{ entry.move_id }}')"
+           @dragend="dragging = null; over = null"{% endif %}
+           data-cal-entry="{{ entry.post.pk }}" data-movable="{{ entry.movable|yesno:'true,false' }}">
+        <a href="{% url 'publishing:post-detail' entry.post.pk %}" class="block min-w-0"{% if entry.movable %} draggable="false"{% endif %}>
+          <span class="cal-entry-top">
+            <span class="cal-time"><time datetime="{{ entry.at|date:'c' }}">{{ entry.at|time:"H:i" }}</time></span>
+            {% include "publishing/_platform_icons.html" with platforms=entry.platforms %}
+          </span>
+          <span class="cal-caption">{{ entry.post.caption|default:"(no caption)" }}</span>
+          <span class="cal-state">{{ entry.status_label }}</span>
+        </a>
+        {% if entry.movable %}
+        <details class="cal-m-move">
+          <summary>Move<span class="sr-only"> {{ entry.post.caption|truncatechars:40|default:"this post" }}</span></summary>
+          <form id="{{ entry.move_id }}" method="post" action="{% url 'publishing:calendar-move' %}" hx-boost="false">
+            {% csrf_token %}
+            <input type="hidden" name="post" value="{{ entry.post.pk }}">
+            {% for p in entry.platforms %}<input type="hidden" name="platforms" value="{{ p }}">{% endfor %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <label class="sr-only" for="{{ entry.move_id }}-date">New day</label>
+            <input id="{{ entry.move_id }}-date" type="date" name="date" class="input w-full" min="{{ today|date:'Y-m-d' }}" value="{{ iso }}" required>
+            <button type="submit" class="btn btn-secondary btn-sm">Move</button>
+          </form>
+        </details>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endwith %}
+    {% endfor %}{% endfor %}
+  </div>
+</div>
+
+<div class="lg:hidden mb-6">
+  {% if month_has_content %}
+  <div class="card overflow-hidden">
+    {% include "publishing/_cal_agenda.html" with week_days=month_days skip_empty=True %}
+  </div>
+  {% else %}
+  <div class="card">
+    {% include "components/empty_state.html" with icon="clock" title="Nothing scheduled this month" message="Create a post, or pick another month." %}
+  </div>
+  {% endif %}
+</div>

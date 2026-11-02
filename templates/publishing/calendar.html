@@ -7,7 +7,11 @@
   <div>
     <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
   </div>
-  <a href="{% url 'publishing:post-new' %}" class="btn btn-primary">New post</a>
+  <div class="flex items-center gap-2">
+    {% if scheduling_on %}<a href="{% url 'publishing:slots' %}" class="btn btn-secondary">Posting slots</a>{% endif %}
+    {% if released.cs_recurring %}<a href="{% url 'publishing:recurring' %}" class="btn btn-secondary">Recurring</a>{% endif %}
+    <a href="{% url 'publishing:post-new' %}" class="btn btn-primary">New post</a>
+  </div>
 </div>
 
 {% include "publishing/_subnav.html" %}
@@ -16,6 +20,17 @@
 to show (channel, status). The selects apply as soon as they change.{% endcomment %}
 <div class="cal-toolbar">
   <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+    {% if view_mode == 'month' %}
+    <nav class="cal-stepper" aria-label="Month">
+      <a href="{% querystring month=prev_month_param %}" aria-label="Previous month">{% include "components/icon.html" with name="chevron-right" class="w-4 h-4 rotate-180" %}</a>
+      <a href="{% querystring month=None %}">Today</a>
+      <a href="{% querystring month=next_month_param %}" aria-label="Next month">{% include "components/icon.html" with name="chevron-right" class="w-4 h-4" %}</a>
+    </nav>
+    <div>
+      <h2 class="cal-range">{{ month_first|date:"F Y" }}</h2>
+      <p class="cal-summary">{% if month_posts %}{{ month_posts }} post{{ month_posts|pluralize }}{% else %}Nothing scheduled this month{% endif %}</p>
+    </div>
+    {% else %}
     <nav class="cal-stepper" aria-label="Week">
       <a href="{% querystring week=prev_week_param %}" aria-label="Previous week">{% include "components/icon.html" with name="chevron-right" class="w-4 h-4 rotate-180" %}</a>
       <a href="{% querystring week=None %}">Today</a>
@@ -33,16 +48,19 @@ to show (channel, status). The selects apply as soon as they change.{% endcommen
         {% endif %}
       </p>
     </div>
+    {% endif %}
   </div>
 
   <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
     <nav class="segmented" aria-label="View">
-      <a href="{% querystring view='week' %}" {% if view_mode != 'list' %}aria-current="page"{% endif %}>Week</a>
+      <a href="{% querystring view='week' %}" {% if view_mode == 'week' %}aria-current="page"{% endif %}>Week</a>
+      {% if scheduling_on %}<a href="{% querystring view='month' %}" {% if view_mode == 'month' %}aria-current="page"{% endif %}>Month</a>{% endif %}
       <a href="{% querystring view='list' %}" {% if view_mode == 'list' %}aria-current="page"{% endif %}>List</a>
     </nav>
     <form method="get" class="flex basis-full sm:basis-auto items-center gap-2" x-data @change="$el.requestSubmit()">
       <input type="hidden" name="week" value="{{ week_param }}">
       <input type="hidden" name="view" value="{{ view_mode }}">
+      {% if month_param %}<input type="hidden" name="month" value="{{ month_param }}">{% endif %}
       <select name="channel" class="select select-sm min-w-0 flex-1 sm:flex-none sm:w-36" aria-label="Channel">
         <option value="">All channels</option>
         <option value="instagram" {% if channel_filter == 'instagram' %}selected{% endif %}>Instagram</option>
@@ -59,7 +77,10 @@ to show (channel, status). The selects apply as soon as they change.{% endcommen
   </div>
 </div>
 
-{% if view_mode == 'list' %}
+{% if view_mode == 'month' %}
+  {% include "publishing/_cal_month.html" %}
+
+{% elif view_mode == 'list' %}
 
   {% url 'publishing:post-new' as post_new_url %}
   {% if week_has_content %}

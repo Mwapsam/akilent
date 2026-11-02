@@ -10,12 +10,29 @@
   <li>Under <strong>Platforms → WhatsApp chat link</strong>, tick the channels you want a link for.
     <ul>
       <li><strong>Facebook:</strong> the link is added to the end of the caption, so people can tap it.</li>
-      <li><strong>Instagram:</strong> links in captions can't be tapped. Copy the link from the post page and put it in your bio or on a story link sticker.</li>
+      <li><strong>Instagram:</strong> links in captions can't be tapped. {% if released.cs_bio_page %}Add the post to your bio page (below), or use its link on a story link sticker.{% else %}Copy the link from the post page and put it in your bio or on a story link sticker.{% endif %}</li>
     </ul>
   </li>
   <li>Save, schedule or publish the post as usual.</li>
 </ol>
 <p>Each channel gets its own short link, so you can see Facebook and Instagram separately.</p>
+
+{% if released.cs_bio_page %}
+<h2>Instagram: use a bio page</h2>
+<p>Your Instagram bio holds one link. If it's one post's chat link, every chat from your bio is counted for that post, even when the customer saw a different one. A bio page fixes that.</p>
+<ol>
+  <li>In <strong>Content Studio → Bio page</strong>, create your page. It gets an address like <code>/b/your-shop</code>.</li>
+  <li>In Instagram, go to <strong>Edit profile → Links</strong> and add that address. Akilent checks your profile once a day and shows whether the bio points at the page.</li>
+  <li>On a published Instagram post, choose <strong>Add to bio page</strong> on its Results card. The post gets its own button on the page.</li>
+</ol>
+<p>The page shows your newest posts (12 by default) and removes posts after 30 days unless you pin them. A removed post's button keeps working for anyone who already has it.</p>
+<p>Instagram chats are labelled by how sure the credit is:</p>
+<ul>
+  <li><strong>Through your bio page:</strong> the customer chose this post's button. Counted for the post.</li>
+  <li><strong>Via bio link, post not confirmed:</strong> the chat came before your bio page went live, through a link that sat in your bio. The customer may have seen another post.</li>
+  <li><strong>Direct link:</strong> the chat used the post's own link (for example on a story sticker) after your bio page went live. It's confirmed for the link, but not proven to be from this post.</li>
+</ul>
+{% endif %}
 
 <h2>What the customer sees</h2>
 <p>Tapping the link opens WhatsApp with a message ready to send, for example "Hi! I saw your post and I'd like to know more. (ref K7Q2MX)". The code at the end is how the chat is matched to the post. If they delete it before sending, the chat still reaches your inbox, but it isn't counted for the post.</p>
@@ -29,6 +46,18 @@
 </ul>
 <p>Leads and orders that came from a post show "From a post" with a link back to it. That needs the lead or order to be made from the chat itself: with "Create lead" or "Create order" in the conversation, or by an automation running on that chat.</p>
 <p>If an order is made without choosing a chat, Akilent links it to the customer's most recent chat and marks it "Linked to a recent chat (a guess)". A guess is never credited to a post. On Insights it appears under "Not credited to a post", next to sales that didn't come through a post at all.</p>
+{% if released.cs_sales_report %}
+
+<h2>Which posts sold</h2>
+<p><strong>Content Studio → Sales</strong> lists your posts by what they sold in the last 7, 30 or 90 days: paid orders first, then orders, leads and chats. Revenue is shown in each currency on its own, never added across currencies.</p>
+<ul>
+  <li><strong>Ranked:</strong> posts with at least 5 confirmed chats in the period.</li>
+  <li><strong>Too early to judge:</strong> posts with fewer. Their numbers are shown, but a handful of chats can't tell you whether a post sells, so they aren't ranked.</li>
+  <li>{% if released.cs_bio_page %}Instagram chats labelled "via bio link, post not confirmed" or "direct link" are{% else %}Instagram chats from a link in your bio are{% endif %} shown under the post but never used to rank it.</li>
+  <li>Below the list, revenue that no post is credited with: sales linked to a chat only by a guess, and sales that didn't come through a post.</li>
+</ul>
+<p>Chats count in the period they started, leads and orders in the period they were created, and revenue in the period it was paid.</p>
+{% endif %}
 
 <h2>What isn't counted</h2>
 <p>Only chats with clear evidence are counted: the link's code, or a reply to a comment on the post. A customer who saw the post and then messaged you another way isn't counted, so your real results can be higher than the card shows. Akilent never guesses which post someone saw.</p>

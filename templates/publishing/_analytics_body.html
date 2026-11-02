@@ -1,0 +1,53 @@
+{% comment %}Account analytics (account_metrics.summary per channel, and results.journey),
+shared by the page and its printable report. A number that wasn't read shows "—" and
+why, never 0. Reach and accounts engaged are people per day, so they are averaged, not
+added up.{% endcomment %}
+<p class="text-xs text-ink-subtle">{{ start|date:"N j" }} to {{ end|date:"N j, Y" }}. The newest {{ settle_days }} days aren't shown yet: Instagram's numbers can take up to 48 hours to settle.</p>
+
+{% for s in summaries %}
+<section class="card card-pad space-y-2 an-card" aria-labelledby="an-{{ s.platform }}" data-analytics="{{ s.platform }}">
+  <h2 id="an-{{ s.platform }}" class="font-semibold text-ink">{{ s.channel }}</h2>
+  {% if s.needs_permission %}
+  <p class="text-sm tone-amber-fg">Some numbers need {{ s.channel }} reconnected with access to insights.</p>
+  {% endif %}
+  <div class="table-wrap">
+  <table class="w-full text-sm">
+    <thead class="sr-only"><tr><th scope="col">Measure</th><th scope="col">Number</th><th scope="col">Days with numbers</th></tr></thead>
+    <tbody class="divide-y divide-border">
+      {% for r in s.rows %}
+      <tr data-metric="{{ r.key }}">
+        <th scope="row" class="py-1.5 pr-2 text-left font-normal text-ink-subtle"><span title="{{ r.definition }}">{{ r.label }}</span></th>
+        <td class="py-1.5 text-right font-medium text-ink tabular-nums">
+          {% if r.key == "followers" %}
+            {% if r.last is not None %}{{ r.last|floatformat:"0g" }} <span class="text-xs text-ink-subtle">({% if r.change > 0 %}+{% endif %}{{ r.change|floatformat:"0g" }})</span>{% else %}—{% endif %}
+          {% elif r.days_with_data %}
+            {% if r.total is not None %}{{ r.total|floatformat:"0g" }} <span class="text-xs text-ink-subtle">in total · {{ r.average|floatformat:"0g" }} a day</span>{% else %}{{ r.average|floatformat:"0g" }} <span class="text-xs text-ink-subtle">a day on average</span>{% endif %}
+          {% else %}—{% endif %}
+        </td>
+        <td class="py-1.5 pl-3 text-right text-xs text-ink-subtle tabular-nums">{% if r.days_with_data %}{{ r.days_with_data }} of {{ s.days }} days{% else %}{{ r.reason }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% empty %}
+<section class="card card-pad">
+  <p class="text-sm text-ink-subtle">Connect Instagram or Facebook to see your account's numbers.</p>
+</section>
+{% endfor %}
+
+{% if journey %}
+<section class="card card-pad space-y-2 an-card" aria-labelledby="an-journey">
+  <h2 id="an-journey" class="font-semibold text-ink">What your posts brought in</h2>
+  <dl class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+    <div><dt class="text-xs text-ink-subtle">Posts published</dt><dd class="font-medium text-ink tabular-nums">{{ journey.posts }}</dd></div>
+    <div><dt class="text-xs text-ink-subtle">Chat link clicks</dt><dd class="font-medium text-ink tabular-nums">{{ journey.clicks|default_if_none:"Not tracked yet" }}</dd></div>
+    <div><dt class="text-xs text-ink-subtle">Chats from posts</dt><dd class="font-medium text-ink tabular-nums">{{ journey.chats|default_if_none:"Not tracked yet" }}</dd></div>
+    <div><dt class="text-xs text-ink-subtle">Leads</dt><dd class="font-medium text-ink tabular-nums">{{ journey.leads|default_if_none:"—" }}</dd></div>
+    <div><dt class="text-xs text-ink-subtle">Orders</dt><dd class="font-medium text-ink tabular-nums">{{ journey.orders|default_if_none:"—" }}</dd></div>
+    <div><dt class="text-xs text-ink-subtle">Paid</dt><dd class="font-medium text-ink tabular-nums">{% for r in journey.revenue %}{{ r.currency }} {{ r.total }}{% if not forloop.last %} · {% endif %}{% empty %}—{% endfor %}</dd></div>
+  </dl>
+  <p class="text-xs text-ink-subtle">Only chats that came through a post's chat link or a reply to its comments are counted, so these are the least your posts brought in. Chats are counted when they started, orders when they were made, and revenue when it was paid, over the last {{ days }} days.</p>
+</section>
+{% endif %}

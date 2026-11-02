@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Media — {{ site.app_name|default:"Akilent" }}{% endblock %}
+
+{% block content %}
+<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+  <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
+  <a href="{% url 'publishing:media-snippets' %}" class="btn btn-secondary">Caption templates and hashtags</a>
+</div>
+
+{% include "publishing/_subnav.html" %}
+
+{{ uploader|json_script:"media-library-config" }}
+<div class="space-y-4" x-data="mediaLibrary()">
+  <section class="card card-pad space-y-3" aria-labelledby="ml-upload">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <h2 id="ml-upload" class="font-semibold text-ink">Media</h2>
+      <label class="btn btn-primary btn-sm cursor-pointer">
+        <input type="file" class="sr-only" multiple accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime"
+               @change="onFiles($event.target.files); $event.target.value = ''" :disabled="busy">
+        Upload files
+      </label>
+    </div>
+    <p class="text-sm text-ink-subtle">Everything uploaded in Content Studio lands here. A file used by a draft or scheduled post can't be removed; one only published posts use is archived, so those posts keep working.</p>
+    <ul class="space-y-1 text-sm" x-show="uploads.length" x-cloak aria-live="polite">
+      <template x-for="u in uploads">
+        <li class="flex flex-wrap items-center gap-2">
+          <span class="truncate max-w-xs" x-text="u.name"></span>
+          <span class="text-xs text-ink-subtle tabular-nums" x-show="!u.error" x-text="u.done ? 'Done' : u.progress + '%'"></span>
+          <span class="text-xs tone-coral-fg" x-show="u.error" x-text="u.error"></span>
+        </li>
+      </template>
+    </ul>
+  </section>
+
+  <form method="get" class="flex flex-wrap items-end gap-2" aria-label="Filter media">
+    <div>
+      <label for="ml-q" class="block text-xs text-ink-subtle mb-1">Name</label>
+      <input id="ml-q" name="q" value="{{ q }}" class="input" placeholder="Search">
+    </div>
+    <div>
+      <label for="ml-kind" class="block text-xs text-ink-subtle mb-1">Type</label>
+      <select id="ml-kind" name="kind" class="select select-sm">
+        <option value="">All</option>
+        <option value="image" {% if kind == 'image' %}selected{% endif %}>Pictures</option>
+        <option value="video" {% if kind == 'video' %}selected{% endif %}>Videos</option>
+      </select>
+    </div>
+    {% if tags %}
+    <div>
+      <label for="ml-tag" class="block text-xs text-ink-subtle mb-1">Tag</label>
+      <select id="ml-tag" name="tag" class="select select-sm">
+        <option value="">All</option>
+        {% for t in tags %}<option value="{{ t }}" {% if t == tag %}selected{% endif %}>{{ t }}</option>{% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    <label class="flex items-center gap-2 text-sm pb-1"><input type="checkbox" name="archived" value="1" {% if archived %}checked{% endif %}> Archived</label>
+    <button type="submit" class="btn btn-secondary btn-sm">Show</button>
+  </form>
+
+  {% if page.object_list %}
+  <ul class="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4" aria-label="Media files">
+    {% for a in page %}
+    <li class="card overflow-hidden flex flex-col" data-asset="{{ a.pk }}">
+      {% include "publishing/_media_thumb.html" with url=a.url size="w-full aspect-square !rounded-none" alt=a.name controls=False %}
+      <div class="p-2.5 space-y-1 flex-1 flex flex-col">
+        <p class="text-sm text-ink truncate" title="{{ a.name }}">{{ a.name }}</p>
+        <p class="text-xs text-ink-subtle">
+          {% if a.width %}{{ a.width }}×{{ a.height }}{% endif %}{% if a.duration %} · {{ a.duration|floatformat:1 }} s{% endif %}
+          {% if a.parent_id %} · {{ a.get_source_display }}{% endif %}
+          · <span data-used="{{ a.used_in }}">{% if a.used_in %}in {{ a.used_in }} post{{ a.used_in|pluralize }}{% else %}not used{% endif %}</span>
+        </p>
+        {% if a.credit %}<p class="text-xs text-ink-subtle"><a href="{{ a.credit_url }}" target="_blank" rel="noopener" class="underline">{{ a.credit }}</a></p>{% endif %}
+        {% if a.tags %}<p class="text-xs text-ink-subtle">{% for t in a.tags %}<span class="mr-1">#{{ t }}</span>{% endfor %}</p>{% endif %}
+        <details class="text-xs mt-auto">
+          <summary class="cursor-pointer text-ink-subtle">Details</summary>
+          <form method="post" action="{% url 'publishing:media-update' a.pk %}" class="space-y-1 mt-1" hx-boost="false">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="tags">
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <label class="sr-only" for="ml-name-{{ a.pk }}">Name</label>
+            <input id="ml-name-{{ a.pk }}" name="name" value="{{ a.name }}" class="input w-full">
+            <label class="sr-only" for="ml-tags-{{ a.pk }}">Tags</label>
+            <input id="ml-tags-{{ a.pk }}" name="tags" value="{{ a.tags|join:', ' }}" class="input w-full" placeholder="Tags, separated by commas">
+            <button type="submit" class="btn btn-ghost btn-sm">Save</button>
+          </form>
+        </details>
+        <div class="flex flex-wrap gap-1 pt-1">
+          {% if not archived %}<a href="{% url 'publishing:media-edit' a.pk %}" class="btn btn-ghost btn-sm">{% if a.kind == 'video' %}Cover{% else %}Edit{% endif %}</a>{% endif %}
+          <form method="post" action="{% url 'publishing:media-update' a.pk %}" hx-boost="false">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            {% if archived %}
+            <button type="submit" name="action" value="restore" class="btn btn-ghost btn-sm">Put back</button>
+            {% else %}
+            <button type="submit" name="action" value="remove" class="btn btn-ghost btn-sm">Remove</button>
+            {% endif %}
+          </form>
+        </div>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% if page.has_other_pages %}
+  <nav class="flex items-center gap-2 text-sm" aria-label="Pages">
+    {% if page.has_previous %}<a href="{% querystring page=page.previous_page_number %}" class="btn btn-ghost btn-sm">Previous</a>{% endif %}
+    <span class="text-ink-subtle">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+    {% if page.has_next %}<a href="{% querystring page=page.next_page_number %}" class="btn btn-ghost btn-sm">Next</a>{% endif %}
+  </nav>
+  {% endif %}
+  {% else %}
+  <section class="card card-pad">
+    <p class="text-sm text-ink-subtle" data-media-empty>{% if archived %}Nothing archived.{% elif q or kind or tag %}Nothing matches.{% else %}No media yet. Upload files here, or add them in the composer.{% endif %}</p>
+  </section>
+  {% endif %}
+
+  {% if stock %}
+  <section class="card card-pad space-y-3" aria-labelledby="ml-stock">
+    <div class="flex flex-wrap items-baseline justify-between gap-2">
+      <h2 id="ml-stock" class="font-semibold text-ink">Stock photos</h2>
+      <a href="https://www.pexels.com" target="_blank" rel="noopener" class="text-xs underline">Photos provided by Pexels</a>
+    </div>
+    <form class="flex flex-wrap gap-2" @submit.prevent="searchStock()">
+      <label class="sr-only" for="ml-stock-q">Search stock photos</label>
+      <input id="ml-stock-q" class="input flex-1 min-w-0" x-model="stockQuery" placeholder="e.g. summer sandals">
+      <button type="submit" class="btn btn-secondary btn-sm" :disabled="stockLoading || !stockQuery">Search</button>
+    </form>
+    <p class="text-xs tone-coral-fg" role="alert" x-show="stockError" x-text="stockError"></p>
+    <ul class="grid gap-2 grid-cols-2 sm:grid-cols-4" x-show="stockPhotos.length" x-cloak>
+      <template x-for="p in stockPhotos" :key="p.id">
+        <li class="space-y-1">
+          <img :src="p.thumb" :alt="p.alt" class="w-full aspect-square object-cover rounded-lg" loading="lazy">
+          <p class="text-xs text-ink-subtle truncate">Photo by <a :href="p.photographer_url" target="_blank" rel="noopener" class="underline" x-text="p.photographer"></a> on <a :href="p.page_url" target="_blank" rel="noopener" class="underline">Pexels</a></p>
+          <button type="button" class="btn btn-ghost btn-sm" @click="addStock(p)" :disabled="adding !== null" x-text="adding === p.id ? 'Adding…' : 'Add to library'"></button>
+        </li>
+      </template>
+    </ul>
+    <p class="text-xs text-ink-subtle">The photographer's credit is kept with the photo in your library.</p>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/media_library.js' %}"></script>
+{% endblock %}

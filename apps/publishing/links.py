@@ -47,9 +47,16 @@ class NoWhatsAppNumber(Exception):
 
 
 def new_code() -> str:
+    """A ref code no tracked link or bio tile uses: they share one namespace, since a
+    customer's message carries only the code."""
+    from .models import BioTile
+
     while True:
         code = "".join(secrets.choice(_ALPHABET) for _ in range(CODE_LENGTH))
-        if not TrackedLink.objects.filter(code=code).exists():
+        if not (
+            TrackedLink.objects.filter(code=code).exists()
+            or BioTile.objects.filter(code=code).exists()
+        ):
             return code
 
 
@@ -100,8 +107,9 @@ def short_url(link: TrackedLink) -> str:
     return f"{base}/go/{link.code}"
 
 
-def whatsapp_url(link: TrackedLink) -> str:
-    text = f"{link.prefill_text or DEFAULT_PREFILL} (ref {link.code})"
+def whatsapp_url(link: TrackedLink, code: str = "") -> str:
+    """``code``: the ref code to send instead of the link's own (a bio tile's)."""
+    text = f"{link.prefill_text or DEFAULT_PREFILL} (ref {code or link.code})"
     return f"https://wa.me/{link.wa_number}?text={quote(text)}"
 
 

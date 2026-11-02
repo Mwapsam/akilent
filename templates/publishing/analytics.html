@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Analytics — {{ site.app_name|default:"Akilent" }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
+</div>
+
+{% include "publishing/_subnav.html" %}
+
+<div class="max-w-3xl space-y-4">
+  <header class="flex flex-wrap items-start justify-between gap-3">
+    <div class="flex-1 min-w-0">
+      <h2 class="text-lg font-semibold text-ink">Analytics</h2>
+      <p class="text-sm text-ink-subtle">Your Instagram and Facebook accounts day by day, and what your posts brought in.</p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <form method="get" x-data="{ busy: false }" @submit="busy = true">
+        <label class="sr-only" for="an-period">Period</label>
+        <select id="an-period" name="period" class="select" onchange="this.form.requestSubmit()" :disabled="busy">
+          {% for choice in periods %}<option value="{{ choice }}" {% if choice == days %}selected{% endif %}>Last {{ choice }} days</option>{% endfor %}
+        </select>
+      </form>
+      <a href="{% url 'publishing:analytics-csv' %}?period={{ days }}" class="btn btn-secondary btn-sm" hx-boost="false" download>CSV</a>
+      <a href="{% url 'publishing:analytics-print' %}?period={{ days }}" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">Print or save as PDF</a>
+    </div>
+  </header>
+
+  {% include "publishing/_analytics_body.html" %}
+
+  <section class="card card-pad space-y-2" aria-labelledby="an-weekly">
+    <h2 id="an-weekly" class="font-semibold text-ink">Weekly email</h2>
+    <p class="text-sm text-ink-subtle">A summary of the last 7 days, sent to Owners and Admins on Monday morning.</p>
+    {% if can_admin %}
+    <form method="post" action="{% url 'publishing:analytics-weekly' %}" class="flex flex-wrap items-center gap-3" hx-boost="false">
+      {% csrf_token %}
+      <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="weekly_report" {% if weekly_report %}checked{% endif %}> Send the weekly email</label>
+      <button type="submit" class="btn btn-secondary btn-sm">Save</button>
+    </form>
+    {% else %}
+    <p class="text-sm text-ink-subtle">{% if weekly_report %}It's on.{% else %}It's off.{% endif %} An Owner or Admin can change this.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

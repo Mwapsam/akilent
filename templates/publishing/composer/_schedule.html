@@ -29,6 +29,13 @@
       <input type="datetime-local" name="scheduled_at" id="scheduled-at" x-model="scheduledAt"
              :disabled="publishMode !== 'schedule'" class="input w-full sm:w-64">
     </div>
+    {% if released.cs_scheduling %}
+    <div class="flex flex-wrap items-center gap-2">
+      <button type="button" class="btn btn-secondary btn-sm" @click="fillNextSlot()" :disabled="slotLoading">Next free slot</button>
+      <span class="text-xs text-ink-subtle" role="status" x-text="slotNote"></span>
+      <a href="{% url 'publishing:slots' %}" class="text-xs underline" x-show="slotSetup" x-cloak>Set up posting slots</a>
+    </div>
+    {% endif %}
     <template x-if="selectedPlatforms.length > 1">
       <label class="flex items-center gap-2 text-sm text-ink-muted">
         <input type="checkbox" class="rounded" x-model="perChannel"

@@ -632,10 +632,347 @@ class LinkClick(models.Model):
     link = models.ForeignKey(
         TrackedLink, on_delete=models.CASCADE, related_name="clicks"
     )
+    # Set when the click came through a bio-page tile rather than the link itself.
+    bio_tile = models.ForeignKey(
+        "BioTile",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="clicks",
+    )
     clicked_at = models.DateTimeField(auto_now_add=True, db_index=True)
     visitor_hash = models.CharField(max_length=64, blank=True, default="")
     referer_host = models.CharField(max_length=255, blank=True, default="")
     is_bot = models.BooleanField(default=False)
+
+
+class MediaCheck(models.Model):
+    """What Akilent knows about one media file a post uses: its SHA-256, and for a video
+    the duration, size and frame rate read by ffprobe on the ``media`` queue.
+
+    Readiness reads these against each channel's limits (constraints.VIDEO_LIMITS) and
+    the story-reuse rule. One row per account and URL (``url_digest`` is the URL's
+    SHA-256, since URLs can be longer than an index allows).
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Checking"
+        OK = "ok", "Checked"
+        FAILED = "failed", "Couldn't check"
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="media_checks"
+    )
+    url = models.URLField(max_length=2048)
+    url_digest = models.CharField(max_length=64)
+    kind = models.CharField(max_length=10, blank=True, default="")  # image / video
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.PENDING
+    )
+    sha256 = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    size_bytes = models.BigIntegerField(null=True, blank=True)
+    duration = models.FloatField(null=True, blank=True)  # seconds
+    width = models.PositiveIntegerField(null=True, blank=True)
+    height = models.PositiveIntegerField(null=True, blank=True)
+    fps = models.FloatField(null=True, blank=True)
+    error = models.CharField(max_length=300, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    # When it was last put on the media queue; "running slowly" counts from here, so a
+    # check re-run after a failure isn't stuck the moment it's queued.
+    queued_at = models.DateTimeField(null=True, blank=True)
+    checked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "url_digest"], name="one_media_check_per_url"
+            ),
+        ]
+        indexes = [models.Index(fields=["status", "created_at"])]
+
+    def __str__(self) -> str:
+        return f"{self.kind or 'media'} {self.status}: {self.url[:60]}"
+
+
+class BioPage(models.Model):
+    """The business's link-in-bio page, ``/b/<slug>``: one tile per post.
+
+    An Instagram bio holds one link. Pointing it here instead of at a single post's
+    chat link lets each post keep its own credit: every tile carries its own ref code,
+    so a chat started from a tile names that post (apps.publishing.bio).
+    """
+
+    account = models.OneToOneField(
+        "accounts.Account", on_delete=models.CASCADE, related_name="bio_page"
+    )
+    slug = models.SlugField(max_length=40, unique=True)
+    title = models.CharField(max_length=100)
+    is_active = models.BooleanField(default=True)
+    # When the page first went live. Instagram link credits from before it can't tell
+    # which post the customer saw, so they are labelled unconfirmed.
+    activated_at = models.DateTimeField(null=True, blank=True)
+    # Times the owner turned the page off since: [[off ISO, on ISO or null], ...]. Link
+    # credits from those times are unconfirmed too (apps.publishing.bio.credit_basis).
+    off_periods = models.JSONField(default=list, blank=True)
+    max_tiles = models.PositiveSmallIntegerField(default=12)
+    archive_after_days = models.PositiveSmallIntegerField(default=30)
+    # What the Instagram profile's website field said at the last check.
+    ig_website = models.URLField(max_length=500, blank=True, default="")
+    ig_website_checked_at = models.DateTimeField(null=True, blank=True)
+    # Look: a picture above the title, and two "#rrggbb" colours (blank: the site's).
+    # Text on each colour is picked black or white for contrast (bio.text_on).
+    avatar_url = models.URLField(max_length=500, blank=True, default="")
+    background_color = models.CharField(max_length=7, blank=True, default="")
+    button_color = models.CharField(max_length=7, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f"/b/{self.slug}"
+
+
+class BioTile(models.Model):
+    """One post on the bio page. Its ``code`` is a ref code of its own, in the same
+    namespace as TrackedLink codes, so a chat it starts is known to come from the tile.
+    Archiving hides the tile but keeps its code working for links already shared."""
+
+    page = models.ForeignKey(BioPage, on_delete=models.CASCADE, related_name="tiles")
+    link = models.ForeignKey(
+        TrackedLink, on_delete=models.CASCADE, related_name="bio_tiles"
+    )
+    code = models.CharField(max_length=12, unique=True)
+    label = models.CharField(max_length=80)
+    position = models.PositiveIntegerField(default=0)
+    pinned = models.BooleanField(default=False)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-pinned", "position", "-created_at", "pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["page", "link"], name="one_bio_tile_per_link"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.page} · {self.label}"
+
+
+class PostingSlot(models.Model):
+    """A weekly time the business likes to post at, on its own clock
+    (``workspace_timezone``). The composer's "Next free slot" picks the next one no
+    channel of the post is already scheduled at (apps.publishing.scheduling)."""
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="posting_slots"
+    )
+    weekday = models.PositiveSmallIntegerField()  # 0 = Monday, as date.weekday()
+    time = models.TimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["weekday", "time"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "weekday", "time"], name="one_posting_slot_per_time"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(weekday__lte=6), name="posting_slot_weekday_range"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.account_id} · {self.weekday} {self.time:%H:%M}"
+
+
+class AccountMetricSnapshot(models.Model):
+    """One day of a channel's account-level numbers (Phase 2b, apps.publishing.
+    account_metrics). Like VariantMetricSnapshot, ``values`` holds a number or None per
+    metric and ``states`` says why one is None; None is never shown as 0."""
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="metric_days"
+    )
+    platform = models.CharField(max_length=20)
+    day = models.DateField()  # the business's own day the numbers are for
+    values = models.JSONField(default=dict)
+    states = models.JSONField(default=dict)
+    error_type = models.CharField(max_length=50, blank=True, default="")
+    error = models.TextField(blank=True, default="")
+    collected_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ["day"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "platform", "day"], name="one_metric_day_per_channel"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.account_id} · {self.platform} · {self.day}"
+
+
+class RecurrenceRule(models.Model):
+    """Repeat a post every ``every_days`` days (Phase 2b, apps.publishing.recurring).
+    Each run makes a new post through the composer's save path, so readiness and
+    approval apply to every copy. ``captions`` are alternate captions used in turn."""
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="recurrence_rules"
+    )
+    source = models.ForeignKey(
+        ContentPost, on_delete=models.CASCADE, related_name="recurrence_rules"
+    )
+    every_days = models.PositiveSmallIntegerField()
+    next_run_at = models.DateTimeField(db_index=True)
+    captions = models.JSONField(default=list, blank=True)
+    active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["next_run_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(every_days__gte=7), name="recurrence_at_least_weekly"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"Repeat post {self.source_id} every {self.every_days} days"
+
+
+class RecurrenceRun(models.Model):
+    """What one run of a rule did: the post it made, or why it made none."""
+
+    class Outcome(models.TextChoices):
+        SCHEDULED = "scheduled", "Scheduled"
+        IN_REVIEW = "in_review", "Sent for review"
+        HELD = "held", "Held as a draft"
+        SKIPPED = "skipped", "Skipped"
+
+    rule = models.ForeignKey(
+        RecurrenceRule, on_delete=models.CASCADE, related_name="runs"
+    )
+    run_for = models.DateTimeField()  # the time the copy was meant to go out
+    outcome = models.CharField(max_length=20, choices=Outcome.choices)
+    post = models.ForeignKey(
+        ContentPost,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="recurrence_runs",
+    )
+    reason = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-run_for"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["rule", "run_for"], name="one_recurrence_run_per_time"
+            ),
+        ]
+
+
+class MediaAsset(models.Model):
+    """A file in the business's media library (Phase 3, apps.publishing.media_library).
+
+    Posts keep media as URLs, so where an asset is used is found from the posts, not
+    stored here. An edited copy (crop, text, a Reel cover) is a new asset whose
+    ``parent`` is the original, which is kept. Archived assets are hidden but their
+    file stays, because a published post still points at it.
+    """
+
+    class Source(models.TextChoices):
+        UPLOAD = "upload", "Uploaded"
+        IMPORT = "import", "Imported"
+        EDIT = "edit", "Edited copy"
+        COVER = "cover", "Reel cover"
+        STOCK = "stock", "Stock photo"
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="media_assets"
+    )
+    url = models.URLField(max_length=2048)
+    url_digest = models.CharField(max_length=64)
+    name = models.CharField(max_length=200, blank=True, default="")
+    kind = models.CharField(max_length=10)  # image / video
+    mime = models.CharField(max_length=50, blank=True, default="")
+    size_bytes = models.BigIntegerField(null=True, blank=True)
+    width = models.PositiveIntegerField(null=True, blank=True)
+    height = models.PositiveIntegerField(null=True, blank=True)
+    duration = models.FloatField(null=True, blank=True)
+    fps = models.FloatField(null=True, blank=True)
+    sha256 = models.CharField(max_length=64, blank=True, default="")
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="derived",
+    )
+    source = models.CharField(
+        max_length=10, choices=Source.choices, default=Source.UPLOAD
+    )
+    tags = models.JSONField(default=list, blank=True)
+    # A stock photo's credit, kept with the file (the provider asks for it).
+    credit = models.CharField(max_length=200, blank=True, default="")
+    credit_url = models.URLField(max_length=500, blank=True, default="")
+    uploaded_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    archived_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "url_digest"], name="one_media_asset_per_url"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return self.name or self.url
+
+
+class CaptionTemplate(models.Model):
+    """A caption the business reuses, inserted from the composer (Phase 3)."""
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="caption_templates"
+    )
+    name = models.CharField(max_length=80)
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class HashtagSet(models.Model):
+    """Hashtags added together from the composer (Phase 3)."""
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="hashtag_sets"
+    )
+    name = models.CharField(max_length=80)
+    tags = models.JSONField(default=list)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return self.name
 
 
 class ApprovalLog(models.Model):
@@ -763,6 +1100,10 @@ class PublishingSettings(models.Model):
     # When on, every post needs an Owner/Admin approval of its current content before it
     # can be scheduled or published. Off by default so solo creators publish directly.
     requires_review = models.BooleanField(default=False)
+    # Phase 2b (cs_analytics): a weekly summary emailed to Owners and Admins.
+    weekly_report = models.BooleanField(default=False)
+    # The ISO week ("2026-W45") whose weekly email was last sent, so each week's goes once.
+    weekly_report_week = models.CharField(max_length=10, blank=True, default="")
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self) -> str:

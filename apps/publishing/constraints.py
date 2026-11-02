@@ -7,6 +7,7 @@ the server's readiness check (``readiness.check``), so the two can't disagree.
 from __future__ import annotations
 
 import re
+from typing import Any
 
 IMAGE, VIDEO, REEL, STORY, TEXT, CAROUSEL = (
     "image",
@@ -34,6 +35,74 @@ MEDIA_TYPES = {
     "instagram": {IMAGE, VIDEO, REEL, STORY, CAROUSEL},
     "facebook": {IMAGE, VIDEO, REEL, STORY, TEXT, CAROUSEL},
 }
+
+# Facebook formats we can't publish correctly yet: a story would go out as a regular
+# post and a carousel as its first image only. Readiness blocks them and dispatch fails
+# them, until the ``cs_fb_formats`` release adds Facebook's own story and multi-photo
+# endpoints.
+FB_FORMAT_FLAG = "cs_fb_formats"
+FB_UNSUPPORTED = {STORY, CAROUSEL}
+FB_UNSUPPORTED_MESSAGE = (
+    "Not yet supported on Facebook. Post to Instagram, or use an image post."
+)
+FB_REEL_AS_VIDEO_MESSAGE = "Publishes as a regular video on Facebook for now."
+
+
+def fb_formats_released() -> bool:
+    """Facebook Reels, stories and multi-photo posts on their own endpoints, and the
+    server-side media checks (Phase 0a)."""
+    from apps.core.releases import is_released
+
+    return is_released(FB_FORMAT_FLAG)
+
+
+def facebook_format_blocked(media_type: str) -> bool:
+    """Whether Facebook must refuse ``media_type`` because it would publish wrongly."""
+    return media_type in FB_UNSUPPORTED and not fb_formats_released()
+
+
+# Video limits per channel and format, from Meta's docs for Graph API v25 (checked
+# 2026-11-01 with the Meta developer docs MCP): Facebook "Publish a Reel" and "Stories",
+# Instagram "IG User Media" (Reel and Story Video Specifications). Instagram publishes
+# every video as a Reel, so its feed video takes the Reel limits. A bound of None isn't
+# checked. ``ratio`` is (min, max) width/height.
+VIDEO_LIMITS: dict[tuple[str, str], dict[str, Any]] = {
+    ("facebook", REEL): {
+        "duration": (3, 90),
+        "fps": (24, 60),
+        "min_size": (540, 960),
+        "ratio": (9 / 16 * 0.98, 9 / 16 * 1.02),
+    },
+    ("facebook", STORY): {
+        "duration": (3, 60),
+        "fps": (24, 60),
+        "min_size": (540, 960),
+        "ratio": (9 / 16 * 0.98, 9 / 16 * 1.02),
+    },
+    ("instagram", REEL): {
+        "duration": (3, 15 * 60),
+        "fps": (23, 60),
+        "max_bytes": 300 * 1024 * 1024,
+        "ratio": (0.01, 10),
+    },
+    ("instagram", VIDEO): {
+        "duration": (3, 15 * 60),
+        "fps": (23, 60),
+        "max_bytes": 300 * 1024 * 1024,
+        "ratio": (0.01, 10),
+    },
+    ("instagram", STORY): {
+        "duration": (3, 60),
+        "fps": (23, 60),
+        "max_bytes": 100 * 1024 * 1024,
+        "ratio": (0.1, 10),
+    },
+}
+
+# Facebook allows 30 API-published Reels per Page in any rolling 24 hours. Our own count
+# only sees Reels sent from Akilent, so it is an early warning; Meta's error decides.
+FB_REELS_PER_DAY = 30
+
 
 # The kind of file each media type takes.
 MEDIA_KIND = {

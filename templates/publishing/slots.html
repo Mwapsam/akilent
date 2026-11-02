@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% load publishing_filters %}
+{% block title %}Posting slots — {{ site.app_name|default:"Akilent" }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
+</div>
+
+{% include "publishing/_subnav.html" %}
+
+<div class="max-w-2xl space-y-4">
+  <section class="card card-pad space-y-3" aria-labelledby="slots-title">
+    <div>
+      <h2 id="slots-title" class="font-semibold text-ink">Posting slots</h2>
+      <p class="text-sm text-ink-subtle">The times you like to post each week. In the composer, <strong>Next free slot</strong> fills in the next one that none of the post's channels is already scheduled at. Times are in {{ current_tz_name|default:"your business timezone" }}.</p>
+    </div>
+
+    {% if has_slots %}
+    <ul class="divide-y divide-border">
+      {% for day in week %}{% if day.slots %}
+      <li class="py-2 flex flex-wrap items-center gap-2">
+        <span class="w-24 text-sm font-medium text-ink">{{ day.day }}</span>
+        {% for slot in day.slots %}
+        <span class="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-0.5 text-sm tabular-nums" data-slot="{{ slot.weekday }}-{{ slot.time|time:'H:i' }}">
+          {{ slot.time|time:"H:i" }}
+          {% if can_admin %}
+          <form method="post" class="inline" hx-boost="false">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="slot" value="{{ slot.pk }}">
+            <button type="submit" class="text-ink-subtle hover:text-ink" aria-label="Remove {{ day.day }} {{ slot.time|time:'H:i' }}">×</button>
+          </form>
+          {% endif %}
+        </span>
+        {% endfor %}
+      </li>
+      {% endif %}{% endfor %}
+    </ul>
+    <p class="text-xs text-ink-subtle" data-next-free>{% if next_free %}Next free slot: {{ next_free|date:"l, N j" }} at {{ next_free|time:"H:i" }}.{% else %}Every slot in the next 8 weeks is taken.{% endif %}</p>
+    {% else %}
+    <p class="text-sm text-ink-subtle" data-no-slots>No slots yet. Add the days and times you like to post.</p>
+    {% endif %}
+
+    {% if can_admin %}
+    <form method="post" class="space-y-2 pt-2 border-t border-border" hx-boost="false">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add">
+      <fieldset>
+        <legend class="block text-sm font-medium text-ink mb-1">Days</legend>
+        <div class="flex flex-wrap gap-3">
+          {% for i, name in day_names %}
+          <label class="flex items-center gap-1 text-sm"><input type="checkbox" name="weekday" value="{{ i }}"> {{ name|slice:":3" }}</label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <div class="flex flex-wrap items-end gap-2">
+        <div>
+          <label for="slot-time" class="block text-sm font-medium text-ink mb-1">Time</label>
+          <input id="slot-time" name="time" type="time" class="input" required value="09:00">
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Add slot</button>
+      </div>
+    </form>
+    {% else %}
+    <p class="text-xs text-ink-subtle">Only an Owner or Admin can change the slots.</p>
+    {% endif %}
+  </section>
+
+  <section class="card card-pad space-y-3" aria-labelledby="best-title">
+    <div>
+      <h2 id="best-title" class="font-semibold text-ink">When your posts do best</h2>
+      <p class="text-sm text-ink-subtle">From your own posts of the last 90 days that have been out at least 3 days (stories left out): likes, comments, saves and shares per person reached, by the time they went out. A guide for choosing slots, not a promise.</p>
+    </div>
+    {% for b in best %}
+    <div data-best="{{ b.platform }}">
+      <h3 class="text-sm font-medium text-ink">{{ b.platform|platform_display_name }}</h3>
+      {% if not b.enough %}
+      <p class="text-sm text-ink-subtle">Not enough posts yet: {{ b.measured }} of {{ b.needed }} posts with numbers.</p>
+      {% elif not b.top %}
+      <p class="text-sm text-ink-subtle">No time of the week has {{ best_min_per_time }} posts with numbers yet. Your typical post: {{ b.typical }}%.</p>
+      {% else %}
+      <ol class="mt-1 space-y-1">
+        {% for t in b.top %}
+        <li class="text-sm text-ink"><span class="font-medium">{{ t.day }} {{ t.label }}</span> <span class="text-ink-subtle">· {{ t.percent }}% from {{ t.posts }} posts</span></li>
+        {% endfor %}
+      </ol>
+      <p class="text-xs text-ink-subtle mt-1">Your typical post: {{ b.typical }}%.</p>
+      {% endif %}
+    </div>
+    {% empty %}
+    <p class="text-sm text-ink-subtle">Connect Instagram or Facebook to see when your posts do best.</p>
+    {% endfor %}
+  </section>
+</div>
+{% endblock %}

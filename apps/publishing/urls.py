@@ -1,6 +1,16 @@
 from django.urls import path
 
-from . import views
+from . import (
+    ai_views,
+    analytics_views,
+    bio_views,
+    import_views,
+    media_views,
+    recurring_views,
+    sales_views,
+    scheduling_views,
+    views,
+)
 
 app_name = "publishing"
 
@@ -21,6 +31,10 @@ urlpatterns = [
     path("campaigns/", views.campaign_manage, name="campaigns"),
     # Calendar
     path("calendar/", views.publishing_calendar, name="calendar"),
+    # Scheduling (release gate cs_scheduling)
+    path("calendar/move/", scheduling_views.calendar_move, name="calendar-move"),
+    path("slots/", scheduling_views.slots_manage, name="slots"),
+    path("slots/next/", scheduling_views.slot_next, name="slot-next"),
     # Library
     path("library/", views.publishing_library, name="library"),
     path("library/bulk/", views.publishing_library_bulk, name="library-bulk"),
@@ -29,6 +43,16 @@ urlpatterns = [
     path("settings/", views.publishing_settings_update, name="settings"),
     # Posts
     path("posts/media/upload/", views.post_media_upload, name="post-media-upload"),
+    path(
+        "posts/media/direct/start/",
+        views.post_media_direct_start,
+        name="post-media-direct-start",
+    ),
+    path(
+        "posts/media/direct/confirm/",
+        views.post_media_direct_confirm,
+        name="post-media-direct-confirm",
+    ),
     path("new/", views.post_new, name="post-new"),
     path("new/readiness/", views.composer_readiness, name="composer-readiness"),
     path("new/autosave/", views.composer_autosave, name="composer-autosave"),
@@ -86,6 +110,56 @@ urlpatterns = [
         views.caption_draft_result,
         name="caption-result",
     ),
+    # Account analytics (release gate cs_analytics)
+    path("analytics/", analytics_views.analytics, name="analytics"),
+    path("analytics/print/", analytics_views.analytics_print, name="analytics-print"),
+    path("analytics/export.csv", analytics_views.analytics_csv, name="analytics-csv"),
+    path(
+        "analytics/weekly/", analytics_views.analytics_weekly, name="analytics-weekly"
+    ),
+    # Recurring posts (release gate cs_recurring)
+    path("recurring/", recurring_views.recurring_list, name="recurring"),
+    path(
+        "recurring/<int:pk>/",
+        recurring_views.recurring_update,
+        name="recurring-update",
+    ),
+    path(
+        "recurring/new/<int:pk>/",
+        recurring_views.recurring_create,
+        name="recurring-create",
+    ),
+    # Media library, editor, templates and hashtag sets (release gate cs_media_library)
+    # Content Studio AI tools (cs_ai_plus).
+    path("ai/", ai_views.ai_tools, name="ai-tools"),
+    path("ai/rewrite/", ai_views.rewrite, name="ai-rewrite"),
+    path("ai/hashtags/", ai_views.hashtags, name="ai-hashtags"),
+    path("ai/result/<int:draft_id>/", ai_views.result, name="ai-result"),
+    path("ai/ideas/", ai_views.ideas, name="ai-ideas"),
+    path("ai/ideas/<int:draft_id>/", ai_views.ideas_status, name="ai-ideas-status"),
+    path("ai/ideas/<int:draft_id>/save/", ai_views.idea_save, name="ai-idea-save"),
+    path("media/", media_views.library, name="media-library"),
+    path("media/<int:pk>/", media_views.asset_update, name="media-update"),
+    path("media/<int:pk>/edit/", media_views.asset_edit, name="media-edit"),
+    path("media/<int:pk>/cover/", media_views.asset_cover, name="media-cover"),
+    path("media/picker.json", media_views.picker, name="media-picker"),
+    path(
+        "media/stock/search.json", media_views.stock_search, name="media-stock-search"
+    ),
+    path("media/stock/import/", media_views.stock_import, name="media-stock-import"),
+    path("media/snippets/", media_views.snippets, name="media-snippets"),
+    # Bulk import (release gate cs_csv_import)
+    path("import/", import_views.csv_import_page, name="csv-import"),
+    # Which posts sold (release gate cs_sales_report)
+    path("sales/", sales_views.sales_report, name="sales"),
+    # Link-in-bio page (release gate cs_bio_page)
+    path("bio/", bio_views.bio_manage, name="bio"),
+    path(
+        "bio/tiles/add/<int:variant_pk>/",
+        bio_views.bio_tile_add,
+        name="bio-tile-add",
+    ),
+    path("bio/tiles/<int:pk>/", bio_views.bio_tile_update, name="bio-tile-update"),
     # Reconciliation (Step 4.7B)
     path("reconciliation/", views.reconciliation_queue, name="reconciliation-queue"),
     path(

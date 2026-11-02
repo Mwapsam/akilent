@@ -248,6 +248,8 @@ Narrow: review and channels first (what needs doing), then the post, then detail
 
     {% include "publishing/_results_card.html" %}
 
+    {% if released.cs_recurring and post.status != "cancelled" %}{% include "publishing/_repeat_card.html" %}{% endif %}
+
     {% with published=post|published_channels %}
     {% if published %}
     <section class="card card-pad space-y-3" aria-labelledby="pd-performance">

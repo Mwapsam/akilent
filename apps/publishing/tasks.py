@@ -281,6 +281,9 @@ def publish_variant_async(self, variant_id: int, scheduled: bool = False) -> str
         return "published"
     if result.get("held"):
         return "held_channel_off"
+    if result.get("status") == ContentPostVariant.Status.SCHEDULED:
+        # Deferred (Facebook's daily Reel limit): the scheduler sends it at its new time.
+        return "deferred"
     if result.get("status") == ContentPostVariant.Status.PROCESSING:
         return "processing"
     if result.get("reconciling"):
@@ -566,6 +569,7 @@ def escalate_exhausted_processing_variants(max_age_hours: int = 48) -> dict:
     from datetime import timedelta
 
     from django.db import transaction
+    from django.db.models import Q
 
     from .models import ContentPostVariant
 
@@ -576,7 +580,10 @@ def escalate_exhausted_processing_variants(max_age_hours: int = 48) -> dict:
     # processing_started_at indicates when the provider first entered async processing.
     # This is independent of polling attempts; it measures provider operation duration.
     stale_filter = ContentPostVariant.objects.filter(
-        platform="instagram",
+        # Instagram video containers, and Facebook Reels / video stories (the only
+        # Facebook channels that process; they carry their video id).
+        Q(platform="instagram")
+        | Q(platform="facebook", metadata__has_key="fb_video_id"),
         status=ContentPostVariant.Status.PROCESSING,
         processing_started_at__lte=exhaustion_threshold,
     )
@@ -758,3 +765,210 @@ def alert_publishing_problems() -> dict:
     from .alerts import send_due_alerts
 
     return send_due_alerts()
+
+
+@shared_task(queue="outbound")
+def archive_stale_bio_tiles() -> int:
+    """Archive bio-page tiles older than their page's limit (pinned tiles stay)."""
+    from .bio import archive_stale_tiles
+
+    return archive_stale_tiles()
+
+
+@shared_task(queue="outbound")
+def check_bio_links() -> int:
+    """Re-read each live bio page's Instagram website field, so the page can warn
+    when the bio doesn't point at it."""
+    from .bio import check_instagram_website
+    from .models import BioPage
+
+    return sum(
+        1
+        for page in BioPage.objects.filter(is_active=True).select_related("account")
+        if check_instagram_website(page)
+    )
+
+
+@shared_task(queue="media", soft_time_limit=300, time_limit=330)
+def probe_media(check_id: int) -> str:
+    """Hash a media file and, for a video, read it with ffprobe (apps.publishing.media_checks).
+    Runs on its own worker so large files never hold up publishing."""
+    from .media_checks import run
+    from .models import MediaCheck
+
+    check = MediaCheck.objects.filter(pk=check_id).first()
+    if check is None:
+        return "not_found"
+    return run(check).status
+
+
+@shared_task(queue="outbound")
+def alert_media_check_backlog() -> int:
+    """Media checks stuck behind a queue: email each business's Owners once a day.
+    Operators see the same in the console (apps.publishing.api.attention_reasons)."""
+    from django.core.cache import cache
+
+    from apps.accounts.notifications import notify_team
+
+    from .media_checks import backlog
+
+    stuck = backlog()
+    if not stuck.exists():
+        return 0
+    logger.error(
+        "Media checks are behind: %s pending, oldest since %s",
+        stuck.count(),
+        stuck.first().created_at.isoformat(),
+    )
+    sent = 0
+    for account_id in stuck.values_list("account_id", flat=True).distinct():
+        if not cache.add(f"media-backlog-alert:{account_id}", 1, timeout=86400):
+            continue
+        from apps.accounts.models import Account
+
+        account = Account.objects.get(pk=account_id)
+        try:
+            notify_team(
+                account,
+                to="owners",
+                subject="Your media checks are running slowly",
+                text=(
+                    "Akilent checks each video before it can be scheduled, and those "
+                    "checks are taking longer than usual. Your posts are saved: you can "
+                    "keep them as drafts and schedule them once the check finishes. "
+                    "We're looking into it."
+                ),
+                path="/publishing/library/",
+                reason=(
+                    "You're getting this because you're an Owner or Admin of "
+                    f"{account.company_name} in Akilent."
+                ),
+            )
+            sent += 1
+        except Exception:
+            logger.exception("media backlog alert failed for account=%s", account_id)
+    return sent
+
+
+@shared_task(queue="outbound")
+def poll_fb_video_variants() -> int:
+    """Finish Facebook Reels and video stories once Meta has processed them."""
+    from .models import ContentPostVariant
+    from .services import refresh_parent_post, try_finish_fb_video_variant
+
+    qs = ContentPostVariant.objects.filter(
+        platform=ContentPostVariant.Platform.FACEBOOK,
+        status=ContentPostVariant.Status.PROCESSING,
+    ).exclude(metadata__fb_video_id__exact="")
+    count = 0
+    for pk in qs.values_list("pk", flat=True):
+        try:
+            with transaction.atomic():
+                variant = (
+                    ContentPostVariant.objects.select_for_update()
+                    .filter(pk=pk, status=ContentPostVariant.Status.PROCESSING)
+                    .first()
+                )
+                if variant is None:
+                    continue
+                variant.metadata = {
+                    **(variant.metadata or {}),
+                    "last_poll_attempt": timezone.now().isoformat(),
+                }
+                variant.save(update_fields=["metadata"])
+            if try_finish_fb_video_variant(variant):
+                count += 1
+            refresh_parent_post(variant.post)
+        except Exception:
+            logger.exception("poll_fb_video_variants error for variant=%s", pk)
+    return count
+
+
+@shared_task(queue="outbound")
+def collect_account_metrics() -> int:
+    """Read each connected channel's settled days (Phase 2b, ``cs_analytics``). Does
+    nothing until released, so no new calls reach Meta before then."""
+    from django.db.models import Q
+
+    from apps.accounts.models import Account
+
+    from . import account_metrics
+    from .metrics_collector import MetricsRateLimited
+
+    if not account_metrics.is_released():
+        return 0
+    count = 0
+    accounts = Account.objects.filter(
+        Q(instagram_accounts__is_active=True)
+        | Q(facebook_page_connection__status="active")
+    ).distinct()
+    for account in accounts:
+        for platform in account_metrics.PLATFORMS:
+            if account_metrics.connection(account, platform) is None:
+                continue
+            for day in account_metrics.days_to_collect(account, platform):
+                try:
+                    account_metrics.collect_day(account, platform, day)
+                    count += 1
+                except MetricsRateLimited:
+                    logger.info("Account metrics rate limited; trying later")
+                    return count
+                except Exception:
+                    logger.exception(
+                        "account metrics failed account=%s %s %s",
+                        account.pk,
+                        platform,
+                        day,
+                    )
+    return count
+
+
+@shared_task(queue="outbound")
+def send_weekly_reports() -> int:
+    """The weekly email (``cs_analytics``), Monday from 08:00 on each business's clock,
+    once a week."""
+    from . import account_metrics
+
+    if not account_metrics.is_released():
+        return 0
+    return account_metrics.send_weekly_reports()
+
+
+@shared_task(queue="outbound")
+def run_recurring_posts() -> int:
+    """Make the copies of recurring posts due within a day (``cs_recurring``)."""
+    from . import recurring
+
+    if not recurring.is_released():
+        return 0
+    return len(recurring.run_due())
+
+
+@shared_task(queue="media")
+def grab_cover_frame(asset_pk: int, seconds: float, user_pk: int | None = None) -> int:
+    """Take one frame of a library video as a Reel cover (``cs_media_library``). On
+    the media queue with ffprobe, so it never delays publishing. Returns the new
+    asset's id, or 0; a failure is kept for the library page to show."""
+    from django.contrib.auth.models import User
+    from django.core.cache import cache
+
+    from . import media_library
+    from .models import MediaAsset
+
+    asset = MediaAsset.objects.filter(pk=asset_pk).select_related("account").first()
+    if asset is None:
+        return 0
+    key = media_library.cover_status_key(asset)
+    try:
+        cover = media_library.grab_cover(
+            asset, seconds, User.objects.filter(pk=user_pk).first() if user_pk else None
+        )
+    except media_library.LibraryError as exc:
+        cache.set(key, {"error": str(exc)}, 3600)
+        return 0
+    except Exception:
+        logger.exception("cover frame failed for asset=%s", asset_pk)
+        cache.set(key, {"error": "Couldn't take a frame. Try again."}, 3600)
+        return 0
+    cache.set(key, {"cover": cover.pk}, 3600)
+    return cover.pk

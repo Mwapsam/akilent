@@ -9,6 +9,8 @@
  *   readiness  POST -> {issues: [{code, level, message, field, platform, blocks, warns, fix_url}]}
  *   autosave   POST -> {saved, post_id, version, wa_link_urls} | 409 conflict / not_draft
  *   upload     POST one file -> {url, name, content_type}
+ *   upload_start / upload_confirm  (when d.direct_upload) the file goes straight to S3:
+ *              start -> {url, fields, token}, POST the file there, confirm -> as upload
  */
 (function () {
   "use strict";
@@ -17,7 +19,9 @@
   var VERBS = { publish_now: "publish", schedule: "schedule", submit_review: "submit for review" };
   var AUTOSAVE_DELAY = 1500;
   var READINESS_DELAY = 800;
+  var MEDIA_CHECK_POLL = 5000; // re-check readiness while a video is being checked
   var RECOVERY_MAX_AGE = 14 * 24 * 3600 * 1000;
+  var HASH_IN_BROWSER_MAX = 100 * 1024 * 1024; // larger files are hashed by the server
 
   function editorData() {
     var el = document.getElementById("post-editor-data");
@@ -33,6 +37,31 @@
   // Looked up by id, not this.$refs: a method called from inside an x-for item gets
   // that item's scope, where $refs doesn't reach the form.
   function formEl() { return document.getElementById("composer-form"); }
+
+  // The file's SHA-256 in base64, for S3 to check the upload against; "" when the
+  // browser can't (no Web Crypto, or a file too large to read into memory).
+  async function sha256Base64(file) {
+    if (file.size > HASH_IN_BROWSER_MAX || !(window.crypto && window.crypto.subtle)) return "";
+    try {
+      var digest = new Uint8Array(await window.crypto.subtle.digest("SHA-256", await file.arrayBuffer()));
+      var bin = "";
+      for (var i = 0; i < digest.length; i++) bin += String.fromCharCode(digest[i]);
+      return window.btoa(bin);
+    } catch (e) {
+      return "";
+    }
+  }
+
+  async function postJson(url, fields) {
+    var fd = new FormData();
+    Object.keys(fields).forEach(function (k) { fd.append(k, fields[k]); });
+    fd.append("csrfmiddlewaretoken", csrf());
+    var r = await fetch(url, { method: "POST", body: fd });
+    var data = {};
+    try { data = await r.json(); } catch (e) { /* not JSON */ }
+    if (!r.ok || data.error) throw new Error(data.error || "Upload failed (" + r.status + ").");
+    return data;
+  }
 
   function csrf() {
     var el = document.querySelector("#composer-form [name=csrfmiddlewaretoken]");
@@ -84,11 +113,24 @@
       _onOnline: null,
       _onOffline: null,
       _readinessSeq: 0,
+      _mediaCheckTimer: null,
       _undoTimer: null,
       _genPoll: null,
       // ── Server state ──────────────────────────────────────────────────────
       d: d,
       urls: d.urls || {},
+      directUpload: !!d.direct_upload,
+      slotNote: "",
+      // Media library (cs_media_library): the "From library" picker, caption templates
+      // and hashtag sets.
+      library: d.library || null,
+      libraryOpen: false,
+      libraryItems: [],
+      libraryQuery: "",
+      libraryLoading: false,
+      libraryError: "",
+      slotSetup: false,
+      slotLoading: false,
       limits: d.constraints || { caption_max: {}, hashtags_max: {} },
       postId: d.post_id || null,
       clientKey: d.client_key || "",
@@ -159,6 +201,10 @@
       captionDraftId: "",
       // The suggestion the caption came from, sent on save so the post is marked AI-assisted.
       aiPick: null,
+      // cs_ai_plus: rewrites and hashtag suggestions, shown until picked or dismissed.
+      // aiAssist holds the ids of those used, sent on save (the post is marked AI-assisted).
+      aiTool: { busy: "", error: "", rewrite: null, tags: [], tagsDraft: "" },
+      aiAssist: [],
 
       // ── Saving and readiness ──────────────────────────────────────────────
       autosaveEnabled: d.autosave !== false,
@@ -337,6 +383,7 @@
           this.hashtagsText = u.prev.hashtagsText;
           if (u.prev.tab !== "all") this.platformCaptions[u.prev.tab] = u.prev.override;
           this.aiPick = u.prevPick || null;
+          if (u.prevAssist) this.aiAssist = u.prevAssist;
         }
         this.undo = null;
         this.touched();
@@ -572,6 +619,7 @@
         }
         var id = item.id;
         var find = function () { return self.media.find(function (m) { return m.id === id; }); };
+        if (this.directUpload) return this.uploadDirect(file, find);
 
         var fd = new FormData();
         fd.append("file", file);
@@ -600,6 +648,132 @@
         };
         xhr.open("POST", this.urls.upload);
         xhr.send(fd);
+      },
+
+      // Phase 0c: start -> the file straight to S3 -> confirm. The server builds the key
+      // and checks the object, so the browser only ever names the file.
+      uploadDirect: async function (file, find) {
+        var self = this;
+        var fail = function (message) {
+          var m = find();
+          if (m) Object.assign(m, { status: "error", error: message });
+        };
+        var started;
+        try {
+          started = await postJson(this.urls.upload_start, {
+            name: file.name, content_type: file.type, size: file.size, sha256: await sha256Base64(file),
+          });
+        } catch (e) {
+          return fail(e.message);
+        }
+        if (!find()) return; // removed while starting
+        var fd = new FormData();
+        Object.keys(started.fields).forEach(function (k) { fd.append(k, started.fields[k]); });
+        fd.append("file", file); // S3 ignores fields after the file
+        var xhr = new XMLHttpRequest();
+        xhr.upload.onprogress = function (e) {
+          var m = find();
+          // The last 1% is the confirm step.
+          if (m && e.lengthComputable) m.progress = Math.min(99, Math.round((e.loaded / e.total) * 100));
+        };
+        xhr.onload = async function () {
+          if (!find()) return; // removed while uploading
+          if (xhr.status < 200 || xhr.status >= 300) return fail("Upload failed (" + xhr.status + "). Try again.");
+          try {
+            var data = await postJson(self.urls.upload_confirm, { token: started.token });
+            var m = find();
+            if (!m) return;
+            Object.assign(m, { url: data.url, status: "done", progress: 100, file: null });
+            self.announce(m.name + " uploaded.");
+            self.touched();
+          } catch (e) {
+            fail(e.message);
+          }
+        };
+        xhr.onerror = function () { fail("Network error. Retry when you're back online."); };
+        xhr.open("POST", started.url);
+        xhr.send(fd);
+      },
+
+      // Posting slots (cs_scheduling): fill in the next slot none of the chosen channels
+      // is already scheduled at. Only fills the time; saving checks it as usual.
+      fillNextSlot: async function () {
+        var self = this;
+        this.slotLoading = true;
+        this.slotNote = "";
+        this.slotSetup = false;
+        var qs = this.selectedPlatforms.map(function (p) { return "platforms=" + encodeURIComponent(p); }).join("&");
+        try {
+          var r = await fetch(this.urls.slot_next + "?" + qs, { headers: { Accept: "application/json" } });
+          var data = await r.json();
+          if (!data.at) {
+            this.slotNote = data.reason || "No free slot.";
+            this.slotSetup = !!data.setup;
+            return;
+          }
+          this.scheduledAt = data.at;
+          if (this.perChannel) this.selectedPlatforms.forEach(function (p) { self.channelTimes[p] = data.at; });
+          this.slotNote = "Next free slot filled in.";
+          this.touched();
+        } catch (e) {
+          this.slotNote = "Couldn't find a slot right now. Try again.";
+        } finally {
+          this.slotLoading = false;
+        }
+      },
+
+      openLibrary: function () {
+        this.libraryOpen = true;
+        this.loadLibrary();
+      },
+
+      loadLibrary: async function () {
+        if (!this.library) return;
+        this.libraryLoading = true;
+        this.libraryError = "";
+        var kind = { image: "image", carousel: "image", video: "video", reel: "video" }[this.mediaType] || "";
+        try {
+          var r = await fetch(this.library.picker + "?kind=" + kind + "&q=" + encodeURIComponent(this.libraryQuery),
+            { headers: { Accept: "application/json" } });
+          var data = await r.json();
+          if (!r.ok) throw new Error(data.error || "Couldn't load the library.");
+          this.libraryItems = data.items || [];
+        } catch (e) {
+          this.libraryError = e.message || "Couldn't load the library.";
+        } finally {
+          this.libraryLoading = false;
+        }
+      },
+
+      // Adds the file as already uploaded: the same URL any upload would give.
+      pickAsset: function (a) {
+        this.media.push(mediaItem(a.url, { name: a.name, kind: a.kind }));
+        this.announce(a.name + " added from the library.");
+        this.libraryOpen = false;
+        this.touched();
+      },
+
+      // A template goes into the caption being edited (all channels, or one channel's
+      // own version), after whatever is there.
+      insertTemplate: function (t) {
+        if (!t) return;
+        var join = function (cur) { return cur.trim() ? cur.replace(/\s+$/, "") + "\n\n" + t.body : t.body; };
+        if (this.captionTab === "all") {
+          this.caption = join(this.caption);
+        } else {
+          this.platformCaptions[this.captionTab] = join(this.platformCaptions[this.captionTab] || "");
+          this.customized[this.captionTab] = true;
+        }
+        this.touched();
+      },
+
+      addHashtagSet: function (s) {
+        if (!s) return;
+        var have = this.hashtags();
+        var lower = have.map(function (t) { return t.toLowerCase(); });
+        s.tags.forEach(function (t) { if (lower.indexOf(t.toLowerCase()) === -1) { have.push(t); lower.push(t.toLowerCase()); } });
+        this.hashtagsText = have.map(function (t) { return "#" + t; }).join(" ");
+        this.touched();
       },
 
       retryUpload: function (item) {
@@ -729,6 +903,91 @@
         }, 1500);
       },
 
+      // ── AI rewrite and hashtags (cs_ai_plus) ──────────────────────────────
+      captionText: function () {
+        var tab = this.captionTab;
+        return tab !== "all" && this.customized[tab] ? this.platformCaptions[tab] || "" : this.caption;
+      },
+
+      // Ask for a draft, then poll until it's finished. Resolves with the draft's JSON.
+      aiDraft: async function (url, fields) {
+        var fd = new FormData();
+        Object.keys(fields).forEach(function (k) { fd.append(k, fields[k]); });
+        fd.append("csrfmiddlewaretoken", csrf());
+        var r = await fetch(url, { method: "POST", body: fd });
+        var started = {};
+        try { started = await r.json(); } catch (e) { /* not JSON */ }
+        if (!r.ok || started.error) throw new Error(started.error || "That didn't work. Try again.");
+        var resultUrl = this.d.ai_plus.result.replace(/\/0\/$/, "/" + started.draft_id + "/");
+        for (var i = 0; i < 40; i++) {
+          await new Promise(function (ok) { setTimeout(ok, 1500); });
+          var res;
+          try { res = await (await fetch(resultUrl)).json(); } catch (e) { continue; }
+          if (res.status === "ready") return res;
+          if (res.status === "error") throw new Error(res.error || "That didn't work. Try again.");
+        }
+        throw new Error("That took too long. Try again.");
+      },
+
+      aiRewrite: async function (instruction) {
+        if (this.aiTool.busy) return;
+        Object.assign(this.aiTool, { busy: "rewrite", error: "", rewrite: null });
+        try {
+          var res = await this.aiDraft(this.d.ai_plus.rewrite, {
+            caption: this.captionText(), instruction: instruction, platform: this.briefPlatform(),
+          });
+          this.aiTool.rewrite = Object.assign({ id: res.id, warnings: res.warnings || [] }, res.result);
+        } catch (e) {
+          this.aiTool.error = e.message;
+        }
+        this.aiTool.busy = "";
+      },
+
+      // Applied only on an explicit pick, and undoable.
+      useRewrite: function () {
+        var rw = this.aiTool.rewrite;
+        if (!rw) return;
+        var tab = this.captionTab;
+        var intoOverride = tab !== "all" && this.customized[tab];
+        this.setUndo({
+          type: "ai", message: "Caption replaced with the rewrite.",
+          prev: { caption: this.caption, hashtagsText: this.hashtagsText, tab: intoOverride ? tab : "all", override: intoOverride ? this.platformCaptions[tab] : "" },
+          prevPick: this.aiPick,
+          prevAssist: this.aiAssist.slice(),
+        });
+        if (intoOverride) this.platformCaptions[tab] = rw.after;
+        else this.caption = rw.after;
+        if (this.aiAssist.indexOf(rw.id) === -1) this.aiAssist.push(rw.id);
+        this.aiTool.rewrite = null;
+        this.touched();
+      },
+
+      aiHashtags: async function () {
+        if (this.aiTool.busy) return;
+        Object.assign(this.aiTool, { busy: "hashtags", error: "", tags: [] });
+        try {
+          var res = await this.aiDraft(this.d.ai_plus.hashtags, {
+            caption: this.captionText(), existing: this.hashtags().join(" "), platform: this.briefPlatform(),
+          });
+          this.aiTool.tags = (res.result && res.result.hashtags) || [];
+          this.aiTool.tagsDraft = res.id;
+        } catch (e) {
+          this.aiTool.error = e.message;
+        }
+        this.aiTool.busy = "";
+      },
+
+      addSuggestedTag: function (tag) {
+        var have = this.hashtags();
+        if (have.map(function (t) { return t.toLowerCase(); }).indexOf(tag.toLowerCase()) === -1) {
+          have.push(tag);
+          this.hashtagsText = have.map(function (t) { return "#" + t; }).join(" ");
+        }
+        this.aiTool.tags = this.aiTool.tags.filter(function (t) { return t !== tag; });
+        if (this.aiAssist.indexOf(this.aiTool.tagsDraft) === -1) this.aiAssist.push(this.aiTool.tagsDraft);
+        this.touched();
+      },
+
       // Applied only on an explicit pick, and undoable.
       selectOption: function (opt) {
         var tab = this.captionTab;
@@ -800,6 +1059,12 @@
           this.issues = data.issues || [];
           this.issuesLoaded = true;
           this.readinessFailed = false;
+          // A video still being checked on the server: ask again until it's done.
+          var self = this;
+          clearTimeout(this._mediaCheckTimer);
+          if (this.issues.some(function (i) { return i.code === "media_checking"; })) {
+            this._mediaCheckTimer = setTimeout(function () { self.checkReadiness(); }, MEDIA_CHECK_POLL);
+          }
         } catch (e) {
           if (seq === this._readinessSeq) this.readinessFailed = true;
         }

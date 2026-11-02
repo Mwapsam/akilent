@@ -34,6 +34,7 @@
     {% if not existing_post %}<input type="hidden" name="brief_cta" :value="brief.cta">{% endif %}
     <input type="hidden" name="ai_draft" :value="aiPick ? aiPick.draft : ''">
     <input type="hidden" name="ai_option" :value="aiPick ? aiPick.option : ''">
+    <input type="hidden" name="ai_assist" :value="aiAssist.join(',')">
 
     <div class="cmp-grid">
       <div class="cmp-editor" :class="mobileView === 'preview' && 'cmp-hide-mobile'">

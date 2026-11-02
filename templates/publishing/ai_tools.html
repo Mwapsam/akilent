@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}AI tools — {{ site.app_name|default:"Akilent" }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
+</div>
+
+{% include "publishing/_subnav.html" %}
+
+<div class="max-w-3xl space-y-4">
+  {% if off_reason %}
+  <div class="tone-info rounded-xl p-3 text-sm" role="status">
+    AI tools are off: {{ off_reason }}
+    {% if can_admin %}<a href="{% url 'settings-ai' %}" class="underline font-medium">AI settings</a>{% endif %}
+  </div>
+  {% endif %}
+
+  <section class="card card-pad space-y-3" aria-labelledby="ai-voice-title">
+    <div>
+      <h2 id="ai-voice-title" class="font-semibold text-ink">Brand voice</h2>
+      <p class="text-sm text-ink-subtle">How your posts should sound. AI follows it when it suggests captions, rewrites them or suggests ideas. It's style only: AI still takes facts like prices only from your AI notes.</p>
+    </div>
+    <form method="post" class="space-y-2" hx-boost="false">
+      {% csrf_token %}
+      <label for="ai-voice" class="sr-only">Brand voice</label>
+      <textarea id="ai-voice" name="brand_voice" rows="5" maxlength="{{ max_voice }}" class="input w-full"
+                {% if not can_admin %}disabled{% endif %}
+                placeholder="Warm and plain-spoken, like talking to a neighbour. Short sentences. One emoji at most. Never say &quot;cheap&quot;; say &quot;good value&quot;.">{{ brand_voice }}</textarea>
+      {% if can_admin %}
+      <button type="submit" class="btn btn-primary btn-sm">Save brand voice</button>
+      {% else %}
+      <p class="text-xs text-ink-subtle">Only an Owner or Admin can change the brand voice.</p>
+      {% endif %}
+    </form>
+  </section>
+
+  <section id="ideas" class="card card-pad space-y-3" aria-labelledby="ai-ideas-title">
+    <div>
+      <h2 id="ai-ideas-title" class="font-semibold text-ink">Post ideas from what sold</h2>
+      <p class="text-sm text-ink-subtle">AI looks at your posts from the last {{ idea_days }} days that started the most WhatsApp chats, leads and paid orders, and suggests new posts that build on them. Only posts the sales report can rank count: chats credited to the post for sure, and enough of them to judge. Ideas go to Planning; nothing is posted.</p>
+    </div>
+    {% if sources %}
+    <ul class="text-sm divide-y divide-border">
+      {% for s in sources %}
+      <li class="py-2" data-source="{{ s.id }}">
+        <a class="underline" href="{% url 'publishing:post-detail' s.id %}">Post {{ s.id }}</a>:
+        {{ s.chats }} chat{{ s.chats|pluralize }}, {{ s.leads }} lead{{ s.leads|pluralize }}, {{ s.paid_orders }} paid order{{ s.paid_orders|pluralize }}
+        <span class="block text-xs text-ink-subtle truncate">{{ s.caption|default:"(no caption)" }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% if not off_reason %}
+    <form method="post" action="{% url 'publishing:ai-ideas' %}" hx-boost="false">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-secondary btn-sm">Suggest ideas</button>
+    </form>
+    {% endif %}
+    {% else %}
+    <p class="text-sm text-ink-subtle" data-ideas-empty>Not enough results yet. Ideas need at least one post in the last {{ idea_days }} days that the sales report can rank.</p>
+    {% endif %}
+    {% include "publishing/_ai_ideas.html" %}
+  </section>
+</div>
+{% endblock %}

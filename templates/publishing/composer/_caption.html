@@ -4,6 +4,22 @@
     <span class="cmp-hint" x-show="customizedList().length" x-cloak>
       Customized for <span x-text="customizedList().map(platformName).join(' and ')"></span>
     </span>
+    {% if released.cs_media_library %}
+    <div class="flex flex-wrap items-center gap-2" x-show="(d.caption_templates || []).length || (d.hashtag_sets || []).length" x-cloak>
+      <label class="sr-only" for="cmp-template">Insert a caption template</label>
+      <select id="cmp-template" class="select select-sm" x-show="(d.caption_templates || []).length"
+              @change="insertTemplate(d.caption_templates[$event.target.value]); $event.target.value = ''">
+        <option value="">Templates</option>
+        <template x-for="(t, i) in d.caption_templates || []" :key="i"><option :value="i" x-text="t.name"></option></template>
+      </select>
+      <label class="sr-only" for="cmp-hashtag-set">Add a hashtag set</label>
+      <select id="cmp-hashtag-set" class="select select-sm" x-show="(d.hashtag_sets || []).length"
+              @change="addHashtagSet(d.hashtag_sets[$event.target.value]); $event.target.value = ''">
+        <option value="">Hashtag sets</option>
+        <template x-for="(s, i) in d.hashtag_sets || []" :key="i"><option :value="i" x-text="s.name"></option></template>
+      </select>
+    </div>
+    {% endif %}
   </div>
 
   <div class="cmp-tabs" role="tablist" aria-label="Caption version">
@@ -65,6 +81,45 @@
     <button type="button" class="underline font-medium" @click="undoLast()">Undo</button>
   </div>
 
+  {% comment %}
+    cs_ai_plus: rewrite the caption being edited, or suggest hashtags. A suggestion is used
+    only when picked, and the post is then saved, checked and approved as usual.
+  {% endcomment %}
+  <template x-if="d.ai_plus">
+    <div class="mt-3 space-y-2" data-not-post>
+      <div class="flex flex-wrap items-center gap-2">
+        <label class="sr-only" for="cmp-rewrite">Rewrite the caption with AI</label>
+        <select id="cmp-rewrite" class="select select-sm w-auto" :disabled="!!aiTool.busy || !captionText().trim()"
+                @change="aiRewrite($event.target.value); $event.target.value = ''">
+          <option value="">Rewrite with AI</option>
+          <template x-for="r in d.ai_plus.rewrites" :key="r.key"><option :value="r.key" x-text="r.label"></option></template>
+        </select>
+        <button type="button" class="btn btn-ghost btn-sm" :disabled="!!aiTool.busy || !captionText().trim()" @click="aiHashtags()">
+          Suggest hashtags
+        </button>
+        <span class="text-xs text-ink-subtle" x-show="aiTool.busy" x-cloak role="status">Writing…</span>
+      </div>
+      <p class="text-xs text-coral-700" x-show="aiTool.error" x-text="aiTool.error" x-cloak role="alert"></p>
+
+      <div x-show="aiTool.rewrite" x-cloak class="rounded-xl border border-border p-3 text-sm">
+        <p class="text-xs font-semibold text-ink-subtle">Suggested rewrite</p>
+        <p class="mt-1 whitespace-pre-line">
+          <template x-for="(part, i) in (aiTool.rewrite && aiTool.rewrite.diff) || []" :key="i">
+            <span :class="part[0] === 'del' ? 'line-through text-coral-700' : ''"
+                  :style="part[0] === 'add' ? 'background: var(--tone-teal-bg); color: var(--tone-teal-fg)' : ''" x-text="part[1] + ' '"></span>
+          </template>
+        </p>
+        <ul class="mt-1 text-xs text-amber-800" x-show="aiTool.rewrite && aiTool.rewrite.warnings.length">
+          <template x-for="(w, i) in (aiTool.rewrite && aiTool.rewrite.warnings) || []" :key="i"><li x-text="w"></li></template>
+        </ul>
+        <div class="mt-2 flex gap-2">
+          <button type="button" class="btn btn-primary btn-sm" @click="useRewrite()">Use this</button>
+          <button type="button" class="btn btn-ghost btn-sm" @click="aiTool.rewrite = null">Discard</button>
+        </div>
+      </div>
+    </div>
+  </template>
+
   {# Counted as published: caption, the call to action line, then hashtags. #}
   <div class="cmp-meter" aria-live="polite">
     <template x-for="p in meterPlatforms()" :key="p">
@@ -79,6 +134,14 @@
     <label for="hashtags-input" class="cmp-label">Hashtags <span class="font-normal text-ink-subtle">(separate with spaces)</span></label>
     <input type="text" id="hashtags-input" name="hashtags" class="input w-full" x-model="hashtagsText"
            placeholder="#summer #newin" autocapitalize="off" spellcheck="false">
+    <div class="flex flex-wrap items-center gap-2 mt-2" x-show="aiTool.tags.length" x-cloak data-not-post>
+      <span class="text-xs text-ink-subtle">Suggested, tap to add:</span>
+      <template x-for="tag in aiTool.tags" :key="tag">
+        <button type="button" class="text-xs rounded-full border border-border px-2 py-0.5 hover:bg-surface"
+                @click="addSuggestedTag(tag)" :aria-label="'Add hashtag ' + tag" x-text="'#' + tag"></button>
+      </template>
+      <button type="button" class="text-xs underline text-ink-subtle" @click="aiTool.tags = []">Dismiss</button>
+    </div>
     <p class="cmp-meter" x-show="selectedPlatforms.includes('instagram') && hashtags().length" x-cloak>
       <span :class="hashtags().length > limits.hashtags_max.instagram ? 'is-over' : ''"
             x-text="hashtags().length + ' / ' + limits.hashtags_max.instagram + ' hashtags on Instagram'"></span>

@@ -25,6 +25,7 @@ from apps.accounts.utils import get_current_account
 from apps.core.htmx import full_page_load
 from apps.core.module_gate import module_required
 
+from . import ai_plus, direct_upload
 from .composer import (
     EDITABLE_STATUSES as _EDITABLE_POST_STATUSES,
 )
@@ -466,6 +467,8 @@ def _calendar_entries(account, start, end) -> list[dict]:
     A post whose channels share a time is one entry. A post with a different time per
     channel shows one entry per channel time, each with that channel's own status.
     """
+    from .scheduling import can_move
+
     variants = (
         ContentPostVariant.objects.filter(
             post__account=account, scheduled_at__gte=start, scheduled_at__lte=end
@@ -490,6 +493,9 @@ def _calendar_entries(account, start, end) -> list[dict]:
                     "platforms": post.platforms,
                     "status": post.status,
                     "status_label": post.get_status_display(),
+                    # Can be dragged to another day (month view): every channel in it
+                    # hasn't gone out yet.
+                    "movable": all(can_move(v, post) for v in post_variants),
                 }
             )
             continue
@@ -501,6 +507,7 @@ def _calendar_entries(account, start, end) -> list[dict]:
                     "platforms": [v.platform],
                     "status": v.status,
                     "status_label": v.get_status_display(),
+                    "movable": can_move(v, post),
                 }
             )
 
@@ -522,6 +529,7 @@ def _calendar_entries(account, start, end) -> list[dict]:
                 "platforms": post.platforms or [],
                 "status": post.status,
                 "status_label": post.get_status_display(),
+                "movable": False,  # no channel time to move
             }
         )
     entries.sort(key=lambda e: e["at"])
@@ -574,6 +582,18 @@ def publishing_calendar(request):
     channel_filter = request.GET.get("channel", "")
     status_filter = request.GET.get("status", "")
     view_mode = request.GET.get("view", "week")
+    from .scheduling import is_released as scheduling_released
+
+    scheduling_on = scheduling_released()
+    if view_mode not in ("week", "list", "month") or (
+        view_mode == "month" and not scheduling_on
+    ):
+        view_mode = "week"
+    month = (
+        _month_context(request, account, today, tz, channel_filter, status_filter)
+        if view_mode == "month"
+        else {}
+    )
 
     entries = _calendar_entries(account, week_start_dt, week_end_dt)
     if channel_filter:
@@ -649,8 +669,69 @@ def publishing_calendar(request):
                 ),
             },
             "same_month": week_start.month == week_end.month,
+            "scheduling_on": scheduling_on,
+            **month,
         },
     )
+
+
+def _month_context(request, account, today, tz, channel_filter, status_filter):
+    """The month view (``cs_scheduling``): whole weeks from the Monday on or before the
+    1st to the Sunday on or after the last day, ``?month=YYYY-MM``."""
+    try:
+        first = datetime.date.fromisoformat(request.GET.get("month", "") + "-01")
+    except ValueError:
+        first = today.replace(day=1)
+    next_first = (first + datetime.timedelta(days=32)).replace(day=1)
+    prev_first = (first - datetime.timedelta(days=1)).replace(day=1)
+    last = next_first - datetime.timedelta(days=1)
+    grid_start = first - datetime.timedelta(days=first.weekday())
+    grid_end = last + datetime.timedelta(days=6 - last.weekday())
+
+    entries = _calendar_entries(
+        account,
+        timezone.make_aware(
+            datetime.datetime.combine(grid_start, datetime.time.min), tz
+        ),
+        timezone.make_aware(datetime.datetime.combine(grid_end, datetime.time.max), tz),
+    )
+    if channel_filter:
+        entries = [e for e in entries if channel_filter in e["platforms"]]
+    if status_filter:
+        entries = [e for e in entries if e["post"].status == status_filter]
+    by_day: dict = {}
+    for e in entries:
+        e["move_id"] = f"move-{e['post'].pk}-{'-'.join(e['platforms'])}"
+        by_day.setdefault(timezone.localtime(e["at"], tz).date(), []).append(e)
+
+    weeks, day = [], grid_start
+    while day <= grid_end:
+        week = []
+        for _ in range(7):
+            week.append(
+                {
+                    "date": day,
+                    "entries": by_day.get(day, []),
+                    "in_month": day.month == first.month,
+                }
+            )
+            day += datetime.timedelta(days=1)
+        weeks.append(week)
+    month_days: list[tuple[datetime.date, list, list]] = [
+        (d, [], by_day.get(d, []))
+        for d in (first + datetime.timedelta(days=i) for i in range(last.day))
+    ]
+    posts = {e["post"].pk for d, _, es in month_days for e in es}
+    return {
+        "month_first": first,
+        "month_weeks": weeks,
+        "month_days": month_days,
+        "month_posts": len(posts),
+        "month_has_content": bool(posts),
+        "month_param": first.strftime("%Y-%m"),
+        "prev_month_param": prev_first.strftime("%Y-%m"),
+        "next_month_param": next_first.strftime("%Y-%m"),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1203,15 +1284,7 @@ def campaign_manage(request):
 # ---------------------------------------------------------------------------
 
 
-_ALLOWED_MEDIA_TYPES = {
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "image/gif",
-    "video/mp4",
-    "video/quicktime",
-    "video/x-msvideo",
-}
+_ALLOWED_MEDIA_TYPES = direct_upload.ALLOWED_TYPES
 _MAX_MEDIA_BYTES = 100 * 1024 * 1024  # 100 MB
 
 
@@ -1237,15 +1310,111 @@ def post_media_upload(request):
     from django.core.files.base import ContentFile
     from django.core.files.storage import default_storage
 
-    path = default_storage.save(
-        f"publishing/{account.pk}/{f.name}", ContentFile(f.read())
-    )
+    data = f.read()
+    path = default_storage.save(f"publishing/{account.pk}/{f.name}", ContentFile(data))
     url = default_storage.url(path)
     # Ensure the URL is absolute so Meta's API can fetch it.
     # S3/CloudFront URLs are already absolute; local dev URLs need the host prepended.
     if url.startswith("/"):
         url = request.build_absolute_uri(url)
+
+    from .constraints import fb_formats_released
+
+    if fb_formats_released():
+        # Hash it while the bytes are here; a video is then probed on the media queue.
+        from .media_checks import record_upload
+
+        record_upload(account, url, data, f.content_type)
+    from .media_library import record_if_released
+
+    record_if_released(
+        account,
+        url,
+        kind="video" if f.content_type.startswith("video/") else "image",
+        mime=f.content_type,
+        name=f.name,
+        data=data,
+        user=request.user,
+    )
     return JsonResponse({"url": url, "name": f.name, "content_type": f.content_type})
+
+
+@login_required
+@module_required("content_studio")
+@require_POST
+def post_media_direct_start(request):
+    """Phase 0c: a presigned POST so the browser sends the file straight to S3.
+    Returns {url, fields, token}; the browser posts the file, then confirms."""
+    account = get_current_account(request)
+    if account is None or not direct_upload.available():
+        return JsonResponse({"error": "Not found"}, status=404)
+    try:
+        upload = direct_upload.start(
+            account,
+            name=request.POST.get("name", ""),
+            content_type=request.POST.get("content_type", ""),
+            size=request.POST.get("size"),
+            sha256=request.POST.get("sha256", ""),
+        )
+    except direct_upload.UploadRefused as exc:
+        return JsonResponse({"error": str(exc)}, status=exc.status)
+    return JsonResponse(upload)
+
+
+@login_required
+@module_required("content_studio")
+@require_POST
+def post_media_direct_confirm(request):
+    """Phase 0c: the file is in S3; check it and hand back its URL, as the upload view
+    does ({url, name, content_type})."""
+    account = get_current_account(request)
+    if account is None or not direct_upload.available():
+        return JsonResponse({"error": "Not found"}, status=404)
+    try:
+        return JsonResponse(
+            direct_upload.confirm(account, request.POST.get("token"), request.user)
+        )
+    except direct_upload.UploadRefused as exc:
+        return JsonResponse({"error": str(exc)}, status=exc.status)
+
+
+def _library_editor_data(account) -> dict:
+    """The composer's media library picker, caption templates and hashtag sets
+    (``cs_media_library``); nothing until released."""
+    from .media_library import is_released
+
+    if not is_released():
+        return {}
+    from .models import CaptionTemplate, HashtagSet
+
+    return {
+        "library": {"picker": reverse("publishing:media-picker")},
+        "caption_templates": [
+            {"name": t.name, "body": t.body}
+            for t in CaptionTemplate.objects.filter(account=account)
+        ],
+        "hashtag_sets": [
+            {"name": s.name, "tags": s.tags}
+            for s in HashtagSet.objects.filter(account=account)
+        ],
+    }
+
+
+def _ai_plus_editor_data(account) -> dict:
+    """The composer's AI rewrite and hashtag tools (``cs_ai_plus``); nothing until released
+    and AI is on for the business."""
+    if not ai_plus.available(account):
+        return {}
+    return {
+        "ai_plus": {
+            "rewrites": [
+                {"key": k, "label": v} for k, v in ai_plus.REWRITE_LABELS.items()
+            ],
+            "rewrite": reverse("publishing:ai-rewrite"),
+            "hashtags": reverse("publishing:ai-hashtags"),
+            "result": reverse("publishing:ai-result", args=[0]),
+        }
+    }
 
 
 def _post_new_submit(request, account):
@@ -1591,8 +1760,14 @@ def post_new(request):
                 "constraints": constraints.for_js(),
                 "destinations": dests,
                 "tz_name": timezone.get_current_timezone_name(),
+                "direct_upload": direct_upload.available(),
+                **_library_editor_data(account),
+                **_ai_plus_editor_data(account),
                 "urls": {
                     "upload": reverse("publishing:post-media-upload"),
+                    "upload_start": reverse("publishing:post-media-direct-start"),
+                    "upload_confirm": reverse("publishing:post-media-direct-confirm"),
+                    "slot_next": reverse("publishing:slot-next"),
                     "readiness": reverse("publishing:composer-readiness"),
                     "autosave": reverse("publishing:composer-autosave"),
                     "locations": reverse("publishing:location-search"),
@@ -1711,6 +1886,8 @@ def post_detail(request, pk):
             "requires_approval": requires_approval,
             "approval_valid": post.is_approval_valid(),
             "can_review": can_review,
+            # The bio page is changed only by an Owner or Admin (bio_views).
+            "can_edit_bio": is_account_admin(request.user, account),
             "approval_logs": post.approval_logs.select_related("performed_by")[:20]
             if requires_approval
             else [],
@@ -2362,6 +2539,7 @@ def generate_caption(request):
         goal=goal,
         cta=cta,
         brief=caption_brief(post) if post else None,
+        voice=ai_plus.voice(account),
     )
     # The caption is recorded (ContentCaption) only when the owner applies a suggestion
     # and saves: see composer.record_ai_caption.

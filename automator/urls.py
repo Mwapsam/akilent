@@ -16,7 +16,7 @@ from apps.accounts.views import (
 )
 from apps.core import views as core_views
 from apps.core import views_events
-from apps.publishing.public_views import go_link
+from apps.publishing.public_views import bio_page, go_link
 from apps.seo.sitemaps import SITEMAPS
 from apps.seo.views import api_catalog, robots_txt
 
@@ -32,6 +32,8 @@ urlpatterns = [
     path("healthz", core_views.healthz, name="healthz"),
     # Tracked WhatsApp chat link for a post (apps.publishing.links); public, no login.
     path("go/<str:code>", go_link, name="go-link"),
+    # Link-in-bio page (apps.publishing.bio); public, no login.
+    path("b/<slug:slug>", bio_page, name="bio-page"),
     path("internal/ux-event/", core_views.ingest_ux_event, name="ux-event-ingest"),
     path("internal/csrf-token/", core_views.csrf_token, name="csrf-token"),
     # Served by a separate ASGI process (docker-compose.yml's `events` service) behind nginx's

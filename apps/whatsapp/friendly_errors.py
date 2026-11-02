@@ -25,6 +25,9 @@ _GRAPH_ERRORS = {
     "account has restrictions).",
     "131026": "WhatsApp couldn't deliver this message. The number may not have "
     "WhatsApp, or has blocked this business.",
+    "131042": "Meta blocked this message because of a billing problem on your WhatsApp "
+    "account: no valid payment method, or the last payment failed. Add or fix the "
+    "payment method in Meta Business Settings → WhatsApp accounts → Payment settings.",
     "131053": "The file or image couldn't be sent — WhatsApp rejected the media.",
     "190": "The WhatsApp connection needs to be reconnected.",
 }

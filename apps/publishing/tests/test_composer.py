@@ -261,9 +261,9 @@ def test_honest_warnings_do_not_block(owner):
     account, _, _ = owner
     _connect_fb(account)
 
-    issues = _check(account, media_type="carousel", media_urls=[IMG, IMG])
+    issues = _check(account, media_type="image", media_urls=[IMG, IMG])
 
-    issue = next(i for i in issues if i["code"] == "fb_first_image_only")
+    issue = next(i for i in issues if i["code"] == "extra_media")
     assert issue["level"] == "warning"
     assert issue["blocks"] == []
 

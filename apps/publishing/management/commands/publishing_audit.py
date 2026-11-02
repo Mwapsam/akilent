@@ -10,9 +10,10 @@ It changes nothing. Exit code 1 means something needs a decision before deploy.
 from datetime import timedelta
 
 from django.core.management.base import BaseCommand
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.utils import timezone
 
+from apps.publishing import constraints
 from apps.publishing.models import (
     ContentPost,
     ContentPostVariant,
@@ -70,6 +71,7 @@ class Command(BaseCommand):
         self._line("Variants PUBLISHING for 6+ hours", stuck_publishing)
         self._line("Variants PROCESSING for 48+ hours", old_processing)
         self._line("Variants awaiting reconciliation", reconciling)
+        self._unsupported_facebook_formats()
         self._line(
             "Facebook connections needing reconnect",
             FacebookPageConnection.objects.filter(
@@ -96,6 +98,41 @@ class Command(BaseCommand):
             )
             raise SystemExit(1)
         self.stdout.write(self.style.SUCCESS("\nNo deploy blockers found."))
+
+    def _unsupported_facebook_formats(self) -> None:
+        """Facebook stories and carousels still waiting to go out. Dispatch fails them
+        (the format would publish wrongly), so their owners should be told first. Not a
+        deploy blocker: the Instagram channel of the same post still publishes."""
+        if not any(
+            constraints.facebook_format_blocked(mt) for mt in constraints.FB_UNSUPPORTED
+        ):
+            return
+        waiting = (
+            ContentPostVariant.objects.filter(
+                platform=ContentPostVariant.Platform.FACEBOOK,
+                post__media_type__in=list(constraints.FB_UNSUPPORTED),
+            )
+            .filter(
+                Q(status=ContentPostVariant.Status.SCHEDULED)
+                | Q(
+                    status=ContentPostVariant.Status.DRAFT,
+                    post__status__in=_ACTIVE_POST_STATUSES,
+                )
+            )
+            .select_related("post")
+            .order_by("scheduled_at", "pk")
+        )
+        self._line(
+            "Facebook stories/carousels waiting to publish (will fail: format not yet "
+            "supported on Facebook)",
+            waiting.count(),
+        )
+        for v in waiting[:50]:
+            when = v.scheduled_at or v.post.scheduled_at
+            self.stdout.write(
+                f"    post={v.post_id} account={v.post.account_id} "
+                f"type={v.post.media_type} at={when.isoformat() if when else '-'}"
+            )
 
     def _line(self, label: str, value) -> None:
         self.stdout.write(f"{label}: {value}")

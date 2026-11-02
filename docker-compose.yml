@@ -169,6 +169,28 @@ services:
         limits:
           memory: 512M
 
+  # ffprobe and file hashing for Content Studio media (apps/publishing/media_checks.py).
+  # Its own worker, so a batch of large videos never delays publishing on celery_worker.
+  celery_media:
+    build: .
+    command: celery -A automator worker -l info -Q media --concurrency 1 -n media@%h
+    restart: unless-stopped
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
   celery_beat:
     build: .
     command: celery -A automator beat -l info

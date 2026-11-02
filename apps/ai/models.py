@@ -19,6 +19,9 @@ class AISettings(models.Model):
     enabled = models.BooleanField(default=False)
     # Prices, address, hours, policies: the only facts AI may state about the business.
     business_notes = models.TextField(blank=True, default="")
+    # How the business writes its posts (Content Studio, cs_ai_plus). Style only, never a
+    # source of facts: see apps.publishing.ai_plus.
+    brand_voice = models.TextField(blank=True, default="")
     consented_at = models.DateTimeField(null=True, blank=True)
     consented_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -226,6 +229,10 @@ class AIDraft(models.Model):
         KNOWLEDGE_ANSWERS = "knowledge_answers", "Draft knowledge answers"
         WEBSITE = "website", "Read a website"
         CONTENT_CAPTION = "content_caption", "Content caption"
+        # Content Studio AI tools (apps.publishing.ai_plus, behind cs_ai_plus).
+        CONTENT_REWRITE = "content_rewrite", "Rewrite a caption"
+        CONTENT_HASHTAGS = "content_hashtags", "Suggest hashtags"
+        CONTENT_IDEAS = "content_ideas", "Post ideas from results"
 
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"

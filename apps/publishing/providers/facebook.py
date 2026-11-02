@@ -4,6 +4,9 @@ Wraps the Facebook Graph API for posting to a connected Page:
   - Text posts → POST /{page-id}/feed
   - Photo posts → POST /{page-id}/photos
   - Video posts → POST /{page-id}/videos
+  - Reels → /{page-id}/video_reels (start, upload, finish)
+  - Stories → /{page-id}/photo_stories and /{page-id}/video_stories
+  - Multi-photo posts → unpublished /{page-id}/photos, then /{page-id}/feed
 
 Requires scopes: pages_manage_posts, pages_read_engagement
 Page access tokens are fetched with a long-lived user token, so they do not
@@ -13,6 +16,7 @@ password). They are stored encrypted.
 
 from __future__ import annotations
 
+import json
 import logging
 
 import requests
@@ -28,6 +32,21 @@ _BASE = f"https://graph.facebook.com/{_GRAPH_VERSION}"
 
 class FacebookPublishError(MetaPublishError):
     pass
+
+
+class _Stream:
+    """A response body passed on as a request body without holding it in memory. The
+    length lets ``requests`` send a Content-Length, which rupload needs."""
+
+    def __init__(self, raw, length: int) -> None:
+        self._raw = raw
+        self._length = length
+
+    def __len__(self) -> int:
+        return self._length
+
+    def read(self, size: int = -1) -> bytes:
+        return self._raw.read(size)
 
 
 class FacebookPublishProvider:
@@ -66,6 +85,95 @@ class FacebookPublishProvider:
         if title:
             payload["title"] = title
         data = self._post("videos", **payload)
+        return data["id"]
+
+    # --- Reels and stories (Graph v25 "Publish a Reel" and "Stories" guides) ---------
+    # A video goes up in three steps: ``upload_phase=start`` on the edge returns a
+    # video id, the file is sent to rupload.facebook.com (here by its hosted URL), and
+    # ``upload_phase=finish`` publishes it. Meta then processes it; ``video_status``
+    # reads where it is.
+
+    def start_video_upload(self, edge: str) -> str:
+        """``edge``: "video_reels" or "video_stories". Returns the video id."""
+        data = self._post(edge, upload_phase="start")
+        return str(data["video_id"])
+
+    def upload_hosted_video(self, video_id: str, file_url: str) -> None:
+        """Send Meta the file by URL. It fetches it as ``facebookexternalhit``."""
+        self._rupload(video_id, {"file_url": file_url}, timeout=60)
+
+    def upload_video_bytes(self, video_id: str, file_url: str, offset: int = 0) -> None:
+        """Send Meta the file's bytes, streamed from ``file_url`` (our own media host;
+        the caller checks), from ``offset`` on. The fallback when Meta can't fetch the
+        URL itself, and how an interrupted upload resumes (``bytes_transfered``)."""
+        headers = {"Range": f"bytes={offset}-"} if offset else {}
+        with requests.get(
+            file_url, headers=headers, stream=True, timeout=30, allow_redirects=False
+        ) as src:
+            src.raise_for_status()
+            if offset and src.status_code != 206:
+                raise RuntimeError("The media host ignored the byte range.")
+            remaining = int(src.headers["Content-Length"])
+            self._rupload(
+                video_id,
+                {
+                    "offset": str(offset),
+                    "file_size": str(offset + remaining),
+                    "Content-Type": "application/octet-stream",
+                },
+                data=_Stream(src.raw, remaining),
+                timeout=(10, 600),
+            )
+
+    def _rupload(self, video_id: str, headers: dict, *, data=None, timeout) -> None:
+        r = requests.post(
+            f"https://rupload.facebook.com/video-upload/{_GRAPH_VERSION}/{video_id}",
+            headers={"Authorization": f"OAuth {self._token}", **headers},
+            data=data,
+            timeout=timeout,
+        )
+        body = r.json() if r.content else {}
+        if "error" in body or r.status_code >= 400:
+            raise FacebookPublishError.from_response(
+                r, body if "error" in body else {"error": {"message": r.text[:200]}}
+            )
+
+    def finish_reel(self, video_id: str, description: str) -> None:
+        self._post(
+            "video_reels",
+            video_id=video_id,
+            upload_phase="finish",
+            video_state="PUBLISHED",
+            description=description,
+        )
+
+    def finish_video_story(self, video_id: str) -> str:
+        """Returns the story's post id."""
+        data = self._post("video_stories", video_id=video_id, upload_phase="finish")
+        return str(data.get("post_id") or "")
+
+    def video_status(self, video_id: str) -> dict:
+        """The video's ``status`` object: video_status plus uploading_phase,
+        processing_phase and publishing_phase, each with a status and maybe an error."""
+        return self._get(video_id, fields="status").get("status") or {}
+
+    def upload_unpublished_photo(self, image_url: str) -> str:
+        """A photo held for a story or a multi-photo post. Meta deletes it after about
+        24 hours if nothing publishes it. Returns the photo id."""
+        data = self._post("photos", url=image_url, published="false")
+        return str(data["id"])
+
+    def create_photo_story(self, photo_id: str) -> str:
+        """Returns the story's post id."""
+        data = self._post("photo_stories", photo_id=photo_id)
+        return str(data.get("post_id") or "")
+
+    def create_multi_photo_post(self, photo_ids: list[str], message: str) -> str:
+        """One feed post with every photo (``attached_media``). Returns the post id."""
+        payload = {"message": message}
+        for i, photo_id in enumerate(photo_ids):
+            payload[f"attached_media[{i}]"] = json.dumps({"media_fbid": photo_id})
+        data = self._post("feed", **payload)
         return data["id"]
 
     def create_comment(self, object_id: str, message: str) -> str:
@@ -127,6 +235,19 @@ class FacebookPublishProvider:
         """
         return parse_insights(
             self._get(f"{post_id}/insights", metric=",".join(metrics))
+        )
+
+    def fetch_page_insights(self, metrics: list[str], since: int, until: int) -> dict:
+        """One day of the Page's insights (read_insights), ``period=day`` between two
+        Unix times. A metric with no data is left out, never reported as 0."""
+        return parse_insights(
+            self._get(
+                f"{self._page_id}/insights",
+                metric=",".join(metrics),
+                period="day",
+                since=since,
+                until=until,
+            )
         )
 
 

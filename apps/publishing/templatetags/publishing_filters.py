@@ -216,3 +216,12 @@ def post_tracking_on(account) -> bool:
     from apps.publishing.results import post_tracking_available
 
     return account is not None and post_tracking_available(account)
+
+
+@register.filter
+def credit_label(entry) -> str:
+    """How sure a post's credit from this entry point is ("" when confirmed); see
+    apps.publishing.bio.credit_basis."""
+    from apps.publishing.bio import credit_label as label
+
+    return label(entry) if entry is not None else ""

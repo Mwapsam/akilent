@@ -137,6 +137,11 @@ def workspace_timezone(account) -> str:
     return tz
 
 
+def workspace_zone(account) -> ZoneInfo:
+    """``workspace_timezone`` as a ``ZoneInfo``, for date arithmetic."""
+    return ZoneInfo(workspace_timezone(account))
+
+
 def is_configured(account) -> bool:
     hours = get_hours(account)
     return bool(hours and hours.schedule)

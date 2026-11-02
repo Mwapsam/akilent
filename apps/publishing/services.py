@@ -8,7 +8,7 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from .constraints import IG_RATIO_MAX, IG_RATIO_MIN
+from .constraints import IG_RATIO_MAX, IG_RATIO_MIN, media_kind
 from .models import ContentPost, ContentPostVariant, FacebookPageConnection
 from .providers.facebook import FacebookPublishError, FacebookPublishProvider
 from .providers.instagram import (
@@ -639,6 +639,8 @@ def _persist_publish_outcome(
             v.last_error = fields["error"]
             v.last_error_type = fields["error_type"]
             v.last_error_at = timezone.now()
+            drop = set(fields.get("drop_metadata") or ())
+            metadata = {k: val for k, val in metadata.items() if k not in drop}
         v.metadata = metadata
         v.save(
             update_fields=[
@@ -976,17 +978,29 @@ def publish_variant(variant: ContentPostVariant) -> dict:
                 variant.status = ContentPostVariant.Status.RECONCILING
                 variant.processing_started_at = None  # Clear on reconciliation
                 # Keep provider evidence (e.g. the IG container id) for the operator.
-                variant.metadata = {
-                    **(variant.metadata or {}),
-                    **result.get("metadata", {}),
-                }
-            elif result.get("metadata", {}).get("ig_container_id"):
-                # Video container created; waiting for polling
+                variant.metadata = _without_deferrals(
+                    {**(variant.metadata or {}), **result.get("metadata", {})}
+                )
+            elif result.get("processing") or result.get("metadata", {}).get(
+                "ig_container_id"
+            ):
+                # Instagram container created, or a Facebook video finished: waiting
+                # for the poller.
                 variant.status = ContentPostVariant.Status.PROCESSING
                 # Track when processing began (for exhaustion detection)
                 if not variant.processing_started_at:
                     variant.processing_started_at = timezone.now()
-                # Preserve any existing metadata and merge in new provider data
+                # Preserve any existing metadata and merge in new provider data. The
+                # Reel went through, so its deferral count is done with.
+                variant.metadata = _without_deferrals(
+                    {**(variant.metadata or {}), **result.get("metadata", {})}
+                )
+            elif result.get("defer_until"):
+                # Facebook's daily Reel limit: wait and try again (``_fb_error``).
+                variant.status = ContentPostVariant.Status.SCHEDULED
+                variant.scheduled_at = result["defer_until"]
+                variant.dispatched_at = None
+                variant.processing_started_at = None
                 variant.metadata = {
                     **(variant.metadata or {}),
                     **result.get("metadata", {}),
@@ -994,6 +1008,11 @@ def publish_variant(variant: ContentPostVariant) -> dict:
             else:
                 variant.status = ContentPostVariant.Status.FAILED
                 variant.processing_started_at = None  # Clear on failure
+                # Keep provider progress (a Facebook video id), so a retry resumes it.
+                # The Reel deferral count ends with the failure: a retry starts afresh.
+                variant.metadata = _without_deferrals(
+                    {**(variant.metadata or {}), **result.get("metadata", {})}
+                )
 
             variant.last_error = result.get("error", "Unknown error")
             variant.last_error_type = result.get(
@@ -1012,6 +1031,8 @@ def publish_variant(variant: ContentPostVariant) -> dict:
                 "last_error_at",
                 "processing_started_at",
                 "metadata",
+                "scheduled_at",
+                "dispatched_at",
             ]
         )
 
@@ -1037,6 +1058,22 @@ def _publish_variant_facebook(variant: ContentPostVariant, post: ContentPost) ->
 
     Returns dict with success, publication_id, publication_url, error, error_type, error_at, reconciling.
     """
+    from . import constraints
+
+    # A post scheduled before readiness blocked these formats would still publish
+    # wrongly (a story as a regular post, a carousel as its first image), so the
+    # channel fails here instead. Other channels of the post are unaffected.
+    if constraints.facebook_format_blocked(post.media_type):
+        return {
+            "success": False,
+            "publication_id": "",
+            "publication_url": "",
+            "error": constraints.FB_UNSUPPORTED_MESSAGE,
+            "error_type": ContentPostVariant.ErrorType.VALIDATION,
+            "error_at": timezone.now(),
+            "reconciling": False,
+        }
+
     result_tuple = _fb_provider_for_post(post)
     if result_tuple is None:
         return {
@@ -1075,6 +1112,14 @@ def _publish_variant_facebook(variant: ContentPostVariant, post: ContentPost) ->
     # A "Visit a link" CTA on a text post also becomes Facebook's link preview card.
     cta = post.cta or {}
     cta_url = cta.get("url", "") if cta.get("kind") == "link" else ""
+
+    if constraints.fb_formats_released() and mt in (
+        ContentPost.MediaType.REEL,
+        ContentPost.MediaType.STORY,
+        ContentPost.MediaType.CAROUSEL,
+    ):
+        urls = variant.media_urls or post.media_urls or []
+        return _publish_fb_format(variant, post, provider, mt, urls, caption)
 
     try:
         if mt == ContentPost.MediaType.TEXT:
@@ -1117,6 +1162,296 @@ def _publish_variant_facebook(variant: ContentPostVariant, post: ContentPost) ->
             "error_at": timezone.now(),
             "reconciling": True,
         }
+
+
+# --- Facebook Reels, stories and multi-photo posts (Phase 0a, cs_fb_formats) ---------
+
+FB_REEL_DEFER = timedelta(hours=1)
+FB_REEL_MAX_DEFERRALS = 24
+FB_REEL_DEFERRALS_KEY = "fb_reel_deferrals"
+FB_VIDEO_PHASES = ("uploading", "processing", "publishing")
+# A Facebook video upload's progress on the variant; dropped once Meta fails the video.
+FB_VIDEO_KEYS = ("fb_video_id", "fb_kind", "fb_upload", "fb_post_id")
+FB_REEL_RATE_MESSAGE = (
+    "Facebook allows a Page 30 Reels a day through apps. This Reel waits and is tried "
+    "again at {at:%H:%M} UTC."
+)
+
+
+def _result(**fields) -> dict:
+    out = {
+        "success": False,
+        "publication_id": "",
+        "publication_url": "",
+        "error": "",
+        "error_type": "",
+        "error_at": None,
+        "reconciling": False,
+    }
+    out.update(fields)
+    return out
+
+
+def _fb_unknown(exc, metadata: dict | None = None, *, published_maybe: bool) -> dict:
+    """A non-Meta exception. Before anything could publish it is a retryable timeout;
+    after the publishing call it must be reconciled, never blindly retried."""
+    is_timeout = isinstance(exc, TimeoutError) or "timed out" in str(exc).lower()
+    return _result(
+        error=(
+            f"Publication outcome unknown: {exc}"
+            if published_maybe
+            else f"Facebook didn't answer: {exc}"
+        ),
+        error_type=ContentPostVariant.ErrorType.TIMEOUT
+        if is_timeout
+        else ContentPostVariant.ErrorType.UNKNOWN,
+        error_at=timezone.now(),
+        reconciling=published_maybe,
+        metadata=metadata or {},
+    )
+
+
+def _fb_error(exc, post, variant, metadata: dict | None = None) -> dict:
+    """A definitive Graph API error. A Reel refused for the Page's daily Reel limit is
+    deferred: back to SCHEDULED an hour later, up to a day of tries."""
+    result = _provider_error_result(exc, post, "facebook")
+    result["metadata"] = metadata or {}
+    if (
+        exc.error_type == ContentPostVariant.ErrorType.RATE_LIMIT
+        and post.media_type == ContentPost.MediaType.REEL
+    ):
+        tries = int((variant.metadata or {}).get(FB_REEL_DEFERRALS_KEY, 0)) + 1
+        if tries <= FB_REEL_MAX_DEFERRALS:
+            at = timezone.now() + FB_REEL_DEFER
+            result["defer_until"] = at
+            result["error"] = FB_REEL_RATE_MESSAGE.format(at=at)
+            result["metadata"] = {**result["metadata"], FB_REEL_DEFERRALS_KEY: tries}
+    return result
+
+
+def _without_deferrals(metadata: dict) -> dict:
+    """The count only lasts while a Reel is being deferred; any other outcome ends it."""
+    return {k: v for k, v in metadata.items() if k != FB_REEL_DEFERRALS_KEY}
+
+
+def _fb_video_phase(status: dict, phase: str) -> str:
+    return ((status or {}).get(f"{phase}_phase") or {}).get("status", "")
+
+
+def _fb_video_error(status: dict) -> tuple[str, str] | None:
+    """The first phase Meta reports as failed, with its message, or None."""
+    for phase in FB_VIDEO_PHASES:
+        error = ((status.get(f"{phase}_phase") or {}).get("error") or {}).get("message")
+        if _fb_video_phase(status, phase) == "error" or error:
+            return phase, error or ""
+    return None
+
+
+def _fb_video_failed(status: dict) -> bool:
+    return _fb_video_error(status or {}) is not None
+
+
+def _publish_fb_format(variant, post, provider, mt, urls: list, caption: str) -> dict:
+    if mt == ContentPost.MediaType.CAROUSEL:
+        return _publish_fb_multi_photo(variant, post, provider, urls, caption)
+    url = urls[0] if urls else ""
+    if mt == ContentPost.MediaType.STORY and media_kind(url) != "video":
+        return _publish_fb_photo_story(variant, post, provider, url)
+    edge = "video_reels" if mt == ContentPost.MediaType.REEL else "video_stories"
+    return _publish_fb_video(variant, post, provider, edge, url, caption)
+
+
+def _publish_fb_multi_photo(variant, post, provider, urls, caption) -> dict:
+    """Every photo is uploaded unpublished (nothing is live yet), then one feed post
+    carries them all. Only that last call can publish."""
+    try:
+        photo_ids = [provider.upload_unpublished_photo(u) for u in urls]
+    except FacebookPublishError as exc:
+        return _fb_error(exc, post, variant)
+    except Exception as exc:
+        return _fb_unknown(exc, published_maybe=False)
+    try:
+        post_id = provider.create_multi_photo_post(photo_ids, caption)
+    except FacebookPublishError as exc:
+        return _fb_error(exc, post, variant)
+    except Exception as exc:
+        return _fb_unknown(exc, {"fb_photo_ids": photo_ids}, published_maybe=True)
+    return _result(
+        success=True,
+        publication_id=post_id,
+        publication_url=f"https://facebook.com/{post_id}",
+    )
+
+
+def _publish_fb_photo_story(variant, post, provider, url) -> dict:
+    try:
+        photo_id = provider.upload_unpublished_photo(url)
+    except FacebookPublishError as exc:
+        return _fb_error(exc, post, variant)
+    except Exception as exc:
+        return _fb_unknown(exc, published_maybe=False)
+    try:
+        post_id = provider.create_photo_story(photo_id)
+    except FacebookPublishError as exc:
+        return _fb_error(exc, post, variant)
+    except Exception as exc:
+        return _fb_unknown(exc, {"fb_photo_id": photo_id}, published_maybe=True)
+    return _result(
+        success=True,
+        publication_id=post_id or photo_id,
+        publication_url=f"https://facebook.com/{post_id or photo_id}",
+    )
+
+
+def _publish_fb_video(variant, post, provider, edge, url, caption) -> dict:
+    """A Reel or video story: start → upload → finish, then Meta processes it and the
+    poller (``try_finish_fb_video_variant``) confirms it.
+
+    The video id is kept on the variant from the first step, so a retry resumes the
+    same upload instead of starting a second one, and first asks Meta whether the
+    earlier attempt already went out.
+    """
+    kind = "reel" if edge == "video_reels" else "video_story"
+    previous = variant.metadata or {}
+    video_id = previous.get("fb_video_id", "")
+    # Kept across attempts, so the deferral cap counts every try.
+    deferrals = (
+        {FB_REEL_DEFERRALS_KEY: previous[FB_REEL_DEFERRALS_KEY]}
+        if FB_REEL_DEFERRALS_KEY in previous
+        else {}
+    )
+
+    status: dict = {}
+    if video_id:
+        try:
+            status = provider.video_status(video_id)
+        except Exception:
+            status = {}
+        if _fb_video_phase(status, "publishing") in ("complete", "in_progress"):
+            # The earlier finish went through; let the poller confirm it.
+            return _result(
+                processing=True,
+                metadata={**deferrals, "fb_video_id": video_id, "fb_kind": kind},
+            )
+        if _fb_video_failed(status):
+            # Meta gave up on that video; resuming it can only fail again.
+            video_id, status = "", {}
+        uploaded = _fb_video_phase(status, "uploading") == "complete"
+    if not video_id:
+        uploaded = False
+        try:
+            video_id = provider.start_video_upload(edge)
+        except FacebookPublishError as exc:
+            return _fb_error(exc, post, variant, deferrals)
+        except Exception as exc:
+            return _fb_unknown(exc, deferrals, published_maybe=False)
+
+    progress = {**deferrals, "fb_video_id": video_id, "fb_kind": kind}
+    if not uploaded:
+        try:
+            _upload_fb_video(provider, video_id, url, _fb_bytes_sent(status), progress)
+        except FacebookPublishError as exc:
+            return _fb_error(exc, post, variant, progress)
+        except Exception as exc:
+            return _fb_unknown(exc, progress, published_maybe=False)
+
+    # Finishing publishes. From here an unknown outcome must be reconciled.
+    try:
+        if kind == "reel":
+            provider.finish_reel(video_id, caption)
+        else:
+            progress["fb_post_id"] = provider.finish_video_story(video_id)
+    except FacebookPublishError as exc:
+        return _fb_error(exc, post, variant, progress)
+    except Exception as exc:
+        return _fb_unknown(exc, progress, published_maybe=True)
+    return _result(processing=True, metadata=progress)
+
+
+def _fb_bytes_sent(status: dict) -> int:
+    """How far an interrupted byte upload got (Meta spells it "bytes_transfered")."""
+    phase = (status or {}).get("uploading_phase") or {}
+    try:
+        return int(phase.get("bytes_transfered") or phase.get("bytes_transferred") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _upload_fb_video(provider, video_id, url, offset: int, progress: dict) -> None:
+    """Meta fetches the file by its URL. With ``cs_direct_upload`` released, a refused
+    fetch is retried by sending the bytes ourselves, and an interrupted byte upload
+    resumes where Meta says it stopped. Only our own media host is streamed (SSRF)."""
+    from . import direct_upload
+
+    types = ContentPostVariant.ErrorType
+    can_send_bytes = direct_upload.released() and _is_own_media_url(url)
+    if offset and can_send_bytes:
+        progress["fb_upload"] = "bytes"
+        provider.upload_video_bytes(video_id, url, offset)
+        return
+    try:
+        provider.upload_hosted_video(video_id, url)
+    except FacebookPublishError as exc:
+        if not can_send_bytes or exc.error_type in (types.PERMISSION, types.RATE_LIMIT):
+            raise
+        logger.info(
+            "Facebook couldn't fetch video=%s by URL (%s); sending the bytes",
+            video_id,
+            exc,
+        )
+        progress["fb_upload"] = "bytes"
+        provider.upload_video_bytes(video_id, url, 0)
+
+
+def try_finish_fb_video_variant(variant: ContentPostVariant) -> bool:
+    """Poll a PROCESSING Facebook Reel or video story; record PUBLISHED or FAILED once
+    Meta is done. Returns True when it was published."""
+    metadata = variant.metadata or {}
+    video_id = metadata.get("fb_video_id", "")
+    result = _fb_provider_for_post(variant.post)
+    if result is None or not video_id:
+        return False
+    provider, _page_id = result
+    try:
+        status = provider.video_status(video_id)
+    except FacebookPublishError as exc:
+        if exc.token_invalid:
+            _mark_token_invalid(variant.post, "facebook")
+        logger.warning("video_status refused for variant=%s: %s", variant.pk, exc)
+        return False
+    except Exception:
+        logger.exception("video_status failed for variant=%s", variant.pk)
+        return False
+
+    failed = _fb_video_error(status)
+    if failed:
+        phase, error = failed
+        # The video is dead on Meta's side: forget it, so a retry uploads afresh.
+        _persist_publish_outcome(
+            variant.pk,
+            None,
+            ContentPostVariant.Status.FAILED,
+            error=f"Facebook couldn't publish this video: {error or phase + ' failed'}",
+            error_type=ContentPostVariant.ErrorType.VALIDATION,
+            drop_metadata=FB_VIDEO_KEYS,
+        )
+        return False
+
+    if _fb_video_phase(status, "publishing") != "complete":
+        return False
+    if metadata.get("fb_kind") == "reel":
+        url = f"https://www.facebook.com/reel/{video_id}"
+        publication_id = video_id
+    else:
+        publication_id = metadata.get("fb_post_id") or video_id
+        url = f"https://facebook.com/{publication_id}"
+    return _persist_publish_outcome(
+        variant.pk,
+        None,
+        ContentPostVariant.Status.PUBLISHED,
+        publication_id=publication_id,
+        publication_url=url,
+    )
 
 
 def _publish_variant_instagram(variant: ContentPostVariant, post: ContentPost) -> dict:

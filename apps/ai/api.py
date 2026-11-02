@@ -77,6 +77,9 @@ DRAFT_KINDS = (
     "playground",
     "knowledge_answers",
     "website",
+    "content_rewrite",
+    "content_hashtags",
+    "content_ideas",
 )
 
 

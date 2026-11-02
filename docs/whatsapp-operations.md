@@ -168,6 +168,7 @@ per-process fallback (safe only for a single worker).
 | 130429 / 131056 / HTTP 429 | throughput / pair rate limit | retryable, backoff |
 | 131047 | re-engagement required (outside window) | terminal |
 | 131026 | undeliverable | terminal |
+| 131042 | business eligibility payment issue (no valid payment method on the WABA) | terminal — fix billing in Meta Business Settings; affects every paid message incl. all templates |
 | 131051 | unsupported message type | terminal |
 | 132xxx | template errors | terminal |
 | 133004–133016 | account / registration errors | terminal |

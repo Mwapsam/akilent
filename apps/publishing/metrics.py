@@ -30,6 +30,9 @@ FB_INSIGHTS = "read_insights"
 
 # Where a post lives on its channel, which decides the metrics it has.
 FEED, REELS, STORY, FB_POST = "feed", "reels", "story", "fb_post"
+# A Facebook Page story (Phase 0a). No metrics are read for it yet: Meta's docs don't say
+# how long story insights stay readable, so nothing is claimed until that is verified.
+FB_STORY = "fb_story"
 
 
 @dataclass(frozen=True)
@@ -186,6 +189,107 @@ REGISTRY: tuple[MetricDef, ...] = (
 )
 
 
+# Account-level numbers, one day at a time (Phase 2b, apps.publishing.account_metrics).
+# Verified with Meta's docs (developer docs MCP, 2026-11-01):
+# - Instagram, ``/{ig-user-id}/insights`` with ``period=day&metric_type=total_value``
+#   and since/until for the day: reach, views, accounts_engaged, total_interactions
+#   (instagram_business_manage_insights). Data can be up to 48 hours late. Followers
+#   are the ``followers_count`` field (instagram_business_basic).
+# - Facebook, ``/{page-id}/insights`` ``period=day``: page_total_media_view_unique
+#   (reach) and page_media_view (views), read_insights. Several Page metrics were
+#   retired on 15 June 2026 (marked in Meta's table; the mark isn't explained), so only
+#   unmarked ones are used. Page insights need 100+ likes. Followers are the Page's
+#   ``followers_count`` field (pages_read_engagement).
+ACCOUNT = "account"
+ACCOUNT_REGISTRY: tuple[MetricDef, ...] = (
+    _m(
+        "followers",
+        "Followers",
+        "Accounts following you when the numbers were read.",
+        "instagram",
+        (ACCOUNT,),
+        "field",
+        "followers_count",
+        IG_BASIC,
+    ),
+    _m(
+        "reach",
+        "Reach",
+        "Accounts that saw any of your content that day. Estimated by Instagram.",
+        "instagram",
+        (ACCOUNT,),
+        "insights",
+        "reach",
+        IG_INSIGHTS,
+    ),
+    _m(
+        "views",
+        "Views",
+        "Times your content was played or shown that day.",
+        "instagram",
+        (ACCOUNT,),
+        "insights",
+        "views",
+        IG_INSIGHTS,
+    ),
+    _m(
+        "engaged",
+        "Accounts engaged",
+        "Accounts that liked, saved, commented on, shared or replied to your content "
+        "that day. Estimated by Instagram.",
+        "instagram",
+        (ACCOUNT,),
+        "insights",
+        "accounts_engaged",
+        IG_INSIGHTS,
+    ),
+    _m(
+        "interactions",
+        "Interactions",
+        "Likes, saves, comments, shares and replies on your content that day.",
+        "instagram",
+        (ACCOUNT,),
+        "insights",
+        "total_interactions",
+        IG_INSIGHTS,
+    ),
+    _m(
+        "followers",
+        "Followers",
+        "People following your Page when the numbers were read.",
+        "facebook",
+        (ACCOUNT,),
+        "field",
+        "followers_count",
+        FB_ENGAGEMENT,
+    ),
+    _m(
+        "reach",
+        "Reach",
+        "People who saw your Page's content that day. Estimated by Facebook.",
+        "facebook",
+        (ACCOUNT,),
+        "insights",
+        "page_total_media_view_unique",
+        FB_INSIGHTS,
+    ),
+    _m(
+        "views",
+        "Views",
+        "Times your Page's content was played or shown that day, including ads.",
+        "facebook",
+        (ACCOUNT,),
+        "insights",
+        "page_media_view",
+        FB_INSIGHTS,
+    ),
+)
+
+
+def account_metrics_for(platform: str) -> list[MetricDef]:
+    return [m for m in ACCOUNT_REGISTRY if m.platform == platform]
+
+
 class State:
     AVAILABLE = "available"
     PENDING = "pending"  # the channel has no number yet (new post, or still processing)
@@ -206,6 +310,10 @@ STATE_REASONS = {
 
 def surface_for(platform: str, media_type: str) -> str:
     if platform == "facebook":
+        from .constraints import fb_formats_released
+
+        if media_type == "story" and fb_formats_released():
+            return FB_STORY
         return FB_POST
     if media_type == "story":
         return STORY

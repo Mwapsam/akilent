@@ -7,7 +7,10 @@
   <div>
     <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
   </div>
-  <a href="{% url 'publishing:post-new' %}" class="btn btn-primary">New post</a>
+  <div class="flex items-center gap-2">
+    {% if released.cs_csv_import %}<a href="{% url 'publishing:csv-import' %}" class="btn btn-secondary">Import CSV</a>{% endif %}
+    <a href="{% url 'publishing:post-new' %}" class="btn btn-primary">New post</a>
+  </div>
 </div>
 
 {% include "publishing/_subnav.html" %}

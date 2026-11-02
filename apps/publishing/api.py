@@ -39,6 +39,14 @@ def attention_reasons(account, now=None) -> list[str]:
     if failed:
         out.append(f"{_plural(failed, 'failed post publish')} today")
 
+    from .media_checks import backlog
+
+    stuck = backlog(now).filter(account=account).count()
+    if stuck:
+        out.append(
+            f"{_plural(stuck, 'media check')} waiting 10+ minutes (media worker)"
+        )
+
     if FacebookPageConnection.objects.filter(
         account=account, status=FacebookPageConnection.Status.EXPIRED
     ).exists():

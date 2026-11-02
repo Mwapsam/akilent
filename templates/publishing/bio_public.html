@@ -1,0 +1,38 @@
+{% extends "public/_base.html" %}
+{% block title %}{{ page.title }}{% endblock %}
+{% block extra_head %}<meta name="robots" content="noindex">
+{% comment %}Colours are validated "#rrggbb" values (bio.clean_color); the text colour on
+each is picked for contrast (bio.text_on).{% endcomment %}
+<style>
+  .bio-tile { transition: border-color .15s; }
+  .bio-tile:hover { border-color: var(--color-accent, currentColor); }
+  .bio-tile:focus-visible { outline: 2px solid var(--color-accent, currentColor); outline-offset: 2px; }
+  {% if page.background_color %}.bio-wrap { background: {{ page.background_color }}; color: {{ background_text }}; }
+  .bio-wrap .bio-title { color: {{ background_text }}; }{% endif %}
+  {% if page.button_color %}.bio-wrap .bio-tile { background: {{ page.button_color }}; color: {{ button_text }}; border-color: {{ page.button_color }}; }
+  .bio-wrap .bio-tile .bio-sub { color: {{ button_text }}; opacity: .85; }{% endif %}
+</style>{% endblock %}
+
+{% block content %}
+<section class="bio-wrap max-w-md mx-auto my-16 px-4 py-8 rounded-2xl">
+  {% if page.avatar_url %}
+  <img src="{{ page.avatar_url }}" alt="" class="w-20 h-20 rounded-full object-cover mx-auto mb-3">
+  {% endif %}
+  <h1 class="bio-title text-2xl font-semibold text-ink text-center mb-6">{{ page.title }}</h1>
+  {% if tiles %}
+  <ul class="space-y-3">
+    {% for tile in tiles %}
+    <li>
+      <a href="{% url 'go-link' tile.code %}" rel="nofollow"
+         class="bio-tile block w-full rounded-xl border border-border bg-surface px-4 py-3 text-ink">
+        <span class="block text-sm font-medium">{{ tile.label }}</span>
+        <span class="bio-sub block text-xs text-ink-subtle">Chat with us on WhatsApp</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="text-center text-ink-subtle">Nothing here yet. Check back soon.</p>
+  {% endif %}
+</section>
+{% endblock %}

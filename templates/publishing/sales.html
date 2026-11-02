@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Which posts sold — {{ site.app_name|default:"Akilent" }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
+</div>
+
+{% include "publishing/_subnav.html" %}
+
+<div class="max-w-3xl space-y-4">
+  <header class="flex flex-wrap items-start justify-between gap-3">
+    <div class="flex-1 min-w-0">
+      <h2 class="text-lg font-semibold text-ink">Which posts sold</h2>
+      <p class="text-sm text-ink-subtle">Chats, leads, orders and paid revenue credited to each post. Only chats that came through a post's chat link or a reply to its comments count, so these are the least each post brought in.</p>
+    </div>
+    <form method="get" class="flex items-center gap-2" x-data="{ busy: false }" @submit="busy = true">
+      <label class="sr-only" for="sales-period">Period</label>
+      <select id="sales-period" name="period" class="select" onchange="this.form.requestSubmit()" :disabled="busy">
+        {% for choice in periods %}
+        <option value="{{ choice }}" {% if choice == days %}selected{% endif %}>Last {{ choice }} days{% if choice == 90 and period_locked %} (upgrade){% endif %}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </header>
+
+  {% if period_locked %}
+  <div class="alert alert-info" role="status">
+    <span>The 90-day view is available on higher plans. Showing the last 30 days. <a href="{% url 'billing:plans' %}" class="underline">Upgrade</a></span>
+  </div>
+  {% endif %}
+
+  {% if report is None %}
+  <section class="card card-pad">
+    <p class="text-sm text-ink-subtle" data-sales-unavailable>Connect Instagram or Facebook and publish a post with a WhatsApp chat link to see which posts sell.</p>
+  </section>
+  {% else %}
+
+  <section class="card card-pad" aria-labelledby="sales-ranked">
+    <h3 id="sales-ranked" class="font-semibold text-ink">Ranked</h3>
+    <p class="text-xs text-ink-subtle">Posts with at least {{ report.min_chats }} confirmed chats in the period, by paid orders, then orders, leads and chats. Revenue is shown per currency and never added across currencies.</p>
+    {% if report.ranked %}
+    <ol class="divide-y divide-border">
+      {% for row in report.ranked %}{% include "publishing/_sales_row.html" with row=row %}{% endfor %}
+    </ol>
+    {% else %}
+    <p class="mt-3 text-sm text-ink-subtle" data-sales-empty>No post has {{ report.min_chats }} confirmed chats in this period yet.</p>
+    {% endif %}
+  </section>
+
+  {% if report.too_early %}
+  <section class="card card-pad" aria-labelledby="sales-early">
+    <h3 id="sales-early" class="font-semibold text-ink">Too early to judge</h3>
+    <p class="text-xs text-ink-subtle">Fewer than {{ report.min_chats }} confirmed chats in the period: too few to say whether these posts sell, so they aren't ranked.</p>
+    <ul class="divide-y divide-border">
+      {% for row in report.too_early %}{% include "publishing/_sales_row.html" with row=row %}{% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <section class="card card-pad space-y-2" aria-labelledby="sales-totals">
+    <h3 id="sales-totals" class="font-semibold text-ink">Revenue paid in the period</h3>
+    <dl class="text-sm space-y-1">
+      <div class="flex flex-wrap justify-between gap-2" data-sales-total="credited">
+        <dt class="text-ink-subtle">Credited to a post</dt>
+        <dd class="font-medium text-ink tabular-nums">{% for r in report.credited %}{{ r.currency }} {{ r.total }}{% if not forloop.last %} · {% endif %}{% empty %}—{% endfor %}</dd>
+      </div>
+      {% for u in report.unconfirmed %}
+      <div class="flex flex-wrap justify-between gap-2" data-sales-total="unconfirmed">
+        <dt class="text-ink-subtle">Credited {{ u.label }}</dt>
+        <dd class="font-medium text-ink tabular-nums">{% for r in u.revenue %}{{ r.currency }} {{ r.total }}{% if not forloop.last %} · {% endif %}{% endfor %}</dd>
+      </div>
+      {% endfor %}
+      {% with n=report.not_credited %}
+      <div class="flex flex-wrap justify-between gap-2" data-sales-total="guessed">
+        <dt class="text-ink-subtle">Linked to a chat only by a guess, so credited to no post</dt>
+        <dd class="font-medium text-ink tabular-nums">{% for r in n.guessed_revenue %}{{ r.currency }} {{ r.total }}{% if not forloop.last %} · {% endif %}{% empty %}—{% endfor %}</dd>
+      </div>
+      <div class="flex flex-wrap justify-between gap-2" data-sales-total="untracked">
+        <dt class="text-ink-subtle">Not linked to any post</dt>
+        <dd class="font-medium text-ink tabular-nums">{% for r in n.untracked_revenue %}{{ r.currency }} {{ r.total }}{% if not forloop.last %} · {% endif %}{% empty %}—{% endfor %}</dd>
+      </div>
+      {% if n.chats is not None %}
+      <p class="text-xs text-ink-subtle pt-1">{{ n.chats }} chat{{ n.chats|pluralize }} started in the period without naming a post.</p>
+      {% endif %}
+      {% endwith %}
+    </dl>
+    <p class="text-xs text-ink-subtle"><a href="{% url 'help-article' 'post-results' %}" class="underline">How posts are credited</a></p>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

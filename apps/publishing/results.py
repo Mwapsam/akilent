@@ -15,7 +15,14 @@ from typing import Any
 from django.db.models import Count, Exists, OuterRef, Q, Sum
 
 from .links import short_url
-from .models import ContentPost, ContentPostVariant, LinkClick, TrackedLink
+from .models import (
+    BioPage,
+    BioTile,
+    ContentPost,
+    ContentPostVariant,
+    LinkClick,
+    TrackedLink,
+)
 
 
 def post_credit_q(prefix: str = "attribution__") -> Q:
@@ -32,6 +39,10 @@ def results_for(post: ContentPost) -> list[dict]:
         ConversationEntryPoint,
     )
 
+    from . import bio
+
+    bio_on = bio.is_released()
+    bio_page = BioPage.objects.filter(account_id=post.account_id).first()
     rows = []
     variants = post.variants.filter(
         platform__in=(
@@ -79,9 +90,25 @@ def results_for(post: ContentPost) -> list[dict]:
                 "leads": attributed.filter(lead__isnull=False).count(),
                 "orders": attributed.filter(order__isnull=False).count(),
                 "revenue": revenue,
+                # Instagram only: link chats split by how sure each credit is.
+                "credit_breakdown": bio.instagram_breakdown(variant),
+                "bio": _bio_state(bio_on, bio_page, variant, link),
             }
         )
     return rows
+
+
+def _bio_state(bio_on: bool, page, variant, link) -> dict | None:
+    """Whether this Instagram channel is on the bio page, for the card's button."""
+    if not bio_on or variant.platform != ContentPostVariant.Platform.INSTAGRAM:
+        return None
+    tile = (
+        BioTile.objects.filter(page=page, link=link).first() if page and link else None
+    )
+    return {
+        "page": page,
+        "on_page": bool(tile and tile.archived_at is None),
+    }
 
 
 # The channels Content Studio publishes to; posts on them are what post results are about.

@@ -212,6 +212,8 @@ AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
 AWS_STORAGE_BUCKET_NAME = os.environ.get("AWS_STORAGE_BUCKET_NAME", "")
 AWS_S3_REGION_NAME = os.environ.get("AWS_S3_REGION_NAME", "")
 AWS_CLOUDFRONT_DOMAIN = os.environ.get("AWS_CLOUDFRONT_DOMAIN", "")
+# Stock photos in the media library (apps/publishing/media_library.py); off when unset.
+PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY", "")
 CLOUDFRONT_ID = os.environ.get("AWS_CLOUDFRONT_ID", "")
 
 USE_S3_STORAGE = bool(
@@ -984,6 +986,34 @@ CELERY_BEAT_SCHEDULE.update(
             "task": "apps.publishing.tasks.alert_publishing_problems",
             "schedule": 300.0,  # Every 5 minutes; one email per channel problem episode
         },
+        "poll-fb-video-variants": {
+            "task": "apps.publishing.tasks.poll_fb_video_variants",
+            "schedule": 60.0,  # Facebook Reels and video stories still processing
+        },
+        "collect-account-metrics": {
+            "task": "apps.publishing.tasks.collect_account_metrics",
+            "schedule": 21600.0,  # Every 6 hours; only days still missing numbers
+        },
+        "send-weekly-account-reports": {
+            "task": "apps.publishing.tasks.send_weekly_reports",
+            "schedule": 3600.0,  # Hourly; sends Monday 08:00 local, once a week
+        },
+        "run-recurring-posts": {
+            "task": "apps.publishing.tasks.run_recurring_posts",
+            "schedule": 900.0,  # Every 15 minutes; copies are made a day ahead
+        },
+        "alert-media-check-backlog": {
+            "task": "apps.publishing.tasks.alert_media_check_backlog",
+            "schedule": 300.0,  # Media checks pending 10+ minutes
+        },
+        "archive-stale-bio-tiles": {
+            "task": "apps.publishing.tasks.archive_stale_bio_tiles",
+            "schedule": 86400.0,  # Daily; tiles past their page's archive_after_days
+        },
+        "check-bio-links": {
+            "task": "apps.publishing.tasks.check_bio_links",
+            "schedule": 86400.0,  # Daily; is the Instagram bio pointing at the bio page?
+        },
     }
 )
 
@@ -999,6 +1029,7 @@ WORKER_QUEUES = [
     "automation",
     "scheduler",
     "ai",
+    "media",  # ffprobe and hashing (celery_media), so large files never delay publishing
 ]
 
 # Private bucket for nightly database dumps (docs/ops/backups.md); read by the Pilot Command Center.

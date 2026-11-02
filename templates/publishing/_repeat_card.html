@@ -1,0 +1,37 @@
+{% comment %}Repeat this post (cs_recurring, apps.publishing.recurring). Each copy is made a
+day ahead through the composer's own checks, and sent for review where the workspace
+reviews posts.{% endcomment %}
+{% with rules=post.recurrence_rules.all %}
+<section class="card card-pad space-y-3" aria-labelledby="pd-repeat" x-data="{ open: false }">
+  <div class="flex flex-wrap items-center justify-between gap-2">
+    <h2 id="pd-repeat" class="pd-section-title">Repeat</h2>
+    <button type="button" class="btn btn-ghost btn-sm" @click="open = !open" :aria-expanded="open" aria-controls="pd-repeat-form">Repeat this post</button>
+  </div>
+  {% if rules %}
+  <p class="text-sm text-ink-subtle">
+    {% for rule in rules %}Every {{ rule.every_days }} days{% if rule.active %}, next {{ rule.next_run_at|date:"N j, H:i" }}{% else %} (paused){% endif %}{% if not forloop.last %}; {% endif %}{% endfor %}.
+    <a href="{% url 'publishing:recurring' %}" class="underline">Manage repeats</a>
+  </p>
+  {% endif %}
+  <form id="pd-repeat-form" method="post" action="{% url 'publishing:recurring-create' post.pk %}" class="space-y-3" hx-boost="false" x-show="open" x-cloak>
+    {% csrf_token %}
+    <div class="grid gap-3 sm:grid-cols-2">
+      <div>
+        <label for="repeat-days" class="block text-sm font-medium text-ink mb-1">Every (days)</label>
+        <input id="repeat-days" name="every_days" type="number" min="7" max="365" value="14" class="input w-full" required>
+      </div>
+      <div>
+        <label for="repeat-first" class="block text-sm font-medium text-ink mb-1">First repeat</label>
+        <input id="repeat-first" name="first_run_at" type="datetime-local" class="input w-full" required>
+      </div>
+    </div>
+    <div>
+      <label for="repeat-captions" class="block text-sm font-medium text-ink mb-1">Other captions (optional)</label>
+      <textarea id="repeat-captions" name="captions" rows="4" class="input w-full" aria-describedby="repeat-captions-help"></textarea>
+      <p id="repeat-captions-help" class="text-xs text-ink-subtle mt-1">Used in turn with the original. Separate them with a line of three dashes (---). Instagram needs a change each time: a copy with the same caption and media as the last one is kept as a draft.</p>
+    </div>
+    <p class="text-xs text-ink-subtle">At least 7 days apart. Each copy is made a day before it goes out and checked like any post{% if post.requires_approval %}, then sent for review{% endif %}. If it can't be scheduled, it's skipped and Owners and Admins are told why.</p>
+    <button type="submit" class="btn btn-primary btn-sm">Repeat</button>
+  </form>
+</section>
+{% endwith %}

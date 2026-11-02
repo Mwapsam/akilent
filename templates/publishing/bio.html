@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Bio page — {{ site.app_name|default:"Akilent" }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
+</div>
+
+{% include "publishing/_subnav.html" %}
+
+<div class="max-w-2xl space-y-4">
+
+  {% if not page %}
+  <section class="card card-pad space-y-3" aria-labelledby="bio-new">
+    <h2 id="bio-new" class="font-semibold text-ink">Set up your bio page</h2>
+    <p class="text-sm text-ink-subtle">An Instagram bio holds one link. Point it at your bio page, and each post you add gets its own button there. A chat that starts from a button is credited to that post, not to whichever post was last in your bio.</p>
+    {% if can_admin %}
+    <form method="post" class="space-y-3" hx-boost="false">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create">
+      <div>
+        <label for="bio-title" class="block text-sm font-medium text-ink mb-1">Title</label>
+        <input id="bio-title" name="title" class="input w-full" maxlength="100" required value="{{ suggested_title }}">
+      </div>
+      <div>
+        <label for="bio-slug" class="block text-sm font-medium text-ink mb-1">Address</label>
+        <div class="flex items-center gap-1 text-sm">
+          <span class="text-ink-subtle">/b/</span>
+          <input id="bio-slug" name="slug" class="input flex-1" maxlength="40" required value="{{ suggested_slug }}" pattern="[a-z0-9][a-z0-9\-]{1,38}[a-z0-9]" aria-describedby="bio-slug-help">
+        </div>
+        <p id="bio-slug-help" class="text-xs text-ink-subtle mt-1">Lowercase letters, numbers and hyphens.</p>
+      </div>
+      <button type="submit" class="btn btn-primary">Create bio page</button>
+    </form>
+    {% else %}
+    <p class="text-sm text-ink-subtle">Ask an Owner or Admin to create it.</p>
+    {% endif %}
+  </section>
+
+  {% else %}
+
+  <section class="card card-pad space-y-3" aria-labelledby="bio-link" x-data="{ copied: false }">
+    <h2 id="bio-link" class="font-semibold text-ink">Your bio page</h2>
+    <div class="flex flex-wrap items-center gap-2">
+      <code class="text-sm break-all">{{ page_url }}</code>
+      <button type="button" class="btn btn-ghost text-xs"
+              @click="navigator.clipboard.writeText('{{ page_url|escapejs }}'); copied = true; setTimeout(() => copied = false, 2000)">
+        <span x-show="!copied">Copy</span><span x-show="copied" x-cloak>Copied</span>
+      </button>
+      <a href="{{ page_url }}" target="_blank" rel="noopener" class="text-sm underline">View</a>
+    </div>
+    {% if not page.is_active %}
+    <p class="text-sm tone-amber-fg">The page is turned off. Its buttons still work for anyone who already has them.</p>
+    {% endif %}
+
+    <div data-bio-link-status="{% if bio_link_set %}set{% elif bio_link_set is None %}unknown{% else %}not-set{% endif %}">
+      {% if bio_link_set %}
+      <p class="text-sm tone-teal-fg">Your Instagram bio points here.</p>
+      {% elif bio_link_set is None %}
+      <p class="text-sm text-ink-subtle">{% if has_instagram %}We haven't checked your Instagram bio yet.{% else %}Connect Instagram so we can check that your bio points here.{% endif %}</p>
+      {% else %}
+      <p class="text-sm tone-amber-fg">Bio link not set: your Instagram profile's website is {% if page.ig_website %}<span class="break-all">{{ page.ig_website }}</span>{% else %}empty{% endif %}. In Instagram, go to Edit profile → Links and add the address above. Until then, chats from your bio can't be credited to the right post.</p>
+      {% endif %}
+      {% if has_instagram and can_admin %}
+      <form method="post" class="mt-2" hx-boost="false">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="check">
+        <button type="submit" class="btn btn-secondary btn-sm">Check again</button>
+      </form>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="card card-pad space-y-3" aria-labelledby="bio-tiles">
+    <h2 id="bio-tiles" class="font-semibold text-ink">Posts on the page ({{ tiles|length }} of {{ page.max_tiles }})</h2>
+    {% for tile in tiles %}
+    <div class="flex flex-wrap items-center gap-2 py-2{% if not forloop.first %} border-t border-border{% endif %}">
+      <div class="flex-1 min-w-0">
+        <p class="text-sm text-ink truncate">{% if tile.pinned %}<span class="text-xs tone-teal-fg mr-1">Pinned</span>{% endif %}{{ tile.label }}</p>
+        <p class="text-xs text-ink-subtle"><a href="{% url 'publishing:post-detail' tile.link.post_id %}" class="underline">Open post</a> · added {{ tile.created_at|date:"j M" }}</p>
+        <p class="text-xs text-ink-subtle" data-tile-stats="{{ tile.pk }}">{{ tile.stats.clicks }} click{{ tile.stats.clicks|pluralize }} · {{ tile.stats.chats }} chat{{ tile.stats.chats|pluralize }} in {{ stats_days }} days</p>
+      </div>
+      <form method="post" action="{% url 'publishing:bio-tile-update' tile.pk %}" class="flex gap-1" hx-boost="false">
+        {% csrf_token %}
+        <button type="submit" name="action" value="up" class="btn btn-ghost btn-sm" aria-label="Move up: {{ tile.label }}" {% if forloop.first %}disabled{% endif %}>↑</button>
+        <button type="submit" name="action" value="down" class="btn btn-ghost btn-sm" aria-label="Move down: {{ tile.label }}" {% if forloop.last %}disabled{% endif %}>↓</button>
+        <button type="submit" name="action" value="{% if tile.pinned %}unpin{% else %}pin{% endif %}" class="btn btn-ghost btn-sm">{% if tile.pinned %}Unpin{% else %}Pin{% endif %}</button>
+        <button type="submit" name="action" value="archive" class="btn btn-ghost btn-sm">Remove</button>
+      </form>
+    </div>
+    {% empty %}
+    <p class="text-sm text-ink-subtle">No posts yet. Open a published Instagram post with a WhatsApp chat link and choose <strong>Add to bio page</strong> on its Results card.</p>
+    {% endfor %}
+    <p class="text-xs text-ink-subtle">The newest {{ page.max_tiles }} posts show. Posts are removed after {{ page.archive_after_days }} days unless pinned. A removed post's button keeps working for anyone who already has it.</p>
+  </section>
+
+  {% if archived %}
+  <section class="card card-pad space-y-2" aria-labelledby="bio-archived">
+    <h2 id="bio-archived" class="font-semibold text-ink">Removed posts</h2>
+    {% for tile in archived %}
+    <div class="flex items-center gap-2 py-1">
+      <p class="flex-1 min-w-0 text-sm text-ink-subtle truncate">{{ tile.label }}</p>
+      <form method="post" action="{% url 'publishing:bio-tile-update' tile.pk %}" hx-boost="false">
+        {% csrf_token %}
+        <button type="submit" name="action" value="restore" class="btn btn-ghost btn-sm">Put back</button>
+      </form>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% if can_admin %}
+  <section class="card card-pad space-y-3" aria-labelledby="bio-settings">
+    <h2 id="bio-settings" class="font-semibold text-ink">Settings</h2>
+    <form method="post" enctype="multipart/form-data" class="space-y-3" hx-boost="false">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="settings">
+      <div>
+        <label for="bio-title-edit" class="block text-sm font-medium text-ink mb-1">Title</label>
+        <input id="bio-title-edit" name="title" class="input w-full" maxlength="100" required value="{{ page.title }}">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label for="bio-max" class="block text-sm font-medium text-ink mb-1">Posts shown</label>
+          <input id="bio-max" name="max_tiles" type="number" min="1" max="30" class="input w-full" value="{{ page.max_tiles }}">
+        </div>
+        <div>
+          <label for="bio-days" class="block text-sm font-medium text-ink mb-1">Remove after (days)</label>
+          <input id="bio-days" name="archive_after_days" type="number" min="1" max="365" class="input w-full" value="{{ page.archive_after_days }}">
+        </div>
+      </div>
+      <fieldset class="space-y-2">
+        <legend class="block text-sm font-medium text-ink mb-1">Picture</legend>
+        {% if page.avatar_url %}<img src="{{ page.avatar_url }}" alt="Current picture" class="w-12 h-12 rounded-full object-cover">{% endif %}
+        <input id="bio-avatar" name="avatar" type="file" accept="image/jpeg,image/png,image/webp" class="text-sm" aria-describedby="bio-avatar-help">
+        <p id="bio-avatar-help" class="text-xs text-ink-subtle">JPEG, PNG or WebP, under 2 MB. Shown round above the title.</p>
+        {% if page.avatar_url %}
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="remove_avatar"> Remove the picture</label>
+        {% endif %}
+      </fieldset>
+      <fieldset class="space-y-2" x-data="{ custom: {% if page.background_color or page.button_color %}true{% else %}false{% endif %} }">
+        <legend class="block text-sm font-medium text-ink mb-1">Colours</legend>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="custom_colors" x-model="custom"> Use my own colours</label>
+        <div class="grid grid-cols-2 gap-3" x-show="custom" x-cloak>
+          <div>
+            <label for="bio-bg" class="block text-sm text-ink mb-1">Background</label>
+            <input id="bio-bg" name="background_color" type="color" class="h-10 w-full" value="{{ page.background_color|default:'#ffffff' }}">
+          </div>
+          <div>
+            <label for="bio-btn" class="block text-sm text-ink mb-1">Buttons</label>
+            <input id="bio-btn" name="button_color" type="color" class="h-10 w-full" value="{{ page.button_color|default:'#1f7a5c' }}">
+          </div>
+        </div>
+        <p class="text-xs text-ink-subtle" x-show="custom" x-cloak>Text is set to dark or white, whichever is easier to read on each colour.</p>
+      </fieldset>
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="is_active" {% if page.is_active %}checked{% endif %}>
+        Page is on
+      </label>
+      <button type="submit" class="btn btn-primary btn-sm">Save</button>
+    </form>
+  </section>
+  {% endif %}
+
+  {% endif %}
+</div>
+{% endblock %}

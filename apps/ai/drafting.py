@@ -469,7 +469,9 @@ _HASHTAG_GUIDANCE = {
 }
 
 
-def content_caption_prompt(account, media_type: str, platform: str, notes: str) -> str:
+def content_caption_prompt(
+    account, media_type: str, platform: str, notes: str, voice: str = ""
+) -> str:
     char_limit = _CAPTION_LIMITS.get(media_type, _CAPTION_LIMITS.get(platform, 2200))
     hashtag_hint = _HASHTAG_GUIDANCE.get(platform, "Include 5-10 relevant hashtags.")
     business = _business_block(account, notes)
@@ -489,7 +491,13 @@ Answer with ONE JSON object and nothing else:
 {{"caption": "<caption text, no hashtags>", "hashtags": ["<tag without #>", ...]}}]}}
 
 About the business:
-{business}"""
+{business}{_voice(voice)}"""
+
+
+def _voice(voice: str) -> str:
+    from apps.ai.content import _voice_block
+
+    return _voice_block(voice)
 
 
 # ---- running one draft ------------------------------------------------------------------------
@@ -527,10 +535,16 @@ def run(draft, provider) -> None:
         from apps.ai import knowledge
 
         return knowledge.run_website(draft, provider)
+    elif draft.kind in ("content_rewrite", "content_hashtags", "content_ideas"):
+        from apps.ai import content
+
+        return content.run(draft, provider, notes)
     elif draft.kind == "content_caption":
         media_type = draft.context.get("media_type", "image")
         platform = draft.context.get("platform", "instagram")
-        system = content_caption_prompt(account, media_type, platform, notes)
+        system = content_caption_prompt(
+            account, media_type, platform, notes, draft.context.get("voice", "")
+        )
         user = draft.prompt
         goal = draft.context.get("goal", "")
         if goal:

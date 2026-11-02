@@ -171,6 +171,22 @@ class InstagramPublishProvider:
         data = self._get(f"{media_id}/insights", metric=",".join(metrics))
         return parse_insights(data)
 
+    def fetch_account_insights(
+        self, ig_user_id: str, metrics: list[str], since: int, until: int
+    ) -> dict:
+        """One day's account totals (instagram_business_manage_insights): ``period=day``
+        with ``metric_type=total_value`` between two Unix times. A metric with no data
+        is left out, never reported as 0."""
+        data = self._get(
+            f"{ig_user_id}/insights",
+            metric=",".join(metrics),
+            period="day",
+            metric_type="total_value",
+            since=since,
+            until=until,
+        )
+        return parse_insights(data)
+
     def get_permalink(self, media_id: str) -> str:
         data = self._get(media_id, fields="permalink")
         return data.get("permalink", "")

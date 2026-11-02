@@ -87,6 +87,11 @@ class MetaPublishError(Exception):
             return types.RATE_LIMIT
         if code in _VALIDATION_CODES or (code is not None and 36000 <= code <= 36999):
             return types.VALIDATION
+        # Facebook video spec errors: 1363128 (duration) and 1363129 (frame rate) are
+        # documented for Reels; the rest of the 1363xxx range reports the same kind.
+        # They can arrive as the code or as the subcode under a generic code.
+        if any(c is not None and 1363000 <= c <= 1363999 for c in (code, self.subcode)):
+            return types.VALIDATION
         if code in _OUTAGE_CODES or self.http_status >= 500:
             return types.PROVIDER_OUTAGE
         return types.UNKNOWN

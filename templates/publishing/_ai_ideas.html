@@ -1,0 +1,33 @@
+{% comment %}
+  Post ideas from results (cs_ai_plus). While the draft is being written this polls itself;
+  each finished idea can be added to Planning as an idea, never as a post.
+{% endcomment %}
+<div id="ai-ideas-panel"
+     {% if draft and draft.status == "pending" %}hx-get="{% url 'publishing:ai-ideas-status' draft.pk %}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  {% if not draft %}
+  {% elif draft.status == "pending" %}
+  <p class="text-sm text-ink-subtle" role="status">Writing ideas from your results…</p>
+  {% elif draft.status == "error" %}
+  <p class="text-sm text-coral-700" role="alert">{{ draft.error|default:"That didn't work. Try again." }}</p>
+  {% else %}
+  {% if draft.warnings %}
+  <ul class="text-xs text-amber-800 mb-2">{% for w in draft.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+  {% endif %}
+  <ul class="divide-y divide-border">
+    {% for idea in draft.result.ideas %}
+    <li class="py-3 flex items-start gap-3" data-idea="{{ forloop.counter0 }}">
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-medium text-ink">{{ idea.topic }}</p>
+        {% if idea.angle %}<p class="text-sm text-ink-subtle whitespace-pre-line">{{ idea.angle }}</p>{% endif %}
+        <p class="text-xs text-ink-subtle mt-1">{{ idea.media_type|capfirst }} · builds on <a class="underline" href="{% url 'publishing:post-detail' idea.based_on %}">post {{ idea.based_on }}</a></p>
+      </div>
+      <form method="post" action="{% url 'publishing:ai-idea-save' draft.pk %}" hx-boost="false">
+        {% csrf_token %}
+        <input type="hidden" name="index" value="{{ forloop.counter0 }}">
+        <button type="submit" class="btn btn-secondary btn-sm">Add to Planning</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>

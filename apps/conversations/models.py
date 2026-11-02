@@ -1019,6 +1019,14 @@ class ConversationEntryPoint(models.Model):
         blank=True,
         related_name="entry_points",
     )
+    # Set when the ref code was a bio-page tile's: the chat came through that tile.
+    bio_tile = models.ForeignKey(
+        "publishing.BioTile",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="entry_points",
+    )
     matched_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

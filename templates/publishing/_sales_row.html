@@ -1,0 +1,25 @@
+{% load publishing_filters %}{% comment %}One post in the "Which posts sold" report (apps.publishing.sales).
+  {% include "publishing/_sales_row.html" with row=row %}
+  Only confirmed credits are in the main figures; less certain ones are listed under them.{% endcomment %}
+<li class="py-3 flex items-start gap-3" data-sales-post="{{ row.post.pk }}">
+  {% if row.rank %}<span class="w-6 shrink-0 text-sm font-semibold text-ink-subtle tabular-nums"><span class="sr-only">Rank </span>{{ row.rank }}</span>{% endif %}
+  {% include "publishing/_media_thumb.html" with url=row.post|first_media size="w-10 h-10" alt=row.post.caption|truncatechars:80 %}
+  <div class="flex-1 min-w-0">
+    <a href="{% url 'publishing:post-detail' row.post.pk %}" class="block text-sm font-medium text-ink truncate hover:underline">{{ row.post.caption|truncatechars:80|default:"(no caption)" }}</a>
+    <p class="text-xs text-ink-subtle">{{ row.post.platforms|join:", "|capfirst }}</p>
+    {% with c=row.confirmed %}
+    <dl class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+      <div><dt class="inline text-ink-subtle">Chats</dt> <dd class="inline font-medium text-ink tabular-nums">{{ c.chats }}</dd></div>
+      <div><dt class="inline text-ink-subtle">Leads</dt> <dd class="inline font-medium text-ink tabular-nums">{{ c.leads }}</dd></div>
+      <div><dt class="inline text-ink-subtle">Orders</dt> <dd class="inline font-medium text-ink tabular-nums">{{ c.orders }}</dd></div>
+      <div><dt class="inline text-ink-subtle">Paid</dt> <dd class="inline font-medium text-ink tabular-nums">{{ c.paid_orders }}</dd></div>
+      <div><dt class="inline text-ink-subtle">Revenue</dt> <dd class="inline font-medium text-ink tabular-nums" data-sales-revenue>{% for r in c.revenue %}{{ r.currency }} {{ r.total }}{% if not forloop.last %} · {% endif %}{% empty %}—{% endfor %}</dd></div>
+    </dl>
+    {% endwith %}
+    {% for u in row.unconfirmed %}
+    <p class="mt-1 text-xs text-ink-subtle" data-sales-unconfirmed="{{ u.basis }}">
+      Also {{ u.label }}: {{ u.chats }} chat{{ u.chats|pluralize }}, {{ u.leads }} lead{{ u.leads|pluralize }}, {{ u.orders }} order{{ u.orders|pluralize }}{% for r in u.revenue %}{% if forloop.first %}, {% endif %}{{ r.currency }} {{ r.total }}{% if not forloop.last %} · {% endif %}{% endfor %}. Not used to rank.
+    </p>
+    {% endfor %}
+  </div>
+</li>

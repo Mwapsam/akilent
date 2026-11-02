@@ -35,16 +35,25 @@ def match_ref_code(conversation, message) -> ConversationEntryPoint | None:
     ignored.
     """
     from apps.publishing.links import find_code
-    from apps.publishing.models import TrackedLink
+    from apps.publishing.models import BioTile, TrackedLink
 
     code = find_code(message.body)
     if not code:
         return None
+    tile = None
     link = (
         TrackedLink.objects.filter(account_id=conversation.account_id, code=code)
         .select_related("post", "variant")
         .first()
     )
+    if link is None:
+        # A bio-page tile's code: the chat came through the tile, for its link's post.
+        tile = (
+            BioTile.objects.filter(page__account_id=conversation.account_id, code=code)
+            .select_related("link__post", "link__variant")
+            .first()
+        )
+        link = tile.link if tile else None
     if link is None:
         return None
     entry, _ = ConversationEntryPoint.objects.get_or_create(
@@ -57,6 +66,7 @@ def match_ref_code(conversation, message) -> ConversationEntryPoint | None:
             "variant": link.variant,
             "campaign": link.campaign,
             "message": message,
+            "bio_tile": tile,
         },
     )
     return entry

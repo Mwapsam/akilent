@@ -23,6 +23,8 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Q
 from django.utils import timezone
 
+from apps.publishing.bio import credit_basis
+
 
 def _mask_phone(phone: str | None) -> str:
     digits = "".join(c for c in (phone or "") if c.isdigit())
@@ -169,6 +171,8 @@ class Command(BaseCommand):
                             "kind": e.kind,
                             "post_id": e.post_id,
                             "variant_id": e.variant_id,
+                            "bio_tile_id": e.bio_tile_id,
+                            "credit_basis": credit_basis(e),
                             "matched_at": _iso(e.matched_at),
                         }
                         for e in c.entry_points.order_by("matched_at")
@@ -187,11 +191,14 @@ class Command(BaseCommand):
                     "conversation": a.conversation.public_id,
                     "method": a.method,
                     "credits_post": a.credits_post,
+                    "credit_basis": credit_basis(a.entry_point)
+                    if a.credits_post
+                    else None,
                     "source_post_id": a.source_post_id,
                     "at": _iso(a.attributed_at),
                 }
                 for a in attributions.select_related(
-                    "lead", "order", "deal", "conversation"
+                    "lead", "order", "deal", "conversation", "entry_point"
                 )
             ],
             "leads": [

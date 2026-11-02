@@ -24,9 +24,51 @@
 
 <h2>Publish or schedule</h2>
 <p>Publish now, or pick a date and time. To post on each channel at a different time, schedule the channels separately. The post page shows each channel's status, so you can see that Facebook published even if Instagram is still waiting.</p>
+{% if released.cs_scheduling %}
+<h3>Month view and moving posts</h3>
+<p>On the <strong>Calendar</strong> tab, choose <strong>Month</strong>. Drag a post that hasn't gone out to another day and it keeps its time. Without a mouse, open <strong>Move</strong> on the post and pick a day. Posts that are published, publishing, failed or being checked can't be moved, and a post that needs approval must be approved first.</p>
+<h3>Posting slots</h3>
+<p>Under <strong>Calendar → Posting slots</strong>, add the days and times you like to post (Owners and Admins). In the composer, <strong>Next free slot</strong> fills in the next slot that none of the post's channels is already scheduled at, looking up to 8 weeks ahead. It only fills in the time: the post is checked and approved as usual when you schedule it.</p>
+<p>The same page shows <strong>when your posts do best</strong>: likes, comments, saves and shares per person reached, by day and 3-hour block, from your posts of the last 90 days that have been out at least 3 days. It needs 10 posts with numbers on a channel before suggesting anything, and 3 posts in a block before suggesting that block.</p>
+{% endif %}
 
 <h2>Review before publishing (optional)</h2>
 <p>An owner or admin can switch on <strong>Require review</strong> on the Channels tab. Posts then need an owner's or admin's approval before they can go out. If someone edits an approved post, it needs approving again.</p>
+
+{% if released.cs_recurring %}
+<h2>Repeat a post</h2>
+<p>On a post's page, choose <strong>Repeat this post</strong>: how many days apart (7 or more), when the first repeat goes out, and other captions to use in turn. Each copy is made a day before it goes out and checked like any post you schedule. If your workspace reviews posts, each copy is sent for review instead of scheduled. Instagram treats repeated content as spam, so a copy with the same caption and media as the last one is kept as a draft for you to change. A copy that can't be scheduled is skipped, and Owners and Admins are emailed why. Manage repeats under <strong>Calendar → Recurring</strong>.</p>
+{% endif %}
+{% if released.cs_csv_import %}
+<h2>Import posts from a spreadsheet</h2>
+<p>Under <strong>Library → Import CSV</strong>, choose a CSV file with a header row naming the columns: <code>caption</code>, <code>platforms</code>, <code>media_type</code>, <code>media_urls</code>, <code>scheduled_at</code>, <code>hashtags</code>. Akilent checks each row first and shows what's wrong with it. Every row becomes a <strong>draft</strong>: nothing is scheduled or published from an import. Images can be links to public https images, which are copied in; upload videos in the composer. Up to 100 rows at a time.</p>
+{% endif %}
+{% if released.cs_media_library %}
+<h2>Media library</h2>
+<p>The <strong>Media</strong> tab holds every picture and video uploaded in Content Studio. Tag files to find them again, and in the composer choose <strong>From library</strong> to add one without uploading it again.</p>
+<ul>
+  <li><strong>Edit a picture:</strong> crop it to a channel's shape (1:1, 4:5, 1.91:1 or 9:16), turn it, and add one line of text. The result is saved as a new picture; the original stays as it is.</li>
+  <li><strong>Reel cover:</strong> on a video, pick a moment and Akilent saves that frame as a picture.</li>
+  <li><strong>Removing a file:</strong> a file in a draft, scheduled or publishing post can't be removed. A file that only published posts use is archived: hidden from the library but kept, so those posts still show it. A file no post uses is deleted.</li>
+  <li><strong>Stock photos</strong> (where offered): search Pexels and add a photo to your library. The photographer's credit is kept with it.</li>
+</ul>
+<p><strong>Caption templates and hashtag sets</strong> (from the Media tab) put text you write often, or hashtags you use together, into a post from the composer. Hashtags already in the post aren't repeated.</p>
+{% endif %}
+{% if released.cs_ai_plus %}
+<h2>AI tools</h2>
+<p>When AI is on for your business (Settings → AI), Content Studio has a few more AI helpers. They only suggest: nothing changes until you pick something, and a post still goes through review if your workspace uses it.</p>
+<ul>
+  <li><strong>Brand voice</strong> (Content Studio → AI): describe how your posts should sound. AI follows it when it writes captions, rewrites or ideas. It's style only: prices and other facts still come from your AI notes.</li>
+  <li><strong>Rewrite with AI</strong> (under the caption): shorter, friendlier, a clearer next step, fixed spelling, or adapted for Instagram or Facebook. You see what changed before you use it, and you can undo it. It tells you if a link, phone number, @mention or hashtag went missing, or if a price or number appeared that isn't in your caption or notes.</li>
+  <li><strong>Suggest hashtags</strong>: tap the ones you want to add. Hashtags already in the post aren't suggested again, and Instagram's limit of 30 is kept.</li>
+  <li><strong>Ideas from what sold</strong> (Content Studio → AI): new post ideas built on your posts that started the most chats, leads and paid orders in the last 90 days. It needs at least one post with enough tracked chats to judge. Add the ones you like to Planning.</li>
+</ul>
+<p>Posts where you used a suggestion are marked as AI-assisted.</p>
+{% endif %}
+{% if released.cs_analytics %}
+<h2>Account analytics</h2>
+<p>The <strong>Analytics</strong> tab shows each account day by day: followers, reach, views, and on Instagram accounts engaged and interactions. Reach and accounts engaged count people per day, so they're shown as a daily average, not added up. Instagram's numbers can take up to 48 hours to settle, so the newest two days aren't shown yet. A dash (—) means the number isn't available, with the reason beside it; it never means zero. Download the days as CSV, or open <strong>Print or save as PDF</strong>. Owners and Admins can turn on a weekly email, sent on Monday morning.</p>
+{% endif %}
 
 <h2>See what a post brought in</h2>
 <p>The post page shows reach and engagement from Instagram and Facebook. Add a WhatsApp chat link to see the chats, leads and paid orders each post brings: see <a href="{% url 'help-article' 'post-results' %}">Track which posts bring WhatsApp chats</a>.</p>

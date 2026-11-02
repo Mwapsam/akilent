@@ -358,6 +358,27 @@ def _post_results_available(ctx) -> bool:
     return _can_publish(ctx) and "whatsapp" in ctx.channels
 
 
+def _bio_link_available(ctx) -> bool:
+    """The bio page is released, and there are Instagram post chats to credit."""
+    from apps.publishing.bio import is_released
+
+    return (
+        is_released()
+        and _post_results_available(ctx)
+        and _instagram_usable(ctx)
+        and _done_instagram(ctx)
+    )
+
+
+def _done_bio_link(ctx) -> bool:
+    """The Instagram profile's website is the bio page, at the last check."""
+    from apps.publishing.bio import bio_link_set
+    from apps.publishing.models import BioPage
+
+    page = BioPage.objects.filter(account=ctx.account).first()
+    return bool(page and bio_link_set(page))
+
+
 def _publish_blocked(ctx) -> str:
     """Until a page or account is connected there is nothing to publish to."""
     if _instagram_usable(ctx) and _done_instagram(ctx):
@@ -627,6 +648,17 @@ STEPS: tuple[StepDef, ...] = (
         done=_exists("conversations.ConversationEntryPoint"),
         available=_post_results_available,
         needs="post",
+    ),
+    StepDef(
+        key="bio_link",
+        section="publish",
+        title="Point your Instagram bio at your bio page",
+        desc="Each post gets its own button there, so a chat from your bio is credited to the post the customer chose.",
+        icon="instagram",
+        cta="Set up bio page",
+        url="publishing:bio",
+        done=_done_bio_link,
+        available=_bio_link_available,
     ),
     StepDef(
         key="wa_template",

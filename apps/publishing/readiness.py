@@ -15,9 +15,11 @@ An issue blocks the actions in its ``blocks`` list and is only a warning for the
 
 from __future__ import annotations
 
+import hashlib
 from datetime import timedelta
 
 from django.conf import settings
+from django.core.cache import cache
 from django.utils import timezone
 
 from . import constraints as limits
@@ -33,6 +35,8 @@ from .composer import (
 SUBMIT_REVIEW, SCHEDULE, PUBLISH_NOW = "submit_review", "schedule", "publish_now"
 GATED_ACTIONS = (SUBMIT_REVIEW, SCHEDULE, PUBLISH_NOW)
 _CONTENT = [SUBMIT_REVIEW, SCHEDULE, PUBLISH_NOW]
+# How long a Facebook story reuse answer is kept while someone edits (seconds).
+STORY_REUSE_CACHE_SECONDS = 60
 
 _TYPE_NAMES = {
     limits.IMAGE: "An image post",
@@ -169,15 +173,6 @@ def _content_issues(inp: ComposerInput) -> list[dict]:
                         _CONTENT,
                     )
                 )
-            if "facebook" in inp.platforms:
-                issues.append(
-                    _issue(
-                        "fb_first_image_only",
-                        "Facebook publishes the first image only.",
-                        "media",
-                        platform="facebook",
-                    )
-                )
         elif len(urls) > 1:
             issues.append(
                 _issue(
@@ -199,11 +194,23 @@ def _content_issues(inp: ComposerInput) -> list[dict]:
                     platform="instagram",
                 )
             )
-        if "facebook" in inp.platforms:
+
+    if "facebook" in inp.platforms:
+        if limits.facebook_format_blocked(mt):
             issues.append(
                 _issue(
-                    "fb_story",
-                    "Facebook publishes this story as a regular post.",
+                    "fb_format_unsupported",
+                    limits.FB_UNSUPPORTED_MESSAGE,
+                    "media_type",
+                    _CONTENT,
+                    platform="facebook",
+                )
+            )
+        elif mt == limits.REEL and not limits.fb_formats_released():
+            issues.append(
+                _issue(
+                    "fb_reel_as_video",
+                    limits.FB_REEL_AS_VIDEO_MESSAGE,
                     "media_type",
                     platform="facebook",
                 )
@@ -236,6 +243,177 @@ def _content_issues(inp: ComposerInput) -> list[dict]:
                 )
             )
     return issues
+
+
+MEDIA_CHECKING = "Checking your video. This takes a moment."
+MEDIA_CHECKING_SLOW = (
+    "Media checks are running slowly. You can save as a draft now and schedule once "
+    "the check finishes."
+)
+
+
+def _media_issues(
+    inp: ComposerInput, account, now, start_checks: bool = True
+) -> list[dict]:
+    """Phase 0a: what the server-side checks say (apps.publishing.media_checks). A check
+    still running or failed blocks; a video outside a channel's limits blocks that
+    channel's post; a Facebook story can't reuse media this Page already published.
+
+    ``start_checks=False`` only reads: a file with no check yet counts as being checked,
+    and nothing is saved or queued (the CSV preview)."""
+    from . import media_checks
+    from .direct_upload import is_unconfirmed
+    from .models import MediaCheck
+
+    issues = []
+    mt = inp.media_type
+    fb_story = "facebook" in inp.platforms and mt == limits.STORY
+    checked = {}
+    for url in inp.media_urls:
+        if is_unconfirmed(url):
+            # A direct upload never confirmed (Phase 0c): it is deleted within a day.
+            issues.append(
+                _issue(
+                    "media_unconfirmed",
+                    media_checks.UNCONFIRMED_MESSAGE,
+                    "media",
+                    _CONTENT,
+                )
+            )
+            continue
+        if limits.media_kind(url) != "video" and not fb_story:
+            continue
+        check = (
+            media_checks.ensure(account, url)
+            if start_checks
+            else media_checks.find(account, url)
+        )
+        if check is None or check.status == MediaCheck.Status.PENDING:
+            slow = check is not None and media_checks.is_slow(check, now)
+            issues.append(
+                _issue(
+                    "media_checking",
+                    MEDIA_CHECKING_SLOW if slow else MEDIA_CHECKING,
+                    "media",
+                    _CONTENT,
+                )
+            )
+        elif check.status == MediaCheck.Status.FAILED:
+            issues.append(
+                _issue(
+                    "media_check_failed",
+                    f"We couldn't check this file: {check.error}",
+                    "media",
+                    _CONTENT,
+                )
+            )
+        else:
+            checked[url] = check
+
+    type_name = _TYPE_NAMES.get(mt, "This post")
+    for check in checked.values():
+        for p in inp.platforms:
+            problems = media_checks.violations(check, p, mt)
+            if problems:
+                issues.append(
+                    _issue(
+                        "video_limits",
+                        f"{type_name} on {PLATFORM_LABELS[p]} must be "
+                        f"{', '.join(problems)}.",
+                        "media",
+                        _CONTENT,
+                        platform=p,
+                    )
+                )
+
+    if fb_story and checked:
+        if _already_published_on_facebook(
+            account, {c.sha256 for c in checked.values()}
+        ):
+            issues.append(
+                _issue(
+                    "fb_story_reused",
+                    "Facebook doesn't allow a story with a photo or video already used "
+                    "in a published post. Use a new file for the story.",
+                    "media",
+                    _CONTENT,
+                    platform="facebook",
+                )
+            )
+
+    if "facebook" in inp.platforms and mt == limits.REEL:
+        if _fb_reels_last_day(account, now) >= limits.FB_REELS_PER_DAY:
+            issues.append(
+                _issue(
+                    "fb_reel_daily_limit",
+                    f"This Page has sent {limits.FB_REELS_PER_DAY} Reels through Akilent "
+                    "in the last 24 hours, Facebook's daily limit. This one waits and "
+                    "goes out when Facebook allows it.",
+                    "media_type",
+                    platform="facebook",
+                )
+            )
+    return issues
+
+
+def _already_published_on_facebook(account, hashes: set[str]) -> bool:
+    """Whether any of ``hashes`` is a file in a post already published on Facebook.
+
+    Starts from the (indexed) hash: only the few files with that content are looked for
+    among published Facebook posts, so the composer's repeated checks stay cheap."""
+    from django.db.models import Max, Q
+
+    from .models import ContentPostVariant, MediaCheck
+
+    hashes = {h for h in hashes if h}
+    if not hashes:
+        return False
+    urls = set(
+        MediaCheck.objects.filter(account=account, sha256__in=hashes).values_list(
+            "url", flat=True
+        )
+    )
+    if not urls:
+        return False
+    published = ContentPostVariant.objects.filter(
+        post__account=account,
+        platform=ContentPostVariant.Platform.FACEBOOK,
+        status=ContentPostVariant.Status.PUBLISHED,
+    )
+    # The composer asks again on every edit, so the answer is kept for a minute. The key
+    # holds the latest Facebook publish, so anything published since asks afresh.
+    latest = published.aggregate(latest=Max("published_at"))["latest"]
+    digest = hashlib.sha256(" ".join(sorted(urls)).encode()).hexdigest()
+    key = f"fb-story-reuse:{account.pk}:{latest}:{digest}"
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+    match = Q()
+    for url in urls:
+        match |= Q(media_urls__icontains=url) | Q(post__media_urls__icontains=url)
+    candidates = published.filter(match).select_related("post")
+    # The channel's own media, or the post's when it has none, as publishing uses them.
+    reused = any(
+        u in urls for v in candidates for u in (v.media_urls or v.post.media_urls or [])
+    )
+    cache.set(key, reused, STORY_REUSE_CACHE_SECONDS)
+    return reused
+
+
+def _fb_reels_last_day(account, now) -> int:
+    from .models import ContentPost, ContentPostVariant
+
+    return ContentPostVariant.objects.filter(
+        post__account=account,
+        post__media_type=ContentPost.MediaType.REEL,
+        platform=ContentPostVariant.Platform.FACEBOOK,
+        status__in=(
+            ContentPostVariant.Status.PUBLISHED,
+            ContentPostVariant.Status.PROCESSING,
+            ContentPostVariant.Status.PUBLISHING,
+        ),
+        last_attempt_at__gte=now - timedelta(hours=24),
+    ).count()
 
 
 def _connection_issues(inp: ComposerInput, dests: dict) -> list[dict]:
@@ -316,9 +494,11 @@ def check(
     dests: dict | None = None,
     wa_ready: bool | None = None,
     now=None,
+    start_checks: bool = True,
 ) -> list[dict]:
     """Every problem with the post in ``inp``. Pass ``error`` when the form couldn't be
-    read; it blocks everything until fixed."""
+    read; it blocks everything until fixed. ``start_checks=False`` reads media checks
+    without starting any (see ``_media_issues``)."""
     if error is not None:
         return [_issue("invalid", str(error), error.field or "caption", _CONTENT)]
     if inp is None:
@@ -333,11 +513,14 @@ def check(
     from .composer import destinations
     from .links import CTA_WHATSAPP, whatsapp_number_for
 
+    now = now or timezone.now()
     issues = _content_issues(inp)
+    if limits.fb_formats_released():
+        issues += _media_issues(inp, account, now, start_checks)
     issues += _connection_issues(
         inp, dests if dests is not None else destinations(account)
     )
-    issues += _schedule_issues(inp, now or timezone.now())
+    issues += _schedule_issues(inp, now)
 
     if (inp.cta or {}).get("kind") == CTA_WHATSAPP and any(inp.wa_links.values()):
         ready = wa_ready if wa_ready is not None else bool(whatsapp_number_for(account))

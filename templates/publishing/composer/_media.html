@@ -80,4 +80,42 @@
              @keydown.enter.prevent="$el.click()" @keydown.space.prevent="$el.click()">browse</label></span>
     <span class="cmp-hint">JPEG, PNG, WebP, GIF or MP4, up to 100 MB each. Images open in the cropper first.</span>
   </div>
+
+  {% if released.cs_media_library %}
+  {% comment %}The media library (cs_media_library): files already in Akilent, added as
+  they are, without uploading again.{% endcomment %}
+  <div class="mt-2" x-show="mediaType !== 'text'">
+    <button type="button" class="btn btn-ghost btn-sm" @click="openLibrary()" aria-haspopup="dialog">From library</button>
+  </div>
+  <div x-show="libraryOpen" x-cloak class="fixed inset-0 flex items-center justify-center p-4" style="z-index: var(--z-modal)"
+       @keydown.escape.window="libraryOpen = false">
+    <div class="fixed inset-0 bg-gray-900/50" @click="libraryOpen = false" aria-hidden="true"></div>
+    <div class="relative card card-pad w-full max-w-2xl max-h-[85vh] overflow-y-auto space-y-3" role="dialog" aria-modal="true" aria-labelledby="library-title"
+         x-trap.noscroll="libraryOpen">
+      <div class="flex items-center justify-between gap-2">
+        <h3 id="library-title" class="font-semibold text-ink">Choose from your media</h3>
+        <button type="button" class="btn btn-ghost btn-sm" @click="libraryOpen = false">Close</button>
+      </div>
+      <form class="flex gap-2" @submit.prevent="loadLibrary()">
+        <label class="sr-only" for="library-q">Search media</label>
+        <input id="library-q" class="input flex-1 min-w-0" x-model="libraryQuery" placeholder="Name or tag">
+        <button type="submit" class="btn btn-secondary btn-sm">Search</button>
+      </form>
+      <p class="text-sm text-ink-subtle" x-show="libraryLoading">Loading…</p>
+      <p class="text-sm tone-coral-fg" role="alert" x-show="libraryError" x-text="libraryError"></p>
+      <p class="text-sm text-ink-subtle" x-show="!libraryLoading && !libraryError && !libraryItems.length">Nothing here yet. Files you upload are added to your media.</p>
+      <ul class="grid gap-2 grid-cols-3 sm:grid-cols-4">
+        <template x-for="a in libraryItems" :key="a.id">
+          <li>
+            <button type="button" class="block w-full text-left rounded-lg overflow-hidden border border-border hover:border-accent focus-visible:outline focus-visible:outline-2" @click="pickAsset(a)" :aria-label="'Add ' + a.name">
+              <template x-if="a.kind === 'image'"><img :src="a.url" alt="" class="w-full aspect-square object-cover" loading="lazy"></template>
+              <template x-if="a.kind === 'video'"><video :src="a.url + '#t=0.1'" preload="metadata" muted playsinline class="w-full aspect-square object-cover"></video></template>
+              <span class="block px-1.5 py-1 text-xs text-ink-subtle truncate" x-text="a.name"></span>
+            </button>
+          </li>
+        </template>
+      </ul>
+    </div>
+  </div>
+  {% endif %}
 </section>

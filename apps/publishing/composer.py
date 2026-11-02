@@ -18,6 +18,7 @@ from django.utils.dateparse import parse_datetime
 
 from apps.core.channels import channel_state
 
+from . import ai_plus
 from .models import ContentPost, ContentPostVariant, FacebookPageConnection
 
 PLATFORM_LABELS = {"instagram": "Instagram", "facebook": "Facebook"}
@@ -127,6 +128,8 @@ class ComposerInput:
     brief: dict[str, str] = field(default_factory=dict)
     # The AI suggestion the caption started from: (AIDraft id, option index), or None.
     ai_pick: tuple[str, int] | None = None
+    # Rewrites and hashtag suggestions the post used (AIDraft ids, cs_ai_plus).
+    ai_assist: list[int] = field(default_factory=list)
 
 
 def parse_schedule(raw: str):
@@ -173,6 +176,7 @@ def parse_form(data) -> ComposerInput:
         wa_links={p: bool(data.get(f"wa_link_{p}")) for p in platforms},
         brief={f: data[f].strip() for f in BRIEF_FIELDS if f in data},
         ai_pick=_ai_pick(data),
+        ai_assist=ai_plus.parse_assist(data.get("ai_assist")),
     )
 
     # Per-channel times: each channel publishes at its own time, and the post's time is
@@ -445,6 +449,7 @@ def _save_locked(post, inp, action, user, data) -> SaveResult:
     with transaction.atomic():
         post.save()
         record_ai_caption(post, inp.ai_pick)
+        ai_plus.record_assist(post, inp.ai_assist)
         initialize_post_with_variants(post, inp.platforms)
         # Before the review check: the CTA and its caption line are part of what a
         # reviewer approves.
