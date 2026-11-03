@@ -476,6 +476,23 @@ def test_backfill_adds_existing_post_media_once(shop):
     ]
 
 
+def test_names_are_decoded_and_backfill_fixes_old_ones(shop):
+    url = MEDIA + "publishing/1/My%20photo.jpg"
+    shop.post(url)
+    call_command("media_library_backfill", stdout=StringIO())
+    assert MediaAsset.objects.get().name == "My photo.jpg"
+
+    MediaAsset.objects.update(name="My%20photo.jpg")  # as an earlier run saved it
+    typed = shop.asset("x.png")
+    MediaAsset.objects.filter(pk=typed.pk).update(name="50%25 off")  # typed by someone
+    out = StringIO()
+    call_command("media_library_backfill", stdout=out)
+
+    assert "Fixed the names of 1 file" in out.getvalue()
+    assert MediaAsset.objects.get(url=url).name == "My photo.jpg"
+    assert MediaAsset.objects.get(pk=typed.pk).name == "50%25 off"
+
+
 def test_remove_never_redirects_off_site(shop, released):
     asset = shop.asset()
     url = reverse("publishing:media-update", args=[asset.pk])

@@ -215,14 +215,14 @@ def _copy_in(account, url: str) -> str:
         from .media_checks import record_upload
 
         record_upload(account, stored, data, kind)
-    from .media_library import record_if_released
+    from .media_library import name_from_url, record_if_released
 
     record_if_released(
         account,
         stored,
         kind="image",
         mime=kind,
-        name=url.rsplit("/", 1)[-1][:200],
+        name=name_from_url(url)[:200],
         data=data,
         source="import",
     )

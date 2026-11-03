@@ -5,7 +5,8 @@
 Files uploaded before the library was released aren't in it. This records every image
 and video URL on a post that is stored in Akilent (our own media host), once per
 business. Files elsewhere are left out: the library only holds what Akilent stores.
-Safe to run again.
+It also decodes names an earlier run kept URL-encoded ("My%20photo.jpg"). Safe to run
+again.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from __future__ import annotations
 from django.core.management.base import BaseCommand
 
 from apps.publishing.constraints import media_kind
-from apps.publishing.media_library import record, url_digest
+from apps.publishing.media_library import name_from_url, record, url_digest
 from apps.publishing.models import ContentPost, MediaAsset
 
 
@@ -39,5 +40,17 @@ class Command(BaseCommand):
                 added += 1
                 if not dry_run:
                     record(post.account, url, kind=media_kind(url))
+        renamed = 0
+        for asset in MediaAsset.objects.filter(name__contains="%").iterator():
+            # Only names taken straight from the URL; a name someone typed is theirs.
+            if asset.name != asset.url.rsplit("/", 1)[-1][:200]:
+                continue
+            renamed += 1
+            if not dry_run:
+                asset.name = name_from_url(asset.url)[:200]
+                asset.save(update_fields=["name"])
         verb = "Would add" if dry_run else "Added"
         self.stdout.write(f"{verb} {added} file(s) to the media library.")
+        if renamed:
+            fixed = "Would fix" if dry_run else "Fixed"
+            self.stdout.write(f"{fixed} the names of {renamed} file(s).")

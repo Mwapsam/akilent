@@ -149,7 +149,18 @@
         var start = function () {
           self.cropper = new window.Cropper(img, { viewMode: 1, autoCropArea: 1, background: false });
         };
-        if (img.complete) start(); else img.addEventListener("load", start, { once: true });
+        // A picture that failed to load is "complete" too, with no size: usually the media
+        // server not allowing it to be read back (CORS), which editing needs.
+        var fail = function () {
+          self.error = "This picture can't be opened for editing yet: the media server doesn't " +
+            "allow it to be read back. Your files and posts aren't affected.";
+        };
+        if (img.complete) {
+          if (img.naturalWidth) start(); else fail();
+        } else {
+          img.addEventListener("load", start, { once: true });
+          img.addEventListener("error", fail, { once: true });
+        }
       },
 
       setRatio: function (r) {

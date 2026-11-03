@@ -81,6 +81,14 @@ def url_digest(url: str) -> str:
     return hashlib.sha256(url.encode()).hexdigest()
 
 
+def name_from_url(url: str) -> str:
+    """A file's name as people wrote it: the URL's last part with %20 and the like
+    decoded, and no query string."""
+    from urllib.parse import unquote, urlsplit
+
+    return unquote(urlsplit(url).path.rsplit("/", 1)[-1])
+
+
 def _dimensions(data: bytes) -> tuple[int | None, int | None]:
     from PIL import Image
 
@@ -112,7 +120,7 @@ def record(
         "url": url,
         "kind": kind,
         "mime": mime[:50],
-        "name": (name or url.rsplit("/", 1)[-1])[:200],
+        "name": (name or name_from_url(url))[:200],
         "size_bytes": len(data) if data is not None else size_bytes,
         "sha256": hashlib.sha256(data).hexdigest() if data is not None else sha256,
         "source": source,
