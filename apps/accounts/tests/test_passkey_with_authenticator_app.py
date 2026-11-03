@@ -30,7 +30,10 @@ class PasskeyWithAppEnrolledTest(TestCase):
         client.post(
             reverse("login"), {"username": self.user.email, "password": PASSWORD}
         )
-        client.post(reverse("2fa-verify"), {"token": _current_token(self.device)})
+        # Kept, so a test can send this exact code again: generating it anew could land
+        # in the next 30-second step and be a different, unused code.
+        self.sign_in_code = _current_token(self.device)
+        client.post(reverse("2fa-verify"), {"token": self.sign_in_code})
         return client
 
     def test_the_settings_page_loads_and_offers_the_add_button(self):
@@ -66,7 +69,7 @@ class PasskeyWithAppEnrolledTest(TestCase):
 
         resp = client.post(
             reverse("passkey-register-options"),
-            data=json.dumps({"method": "app", "token": _current_token(self.device)}),
+            data=json.dumps({"method": "app", "token": self.sign_in_code}),
             content_type="application/json",
         )
 

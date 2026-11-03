@@ -384,7 +384,8 @@ def _already_published_on_facebook(account, hashes: set[str]) -> bool:
     # holds the latest Facebook publish, so anything published since asks afresh.
     latest = published.aggregate(latest=Max("published_at"))["latest"]
     digest = hashlib.sha256(" ".join(sorted(urls)).encode()).hexdigest()
-    key = f"fb-story-reuse:{account.pk}:{latest}:{digest}"
+    version = int(latest.timestamp() * 1_000_000) if latest else 0
+    key = f"fb-story-reuse:{account.pk}:{version}:{digest}"
     cached = cache.get(key)
     if cached is not None:
         return cached
