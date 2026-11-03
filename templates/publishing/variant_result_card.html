@@ -47,18 +47,30 @@ Expects ``variant`` and ``post``.{% endcomment %}
     {% if variant.last_error %}<p class="text-xs text-ink-muted">{{ variant|variant_error_message }}</p>{% endif %}
     <a href="{% url 'publishing:reconciliation-queue' %}" class="inline-block text-sm font-medium text-accent hover:underline">Resolve in Needs check →</a>
   </div>
-  {% elif variant.last_error and variant.status == 'failed' %}
+  {% elif variant.status == 'failed' %}
   <div class="alert alert-danger !p-3 flex-col !gap-0.5">
     <p class="text-xs font-semibold">Why it failed</p>
+    {% if variant.last_error %}
     <p class="text-sm break-words">{{ variant|variant_error_message }}</p>
+    {% else %}
+    <p class="text-sm break-words" data-no-reason>No reason was recorded for this channel. If another channel says what to change, it likely applies here too.</p>
+    {% endif %}
   </div>
   {% endif %}
 
   {% if variant|is_variant_retryable %}
-  <form method="post" action="{% url 'publishing:post-retry-variant' post.pk variant.platform %}">
-    {% csrf_token %}
-    <button type="submit" class="btn btn-secondary btn-sm">{% include "components/icon.html" with name="refresh" class="w-4 h-4" %}Retry this channel</button>
-  </form>
+  <div class="flex flex-wrap gap-2">
+    {% if can_fix and variant.last_error_type == 'validation' %}
+    <form method="post" action="{% url 'publishing:post-fix' post.pk %}" hx-boost="false">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary btn-sm">{% include "components/icon.html" with name="pencil" class="w-4 h-4" %}Edit and fix</button>
+    </form>
+    {% endif %}
+    <form method="post" action="{% url 'publishing:post-retry-variant' post.pk variant.platform %}">
+      {% csrf_token %}
+      <button type="submit" class="btn {% if can_fix and variant.last_error_type == 'validation' %}btn-ghost{% else %}btn-secondary{% endif %} btn-sm">{% include "components/icon.html" with name="refresh" class="w-4 h-4" %}Retry this channel</button>
+    </form>
+  </div>
   {% endif %}
 
   {% if variant.publication_id and variant.status == 'published' %}

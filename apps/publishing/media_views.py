@@ -59,6 +59,7 @@ def library(request):
         request,
         "publishing/media_library.html",
         {
+            "account": account,
             "page": page,
             "archived": archived,
             "kind": kind,
@@ -147,6 +148,7 @@ def asset_edit(request, pk):
         request,
         "publishing/media_edit.html",
         {
+            "account": account,
             "asset": asset,
             "cover_status": cache.get(media_library.cover_status_key(asset)),
             "derived": asset.derived.filter(archived_at__isnull=True)[:12],
@@ -273,6 +275,7 @@ def snippets(request):
         request,
         "publishing/snippets.html",
         {
+            "account": account,
             "templates": CaptionTemplate.objects.filter(account=account),
             "hashtag_sets": HashtagSet.objects.filter(account=account),
         },

@@ -103,6 +103,12 @@ def post_headline(post):
 
 
 @register.filter
+def platform_names(platforms) -> str:
+    """A post's channels as people read them: "Instagram, Facebook"."""
+    return ", ".join(platform_display_name(p) for p in platforms or [])
+
+
+@register.filter
 def platform_display_name(platform):
     """Return user-friendly platform name."""
     names = {

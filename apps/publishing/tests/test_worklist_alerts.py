@@ -225,7 +225,7 @@ def test_the_overview_shows_every_bucket_and_what_needs_you(team, owner_client):
     for _, label in BUCKETS:
         assert label in html
     assert "Broken one" in html
-    assert "See why it failed and retry" in html
+    assert "See why it failed and fix it" in html
 
 
 def test_the_library_lists_exactly_the_posts_the_overview_counts(team, owner_client):

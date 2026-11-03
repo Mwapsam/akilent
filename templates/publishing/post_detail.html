@@ -63,9 +63,17 @@ Narrow: review and channels first (what needs doing), then the post, then detail
       </a>
       {% endif %}
       {% if post.status == 'failed' %}
+      {% comment %}Fixing comes first: retrying a post Meta refused for its content fails the
+      same way. Retry stays for outages and timeouts.{% endcomment %}
+      {% if can_fix %}
+      <form method="post" action="{% url 'publishing:post-fix' post.pk %}" hx-boost="false">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary">{% include "components/icon.html" with name="pencil" class="w-4 h-4" %}Edit and fix</button>
+      </form>
+      {% endif %}
       <form method="post" action="{% url 'publishing:post-retry' post.pk %}">
         {% csrf_token %}
-        <button type="submit" class="btn btn-primary">{% include "components/icon.html" with name="refresh" class="w-4 h-4" %}Retry</button>
+        <button type="submit" class="btn {% if can_fix %}btn-secondary{% else %}btn-primary{% endif %}">{% include "components/icon.html" with name="refresh" class="w-4 h-4" %}Retry</button>
       </form>
       {% endif %}
     </div>
@@ -79,10 +87,10 @@ Narrow: review and channels first (what needs doing), then the post, then detail
     <p class="font-semibold">This post didn't publish</p>
     <p class="mt-0.5 break-words">{{ post.error }}</p>
   </div>
-  {% if post.status == 'failed' %}
-  <form method="post" action="{% url 'publishing:post-retry' post.pk %}" class="shrink-0">
+  {% if post.status == 'failed' and can_fix %}
+  <form method="post" action="{% url 'publishing:post-fix' post.pk %}" class="shrink-0" hx-boost="false">
     {% csrf_token %}
-    <button type="submit" class="btn btn-secondary btn-sm">Retry now</button>
+    <button type="submit" class="btn btn-secondary btn-sm">Edit and fix</button>
   </form>
   {% endif %}
 </div>

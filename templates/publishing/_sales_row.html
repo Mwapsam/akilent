@@ -6,7 +6,7 @@
   {% include "publishing/_media_thumb.html" with url=row.post|first_media size="w-10 h-10" alt=row.post.caption|truncatechars:80 %}
   <div class="flex-1 min-w-0">
     <a href="{% url 'publishing:post-detail' row.post.pk %}" class="block text-sm font-medium text-ink truncate hover:underline">{{ row.post.caption|truncatechars:80|default:"(no caption)" }}</a>
-    <p class="text-xs text-ink-subtle">{{ row.post.platforms|join:", "|capfirst }}</p>
+    <p class="text-xs text-ink-subtle">{{ row.post.platforms|platform_names }}</p>
     {% with c=row.confirmed %}
     <dl class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs">
       <div><dt class="inline text-ink-subtle">Chats</dt> <dd class="inline font-medium text-ink tabular-nums">{{ c.chats }}</dd></div>

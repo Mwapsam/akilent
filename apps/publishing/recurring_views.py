@@ -36,7 +36,9 @@ def recurring_list(request):
     )
     for rule in rules:
         rule.recent_runs = list(rule.runs.all()[:5])  # type: ignore[attr-defined]
-    return render(request, "publishing/recurring.html", {"rules": rules})
+    return render(
+        request, "publishing/recurring.html", {"account": account, "rules": rules}
+    )
 
 
 @login_required

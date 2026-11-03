@@ -119,6 +119,7 @@ def slots_manage(request):
         request,
         "publishing/slots.html",
         {
+            "account": account,
             "week": week,
             "has_slots": bool(slots),
             "day_names": list(enumerate(scheduling.DAY_NAMES)),

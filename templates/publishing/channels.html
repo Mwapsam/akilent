@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load publishing_filters %}
 {% block title %}Channels — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
@@ -148,7 +149,7 @@
           {% if post.error %}
           <p class="text-xs tone-coral-fg mt-0.5 truncate">{{ post.error|truncatechars:100 }}</p>
           {% endif %}
-          <p class="text-xs text-ink-subtle">{{ post.platforms|join:", "|capfirst }} · {{ post.updated_at|date:"N j, H:i" }}</p>
+          <p class="text-xs text-ink-subtle">{{ post.platforms|platform_names }} · {{ post.updated_at|date:"N j, H:i" }}</p>
         </div>
         <form method="post" action="{% url 'publishing:post-retry' post.pk %}" class="shrink-0">
           {% csrf_token %}

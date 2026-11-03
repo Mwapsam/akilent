@@ -63,6 +63,7 @@ def analytics(request):
         request,
         "publishing/analytics.html",
         {
+            "account": account,
             **_context(account, _days(request)),
             "weekly_report": bool(settings_row and settings_row.weekly_report),
             "can_admin": is_account_admin(request.user, account),
@@ -82,8 +83,8 @@ def analytics_print(request):
         request,
         "publishing/analytics_print.html",
         {
-            **_context(account, _days(request)),
             "account": account,
+            **_context(account, _days(request)),
             "now": timezone.now(),
         },
     )

@@ -94,7 +94,7 @@
           <option value="">Rewrite with AI</option>
           <template x-for="r in d.ai_plus.rewrites" :key="r.key"><option :value="r.key" x-text="r.label"></option></template>
         </select>
-        <button type="button" class="btn btn-ghost btn-sm" :disabled="!!aiTool.busy || !captionText().trim()" @click="aiHashtags()">
+        <button type="button" class="btn btn-secondary btn-sm" :disabled="!!aiTool.busy || !captionText().trim()" @click="aiHashtags()">
           Suggest hashtags
         </button>
         <span class="text-xs text-ink-subtle" x-show="aiTool.busy" x-cloak role="status">Writing…</span>

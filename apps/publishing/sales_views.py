@@ -28,6 +28,7 @@ def sales_report(request):
         request,
         "publishing/sales.html",
         {
+            "account": account,
             "report": sales.report(account, period),
             "days": days,
             "periods": reporting.PERIODS,

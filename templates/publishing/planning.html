@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load publishing_filters %}
 {% block title %}Planning — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
@@ -15,7 +16,7 @@
 <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
   <div class="card card-pad text-center">
     <p class="text-2xl font-bold text-ink">{{ counts.idea }}</p>
-    <p class="text-xs text-ink-subtle mt-0.5">Ideas</p>
+    <p class="text-xs text-ink-subtle mt-0.5">Idea{{ counts.idea|pluralize }}</p>
   </div>
   <div class="card card-pad text-center">
     <p class="text-2xl font-bold text-ink">{{ counts.planned }}</p>
@@ -58,7 +59,7 @@
           </div>
           <p class="text-xs text-ink-subtle mt-0.5">
             {{ item.get_media_type_display }}
-            {% if item.platforms %} · {{ item.platforms|join:", "|capfirst }}{% endif %}
+            {% if item.platforms %} · {{ item.platforms|platform_names }}{% endif %}
             {% if item.pillar %} · {{ item.pillar.name }}{% endif %}
           </p>
         </div>
@@ -80,7 +81,7 @@
   {# Ideas backlog #}
   <div class="card card-pad">
     <div class="flex items-center justify-between mb-3">
-      <h2 class="font-semibold text-ink">Ideas backlog</h2>
+      <h2 class="font-semibold text-ink">Not on the calendar yet</h2>
     </div>
     {% if backlog %}
     <div class="space-y-2">
@@ -103,7 +104,7 @@
       {% endfor %}
     </div>
     {% else %}
-    <p class="text-sm text-ink-subtle text-center py-4">No ideas yet.</p>
+    <p class="text-sm text-ink-subtle text-center py-4">{% if counts.idea or counts.planned or counts.in_production %}Everything you've planned has a date. See it on the <a href="{% url 'publishing:calendar' %}" class="underline">calendar</a>.{% else %}No ideas yet.{% endif %}</p>
     {% endif %}
     <div class="mt-4 pt-3 border-t border-surface-subtle">
       <a href="{% url 'publishing:plan-new' %}" class="text-sm text-accent hover:underline">+ Add idea</a>

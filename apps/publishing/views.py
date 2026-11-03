@@ -405,6 +405,10 @@ def fb_oauth_disconnect(request):
 # ---------------------------------------------------------------------------
 
 
+# Planned ideas this many days ahead with no post yet show under "Needs you".
+PLAN_DUE_DAYS = 3
+
+
 @login_required
 @module_required("content_studio")
 @_in_workspace_tz
@@ -443,6 +447,17 @@ def publishing_index(request):
     upcoming = list(
         qs.filter(status=ContentPost.Status.SCHEDULED).order_by("scheduled_at")[:5]
     )
+    # Planned in the next few days with no post written for it yet.
+    plans_due = list(
+        ContentPlanItem.objects.filter(
+            account=account,
+            planned_date__gte=today,
+            planned_date__lte=today + datetime.timedelta(days=PLAN_DUE_DAYS),
+            posts__isnull=True,
+        )
+        .exclude(plan_status=ContentPlanItem.PlanStatus.PUBLISHED)
+        .order_by("planned_date")[:5]
+    )
 
     return render(
         request,
@@ -450,6 +465,7 @@ def publishing_index(request):
         {
             "account": account,
             "work": work,
+            "plans_due": plans_due,
             "published_this_month": published_this_month,
             "upcoming": upcoming,
         },
@@ -1042,7 +1058,14 @@ def plan_item_new(request):
     if request.method == "POST":
         item = _save_plan_item(request, account, instance=None)
         if item:
-            messages.success(request, "Idea added to your planning backlog.")
+            from django.utils.formats import date_format
+
+            messages.success(
+                request,
+                f"Planned for {date_format(item.planned_date, 'D, N j')}."
+                if item.planned_date
+                else "Idea added. Give it a date to put it on the calendar.",
+            )
             return redirect("publishing:planning")
 
     pillars = ContentPillar.objects.filter(account=account)
@@ -1875,6 +1898,7 @@ def post_detail(request, pk):
 
     from .links import cta_for, links_for_post, short_url
     from .results import results_for
+    from .services import can_reopen_failed
 
     post = get_object_or_404(ContentPost, pk=pk, account=account)
     requires_approval = post.requires_approval
@@ -1895,6 +1919,8 @@ def post_detail(request, pk):
             "requires_approval": requires_approval,
             "approval_valid": post.is_approval_valid(),
             "can_review": can_review,
+            # A failed post nothing went out from can go back to draft and be fixed.
+            "can_fix": can_reopen_failed(post),
             # The bio page is changed only by an Owner or Admin (bio_views).
             "can_edit_bio": is_account_admin(request.user, account),
             "approval_logs": post.approval_logs.select_related("performed_by")[:20]
@@ -2229,6 +2255,33 @@ def post_cancel(request, pk):
             "Channels still waiting were cancelled. Channels already live stay published.",
         )
     return redirect("publishing:post-detail", pk=post.pk)
+
+
+@login_required
+@module_required("content_studio")
+@require_POST
+def post_fix(request, pk):
+    """A failed post back to draft, then into the composer to fix what Meta refused."""
+    from .services import reopen_failed_post
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    post = get_object_or_404(ContentPost, pk=pk, account=account)
+    with transaction.atomic():
+        reopened = reopen_failed_post(post)
+    if not reopened:
+        messages.error(
+            request,
+            "This post can't be edited: a channel already went out. Retry the failed "
+            "channel, or make a new post.",
+        )
+        return redirect("publishing:post-detail", pk=post.pk)
+    messages.info(
+        request,
+        "Back to draft. Fix what went wrong, then schedule or publish it again.",
+    )
+    return redirect(f"{reverse('publishing:post-new')}?post_id={post.pk}")
 
 
 @login_required

@@ -401,6 +401,49 @@ def _already_published_on_facebook(account, hashes: set[str]) -> bool:
     return reused
 
 
+def _ig_ratio_issues(inp: ComposerInput, account) -> list[dict]:
+    """Instagram refuses pictures outside 4:5 portrait to 1.91:1 landscape. When the media
+    library knows a picture's size, say so now, instead of failing at publish time."""
+    from .media_library import url_digest
+    from .models import MediaAsset
+
+    if "instagram" not in inp.platforms or inp.media_type not in (
+        limits.IMAGE,
+        limits.CAROUSEL,
+    ):
+        return []
+    urls = inp.media_urls if inp.media_type == limits.CAROUSEL else inp.media_urls[:1]
+    if not urls:
+        return []
+    sizes = {
+        a.url: (a.width, a.height)
+        for a in MediaAsset.objects.filter(
+            account=account, url_digest__in=[url_digest(u) for u in urls]
+        )
+        if a.width and a.height
+    }
+    bad = [
+        (w, h)
+        for u in urls
+        if (size := sizes.get(u))
+        for w, h in [size]
+        if not limits.IG_RATIO_MIN <= w / h <= limits.IG_RATIO_MAX
+    ]
+    if not bad:
+        return []
+    w, h = bad[0]
+    return [
+        _issue(
+            "ig_ratio",
+            f"Instagram takes pictures from 4:5 portrait to 1.91:1 landscape; this one is "
+            f"{w} by {h} pixels. Crop it (in Media → Edit, or upload it again).",
+            "media",
+            _CONTENT,
+            platform="instagram",
+        )
+    ]
+
+
 def _fb_reels_last_day(account, now) -> int:
     from .models import ContentPost, ContentPostVariant
 
@@ -516,6 +559,7 @@ def check(
 
     now = now or timezone.now()
     issues = _content_issues(inp)
+    issues += _ig_ratio_issues(inp, account)
     if limits.fb_formats_released():
         issues += _media_issues(inp, account, now, start_checks)
     issues += _connection_issues(

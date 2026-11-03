@@ -206,6 +206,42 @@ def reopen_post(post: ContentPost) -> None:
     post.save(update_fields=["status", "scheduled_at", "updated_at"])
 
 
+# A channel in one of these has gone out, or may have: its post can't be reopened for edits.
+_OUT_OR_MAYBE_OUT = (
+    ContentPostVariant.Status.PUBLISHED,
+    ContentPostVariant.Status.PUBLISHING,
+    ContentPostVariant.Status.PROCESSING,
+    ContentPostVariant.Status.RECONCILING,
+)
+
+
+def can_reopen_failed(post: ContentPost) -> bool:
+    """A failed post can go back to draft for fixing only if no channel went out."""
+    return (
+        post.status == ContentPost.Status.FAILED
+        and not post.variants.filter(status__in=_OUT_OR_MAYBE_OUT).exists()
+    )
+
+
+def reopen_failed_post(post: ContentPost) -> bool:
+    """Return a failed post to draft so it can be edited (a picture cropped, a caption
+    shortened) and scheduled again. Each channel keeps its last error, which the post
+    page shows as a hint. Returns False when a channel went out."""
+    if not can_reopen_failed(post):
+        return False
+    post.variants.filter(
+        status__in=[
+            ContentPostVariant.Status.FAILED,
+            ContentPostVariant.Status.SCHEDULED,
+        ]
+    ).update(status=ContentPostVariant.Status.DRAFT, scheduled_at=None)
+    post.status = ContentPost.Status.DRAFT
+    post.scheduled_at = None
+    post.error = ""
+    post.save(update_fields=["status", "scheduled_at", "error", "updated_at"])
+    return True
+
+
 def variant_is_due(variant: ContentPostVariant, now=None) -> bool:
     """A SCHEDULED channel waits for its own time; every other state is not time-gated."""
     if variant.status != ContentPostVariant.Status.SCHEDULED:

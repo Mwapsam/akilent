@@ -18,20 +18,25 @@
 {# Where every unfinished post stands: each post is in exactly one bucket. #}
 <div class="card card-pad mb-4">
   <h2 class="font-semibold text-ink mb-3">Where your posts stand</h2>
+  {% comment %}Only the states that have posts in them get a tile; the empty ones are named
+  on one line underneath, so the card stays short.{% endcomment %}
   <ul class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-    {% for b in work.buckets %}
-    <li class="rounded-lg border border-border px-3 py-2{% if b.warn %} tone-coral-bg{% endif %}">
-      {% if b.url %}<a href="{{ b.url }}" class="block">{% endif %}
+    {% for b in work.buckets %}{% if b.count %}
+    <li class="rounded-lg border border-border px-3 py-2{% if b.warn %} tone-coral-bg{% endif %}" data-bucket="{{ b.key }}">
+      {% if b.url %}<a href="{{ b.url }}" class="block" aria-label="{{ b.label }}: {{ b.count }} post{{ b.count|pluralize }}">{% endif %}
         <p class="text-xl font-bold text-ink">{{ b.count }}</p>
         <p class="text-xs text-ink-subtle">{{ b.label }}</p>
       {% if b.url %}</a>{% endif %}
     </li>
-    {% endfor %}
+    {% endif %}{% endfor %}
     <li class="rounded-lg border border-border px-3 py-2">
       <p class="text-xl font-bold text-ink">{{ published_this_month }}</p>
       <p class="text-xs text-ink-subtle">Published this month</p>
     </li>
   </ul>
+  {% if work.empty_labels %}
+  <p class="text-xs text-ink-subtle mt-3" data-empty-buckets>Nothing in: {{ work.empty_labels|join:", " }}.</p>
+  {% endif %}
 </div>
 
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -42,8 +47,22 @@
       <h2 class="font-semibold text-ink">Needs you</h2>
       {% if work.needs_you_total > work.needs_you|length %}<span class="text-xs text-ink-subtle">{{ work.needs_you|length }} of {{ work.needs_you_total }}</span>{% endif %}
     </div>
-    {% if work.needs_you %}
+    {% if work.needs_you or plans_due %}
     <ul class="space-y-2">
+      {% for item in plans_due %}
+      <li class="p-2 rounded-lg bg-surface-subtle" data-plan-due="{{ item.pk }}">
+        <div class="flex items-start justify-between gap-2">
+          <a href="{% url 'publishing:plan-edit' item.pk %}" class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-ink truncate">{{ item.topic|truncatechars:50 }}</p>
+            <p class="text-xs text-ink-subtle">Planned for {{ item.planned_date|date:"D, N j" }} · not written yet</p>
+          </a>
+          <form method="post" action="{% url 'publishing:plan-create-post' item.pk %}" class="shrink-0" hx-boost="false">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-ghost text-xs py-0.5 px-2">Write the post</button>
+          </form>
+        </div>
+      </li>
+      {% endfor %}
       {% for row in work.needs_you %}
       <li class="p-2 rounded-lg {% if row.bucket == 'needs_check' or row.bucket == 'failed' %}tone-coral-bg{% else %}bg-surface-subtle{% endif %}">
         <div class="flex items-start justify-between gap-2">
@@ -80,7 +99,7 @@
         <div class="flex-1 min-w-0">
           <p class="text-sm font-medium text-ink truncate">{{ post.caption|truncatechars:60|default:"(no caption)" }}</p>
           <p class="text-xs text-ink-subtle">
-            {{ post.platforms|join:", "|capfirst }}
+            {{ post.platforms|platform_names }}
             {% if post.scheduled_at %} · {{ post.scheduled_at|date:"N j, H:i" }}{% endif %}
           </p>
         </div>

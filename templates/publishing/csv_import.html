@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load publishing_filters %}
 {% block title %}Import posts — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
@@ -30,7 +31,7 @@
       {% for r in preview %}
       <li class="py-2 text-sm" data-import-row="{{ r.n }}" data-ok="{{ r.ok|yesno:'true,false' }}">
         <p class="font-medium text-ink">Row {{ r.n }}: {{ r.caption|truncatechars:70|default:"(no caption)" }}</p>
-        <p class="text-xs text-ink-subtle">{{ r.platforms|join:", "|default:"no channel" }} · {{ r.media_type }} · {{ r.media_count }} file{{ r.media_count|pluralize }}{% if r.scheduled_at %} · suggested {{ r.scheduled_at|date:"N j, H:i" }}{% endif %}</p>
+        <p class="text-xs text-ink-subtle">{{ r.platforms|platform_names|default:"no channel" }} · {{ r.media_type }} · {{ r.media_count }} file{{ r.media_count|pluralize }}{% if r.scheduled_at %} · suggested {{ r.scheduled_at|date:"N j, H:i" }}{% endif %}</p>
         {% for e in r.errors %}<p class="text-xs tone-coral-fg">{{ e }}</p>{% endfor %}
         {% if r.ok %}
           {% for m in r.to_fix %}<p class="text-xs tone-amber-fg">To fix before scheduling: {{ m }}</p>{% endfor %}

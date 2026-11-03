@@ -25,7 +25,8 @@ BUCKETS = (
     ("approved", "Approved"),
     ("scheduled", "Scheduled"),
     ("draft", "Drafts"),
-    ("idea", "Ideas"),
+    # Posts saved as an idea; planned ideas on the Planning tab aren't posts yet.
+    ("idea", "Post ideas"),
 )
 BUCKET_LABELS = dict(BUCKETS)
 
@@ -117,7 +118,7 @@ def next_action(post, bucket: str, user, can_review: Callable) -> dict:
             }
         return {"label": "An Owner or Admin needs to check this", "url": ""}
     if bucket == "failed":
-        return {"label": "See why it failed and retry", "url": detail}
+        return {"label": "See why it failed and fix it", "url": detail}
     if bucket == "publishing":
         return {"label": "Publishing now", "url": ""}
     if bucket == "changes_requested":
@@ -201,4 +202,5 @@ def worklist(account, user, can_review: Callable, limit: int = 8) -> dict:
             for _, post, bucket in needs_you[:limit]
         ],
         "needs_you_total": len(needs_you),
+        "empty_labels": [label for key, label in BUCKETS if not counts[key]],
     }

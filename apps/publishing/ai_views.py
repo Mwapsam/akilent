@@ -42,6 +42,7 @@ def ai_tools(request):
         request,
         "publishing/ai_tools.html",
         {
+            "account": account,
             "can_admin": can_admin,
             "brand_voice": ai_plus.voice(account),
             "max_voice": ai_plus.MAX_VOICE,

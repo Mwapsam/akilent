@@ -79,7 +79,10 @@
 </form>
 
 {# Bulk action form #}
-<form method="post" action="{% url 'publishing:library-bulk' %}" id="bulk-form">
+{% comment %}The bulk buttons appear once a post is ticked; nothing destructive sits on the
+page before anything is selected.{% endcomment %}
+<form method="post" action="{% url 'publishing:library-bulk' %}" id="bulk-form"
+      x-data="{ selected: 0 }" @change="selected = $el.querySelectorAll('.post-checkbox:checked').length">
   {% csrf_token %}
 
   {% if page_obj.object_list %}
@@ -87,7 +90,8 @@
     <label class="text-sm text-ink-subtle flex items-center gap-1.5 min-h-9">
       <input type="checkbox" id="select-all" class="rounded"> Select all
     </label>
-    <div class="flex flex-wrap gap-2">
+    <div class="flex flex-wrap items-center gap-2" x-show="selected" x-cloak>
+      <span class="text-sm text-ink" x-text="selected + ' selected'" aria-live="polite"></span>
       <button type="submit" name="action" value="delete_drafts"
               class="btn btn-danger-ghost text-sm"
               data-confirm="Delete the selected drafts? This cannot be undone." data-confirm-danger data-confirm-label="Delete">Delete drafts</button>
@@ -125,9 +129,9 @@
             <a href="{% url 'publishing:post-detail' post.pk %}" class="font-medium text-ink hover:underline line-clamp-2">
               {{ post.caption|truncatechars:70|default:"(no caption)" }}
             </a>
-            <span class="md:hidden block text-xs text-ink-subtle mt-0.5">{{ post.platforms|join:", "|capfirst }} · {{ post.get_media_type_display }}<span class="sm:hidden"> · {{ post.created_at|date:"N j" }}</span></span>
+            <span class="md:hidden block text-xs text-ink-subtle mt-0.5">{{ post.platforms|platform_names }} · {{ post.get_media_type_display }}<span class="sm:hidden"> · {{ post.created_at|date:"N j" }}</span></span>
           </td>
-          <td class="hidden md:table-cell px-4 py-2 text-ink-subtle">{{ post.platforms|join:", "|capfirst }}</td>
+          <td class="hidden md:table-cell px-4 py-2 text-ink-subtle">{{ post.platforms|platform_names }}</td>
           <td class="hidden md:table-cell px-4 py-2 text-ink-subtle">{{ post.get_media_type_display }}</td>
           <td class="px-3 sm:px-4 py-2">
             {% status_badge post.status post.get_status_display %}

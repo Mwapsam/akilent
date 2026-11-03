@@ -60,6 +60,7 @@ def csv_import_page(request):
         request,
         "publishing/csv_import.html",
         {
+            "account": account,
             "preview": preview,
             "ready": sum(1 for r in preview or [] if r["ok"]),
             "max_rows": csv_import.MAX_ROWS,

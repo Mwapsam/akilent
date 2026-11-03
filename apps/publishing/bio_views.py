@@ -83,6 +83,7 @@ def bio_manage(request):
         request,
         "publishing/bio.html",
         {
+            "account": account,
             "page": page,
             "page_url": bio.page_url(page) if page else "",
             "tiles": tiles,

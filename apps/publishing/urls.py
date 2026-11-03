@@ -77,6 +77,7 @@ urlpatterns = [
     ),
     path("locations/search/", views.location_search, name="location-search"),
     path("posts/<int:pk>/reopen/", views.post_reopen, name="post-reopen"),
+    path("posts/<int:pk>/fix/", views.post_fix, name="post-fix"),
     path(
         "posts/<int:pk>/refresh-insights/",
         views.post_refresh_insights,
