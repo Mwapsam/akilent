@@ -28,7 +28,7 @@ to show (channel, status). The selects apply as soon as they change.{% endcommen
     </nav>
     <div>
       <h2 class="cal-range">{{ month_first|date:"F Y" }}</h2>
-      <p class="cal-summary">{% if month_posts %}{{ month_posts }} post{{ month_posts|pluralize }}{% else %}Nothing scheduled this month{% endif %}</p>
+      <p class="cal-summary">{% if month_posts or month_planned %}{{ month_posts }} post{{ month_posts|pluralize }}{% if month_planned %} · {{ month_planned }} planned{% endif %}{% else %}Nothing planned this month{% endif %}</p>
     </div>
     {% else %}
     <nav class="cal-stepper" aria-label="Week">

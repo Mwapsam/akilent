@@ -13,6 +13,7 @@ from django.utils import timezone
 from apps.accounts.models import Account, BusinessHours, Membership
 from apps.publishing import scheduling
 from apps.publishing.models import (
+    ContentPlanItem,
     ContentPost,
     ContentPostVariant,
     PostingSlot,
@@ -115,6 +116,26 @@ def test_the_month_view_shows_whole_weeks_and_marks_what_can_move(shop, released
     assert f'id="move-{movable.pk}-instagram-facebook"' in html
     assert f'id="move-{locked.pk}-' not in html  # locked posts have no Move form
     assert "Posting slots" in html
+
+
+def test_the_month_view_shows_planned_ideas(shop, released):
+    import datetime
+
+    day = datetime.date(2026, 12, 10)
+    item = ContentPlanItem.objects.create(
+        account=shop.account, topic="Holiday teaser", planned_date=day
+    )
+    ContentPlanItem.objects.create(
+        account=shop.account, topic="Next year", planned_date=datetime.date(2027, 2, 1)
+    )
+
+    resp = shop.client.get(reverse("publishing:calendar") + "?view=month&month=2026-12")
+
+    html = resp.content.decode()
+    assert resp.context["month_planned"] == 1
+    assert "0 posts · 1 planned" in html
+    assert "Holiday teaser" in html and "Next year" not in html
+    assert reverse("publishing:plan-edit", args=[item.pk]) in html
 
 
 def test_month_navigation(shop, released):

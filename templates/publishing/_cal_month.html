@@ -43,6 +43,7 @@ rebuild.{% endcomment %}
          @drop.prevent="if (dragging) { const f = document.getElementById(dragging); f.querySelector('[name=date]').value = '{{ iso }}'; dragging = null; over = null; f.requestSubmit(); }"
          {% endif %}>
       <span class="cal-m-num">{{ cell.date|date:"j" }}<span class="sr-only"> {{ cell.date|date:"F" }}{% if cell.date == today %}, today{% endif %}</span></span>
+      {% for item in cell.plans %}{% include "publishing/_cal_plan.html" %}{% endfor %}
       {% for entry in cell.entries %}
       <div class="cal-m-entry cal-entry" data-tone="{{ entry.status|status_tone }}"
            {% if entry.movable %}draggable="true"
@@ -86,7 +87,7 @@ rebuild.{% endcomment %}
   </div>
   {% else %}
   <div class="card">
-    {% include "components/empty_state.html" with icon="clock" title="Nothing scheduled this month" message="Create a post, or pick another month." %}
+    {% include "components/empty_state.html" with icon="clock" title="Nothing planned this month" message="Plan an idea or create a post, or pick another month." %}
   </div>
   {% endif %}
 </div>

@@ -703,6 +703,12 @@ def _month_context(request, account, today, tz, channel_filter, status_filter):
     for e in entries:
         e["move_id"] = f"move-{e['post'].pk}-{'-'.join(e['platforms'])}"
         by_day.setdefault(timezone.localtime(e["at"], tz).date(), []).append(e)
+    # Planned ideas show as in the week view: by their planned date, not filtered.
+    plans_by_day: dict = {}
+    for item in ContentPlanItem.objects.filter(
+        account=account, planned_date__gte=grid_start, planned_date__lte=grid_end
+    ).select_related("pillar"):
+        plans_by_day.setdefault(item.planned_date, []).append(item)
 
     weeks, day = [], grid_start
     while day <= grid_end:
@@ -712,22 +718,25 @@ def _month_context(request, account, today, tz, channel_filter, status_filter):
                 {
                     "date": day,
                     "entries": by_day.get(day, []),
+                    "plans": plans_by_day.get(day, []),
                     "in_month": day.month == first.month,
                 }
             )
             day += datetime.timedelta(days=1)
         weeks.append(week)
     month_days: list[tuple[datetime.date, list, list]] = [
-        (d, [], by_day.get(d, []))
+        (d, plans_by_day.get(d, []), by_day.get(d, []))
         for d in (first + datetime.timedelta(days=i) for i in range(last.day))
     ]
     posts = {e["post"].pk for d, _, es in month_days for e in es}
+    planned = sum(len(ps) for _, ps, _ in month_days)
     return {
         "month_first": first,
         "month_weeks": weeks,
         "month_days": month_days,
         "month_posts": len(posts),
-        "month_has_content": bool(posts),
+        "month_planned": planned,
+        "month_has_content": bool(posts or planned),
         "month_param": first.strftime("%Y-%m"),
         "prev_month_param": prev_first.strftime("%Y-%m"),
         "next_month_param": next_first.strftime("%Y-%m"),
