@@ -4,7 +4,7 @@ every width, with ``skip_empty`` so only days with something on them are listed.
 <ol class="cal-agenda">
   {% for day, day_plan_items, day_posts in week_days %}
   {% if not skip_empty or day_plan_items or day_posts %}
-  <li class="cal-row{% if day < today %} cal-row--past{% endif %}{% if day == today %} cal-today{% endif %}">
+  <li class="cal-row{% if day < today %} cal-row--past{% endif %}{% if day == today %} cal-today{% endif %}"{% if day == today %} aria-current="date"{% endif %}>
     <div class="cal-row-date">
       <span class="cal-dow">{{ day|date:"D" }}</span>
       <span class="cal-date">{{ day|date:"j" }}</span>

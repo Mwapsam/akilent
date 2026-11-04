@@ -37,7 +37,7 @@ rebuild.{% endcomment %}
     {% for week in month_weeks %}{% for cell in week %}
     {% with iso=cell.date|date:"Y-m-d" %}
     <div role="listitem"
-         class="cal-m-day{% if not cell.in_month %} cal-m-day--out{% endif %}{% if cell.date == today %} cal-today{% endif %}"
+         class="cal-m-day{% if not cell.in_month %} cal-m-day--out{% endif %}{% if cell.date == today %} cal-today{% endif %}"{% if cell.date == today %} aria-current="date"{% endif %}
          {% if cell.date >= today %}
          :class="over === '{{ iso }}' && 'cal-m-day--over'"
          @dragover.prevent="if (dragging) over = '{{ iso }}'"

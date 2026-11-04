@@ -195,15 +195,30 @@ def test_a_refused_idea_stays_in_the_modal_with_its_reason(shop):
 
     response = client.post(
         reverse("publishing:plan-new"),
-        {"topic": "", "planned_date": "2026-11-20"},
+        {"topic": "", "planned_date": "2026-11-20", "notes": "Keep me"},
         **OVERLAY,
     )
 
     assert response.status_code == 422
     html = _is_fragment(response)
     assert 'data-overlay="modal"' in html
-    assert response["X-Toast"] == "danger|Topic%20is%20required."
+    # The reason is under the field (a toast covered the modal's Close), and what was typed stays.
+    assert 'aria-invalid="true" aria-describedby="plan-topic-error"' in html
+    assert "Give the idea a topic." in html
+    assert ">Keep me</textarea>" in html
+    assert 'value="2026-11-20"' in html
+    assert "X-Toast" not in response
+    assert "ak-overlay-actions" in html  # buttons pinned to the modal's bottom
     assert not ContentPlanItem.objects.exists()
+
+
+def test_the_plan_page_shows_the_same_field_errors(shop):
+    _account, client = shop
+
+    response = client.post(reverse("publishing:plan-new"), {"topic": " "})
+
+    assert response.status_code == 422
+    assert "Give the idea a topic." in response.content.decode()
 
 
 def test_without_the_overlay_the_plan_form_still_redirects(shop):
@@ -316,7 +331,7 @@ def test_the_media_editor_opens_as_a_wide_modal(shop, settings):
 
     html = _is_fragment(client.get(url, **OVERLAY))
 
-    assert 'data-overlay="modal"' in html and 'data-overlay-size="xl"' in html
+    assert 'data-overlay="modal"' in html and 'data-overlay-size="full"' in html
     assert "cropper.min" in html  # its stylesheet comes with it
     assert 'x-data="mediaEditor()"' in html
     grid = client.get(reverse("publishing:media-library")).content.decode()
@@ -387,3 +402,100 @@ def test_the_composer_is_never_refreshed_under_an_overlay(shop):
     html = client.get("/publishing/new/").content.decode()
 
     assert 'data-overlay-refresh="off"' in html
+
+
+# --- Review of Phases 0-2 ----------------------------------------------------------------
+
+SHELL_SWAP = {
+    "HTTP_HX_REQUEST": "true",
+    "HTTP_HX_BOOSTED": "true",
+    "HTTP_X_AKILENT_SHELL": "app",
+}
+
+
+def test_the_composer_brings_its_styles_and_layout_into_a_shell_swap(shop):
+    """Reached from "New post" inside the app, the composer was unstyled: its <style> lived
+    only in <head>, and <main> kept the previous page's classes."""
+    _account, client = shop
+
+    response = client.get(reverse("publishing:post-new"), **SHELL_SWAP)
+
+    html = response.content.decode()
+    assert not response.has_header("HX-Refresh")
+    assert "<!DOCTYPE" not in html
+    assert ".composer-main" in html  # composer/_styles.html came with the page
+    assert "cropper.min.css" in html
+    assert '<template data-main-class="composer-main' in html
+
+
+def test_other_pages_send_the_default_main_classes(shop):
+    _account, client = shop
+
+    html = client.get(reverse("publishing:library"), **SHELL_SWAP).content.decode()
+
+    assert '<template data-main-class="px-4 sm:px-6 lg:px-8 py-6' in html
+
+
+def test_a_full_load_still_puts_page_styles_in_the_head(shop):
+    _account, client = shop
+
+    html = client.get(reverse("publishing:post-new")).content.decode()
+
+    head, body = html.split("</head>", 1)
+    assert ".composer-main" in head and ".composer-main" not in body
+    assert '<main id="main" tabindex="-1" hx-history-elt class="composer-main' in body
+    assert "data-main-class" not in body
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "/publishing/",
+        "/publishing/library/",
+        "/publishing/calendar/",
+        "/publishing/planning/",
+        "/publishing/channels/",
+    ],
+)
+def test_every_tab_has_the_same_header_so_the_tabs_dont_move(shop, url):
+    _account, client = shop
+
+    html = client.get(url).content.decode()
+
+    main = html.split('id="main"', 1)[1]
+    before_tabs = main.split("data-instant-tabs", 1)[0]
+    assert 'class="cs-head"' in before_tabs
+    assert "<style" not in before_tabs
+    assert (
+        "text-ink-subtle mt-0.5" not in before_tabs
+    )  # no subtitle changing its height
+
+
+def test_today_is_marked_for_assistive_tech(shop):
+    _account, client = shop
+
+    week = client.get("/publishing/calendar/").content.decode()
+    month = client.get("/publishing/calendar/?view=month").content.decode()
+
+    assert 'aria-current="date"' in week
+    assert 'aria-current="date"' in month
+
+
+def test_full_pages_vary_on_the_overlay_target_too(shop):
+    account, client = shop
+    post = _post(account)
+
+    response = client.get(reverse("publishing:post-detail", args=[post.pk]))
+
+    assert "HX-Target" in response["Vary"]
+
+
+def test_overviews_action_on_a_post_opens_the_drawer(shop):
+    account, client = shop
+    _post(account, status=ContentPost.Status.FAILED, error="x")
+
+    html = client.get(reverse("publishing:index")).content.decode()
+
+    for line in html.splitlines():
+        if "/publishing/posts/" in line and "href=" in line:
+            assert "data-overlay-open" in line, line

@@ -23,6 +23,8 @@
     border-radius: var(--radius-surface); padding-bottom: 0; width: calc(100% - 2rem); max-width: 32rem; }
   #overlay-host[data-kind="modal"][data-size="lg"] .ak-overlay-panel { max-width: 42rem; }
   #overlay-host[data-kind="modal"][data-size="xl"] .ak-overlay-panel { max-width: 56rem; }
+  /* Almost the whole screen (the media editor). */
+  #overlay-host[data-kind="modal"][data-size="full"] .ak-overlay-panel { inset: 3vh 0 auto; max-width: 80rem; max-height: 94vh; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ak-overlay-backdrop, .ak-overlay-panel { transition: none; }
@@ -33,3 +35,11 @@
 .ak-overlay-step[hidden] { display: none; }
 #overlay-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 1.25rem; }
 @media (min-width: 640px) { .ak-overlay-head, #overlay-body { padding-inline: 1.5rem; } }
+
+/* A form's buttons pinned to the bottom of the overlay's scrolling body (#overlay-body's padding
+   is 1.25rem, 1.5rem from sm): they stay in view however long the form is. */
+#overlay-body .ak-overlay-actions { position: sticky; bottom: -1.25rem; z-index: 1; margin: 0 -1.25rem -1.25rem;
+  padding: .75rem 1.25rem; background: var(--color-surface); border-top: 1px solid var(--color-border); }
+@media (min-width: 640px) {
+  #overlay-body .ak-overlay-actions { margin-inline: -1.5rem; padding-inline: 1.5rem; }
+}

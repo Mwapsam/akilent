@@ -3,7 +3,7 @@
 {% block title %}Media — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
-<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+<div class="cs-head">
   <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
   <a href="{% url 'publishing:media-snippets' %}" data-overlay-open="drawer" data-overlay-size="lg" class="btn btn-secondary">Caption templates and hashtags</a>
 </div>
@@ -87,7 +87,7 @@
           </form>
         </details>
         <div class="flex flex-wrap gap-1 pt-1">
-          {% if not archived %}<a href="{% url 'publishing:media-edit' a.pk %}" data-overlay-open="modal" data-overlay-size="xl" class="btn btn-ghost btn-sm">{% if a.kind == 'video' %}Cover{% else %}Edit{% endif %}</a>{% endif %}
+          {% if not archived %}<a href="{% url 'publishing:media-edit' a.pk %}" data-overlay-open="modal" data-overlay-size="full" class="btn btn-ghost btn-sm">{% if a.kind == 'video' %}Cover{% else %}Edit{% endif %}</a>{% endif %}
           <form method="post" action="{% url 'publishing:media-update' a.pk %}" hx-boost="false">
             {% csrf_token %}
             <input type="hidden" name="next" value="{{ request.get_full_path }}">

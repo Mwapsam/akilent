@@ -151,9 +151,20 @@
         };
         // A picture that failed to load is "complete" too, with no size: usually the media
         // server not allowing it to be read back (CORS), which editing needs.
+        // Then show it anyway, loaded without CORS: a preview only (Cropper is never started
+        // on it, since a picture the page can't read back can't be saved).
         var fail = function () {
-          self.error = "This picture can't be opened for editing yet: the media server doesn't " +
-            "allow it to be read back. Your files and posts aren't affected.";
+          img.removeEventListener("load", start);
+          self.error = "This picture can't be edited yet: the media server doesn't allow it " +
+            "to be read back, so it's shown as a preview only. Your files and posts aren't affected.";
+          // A new element: the same one, with crossorigin removed, kept its failed load.
+          var preview = new Image();
+          preview.alt = img.alt;
+          preview.className = img.className;
+          preview.style.cssText = img.style.cssText;
+          preview.setAttribute("data-media-preview", "");
+          preview.src = img.getAttribute("src");
+          img.replaceWith(preview);
         };
         if (img.complete) {
           if (img.naturalWidth) start(); else fail();

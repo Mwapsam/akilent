@@ -1775,3 +1775,30 @@ Plan: "Content Studio: make it feel like an app" (2026-11-03). Approving it cove
 **Open**
 - The help modal on Sales can't be exercised locally: the article belongs to the WhatsApp channel, which is off on the dev server.
 - Phases 3–5 each need their own go-ahead.
+
+### Entry 18a: fixes from the review of Phases 0–2 (2026-11-04)
+- **The composer was unstyled when reached in place.**
+  - `{% block extra_head %}` is now rendered in a shell swap too. It travels into `<main>` with the page, so a page's `<style>`/stylesheet arrives with it and leaves with it. This applies to the composer, the media editor and the email block editor.
+  - `<main>`'s classes (`block main_class`) come with the swap (`<template data-main-class>`) and with Back (read from the restored page).
+  - Harness: `composer.styled-after-swap` checks the sticky action bar and preview after a boosted visit, and `main.classes-restored-after-composer`.
+- **The tab row jumped (136/146/158px).**
+  - Every Content Studio header is `.cs-head`, 2.75rem high from sm up (`static/css/studio.css`), with no subtitle.
+  - The Needs-check explanation moved under the tabs.
+  - The inline `<style>` the `:has(+ nav)` rule matched is gone.
+  - Harness: `tabs.same-height-on-every-tab` (148px on all 7 tabs).
+- **The media editor showed a broken image without CORS.** It now shows the picture without `crossorigin` as a preview only: a fresh `<img>` (the same element kept its failed load), the message says so, and Save is disabled. It opens almost full screen (`size="full"`).
+  - Harness: `editor.no-cors-shows-preview`, against an https test host answered with no CORS headers.
+  - **Still needed on AWS:** S3 CORS for `https://akilent.com` (GET/HEAD), plus a CloudFront policy that forwards `Origin`.
+- **Unhandled `AbortError: Transition was skipped`:** `ready` and `updateCallbackDone` are caught.
+- **Plan form errors** show under the field (`aria-invalid`, `aria-describedby`), keep what was typed, and answer 422 on the page as well as in the modal. There's no toast any more (it covered Close). In the modal the buttons are pinned to its bottom edge (`.ak-overlay-actions`).
+- **Smaller fixes:**
+  - Overview's action button on a post opens the drawer.
+  - Today has `aria-current="date"` (week, month, list).
+  - Full pages also `Vary: HX-Target`.
+- **Kept as they were, with the reasons from Phase 1:**
+  - no `preload` on the tabs (a click during a hover preload was dropped);
+  - no `cs-tab` view-transition underline (the tab is already active before the transition, so there is nothing to slide).
+- **Verification:**
+  - full suite 5,801 tests, 0 failures, 25 skipped; ruff, format and mypy clean;
+  - `studio_feel_qa.mjs` 14/14 (cache disabled);
+  - `studio_overlay_qa.mjs` 30/30.

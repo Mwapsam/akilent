@@ -1130,6 +1130,17 @@
     pageCleanups = [];
   });
 
+  // The page's own classes for <main> (base.html, block main_class), which a swap would
+  // otherwise leave as the previous page's: the composer's layout depends on them.
+  document.addEventListener("htmx:afterSwap", function (e) {
+    if (!isBoosted(e.detail)) return;
+    const main = mainEl();
+    const carrier = main && main.querySelector(":scope > template[data-main-class]");
+    if (!carrier) return;
+    main.className = carrier.getAttribute("data-main-class");
+    carrier.remove();
+  });
+
   // afterSettle only fires once content has actually been swapped in, so isBoosted alone is
   // enough here: a normal 2xx nav and a forced 400/422 re-render (beforeSwap, above) both reach
   // this point, and any other error status never swapped at all. A status check on top of that
@@ -1162,6 +1173,11 @@
       // second navigation started, finishes while the second is still running.
       const done = function () { if (latest === t) document.documentElement.classList.remove("ak-page-vt"); };
       if (t && t.finished) t.finished.then(done, done); else done();
+      // A transition skipped by a newer navigation rejects these with "Transition was skipped":
+      // expected, not an error, so don't leave them unhandled in the console.
+      const ignore = function () {};
+      if (t && t.ready) t.ready.catch(ignore);
+      if (t && t.updateCallbackDone) t.updateCallbackDone.catch(ignore);
       return t;
     };
     document.startViewTransition.__ak = true;
@@ -1176,6 +1192,9 @@
       t.innerHTML = m[1].trim();
       document.title = t.value;
     }
+    // Only <main>'s contents are restored: its classes come from the restored page too.
+    const cls = typeof html === "string" && html.match(/<main id="main"[^>]*\sclass="([^"]*)"/);
+    if (cls && mainEl()) mainEl().className = cls[1];
     syncNav();
     focusPage();
     runPageHooks();

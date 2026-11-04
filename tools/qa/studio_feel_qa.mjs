@@ -145,6 +145,14 @@ for (const [sel, href, ready] of [
   check(`swap.${href}`, ok && (await evaluate("window.__keep")) === "still here", { path: await evaluate("location.pathname") });
 }
 
+// 2b. The composer reached in place has its own styles and <main> layout (it came unstyled:
+// its <style> lived only in <head>, and <main> kept the previous page's classes).
+const composerLook = await evaluate(`(() => { const bar = document.querySelector('.cmp-bar'), pv = document.querySelector('.cmp-preview');
+  return { bar: bar && getComputedStyle(bar).position, barBorder: bar && getComputedStyle(bar).borderTopStyle,
+    preview: pv && getComputedStyle(pv).position, main: document.getElementById('main').className }; })()`);
+await shot("composer-after-swap");
+check("composer.styled-after-swap", composerLook.bar === "sticky" && composerLook.barBorder === "solid" && composerLook.preview === "sticky" && /composer-main/.test(composerLook.main), composerLook);
+
 // 3. The composer's crop dialog is wired after an in-place swap (akilent.onPage).
 await evaluate(`(() => { const c = document.createElement('canvas'); c.width = 400; c.height = 400; c.getContext('2d').fillRect(0,0,400,400);
   window.__cropResult = 'pending'; window._igCropOpen(c.toDataURL(), { ratio: 1 }, (r) => { window.__cropResult = r === null ? 'skipped' : 'cropped'; }); return 0; })()`);
@@ -178,6 +186,28 @@ await clickSel("[data-instant-tabs] a[href='/publishing/sales/']");
 await sleep(800);
 check("tab.reverts-on-error", (await activeTab()) === "Library" && (await evaluate("location.pathname")) === "/publishing/library/", { tab: await activeTab() });
 rules.shift();
+
+// 5b. Leaving the composer puts the normal <main> classes back, and the tab row sits at the
+// same height on every tab (a header with a subtitle or buttons used to push it down).
+await go("/publishing/new/", 1500);
+await clickSel("#shell-nav-desktop a[href='/publishing/']"); // the composer has no tabs: the sidebar link
+await waitFor("location.pathname === '/publishing/' && !document.querySelector('#main[aria-busy]')"); await sleep(600);
+check("main.classes-restored-after-composer", await evaluate(`!/composer-main/.test(document.getElementById('main').className) && /max-w-7xl/.test(document.getElementById('main').className)`), await evaluate("document.getElementById('main').className"));
+const tabTops = {};
+for (const href of ["/publishing/", "/publishing/library/", "/publishing/calendar/", "/publishing/planning/", "/publishing/channels/", "/publishing/sales/", "/publishing/media/"]) {
+  await waitFor("!document.documentElement.classList.contains('ak-page-vt') && !document.querySelector('#main[aria-busy]')"); await sleep(150);
+  await clickSel(`[data-instant-tabs] a[href='${href}']`).catch(() => {});
+  await waitFor(`location.pathname === ${JSON.stringify(href)} && !document.querySelector('#main[aria-busy]')`); await sleep(500);
+  tabTops[href] = await evaluate(`Math.round(document.querySelector('[data-instant-tabs]').getBoundingClientRect().top + scrollY)`);
+}
+check("tabs.same-height-on-every-tab", new Set(Object.values(tabTops)).size === 1, tabTops);
+
+// 5c. Quick tab clicks skip view transitions without unhandled errors (checked at the end).
+for (const href of ["/publishing/library/", "/publishing/calendar/", "/publishing/planning/", "/publishing/"]) {
+  await clickSel(`[data-instant-tabs] a[href='${href}']`).catch(() => {});
+  await sleep(60);
+}
+await waitFor("location.pathname === '/publishing/' && !document.querySelector('#main[aria-busy]')"); await sleep(800);
 
 // 6. Month calendar: today stands out.
 await go("/publishing/calendar/?view=month", 1500);

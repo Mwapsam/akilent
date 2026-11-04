@@ -3,15 +3,15 @@
 {% block title %}Needs check — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
-<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+<div class="cs-head">
   <div>
     <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
-    <p class="text-sm text-ink-subtle mt-0.5">Publications we couldn't confirm. Check the channel before you act, so nothing is posted twice.</p>
   </div>
   <a href="{% url 'publishing:post-new' %}" class="btn btn-primary">New post</a>
 </div>
 
 {% include "publishing/_subnav.html" %}
+<p class="text-sm text-ink-subtle -mt-2 mb-4">Publications we couldn't confirm. Check the channel before you act, so nothing is posted twice.</p>
 
 {% if variants %}
   <div class="space-y-4">

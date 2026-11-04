@@ -1,0 +1,11 @@
+/* Content Studio page chrome. A file of its own rather than assets/app.css, which is a Tailwind
+   build checked byte for byte in CI; linked from base.html for signed-in pages. */
+
+/* The header above the tabs (templates/publishing/_subnav.html): one height on every page, with
+   or without buttons, so the tab row never moves between tabs. Below sm the buttons may wrap,
+   so it only has a minimum there. */
+.cs-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: .75rem; min-height: 2.75rem; margin-bottom: 1rem; }
+@media (min-width: 640px) {
+  .cs-head { flex-wrap: nowrap; height: 2.75rem; }
+}

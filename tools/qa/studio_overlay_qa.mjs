@@ -88,6 +88,7 @@ ws.addEventListener("message", async (ev) => {
     if (act && act.delay) { await sleep(act.delay); await send("Fetch.continueRequest", { requestId }); }
     else if (!act) await send("Fetch.continueRequest", { requestId });
     else if (act.fail) await send("Fetch.failRequest", { requestId, errorReason: act.fail });
+    else if (act.raw) await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: act.type }], body: act.raw });
     else await send("Fetch.fulfillRequest", { requestId, responseCode: act.status,
       responseHeaders: [{ name: "Content-Type", value: act.html !== undefined ? "text/html" : "application/json" }, ...(act.headers || [])],
       body: Buffer.from(act.html !== undefined ? act.html : JSON.stringify(act.body)).toString("base64") });
@@ -208,9 +209,15 @@ check("modal.focus-on-topic", st7.focus === "plan-topic", st7);
 await evaluate(`(() => { const t = document.getElementById('plan-topic'); t.removeAttribute('required'); t.value = '   '; return 0; })()`);
 await clickSel("#overlay-body form button[type=submit].btn-primary");
 await sleep(900);
-const st8 = await evaluate(`({ open: !document.getElementById('overlay-host').hidden, form: !!document.querySelector('#overlay-body #plan-topic'), body: document.getElementById('overlay-body').innerHTML.slice(0, 300), hx: document.querySelector('#overlay-body form') && document.querySelector('#overlay-body form').getAttribute('hx-post') })`);
+const st8 = await evaluate(`(() => { const t = document.getElementById('plan-topic'), save = document.querySelector('#overlay-body .ak-overlay-actions .btn-primary');
+  const r = save && save.getBoundingClientRect(), panel = document.querySelector('.ak-overlay-panel').getBoundingClientRect();
+  return { open: !document.getElementById('overlay-host').hidden, invalid: t && t.getAttribute('aria-invalid'),
+    error: (document.getElementById('plan-topic-error') || {}).textContent, focus: document.activeElement && document.activeElement.id,
+    saveInView: !!r && r.bottom <= panel.bottom + 1 && r.top >= panel.top }; })()`);
 st8.toast = await toasts();
-check("modal.refused-save-stays", st8.open && st8.form && /Topic is required/.test(st8.toast), st8);
+await shot("overlay-add-idea-refused");
+check("modal.refused-save-stays", st8.open && st8.invalid === "true" && /topic/i.test(st8.error || "") && st8.focus === "plan-topic", st8);
+check("modal.buttons-pinned-in-view", st8.saveInView, st8);
 
 // 9. A save closes it, the toast says when, the calendar shows the idea, same page.
 const topic = "QA overlay idea " + Date.now();
@@ -267,6 +274,32 @@ for (const [page, sel, kind, ready] of [
   check(`side.${name}.closes-back-to-page`, (await evaluate("location.pathname")) === page, {});
 }
 
+// 11b. A media server without CORS headers (CloudFront today): the editor can't read the picture
+// back, so it shows it as a preview only instead of a broken image. The picture is on
+// media.qa.invalid (a test asset), another origin, so the browser checks CORS for it.
+{
+  const png = readFileSync(join(repo, "static/img/demo/leather-sandals.png")).toString("base64");
+  // An https host (the page's CSP allows https images) that's answered here, never with CORS
+  // headers; the request never leaves the browser.
+  rules.unshift({ match: (r) => new URL(r.url).host === "media.qa.invalid", act: { raw: png, type: "image/png" } });
+  await go("/publishing/media/", 1400);
+  const editHref = await evaluate(`(() => { let el = document.querySelector('#main img[src*="leather-sandals"], #main [style*="leather-sandals"]'); while (el && !(el.querySelector && el.querySelector('a[href$="/edit/"]'))) el = el.parentElement; const a = el && el.querySelector('a[href$="/edit/"]'); return a ? a.getAttribute('href') : null; })()`);
+  if (!editHref) { check("editor.no-cors-shows-preview", false, "no localhost picture in the grid"); }
+  else {
+    await clickSel(`#main a[href="${editHref}"]`);
+    await waitFor("!!document.querySelector('#overlay-body [x-data^=mediaEditor]')");
+    const shownOk = await waitFor(`(() => { const i = document.querySelector('#overlay-body img[data-media-preview]'); return i && !i.hasAttribute('crossorigin') && i.complete && i.naturalWidth > 0; })()`);
+    const cors = await evaluate(`(() => { const i = document.querySelector('#overlay-body img[data-media-preview]');
+      return { msg: (document.querySelector('#overlay-body [role=alert]') || {}).textContent, saveDisabled: document.querySelector('#overlay-body button.btn-primary').disabled,
+        img: i && { src: i.getAttribute('src'), co: i.getAttribute('crossorigin'), complete: i.complete, w: i.naturalWidth, h: Math.round(i.getBoundingClientRect().height), display: getComputedStyle(i).display } }; })()`);
+    await shot("overlay-media-editor-no-cors");
+    check("editor.no-cors-shows-preview", shownOk && /preview only/.test(cors.msg || "") && cors.saveDisabled, cors);
+    await key("Escape", "Escape", 27);
+    await waitFor(`document.getElementById('overlay-host').hidden`);
+  }
+  rules.shift();
+}
+
 // 12. The composer keeps what you typed while its templates drawer opens and closes.
 await go("/publishing/new/", 1500);
 const manage = await evaluate(`!!document.querySelector('#main a[href="/publishing/media/snippets/"]')`);
@@ -282,7 +315,7 @@ if (manage) {
   check("composer.keeps-work-under-drawer", false, "Manage templates link hidden (cs_media_library off?)");
 }
 
-check("console.no-errors", consoleErrors.filter((e) => !/favicon|ERR_BLOCKED_BY_CLIENT|status of 422/.test(e)).length === 0, consoleErrors.slice(0, 5));
+check("console.no-errors", consoleErrors.filter((e) => !/favicon|ERR_BLOCKED_BY_CLIENT|status of 422|leather-sandals|CORS/.test(e)).length === 0, consoleErrors.slice(0, 5));
 const failed = results.filter((r) => !r.pass);
 writeFileSync(join(outDir, "studio_overlay_qa.json"), JSON.stringify({ results, log }, null, 2));
 console.log(`${results.length - failed.length}/${results.length} passed`);

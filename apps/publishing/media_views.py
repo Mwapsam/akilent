@@ -157,7 +157,7 @@ def asset_edit(request, pk):
             "derived": asset.derived.filter(archived_at__isnull=True)[:12],
         },
         kind="modal",
-        size="xl",
+        size="full",
         title="Reel cover" if asset.kind == "video" else "Edit picture",
     )
 

@@ -3,10 +3,9 @@
 {% block title %}Content Studio — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
-<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+<div class="cs-head">
   <div>
     <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
-    <p class="text-sm text-ink-subtle mt-0.5">Plan, create, and publish content across your channels.</p>
   </div>
   <a href="{% url 'publishing:post-new' %}" class="btn btn-primary">New post</a>
 </div>
@@ -71,7 +70,7 @@
             <p class="text-xs text-ink-subtle">{{ row.bucket_label }}{% if row.bucket == 'failed' and row.post.error %} · <span class="tone-coral-fg">{{ row.post.error|truncatechars:70 }}</span>{% endif %}</p>
           </a>
           {% if row.action.url %}
-          <a href="{{ row.action.url }}" class="btn btn-ghost text-xs py-0.5 px-2 shrink-0">{{ row.action.label }}</a>
+          <a href="{{ row.action.url }}"{% if "/posts/" in row.action.url %} data-overlay-open="drawer"{% endif %} class="btn btn-ghost text-xs py-0.5 px-2 shrink-0">{{ row.action.label }}</a>
           {% else %}
           <span class="text-xs text-ink-subtle shrink-0 text-right" style="max-width:45%">{{ row.action.label }}</span>
           {% endif %}

@@ -22,7 +22,7 @@ from django.views.decorators.http import require_POST
 from apps.accounts.api import is_account_admin
 from apps.accounts.fields import open_text, seal_text
 from apps.accounts.utils import get_current_account
-from apps.core.htmx import full_page_load, is_overlay, overlay_done, overlay_or_page
+from apps.core.htmx import full_page_load, overlay_done, overlay_or_page
 from apps.core.module_gate import module_required
 
 from . import ai_plus, direct_upload
@@ -1093,9 +1093,9 @@ def plan_item_new(request):
     if account is None:
         return redirect("dashboard")
 
-    invalid = False
+    errors: dict[str, str] = {}
     if request.method == "POST":
-        item = _save_plan_item(request, account, instance=None)
+        item, errors = _save_plan_item(request, account, instance=None)
         if item:
             from django.utils.formats import date_format
 
@@ -1106,7 +1106,6 @@ def plan_item_new(request):
                 else "Idea added. Give it a date to put it on the calendar.",
                 _plan_back(request)[0],
             )
-        invalid = True
 
     pillars = ContentPillar.objects.filter(account=account)
     campaigns = ContentCampaign.objects.filter(account=account)
@@ -1130,10 +1129,12 @@ def plan_item_new(request):
             "media_type_choices": ContentPost.MediaType.choices,
             "plan_status_choices": ContentPlanItem.PlanStatus.choices,
             "item": None,
+            "errors": errors,
+            "values": request.POST if errors else {},
         },
         kind="modal",
         title="Add idea",
-        status=422 if invalid and is_overlay(request) else 200,
+        status=422 if errors else 200,
     )
 
 
@@ -1146,12 +1147,11 @@ def plan_item_edit(request, pk):
 
     item = get_object_or_404(ContentPlanItem, pk=pk, account=account)
 
-    invalid = False
+    errors: dict[str, str] = {}
     if request.method == "POST":
-        updated = _save_plan_item(request, account, instance=item)
+        updated, errors = _save_plan_item(request, account, instance=item)
         if updated:
             return overlay_done(request, "Plan item updated.", _plan_back(request)[0])
-        invalid = True
 
     pillars = ContentPillar.objects.filter(account=account)
     campaigns = ContentCampaign.objects.filter(account=account)
@@ -1169,18 +1169,23 @@ def plan_item_edit(request, pk):
             "campaigns": campaigns,
             "media_type_choices": ContentPost.MediaType.choices,
             "plan_status_choices": ContentPlanItem.PlanStatus.choices,
+            "errors": errors,
+            "values": request.POST if errors else {},
         },
         title="Edit plan item",
-        status=422 if invalid and is_overlay(request) else 200,
+        status=422 if errors else 200,
     )
 
 
 def _save_plan_item(request, account, instance=None):
-    """Create or update a ContentPlanItem from POST data. Returns instance or None on error."""
+    """Create or update a ContentPlanItem from POST data.
+
+    Returns ``(item, {})``, or ``(None, errors)`` with a message per field, shown under the
+    field in the form.
+    """
     topic = request.POST.get("topic", "").strip()
     if not topic:
-        messages.error(request, "Topic is required.")
-        return None
+        return None, {"topic": "Give the idea a topic."}
 
     objective = request.POST.get("objective", "").strip()
     platforms = request.POST.getlist("platforms")
@@ -1193,8 +1198,7 @@ def _save_plan_item(request, account, instance=None):
         try:
             planned_date = datetime.date.fromisoformat(planned_date_raw)
         except ValueError:
-            messages.error(request, "Invalid planned date.")
-            return None
+            return None, {"planned_date": "That isn't a date."}
 
     pillar_id = request.POST.get("pillar", "")
     campaign_id = request.POST.get("campaign", "")
@@ -1222,7 +1226,7 @@ def _save_plan_item(request, account, instance=None):
     instance.pillar = pillar
     instance.campaign = campaign
     instance.save()
-    return instance
+    return instance, {}
 
 
 @login_required

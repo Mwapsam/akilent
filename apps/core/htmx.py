@@ -274,4 +274,5 @@ def _vary(response):
     # to reuse the response. Without Vary: Cookie, that cache is keyed on URL alone, so on a shared
     # browser (a kiosk, a shared machine) user B's click could be served user A's cached fragment
     # from before A signed out, entirely client-side, with nothing hitting the server to notice.
-    patch_vary_headers(response, ("HX-Request", "HX-Boosted", "Cookie"))
+    # HX-Target too: the same URL answers the overlay with a partial (overlay_or_page).
+    patch_vary_headers(response, ("HX-Request", "HX-Boosted", "HX-Target", "Cookie"))

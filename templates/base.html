@@ -39,7 +39,8 @@
   <link rel="preload" href="{% static 'fonts/inter-variable.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="icon" type="image/svg+xml" href="{% static 'img/brand/icon-color.svg' %}">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
-  {% if user.is_authenticated %}<link rel="stylesheet" href="{% static 'css/overlay.css' %}">{% endif %}
+  {% if user.is_authenticated %}<link rel="stylesheet" href="{% static 'css/overlay.css' %}">
+  <link rel="stylesheet" href="{% static 'css/studio.css' %}">{% endif %}
   
   {% comment %}
     HTMX drives every partial swap/poll. Deferred like Alpine so it does not
@@ -106,7 +107,12 @@
   <script defer src="{% static 'js/media_library.js' %}"></script>
   {% endif %}
   <script defer src="{% static 'js/alpine.min.js' %}"></script>
+{% endif %}
+  {% comment %}Rendered in both modes: in a shell swap it travels with the page into <main>, so a
+  page's own <style> or stylesheet arrives with it and leaves with it (the composer was unstyled
+  when reached from inside the app). A <script> here still forces a real load (_needs_full_load).{% endcomment %}
   {% block extra_head %}{% endblock %}
+{% if not request.shell_swap %}
 </head>
 <body class="h-full bg-canvas text-ink antialiased" x-data
       hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
@@ -358,9 +364,9 @@
   {% endif %}
 
       {# Page content. hx-history-elt: back/forward re-fetch the page and restore only this. #}
-      {% if not request.shell_swap %}
-      <main id="main" tabindex="-1" hx-history-elt class="{% if user.is_authenticated %}{% block main_class %}px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-7xl mx-auto{% endblock %}{% else %}min-h-full{% endif %}">
-      {% endif %}
+      {% comment %}A shell swap keeps the old <main>, so the page's classes come with it and
+      static/js/app.js puts them on <main> (data-main-class).{% endcomment %}
+      {% if request.shell_swap %}<template data-main-class="{% else %}<main id="main" tabindex="-1" hx-history-elt class="{% endif %}{% if user.is_authenticated %}{% block main_class %}px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-7xl mx-auto{% endblock %}{% else %}min-h-full{% endif %}">{% if request.shell_swap %}</template>{% endif %}
         {% block page_header %}{% endblock %}
         {% block content %}{% endblock %}
       {% if not request.shell_swap %}

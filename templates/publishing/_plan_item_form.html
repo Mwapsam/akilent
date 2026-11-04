@@ -8,16 +8,18 @@ save closes it; on the page, Save and Cancel go back to back_url.{% endcomment %
 
   <div>
     <label class="block text-sm font-medium text-ink-muted mb-1" for="plan-topic">Topic <span class="tone-coral-fg">*</span></label>
-    <input id="plan-topic" type="text" name="topic" value="{{ item.topic|default:'' }}"
+    <input id="plan-topic" type="text" name="topic" value="{% if values %}{{ values.topic }}{% else %}{{ item.topic|default:'' }}{% endif %}"
            placeholder="What is this content about?"
-           class="input w-full" required{% if in_overlay and not item %} autofocus{% endif %}>
+           class="input w-full" required{% if in_overlay and not item %} autofocus{% endif %}
+           {% if errors.topic %}aria-invalid="true" aria-describedby="plan-topic-error"{% endif %}>
+    {% if errors.topic %}<p id="plan-topic-error" class="text-xs tone-coral-fg mt-1">{{ errors.topic }}</p>{% endif %}
   </div>
 
   <div>
     <label class="block text-sm font-medium text-ink-muted mb-1" for="plan-objective">Objective</label>
     <textarea id="plan-objective" name="objective" rows="2"
               placeholder="What should this content achieve?"
-              class="input w-full">{{ item.objective|default:'' }}</textarea>
+              class="input w-full">{% if values %}{{ values.objective }}{% else %}{{ item.objective|default:'' }}{% endif %}</textarea>
   </div>
 
   <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -79,17 +81,20 @@ save closes it; on the page, Save and Cancel go back to back_url.{% endcomment %
   <div>
     <label class="block text-sm font-medium text-ink-muted mb-1" for="plan-planned-date">Planned date</label>
     <input id="plan-planned-date" type="date" name="planned_date"
-           value="{% if item %}{{ item.planned_date|date:'Y-m-d'|default:'' }}{% else %}{{ initial_date }}{% endif %}"
-           class="input w-full">
+           value="{% if values %}{{ values.planned_date }}{% elif item %}{{ item.planned_date|date:'Y-m-d'|default:'' }}{% else %}{{ initial_date }}{% endif %}"
+           class="input w-full"{% if errors.planned_date %} aria-invalid="true" aria-describedby="plan-date-error"{% endif %}>
+    {% if errors.planned_date %}<p id="plan-date-error" class="text-xs tone-coral-fg mt-1">{{ errors.planned_date }}</p>{% endif %}
   </div>
 
   <div>
     <label class="block text-sm font-medium text-ink-muted mb-1" for="plan-notes">Notes</label>
     <textarea id="plan-notes" name="notes" rows="3" placeholder="Any additional context..."
-              class="input w-full">{{ item.notes|default:'' }}</textarea>
+              class="input w-full">{% if values %}{{ values.notes }}{% else %}{{ item.notes|default:'' }}{% endif %}</textarea>
   </div>
 
-  <div class="flex gap-2 pt-2">
+  {% comment %}In the modal the buttons stay pinned to its bottom edge (ak-overlay-actions,
+  static/css/overlay.css), so they never scroll out of sight on a short screen.{% endcomment %}
+  <div class="flex gap-2 pt-2{% if in_overlay %} ak-overlay-actions{% endif %}">
     <button type="submit" class="btn btn-primary">{% if item %}Save changes{% else %}Add to backlog{% endif %}</button>
     {% if in_overlay %}
     <button type="button" class="btn btn-ghost" data-overlay-close>Cancel</button>

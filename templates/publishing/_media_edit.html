@@ -21,7 +21,7 @@ stylesheet for Cropper comes with the content, and a save closes it over the gri
     {% comment %}A fixed-height stage: Cropper sizes itself to its container, and an
     unsized one gave it a 100px box.{% endcomment %}
     <div class="overflow-hidden rounded-lg bg-surface-muted" style="height: min(70vh, 40rem)">
-      <img x-ref="image" src="{{ asset.url }}" crossorigin="anonymous" alt="{{ asset.name }}" class="block max-w-full">
+      <img x-ref="image" src="{{ asset.url }}" crossorigin="anonymous" alt="{{ asset.name }}" class="block max-w-full mx-auto" style="max-height: 100%">
     </div>
     <fieldset class="flex flex-wrap items-center gap-2">
       <legend class="sr-only">Shape</legend>
@@ -49,7 +49,7 @@ stylesheet for Cropper comes with the content, and a save closes it over the gri
       </div>
     </div>
     <p class="text-sm tone-coral-fg" role="alert" x-show="error" x-text="error"></p>
-    <button type="button" class="btn btn-primary btn-sm" @click="save()" :disabled="saving" x-text="saving ? 'Saving…' : 'Save as a new picture'"></button>
+    <button type="button" class="btn btn-primary btn-sm" @click="save()" :disabled="saving || !cropper" x-text="saving ? 'Saving…' : 'Save as a new picture'"></button>
   </section>
   {% else %}
   <section class="card card-pad space-y-3" aria-labelledby="me-cover">
