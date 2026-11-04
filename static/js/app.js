@@ -367,7 +367,7 @@
     // opts.close: how to close this dialog when Esc reaches it.
     open(root, opts) {
       if (!root || dialogStack.some(function (d) { return d.root === root; })) return;
-      dialogStack.push({ root: root, close: opts && opts.close, opener: document.activeElement });
+      dialogStack.push({ root: root, close: opts && opts.close, opener: (opts && opts.opener) || document.activeElement });
       syncInert();
       // After Alpine has shown it: focus() on a display:none element does nothing.
       requestAnimationFrame(function () {
@@ -382,6 +382,11 @@
       // Only the topmost dialog hands focus back; closing one underneath (a
       // modal-close for it while a confirm is up) must not pull focus out.
       if (i === dialogStack.length) restoreFocus(d.opener);
+    },
+    // The element focus returns to when this dialog closes.
+    setOpener(root, el) {
+      const d = dialogStack.find(function (x) { return x.root === root; });
+      if (d) d.opener = el;
     },
     isTop(root) {
       const top = dialogStack[dialogStack.length - 1];
@@ -1221,6 +1226,387 @@
       setTimeout(function () { navProgressEl.classList.remove("is-done"); }, 300);
     }
   });
+
+  // A form's submit buttons are disabled while its htmx request is in flight, so a slow save
+  // can't be sent twice. beforeSend runs after htmx has read the form (the clicked button's
+  // name and value are already in the request). A form inside an element with its own
+  // hx-disabled-elt is left to htmx.
+  const lockedSubmits = new WeakMap();
+  document.addEventListener("htmx:beforeSend", function (e) {
+    const form = e.detail.elt;
+    if (!form || form.tagName !== "FORM" || form.closest("[hx-disabled-elt]")) return;
+    const buttons = Array.prototype.filter.call(form.querySelectorAll("[type=submit]"), function (b) { return !b.disabled; });
+    buttons.forEach(function (b) { b.disabled = true; });
+    lockedSubmits.set(e.detail.xhr, buttons);
+  });
+  document.addEventListener("htmx:afterRequest", function (e) {
+    const buttons = e.detail.xhr && lockedSubmits.get(e.detail.xhr);
+    if (buttons) buttons.forEach(function (b) { b.disabled = false; });
+  });
+
+  // Instant tab feedback (data-instant-tabs, e.g. templates/publishing/_subnav.html). The tab
+  // takes the active look as soon as its request goes out (beforeSend, so a navigation the
+  // unsaved-work guard cancelled never moves it), and a page slow to arrive shows the tab's
+  // data-skeleton under the tabs after 150ms. Anything that ends the navigation without the
+  // new page (an error, an abort, Back, a newer navigation) puts the previous tab back; the
+  // swapped-in page brings its own server-rendered tabs either way.
+  let tabNav = null; // { nav, prev, timer, skeleton, hidden }
+  function setActiveTab(nav, link) {
+    const on = (nav.dataset.activeClass || "").split(/\s+/).filter(Boolean);
+    const off = (nav.dataset.inactiveClass || "").split(/\s+/).filter(Boolean);
+    nav.querySelectorAll("a[href]").forEach(function (a) {
+      const active = a === link;
+      a.classList.remove.apply(a.classList, active ? off : on);
+      a.classList.add.apply(a.classList, active ? on : off);
+      if (active) a.setAttribute("aria-current", "page");
+      else a.removeAttribute("aria-current");
+    });
+  }
+  function endTabNav(restore) {
+    const t = tabNav;
+    tabNav = null;
+    if (!t) return;
+    clearTimeout(t.timer);
+    if (t.skeleton) t.skeleton.remove();
+    t.hidden.forEach(function (el) { el.hidden = false; });
+    if (restore && document.contains(t.nav)) setActiveTab(t.nav, t.prev);
+  }
+  function showTabSkeleton(t, kind) {
+    const tpl = document.getElementById("skeleton-" + kind);
+    if (!tpl || !document.contains(t.nav)) return;
+    let el = t.nav.nextElementSibling;
+    while (el) {
+      if (!el.hidden) { el.hidden = true; t.hidden.push(el); }
+      el = el.nextElementSibling;
+    }
+    t.skeleton = tpl.content.firstElementChild.cloneNode(true);
+    t.nav.after(t.skeleton);
+  }
+  document.addEventListener("click", function (e) {
+    if (e.target.closest && e.target.closest("[data-instant-tabs] a[href]") && window.performance && performance.mark) {
+      performance.mark("ak-tab-click");
+    }
+  }, true);
+  document.addEventListener("htmx:beforeSend", function (e) {
+    if (!isBoosted(e.detail) || isPreloaded(e.detail)) return;
+    endTabNav(true); // a newer navigation replaces the one still in flight
+    const elt = e.detail.elt;
+    const link = elt && elt.closest && elt.closest("[data-instant-tabs] a[href]");
+    if (!link) return;
+    const nav = link.closest("[data-instant-tabs]");
+    const prev = nav.querySelector('a[aria-current="page"]');
+    if (prev === link) return;
+    setActiveTab(nav, link);
+    if (window.performance && performance.mark) performance.mark("ak-tab-active");
+    const t = { nav: nav, prev: prev, timer: null, skeleton: null, hidden: [] };
+    if (link.dataset.skeleton) {
+      t.timer = setTimeout(function () { if (tabNav === t) showTabSkeleton(t, link.dataset.skeleton); }, 150);
+    }
+    tabNav = t;
+  });
+  document.addEventListener("htmx:beforeSwap", function (e) {
+    if (isBoosted(e.detail) && e.detail.shouldSwap) endTabNav(false);
+  });
+  ["htmx:responseError", "htmx:sendError", "htmx:timeout", "htmx:abort"].forEach(function (name) {
+    document.addEventListener(name, function (e) { if (isBoosted(e.detail)) endTabNav(true); });
+  });
+  window.addEventListener("popstate", function () { endTabNav(true); });
+
+  // --- Overlay ---------------------------------------------------------------
+  // One drawer-or-modal over the current page (components/overlay_host.html). A link marked
+  // data-overlay-open="drawer|modal" (data-overlay-size="md|lg|xl") opens its own URL here
+  // instead of navigating; the view answers with the partial (overlay_or_page in
+  // apps/core/htmx.py) and the page underneath stays as it was.
+  //   - History: opening pushes the link's URL (a refresh or a shared link gives the real
+  //     page); Back, Esc, the backdrop and Close all close it, and closing pops that entry.
+  //     The entry carries no htmx key, so htmx's own Back handling ignores it, and the capture
+  //     listener below keeps htmx from re-fetching the page when Back lands on it again.
+  //   - A navigation started from inside it (a boosted link) first puts the page's URL back
+  //     with replaceState, so no stray overlay entry is left behind.
+  //   - Forms inside post back into the overlay. A 400/422 re-renders there; a save answers
+  //     204 + HX-Trigger overlay-close. Any successful post refreshes the page underneath with
+  //     one request, so what it shows (a calendar day, a table row) is never stale.
+  //   - In a drawer, J/K (and the arrows in its title row) step through the [data-row] rows
+  //     of the list on screen, in the order shown.
+  const overlay = { open: false, url: "", base: "", baseState: null, opener: null, pushed: false, rows: [], index: -1 };
+  const overlayHost = () => document.getElementById("overlay-host");
+  const overlayBody = () => document.getElementById("overlay-body");
+  const reducedMotion = () => !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const isOverlayTarget = (detail) => !!(detail && detail.target && detail.target.id === "overlay-body");
+
+  function overlayShape(kind, size) {
+    const host = overlayHost();
+    host.dataset.kind = kind === "modal" ? "modal" : "drawer";
+    host.dataset.size = size || "md";
+  }
+  const DRAWER_LINK = 'a[data-overlay-open="drawer"][href]';
+  const rowLink = (row) => (row.matches(DRAWER_LINK) ? row : row.querySelector(DRAWER_LINK));
+  function overlayRows(opener) {
+    const row = opener && opener.closest && opener.closest("[data-row]");
+    if (!row || !row.closest("#main")) return { rows: [], index: -1 };
+    const rows = Array.prototype.filter.call(document.querySelectorAll("#main [data-row]"), function (r) {
+      return shown(r) && rowLink(r);
+    });
+    return { rows: rows, index: rows.indexOf(row) };
+  }
+  function syncOverlayStep() {
+    const host = overlayHost();
+    const step = host.querySelector("[data-overlay-step]");
+    const many = host.dataset.kind === "drawer" && overlay.rows.length > 1 && overlay.index !== -1;
+    step.hidden = !many;
+    if (!many) return;
+    host.querySelector("[data-overlay-position]").textContent = (overlay.index + 1) + " of " + overlay.rows.length;
+    host.querySelector("[data-overlay-prev]").disabled = overlay.index === 0;
+    host.querySelector("[data-overlay-next]").disabled = overlay.index === overlay.rows.length - 1;
+  }
+  function overlayPageview(url) {
+    // GA4 counts the history change itself (enhanced measurement); this event is for
+    // anything else listening, and for the browser harness.
+    window.dispatchEvent(new CustomEvent("akilent:pageview", { detail: { path: url, overlay: true } }));
+  }
+  function loadOverlay(url) {
+    const body = overlayBody();
+    htmx.trigger(body, "htmx:abort"); // a newer step through the rows replaces a slower one
+    body.setAttribute("aria-busy", "true");
+    const pending = setTimeout(function () {
+      const tpl = document.getElementById("skeleton-form");
+      if (tpl && body.getAttribute("aria-busy") === "true") body.replaceChildren(tpl.content.firstElementChild.cloneNode(true));
+    }, 150);
+    htmx.ajax("GET", url, { source: body, target: body, swap: "innerHTML" }).finally(function () {
+      clearTimeout(pending);
+      body.setAttribute("aria-busy", "false");
+    });
+  }
+  function openOverlay(url, opts) {
+    const host = overlayHost();
+    if (!host || !window.htmx) { window.location.href = url; return; }
+    if (!overlay.open) {
+      overlay.opener = opts.opener || document.activeElement;
+      overlay.base = location.href;
+      overlay.baseState = history.state;
+      overlay.pushed = false;
+      const found = overlayRows(overlay.opener);
+      overlay.rows = found.rows;
+      overlay.index = found.index;
+      overlayShape(opts.kind, opts.size);
+      host.querySelector("#overlay-title").textContent = opts.title || "";
+      overlayBody().replaceChildren();
+      host.hidden = false;
+      overlay.open = true;
+      document.documentElement.style.overflow = "hidden";
+      akDialog.open(host, { close: closeOverlay, opener: overlay.opener });
+      if (reducedMotion()) host.classList.add("is-open");
+      else requestAnimationFrame(function () { requestAnimationFrame(function () { host.classList.add("is-open"); }); });
+    }
+    overlay.url = url;
+    syncOverlayStep();
+    const state = { akOverlay: url, base: overlay.base };
+    if (opts.history === "push") {
+      // The page's own entry needs htmx's key, or Back from a page loaded at the overlay's
+      // URL (a refresh) could never bring this page back.
+      if (!history.state) { history.replaceState({ htmx: true }, "", overlay.base); overlay.baseState = history.state; }
+      history.pushState(state, "", url);
+      overlay.pushed = true;
+    }
+    else if (opts.history === "replace") history.replaceState(state, "", url);
+    overlayPageview(url);
+    loadOverlay(url);
+  }
+  // Hide it without touching history (the caller already has, or will).
+  function hideOverlay() {
+    if (!overlay.open) return;
+    const host = overlayHost();
+    const body = overlayBody();
+    overlay.open = false;
+    overlay.pushed = false;
+    htmx.trigger(body, "htmx:abort");
+    host.classList.remove("is-open");
+    document.documentElement.style.overflow = "";
+    akDialog.close(host);
+    const done = function () { if (!overlay.open) { host.hidden = true; body.replaceChildren(); } };
+    if (reducedMotion()) done(); else setTimeout(done, 200);
+  }
+  // What Esc, the backdrop, Close and a finished save do: pop the overlay's history entry
+  // (popstate, below, then hides it), or just hide it if it never pushed one.
+  function closeOverlay() {
+    if (!overlay.open) return;
+    if (overlay.pushed && history.state && history.state.akOverlay) history.back();
+    else hideOverlay();
+  }
+  function stepOverlay(delta) {
+    const i = overlay.index + delta;
+    if (!overlay.open || i < 0 || i >= overlay.rows.length) return;
+    const row = overlay.rows[i];
+    const link = row.isConnected && rowLink(row);
+    if (!link) return;
+    overlay.index = i;
+    overlay.opener = link; // focus goes back to the row you ended on
+    akDialog.setOpener(overlayHost(), link);
+    openOverlay(link.getAttribute("href"), { history: overlay.pushed ? "replace" : "none" });
+    row.scrollIntoView({ block: "nearest" });
+  }
+  akilent.openOverlay = function (url, opts) {
+    openOverlay(url, Object.assign({ history: "push" }, opts || {}));
+  };
+  akilent.closeOverlay = closeOverlay;
+
+  document.addEventListener("click", function (e) {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const t = e.target;
+    if (!t.closest) return;
+    if (overlay.open && t.closest("#overlay-host [data-overlay-close]")) { e.preventDefault(); closeOverlay(); return; }
+    if (overlay.open && t.closest("#overlay-host [data-overlay-prev]")) { stepOverlay(-1); return; }
+    if (overlay.open && t.closest("#overlay-host [data-overlay-next]")) { stepOverlay(1); return; }
+    const link = t.closest("a[data-overlay-open][href]");
+    if (!link || link.closest("#overlay-host")) return;
+    // Captured before htmx's boost sees the click, so the page underneath stays.
+    e.preventDefault();
+    e.stopPropagation();
+    openOverlay(link.getAttribute("href"), {
+      kind: link.dataset.overlayOpen, size: link.dataset.overlaySize, opener: link,
+      title: link.dataset.overlayTitle || "", history: "push",
+    });
+  }, true);
+  document.addEventListener("keydown", function (e) {
+    if (!overlay.open || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (!akDialog.isTop(overlayHost())) return;
+    const t = e.target;
+    if (t && (t.isContentEditable || (t.matches && t.matches("input, textarea, select")))) return;
+    if (e.key === "j" || e.key === "J") { e.preventDefault(); stepOverlay(1); }
+    else if (e.key === "k" || e.key === "K") { e.preventDefault(); stepOverlay(-1); }
+  });
+
+  // Back and Forward. Capture phase, ahead of htmx's window.onpopstate: landing back on the
+  // page under an open overlay just closes it (htmx would re-fetch the whole page).
+  window.addEventListener("popstate", function (e) {
+    const state = e.state;
+    if (overlay.open) {
+      if (state && state.akOverlay && state.base === overlay.base) return; // still inside
+      hideOverlay();
+      if (location.href === overlay.base) e.stopImmediatePropagation();
+      return;
+    }
+    if (state && state.akOverlay) {
+      e.stopImmediatePropagation();
+      // Forward onto an overlay over this same page reopens it; over any other page (the
+      // page underneath has changed since), load its real page.
+      if (overlay.base && state.base === overlay.base) {
+        overlay.base = state.base;
+        openOverlay(state.akOverlay, { history: "none" });
+        overlay.pushed = true;
+      } else {
+        window.location.reload();
+      }
+    }
+  }, true);
+
+  // A navigation (boosted link or form) started inside the overlay: the page under it is
+  // going away, so close it first and put the page's own URL back in place of the overlay's.
+  document.addEventListener("htmx:beforeSend", function (e) {
+    if (!overlay.open || !isBoosted(e.detail) || isPreloaded(e.detail)) return;
+    if (overlay.pushed) history.replaceState(overlay.baseState, "", overlay.base);
+    hideOverlay();
+  });
+  document.addEventListener("htmx:beforeHistorySave", function () {
+    if (overlay.open) hideOverlay();
+  });
+  // Once another page is showing, an old overlay entry (Forward) belongs to a page that's gone.
+  ["htmx:afterSettle", "htmx:historyRestore"].forEach(function (name) {
+    document.addEventListener(name, function (e) {
+      if (!overlay.open && (name === "htmx:historyRestore" || isBoosted(e.detail))) overlay.base = "";
+    });
+  });
+
+  // A form inside the overlay posts back into it rather than navigating. hx-boost="false"
+  // keeps a form native (one that leaves for another page, like "Edit and fix").
+  document.addEventListener("htmx:beforeProcessNode", function (e) {
+    const el = e.target;
+    if (!el || el.tagName !== "FORM" || !el.closest("#overlay-body")) return;
+    if (el.getAttribute("hx-boost") === "false" || el.hasAttribute("hx-post") || el.hasAttribute("hx-get")) return;
+    if ((el.getAttribute("method") || "get").toLowerCase() !== "post") return;
+    el.setAttribute("hx-post", el.getAttribute("action") || overlay.url);
+    el.setAttribute("hx-target", "#overlay-body");
+    el.setAttribute("hx-swap", "innerHTML");
+  });
+
+  document.addEventListener("htmx:beforeSwap", function (e) {
+    if (!isOverlayTarget(e.detail)) return;
+    if (!overlay.open) { e.detail.shouldSwap = false; return; }
+    const status = e.detail.xhr.status;
+    if (status === 400 || status === 422) { e.detail.shouldSwap = true; e.detail.isError = false; }
+  });
+  document.addEventListener("htmx:afterSwap", function (e) {
+    if (!isOverlayTarget(e.detail) || !overlay.open) return;
+    const content = overlayBody().querySelector("[data-overlay]");
+    if (!content) return;
+    overlayShape(content.dataset.overlay, content.dataset.overlaySize);
+    overlayHost().querySelector("#overlay-title").textContent = content.dataset.overlayTitle || "";
+    syncOverlayStep();
+    overlayBody().scrollTop = 0;
+    const invalid = content.querySelector('[aria-invalid="true"]');
+    if (invalid && invalid.focus) invalid.focus();
+    else focusInitial(overlayHost());
+  });
+  document.addEventListener("overlay-close", function () { closeOverlay(); });
+
+  // One request refreshes the page under the overlay after a save: its [data-cs-region]
+  // parts if it marks any, else everything in <main>. Focus that was on a link inside goes
+  // to the same link in the new copy.
+  let refreshSeq = 0;
+  function refreshUnderOverlay() {
+    const main = mainEl();
+    // A page holding unsaved work (the composer) is never replaced under you.
+    if (!main || !window.htmx || main.querySelector('[data-overlay-refresh="off"]')) return;
+    const url = overlay.open ? overlay.base : location.href;
+    const seq = ++refreshSeq;
+    fetch(url, { credentials: "same-origin", cache: "no-store", headers: { "X-Akilent-Refresh": "1" } })
+      .then(function (r) { return r.ok ? r.text() : null; })
+      .then(function (html) {
+        if (!html || seq !== refreshSeq || !main.isConnected) return;
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        const fresh = doc.getElementById("main");
+        if (!fresh) return;
+        const active = document.activeElement;
+        const href = active && main.contains(active) && active.getAttribute && active.getAttribute("href");
+        const regions = main.querySelectorAll("[data-cs-region][id]");
+        const scrollY = window.scrollY;
+        if (regions.length) {
+          regions.forEach(function (el) {
+            const next = doc.getElementById(el.id);
+            if (next) htmx.swap(el, next.outerHTML, { swapStyle: "outerHTML" });
+          });
+        } else {
+          pageCleanups.forEach(function (c) { try { c(); } catch (err) { console.error(err); } });
+          pageCleanups = [];
+          htmx.swap(main, fresh.innerHTML, { swapStyle: "innerHTML" });
+          runPageHooks();
+        }
+        window.scrollTo(0, scrollY);
+        if (overlay.open) {
+          const found = overlayRows(main.querySelector('a[data-overlay-open][href="' + CSS.escape(overlay.url) + '"]'));
+          overlay.rows = found.rows;
+          overlay.index = found.index;
+          syncOverlayStep();
+        }
+        if (href) {
+          const again = main.querySelector('a[href="' + CSS.escape(href) + '"]');
+          if (again && !overlay.open) again.focus({ preventScroll: true });
+        }
+      })
+      .catch(function () {});
+  }
+  document.addEventListener("htmx:afterRequest", function (e) {
+    const verb = ((e.detail.requestConfig && e.detail.requestConfig.verb) || "get").toLowerCase();
+    if (verb === "get" || !e.detail.successful || !e.detail.elt || !e.detail.elt.closest) return;
+    if (!e.detail.elt.closest("#overlay-host")) return;
+    refreshUnderOverlay();
+  });
+  // For a save made by a script rather than a form (the media editor's upload).
+  akilent.overlaySaved = function (message) {
+    if (message) window.toast("success", message);
+    refreshUnderOverlay();
+    closeOverlay();
+  };
 
   // Never strand a navigation: if the in-place request can't complete, load the page.
   document.addEventListener("htmx:sendError", function (e) {

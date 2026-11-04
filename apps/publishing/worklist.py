@@ -100,7 +100,9 @@ def bucket_for(post: ContentPost) -> str:
     return "draft"
 
 
-def next_action(post, bucket: str, user, can_review: Callable) -> dict:
+def next_action(
+    post, bucket: str, user, can_review: Callable, is_manager: bool | None = None
+) -> dict:
     """``{"label", "url"}`` for what ``user`` should do about ``post``; ``url`` is empty
     when the next step is someone else's, or nobody's.
 
@@ -108,7 +110,8 @@ def next_action(post, bucket: str, user, can_review: Callable) -> dict:
     """
     detail = reverse("publishing:post-detail", args=[post.pk])
     edit = f"{reverse('publishing:post-new')}?post_id={post.pk}"
-    is_manager = can_review_any(post, user)
+    if is_manager is None:
+        is_manager = can_review_any(post, user)
 
     if bucket == "needs_check":
         if is_manager:
@@ -171,10 +174,22 @@ def post_ids_in(account, key: str) -> list[int]:
 
 def worklist(account, user, can_review: Callable, limit: int = 8) -> dict:
     """Counts for every bucket, and the posts waiting on someone with their next action."""
+    from apps.accounts.models import Membership
+
+    from .models import PublishingSettings
+
     counts = dict.fromkeys(BUCKET_LABELS, 0)
     needs_you = []
     order = {key: i for i, key in enumerate(ACTION_BUCKETS)}
+    # Read once for the whole list, not once per post.
+    review = PublishingSettings.requires_review_for(account.pk)
+    is_manager = Membership.objects.filter(
+        account_id=account.pk,
+        user_id=user.pk,
+        role__in=[Membership.Role.OWNER, Membership.Role.ADMIN],
+    ).exists()
     for post in active_posts(account):
+        post._workspace_requires_review = review
         bucket = bucket_for(post)
         counts[bucket] += 1
         if bucket in order:
@@ -197,7 +212,7 @@ def worklist(account, user, can_review: Callable, limit: int = 8) -> dict:
                 "post": post,
                 "bucket": bucket,
                 "bucket_label": BUCKET_LABELS[bucket],
-                "action": next_action(post, bucket, user, can_review),
+                "action": next_action(post, bucket, user, can_review, is_manager),
             }
             for _, post, bucket in needs_you[:limit]
         ],

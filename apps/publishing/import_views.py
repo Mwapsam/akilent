@@ -9,9 +9,11 @@ from __future__ import annotations
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import redirect, render
+from django.shortcuts import redirect
+from django.urls import reverse
 
 from apps.accounts.utils import get_current_account
+from apps.core.htmx import overlay_done, overlay_or_page
 from apps.core.module_gate import module_required
 
 from . import csv_import
@@ -37,11 +39,14 @@ def csv_import_page(request):
         result = csv_import.import_rows(account, request.user, stored["rows"])
         request.session.pop(_SESSION_KEY, None)
         created = len(result["created"])
-        messages.success(
-            request,
+        done = (
             f"Imported {created} draft{'s' if created != 1 else ''}. Open each one to "
-            "check it and schedule it.",
+            "check it and schedule it."
         )
+        if not result["failed"]:
+            # From the Library's Import modal: close it and show the new drafts under it.
+            return overlay_done(request, done, reverse("publishing:library"))
+        messages.success(request, done)
         for n, why in result["failed"]:
             messages.error(request, f"Row {n} wasn't imported: {why}")
         return redirect("publishing:library")
@@ -56,8 +61,9 @@ def csv_import_page(request):
         preview = csv_import.preview(account, rows)
         request.session[_SESSION_KEY] = {"account": account.pk, "rows": rows}
 
-    return render(
+    return overlay_or_page(
         request,
+        "publishing/_csv_import.html",
         "publishing/csv_import.html",
         {
             "account": account,
@@ -66,4 +72,7 @@ def csv_import_page(request):
             "max_rows": csv_import.MAX_ROWS,
             "columns": csv_import.COLUMNS,
         },
+        kind="modal",
+        size="lg",
+        title="Import posts from a CSV file",
     )

@@ -1,0 +1,8 @@
+{% comment %}What the overlay host (components/overlay_host.html, static/js/app.js "Overlay") swaps
+into #overlay-body, rendered by overlay_or_page (apps/core/htmx.py). data-overlay tells the host
+which shape to take (a right-hand drawer or a centred modal) and how wide, and data-overlay-title
+fills the host's title row. The partial is the same template the full page includes, with
+in_overlay set.{% endcomment %}
+<div data-overlay="{{ overlay_kind }}" data-overlay-size="{{ overlay_size }}" data-overlay-title="{{ overlay_title }}" data-overlay-url="{{ request.get_full_path }}">
+  {% include overlay_partial %}
+</div>

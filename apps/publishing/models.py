@@ -367,9 +367,14 @@ class ContentPost(models.Model):
         Read live from the workspace setting, so turning review on also covers posts that
         were already scheduled.
         """
-        return self.approval_required or PublishingSettings.requires_review_for(
-            self.account_id
-        )
+        if self.approval_required:
+            return True
+        # A list of posts can read the workspace setting once and hand it to each post
+        # (worklist does); otherwise it is read here.
+        cached = self.__dict__.get("_workspace_requires_review")
+        if cached is not None:
+            return cached
+        return PublishingSettings.requires_review_for(self.account_id)
 
     def is_approval_valid(self, variants=None) -> bool:
         """Check if the post's approval is currently valid.

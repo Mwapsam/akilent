@@ -8,57 +8,5 @@
 
 {% include "publishing/_subnav.html" %}
 
-<div class="max-w-3xl space-y-4">
-  <p class="text-sm"><a href="{% url 'publishing:media-library' %}" class="underline">Back to media</a></p>
-
-  <section class="card card-pad space-y-3" aria-labelledby="sn-templates">
-    <h2 id="sn-templates" class="font-semibold text-ink">Caption templates</h2>
-    <p class="text-sm text-ink-subtle">Text you write often. In the composer, choose <strong>Templates</strong> to put one in the caption.</p>
-    <ul class="divide-y divide-border">
-      {% for t in templates %}
-      <li class="py-2 flex items-start gap-2" data-template="{{ t.pk }}">
-        <div class="flex-1 min-w-0">
-          <p class="text-sm font-medium text-ink">{{ t.name }}</p>
-          <p class="text-xs text-ink-subtle whitespace-pre-line line-clamp-3">{{ t.body }}</p>
-        </div>
-        <form method="post" hx-boost="false">{% csrf_token %}<input type="hidden" name="action" value="delete_template"><input type="hidden" name="pk" value="{{ t.pk }}"><button type="submit" class="btn btn-ghost btn-sm" aria-label="Delete {{ t.name }}">Delete</button></form>
-      </li>
-      {% empty %}
-      <li class="py-2 text-sm text-ink-subtle">No templates yet.</li>
-      {% endfor %}
-    </ul>
-    <form method="post" class="space-y-2" hx-boost="false">
-      {% csrf_token %}
-      <input type="hidden" name="action" value="template">
-      <div><label for="sn-t-name" class="block text-sm font-medium text-ink mb-1">Name</label><input id="sn-t-name" name="name" maxlength="80" class="input w-full" required></div>
-      <div><label for="sn-t-body" class="block text-sm font-medium text-ink mb-1">Text</label><textarea id="sn-t-body" name="body" rows="4" class="input w-full" required></textarea></div>
-      <button type="submit" class="btn btn-primary btn-sm">Save template</button>
-    </form>
-  </section>
-
-  <section class="card card-pad space-y-3" aria-labelledby="sn-tags">
-    <h2 id="sn-tags" class="font-semibold text-ink">Hashtag sets</h2>
-    <p class="text-sm text-ink-subtle">Hashtags you add together. In the composer, choose <strong>Hashtag sets</strong> to add one; tags already there aren't repeated. Instagram allows 30 hashtags in a post.</p>
-    <ul class="divide-y divide-border">
-      {% for s in hashtag_sets %}
-      <li class="py-2 flex items-start gap-2" data-hashtag-set="{{ s.pk }}">
-        <div class="flex-1 min-w-0">
-          <p class="text-sm font-medium text-ink">{{ s.name }} <span class="text-xs text-ink-subtle">({{ s.tags|length }})</span></p>
-          <p class="text-xs text-ink-subtle">{% for t in s.tags %}#{{ t }} {% endfor %}</p>
-        </div>
-        <form method="post" hx-boost="false">{% csrf_token %}<input type="hidden" name="action" value="delete_hashtags"><input type="hidden" name="pk" value="{{ s.pk }}"><button type="submit" class="btn btn-ghost btn-sm" aria-label="Delete {{ s.name }}">Delete</button></form>
-      </li>
-      {% empty %}
-      <li class="py-2 text-sm text-ink-subtle">No hashtag sets yet.</li>
-      {% endfor %}
-    </ul>
-    <form method="post" class="space-y-2" hx-boost="false">
-      {% csrf_token %}
-      <input type="hidden" name="action" value="hashtags">
-      <div><label for="sn-h-name" class="block text-sm font-medium text-ink mb-1">Name</label><input id="sn-h-name" name="name" maxlength="80" class="input w-full" required></div>
-      <div><label for="sn-h-tags" class="block text-sm font-medium text-ink mb-1">Hashtags</label><input id="sn-h-tags" name="tags" class="input w-full" placeholder="#sandals #summer #lusaka" required></div>
-      <button type="submit" class="btn btn-primary btn-sm">Save set</button>
-    </form>
-  </section>
-</div>
+{% include "publishing/_snippets.html" %}
 {% endblock %}

@@ -15,6 +15,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import get_current_account
+from apps.core.htmx import overlay_or_page
 from apps.core.module_gate import module_required
 
 from . import direct_upload, media_library
@@ -144,8 +145,10 @@ def asset_edit(request, pk):
             )
         return JsonResponse({"id": copy.pk, "url": copy.url})
     media_library.sync_from_check(asset)
-    return render(
+    # From the media grid it opens as an almost full-screen modal over the grid.
+    return overlay_or_page(
         request,
+        "publishing/_media_edit.html",
         "publishing/media_edit.html",
         {
             "account": account,
@@ -153,6 +156,9 @@ def asset_edit(request, pk):
             "cover_status": cache.get(media_library.cover_status_key(asset)),
             "derived": asset.derived.filter(archived_at__isnull=True)[:12],
         },
+        kind="modal",
+        size="xl",
+        title="Reel cover" if asset.kind == "video" else "Edit picture",
     )
 
 
@@ -271,12 +277,15 @@ def snippets(request):
                 account=account, pk=request.POST.get("pk")
             ).delete()
         return redirect("publishing:media-snippets")
-    return render(
+    return overlay_or_page(
         request,
+        "publishing/_snippets.html",
         "publishing/snippets.html",
         {
             "account": account,
             "templates": CaptionTemplate.objects.filter(account=account),
             "hashtag_sets": HashtagSet.objects.filter(account=account),
         },
+        size="lg",
+        title="Caption templates and hashtags",
     )

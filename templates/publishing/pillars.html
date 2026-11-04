@@ -8,40 +8,5 @@
   <p class="text-sm text-ink-subtle mt-0.5">Organise your content into themes for consistent publishing.</p>
 </div>
 
-<div class="max-w-lg space-y-4">
-
-  <div class="card card-pad">
-    <h2 class="font-semibold text-ink mb-3">Your pillars</h2>
-    {% if pillars %}
-    <div class="space-y-2">
-      {% for pillar in pillars %}
-      <div class="flex items-center gap-3 py-2 border-b border-surface-subtle last:border-0">
-        <span class="w-4 h-4 rounded-full shrink-0" style="background:{{ pillar.color }}"></span>
-        <span class="text-sm font-medium text-ink">{{ pillar.name }}</span>
-      </div>
-      {% endfor %}
-    </div>
-    {% else %}
-    <p class="text-sm text-ink-subtle text-center py-4">No pillars yet.</p>
-    {% endif %}
-  </div>
-
-  <div class="card card-pad">
-    <h2 class="font-semibold text-ink mb-3">Add a pillar</h2>
-    <form method="post" class="space-y-3">
-      {% csrf_token %}
-      <div>
-        <label class="block text-sm font-medium text-ink-muted mb-1" for="pillar-name">Name</label>
-        <input id="pillar-name" type="text" name="name" placeholder="e.g. Education, Promotion, Behind the scenes"
-               class="input w-full" required>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-ink-muted mb-1" for="pillar-color">Colour</label>
-        <input id="pillar-color" type="color" name="color" value="#6366f1" class="h-8 w-16 rounded border border-gray-300 cursor-pointer">
-      </div>
-      <button type="submit" class="btn btn-primary">Add pillar</button>
-    </form>
-  </div>
-
-</div>
+{% include "publishing/_pillars.html" %}
 {% endblock %}

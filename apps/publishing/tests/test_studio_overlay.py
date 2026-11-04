@@ -1,0 +1,389 @@
+"""Content Studio in place: a post opens as a drawer over the list it was clicked in, and
+"Add idea" / "Edit plan item" open over the page, save without leaving it, and close.
+
+The overlay host is static/js/app.js "Overlay"; the server side is overlay_or_page and
+overlay_done in apps/core/htmx.py. Each URL stays a real page."""
+
+import datetime
+import json
+
+import pytest
+from django.contrib.auth.models import User
+from django.test import Client
+from django.urls import reverse
+from django.utils import timezone
+
+from apps.accounts.models import Account, Membership
+from apps.publishing.models import ContentPlanItem, ContentPost, ContentPostVariant
+
+pytestmark = pytest.mark.django_db
+
+OVERLAY = {"HTTP_HX_REQUEST": "true", "HTTP_HX_TARGET": "overlay-body"}
+
+
+@pytest.fixture
+def shop():
+    account = Account.objects.create(company_name="Overlay Shop")
+    user = User.objects.create_user("ov", "ov@example.com", "pass")
+    Membership.objects.create(user=user, account=account, role=Membership.Role.OWNER)
+    client = Client()
+    client.force_login(user)
+    return account, client
+
+
+def _post(account, status=ContentPost.Status.DRAFT, **kw):
+    post = ContentPost.objects.create(
+        account=account,
+        caption=kw.pop("caption", "Autumn drop"),
+        platforms=["instagram"],
+        media_type="image",
+        media_urls=["https://example.com/a.jpg"],
+        status=status,
+        **kw,
+    )
+    ContentPostVariant.objects.create(
+        post=post,
+        platform="instagram",
+        status=ContentPostVariant.Status.FAILED
+        if status == ContentPost.Status.FAILED
+        else ContentPostVariant.Status.DRAFT,
+    )
+    return post
+
+
+def _is_fragment(response):
+    html = response.content.decode()
+    assert "<html" not in html.lower()
+    assert 'id="main"' not in html
+    assert response["X-Akilent-Overlay"] == "1"
+    # The same URL answers a full page: never cached, and caches keyed on these headers.
+    assert response["Cache-Control"] == "no-store"
+    vary = response["Vary"]
+    assert "HX-Request" in vary and "HX-Target" in vary
+    return html
+
+
+# --- The post drawer ---------------------------------------------------------------------
+
+
+def test_the_post_opens_as_a_drawer_from_the_overlay(shop):
+    account, client = shop
+    post = _post(account)
+
+    response = client.get(reverse("publishing:post-detail", args=[post.pk]), **OVERLAY)
+
+    html = _is_fragment(response)
+    assert 'data-overlay="drawer"' in html
+    assert 'data-overlay-size="lg"' in html
+    assert f'data-post-drawer="{post.pk}"' in html
+    assert "Open full page" in html
+
+
+def test_the_post_url_is_still_the_full_page(shop):
+    account, client = shop
+    post = _post(account)
+
+    html = client.get(
+        reverse("publishing:post-detail", args=[post.pk])
+    ).content.decode()
+
+    assert 'id="main"' in html
+    assert "data-post-drawer" not in html
+    assert 'id="overlay-host"' in html  # the host is in every signed-in page
+
+
+def test_a_failed_post_can_be_fixed_or_retried_from_the_drawer(shop):
+    account, client = shop
+    post = _post(account, status=ContentPost.Status.FAILED, error="Bad ratio")
+
+    html = client.get(
+        reverse("publishing:post-detail", args=[post.pk]), **OVERLAY
+    ).content.decode()
+
+    assert reverse("publishing:post-fix", args=[post.pk]) in html
+    assert reverse("publishing:post-retry", args=[post.pk]) in html
+    assert "Bad ratio" in html
+
+
+def test_retrying_in_the_drawer_shows_the_drawer_again_with_a_toast(shop):
+    """A drawer action whose view redirects back to the post: the browser follows the
+    redirect with the same headers, so the drawer re-renders and the message rides along."""
+    account, client = shop
+    post = _post(account, status=ContentPost.Status.FAILED, error="Timeout")
+
+    response = client.post(
+        reverse("publishing:post-retry", args=[post.pk]), follow=True, **OVERLAY
+    )
+
+    html = _is_fragment(response)
+    assert f'data-post-drawer="{post.pk}"' in html
+    assert response["X-Toast"].startswith("success|")
+
+
+def test_a_drawer_action_that_leaves_the_post_loads_that_page_for_real(shop):
+    """Delete redirects to Overview, which can't show itself in the overlay: go there with a
+    real page load, with the message kept for it."""
+    account, client = shop
+    post = _post(account)
+
+    response = client.post(
+        reverse("publishing:post-delete", args=[post.pk]), follow=True, **OVERLAY
+    )
+
+    assert response.status_code == 204
+    assert response["HX-Redirect"] == reverse("publishing:index")
+    html = client.get(reverse("publishing:index")).content.decode()
+    assert "Post deleted." in html
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["publishing:library", "publishing:index", "publishing:calendar"],
+)
+def test_lists_open_posts_in_the_drawer(shop, name):
+    account, client = shop
+    _post(account, status=ContentPost.Status.FAILED, error="x")
+    soon = timezone.now() + datetime.timedelta(hours=2)
+    sched = _post(account, status=ContentPost.Status.SCHEDULED, scheduled_at=soon)
+    ContentPostVariant.objects.filter(post=sched).update(
+        status=ContentPostVariant.Status.SCHEDULED, scheduled_at=soon
+    )
+
+    html = client.get(reverse(name)).content.decode()
+
+    assert 'data-overlay-open="drawer"' in html
+    assert "data-row" in html
+
+
+# --- Add idea and Edit plan item ---------------------------------------------------------
+
+
+def test_add_idea_opens_as_a_modal_with_the_day_filled_in(shop):
+    _account, client = shop
+
+    response = client.get(
+        reverse("publishing:plan-new") + "?planned_date=2026-11-20", **OVERLAY
+    )
+
+    html = _is_fragment(response)
+    assert 'data-overlay="modal"' in html
+    assert 'data-overlay-title="Add idea"' in html
+    assert 'value="2026-11-20"' in html
+    assert "data-overlay-close" in html  # Cancel closes rather than navigating
+    assert "autofocus" in html
+
+
+def test_saving_an_idea_in_the_modal_closes_it(shop):
+    account, client = shop
+
+    response = client.post(
+        reverse("publishing:plan-new"),
+        {"topic": "Gift guide", "planned_date": "2026-11-20", "media_type": "image"},
+        **OVERLAY,
+    )
+
+    assert response.status_code == 204
+    assert json.loads(response["HX-Trigger"]) == {"overlay-close": True}
+    assert response["X-Toast"].startswith("success|Planned%20for")
+    item = ContentPlanItem.objects.get(account=account)
+    assert item.topic == "Gift guide"
+    assert str(item.planned_date) == "2026-11-20"
+
+
+def test_a_refused_idea_stays_in_the_modal_with_its_reason(shop):
+    _account, client = shop
+
+    response = client.post(
+        reverse("publishing:plan-new"),
+        {"topic": "", "planned_date": "2026-11-20"},
+        **OVERLAY,
+    )
+
+    assert response.status_code == 422
+    html = _is_fragment(response)
+    assert 'data-overlay="modal"' in html
+    assert response["X-Toast"] == "danger|Topic%20is%20required."
+    assert not ContentPlanItem.objects.exists()
+
+
+def test_without_the_overlay_the_plan_form_still_redirects(shop):
+    _account, client = shop
+    nxt = reverse("publishing:calendar") + "?view=month"
+
+    response = client.post(
+        reverse("publishing:plan-new"),
+        {"topic": "Gift guide", "next": nxt, "media_type": "image"},
+    )
+
+    assert response.status_code == 302
+    assert response["Location"] == nxt
+
+
+def test_editing_and_deleting_a_plan_item_in_the_drawer(shop):
+    account, client = shop
+    item = ContentPlanItem.objects.create(account=account, topic="Old")
+    url = reverse("publishing:plan-edit", args=[item.pk])
+
+    html = _is_fragment(client.get(url, **OVERLAY))
+    assert 'data-overlay="drawer"' in html
+    assert reverse("publishing:plan-delete", args=[item.pk]) in html
+
+    saved = client.post(url, {"topic": "New", "media_type": "image"}, **OVERLAY)
+    assert saved.status_code == 204
+    item.refresh_from_db()
+    assert item.topic == "New"
+
+    deleted = client.post(reverse("publishing:plan-delete", args=[item.pk]), **OVERLAY)
+    assert deleted.status_code == 204
+    assert json.loads(deleted["HX-Trigger"]) == {"overlay-close": True}
+    assert not ContentPlanItem.objects.exists()
+
+
+@pytest.mark.parametrize(
+    "name", ["publishing:planning", "publishing:calendar", "publishing:index"]
+)
+def test_plan_links_open_in_the_overlay(shop, name):
+    account, client = shop
+    ContentPlanItem.objects.create(
+        account=account,
+        topic="Due soon",
+        planned_date=timezone.localdate() + datetime.timedelta(days=1),
+        plan_status=ContentPlanItem.PlanStatus.PLANNED,
+    )
+
+    html = client.get(reverse(name)).content.decode()
+
+    assert 'data-overlay-open="' in html
+    for line in html.splitlines():
+        if (
+            "/publishing/plan/" in line
+            and "href=" in line
+            and "plan-create" not in line
+        ):
+            assert "data-overlay-open" in line, line
+
+
+# --- The rest of Content Studio's side pages ---------------------------------------------
+
+ALL_FLAGS = frozenset(
+    {"cs_media_library", "cs_sales_report", "cs_scheduling", "cs_csv_import"}
+)
+
+
+def _asset(account):
+    from apps.publishing import media_library
+    from apps.publishing.models import MediaAsset
+
+    url = "https://example.com/media/shop/pic.jpg"
+    return MediaAsset.objects.create(
+        account=account, url=url, url_digest=media_library.url_digest(url), kind="image"
+    )
+
+
+@pytest.mark.parametrize(
+    "url,kind,title",
+    [
+        ("/publishing/pillars/", "modal", "Content pillars"),
+        ("/publishing/campaigns/", "modal", "Content themes"),
+        ("/publishing/slots/", "drawer", "Posting slots"),
+        ("/publishing/import/", "modal", "Import posts from a CSV file"),
+        ("/publishing/media/snippets/", "drawer", "Caption templates and hashtags"),
+        ("/help/post-results/", "modal", None),
+    ],
+)
+def test_side_pages_open_in_the_overlay_and_stay_pages(
+    shop, settings, url, kind, title
+):
+    _account, client = shop
+    settings.RELEASED_FEATURES = ALL_FLAGS
+
+    html = _is_fragment(client.get(url, **OVERLAY))
+    assert f'data-overlay="{kind}"' in html
+    if title:
+        assert f'data-overlay-title="{title}"' in html
+    # Native-only forms on the page post back into the overlay instead.
+    assert 'hx-boost="false"' not in html
+
+    page = client.get(url).content.decode()
+    assert "<html" in page.lower() and "data-overlay=" not in page
+
+
+def test_the_media_editor_opens_as_a_wide_modal(shop, settings):
+    account, client = shop
+    settings.RELEASED_FEATURES = ALL_FLAGS
+    asset = _asset(account)
+    url = reverse("publishing:media-edit", args=[asset.pk])
+
+    html = _is_fragment(client.get(url, **OVERLAY))
+
+    assert 'data-overlay="modal"' in html and 'data-overlay-size="xl"' in html
+    assert "cropper.min" in html  # its stylesheet comes with it
+    assert 'x-data="mediaEditor()"' in html
+    grid = client.get(reverse("publishing:media-library")).content.decode()
+    assert f'href="{url}" data-overlay-open="modal"' in grid
+
+
+def test_a_pillar_saved_in_the_modal_comes_back_to_it(shop):
+    account, client = shop
+
+    response = client.post(
+        "/publishing/pillars/", {"name": "Behind the scenes"}, follow=True, **OVERLAY
+    )
+
+    html = _is_fragment(response)
+    assert "Behind the scenes" in html
+    assert response["X-Toast"].startswith("success|")
+
+
+def test_a_clean_csv_import_closes_the_modal_over_the_library(shop, settings):
+    account, client = shop
+    settings.RELEASED_FEATURES = ALL_FLAGS
+    session = client.session
+    session["publishing_csv_import"] = {"account": account.pk, "rows": []}
+    session.save()
+
+    response = client.post("/publishing/import/", {"action": "import"}, **OVERLAY)
+
+    assert response.status_code == 204
+    assert json.loads(response["HX-Trigger"]) == {"overlay-close": True}
+
+
+@pytest.mark.parametrize(
+    "url,needle",
+    [
+        (
+            "/publishing/planning/",
+            'href="/publishing/pillars/" data-overlay-open="modal"',
+        ),
+        (
+            "/publishing/calendar/",
+            'href="/publishing/slots/" data-overlay-open="drawer"',
+        ),
+        (
+            "/publishing/library/",
+            'href="/publishing/import/" data-overlay-open="modal"',
+        ),
+        (
+            "/publishing/media/",
+            'href="/publishing/media/snippets/" data-overlay-open="drawer"',
+        ),
+        (
+            "/publishing/new/",
+            'href="/publishing/media/snippets/" data-overlay-open="drawer"',
+        ),
+        ("/publishing/new/", 'href="/publishing/slots/" data-overlay-open="drawer"'),
+    ],
+)
+def test_side_pages_are_opened_in_the_overlay(shop, settings, url, needle):
+    _account, client = shop
+    settings.RELEASED_FEATURES = ALL_FLAGS
+
+    assert needle in client.get(url).content.decode()
+
+
+def test_the_composer_is_never_refreshed_under_an_overlay(shop):
+    _account, client = shop
+
+    html = client.get("/publishing/new/").content.decode()
+
+    assert 'data-overlay-refresh="off"' in html

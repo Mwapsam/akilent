@@ -19,6 +19,9 @@
         <template x-for="(s, i) in d.hashtag_sets || []" :key="i"><option :value="i" x-text="s.name"></option></template>
       </select>
     </div>
+    {% comment %}Opens over the composer, which is never refreshed under it (unsaved work), so a
+    template added there shows in these lists the next time the composer opens.{% endcomment %}
+    <a href="{% url 'publishing:media-snippets' %}" data-overlay-open="drawer" data-overlay-size="lg" class="text-xs text-ink-subtle hover:text-ink underline">Manage templates</a>
     {% endif %}
   </div>
 

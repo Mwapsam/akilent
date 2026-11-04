@@ -1,0 +1,112 @@
+{% comment %}The plan item form: "Add idea" (a modal from Planning, the calendar and Overview) and
+"Edit plan item" (a drawer). The page plan_item_form.html includes it too, so the URL works
+on its own. In the overlay it posts back into the overlay (static/js/app.js "Overlay") and a
+save closes it; on the page, Save and Cancel go back to back_url.{% endcomment %}
+<form method="post" class="{% if not in_overlay %}card card-pad {% endif %}space-y-4">
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{{ back_url }}">
+
+  <div>
+    <label class="block text-sm font-medium text-ink-muted mb-1" for="plan-topic">Topic <span class="tone-coral-fg">*</span></label>
+    <input id="plan-topic" type="text" name="topic" value="{{ item.topic|default:'' }}"
+           placeholder="What is this content about?"
+           class="input w-full" required{% if in_overlay and not item %} autofocus{% endif %}>
+  </div>
+
+  <div>
+    <label class="block text-sm font-medium text-ink-muted mb-1" for="plan-objective">Objective</label>
+    <textarea id="plan-objective" name="objective" rows="2"
+              placeholder="What should this content achieve?"
+              class="input w-full">{{ item.objective|default:'' }}</textarea>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div>
+      <label class="block text-sm font-medium text-ink-muted mb-1" for="plan-media-type">Media type</label>
+      <select id="plan-media-type" name="media_type" class="input w-full">
+        {% for val, label in media_type_choices %}
+        <option value="{{ val }}" {% if item.media_type == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-ink-muted mb-1" for="plan-plan-status">Status</label>
+      <select id="plan-plan-status" name="plan_status" class="input w-full">
+        {% for val, label in plan_status_choices %}
+        <option value="{{ val }}" {% if item.plan_status == val %}selected{% elif not item and val == 'idea' %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <fieldset>
+    <legend class="block text-sm font-medium text-ink-muted mb-1">Platforms</legend>
+    <div class="flex gap-3">
+      <label class="flex items-center gap-1.5 text-sm">
+        <input type="checkbox" name="platforms" value="instagram"
+               {% if 'instagram' in item.platforms|default:'' %}checked{% endif %}>
+        Instagram
+      </label>
+      <label class="flex items-center gap-1.5 text-sm">
+        <input type="checkbox" name="platforms" value="facebook"
+               {% if 'facebook' in item.platforms|default:'' %}checked{% endif %}>
+        Facebook
+      </label>
+    </div>
+  </fieldset>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div>
+      <label class="block text-sm font-medium text-ink-muted mb-1" for="plan-pillar">Pillar</label>
+      <select id="plan-pillar" name="pillar" class="input w-full">
+        <option value="">— None —</option>
+        {% for pillar in pillars %}
+        <option value="{{ pillar.pk }}" {% if item.pillar_id == pillar.pk %}selected{% endif %}>{{ pillar.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-ink-muted mb-1" for="plan-campaign">Theme</label>
+      <select id="plan-campaign" name="campaign" class="input w-full">
+        <option value="">— None —</option>
+        {% for campaign in campaigns %}
+        <option value="{{ campaign.pk }}" {% if item.campaign_id == campaign.pk %}selected{% endif %}>{{ campaign.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div>
+    <label class="block text-sm font-medium text-ink-muted mb-1" for="plan-planned-date">Planned date</label>
+    <input id="plan-planned-date" type="date" name="planned_date"
+           value="{% if item %}{{ item.planned_date|date:'Y-m-d'|default:'' }}{% else %}{{ initial_date }}{% endif %}"
+           class="input w-full">
+  </div>
+
+  <div>
+    <label class="block text-sm font-medium text-ink-muted mb-1" for="plan-notes">Notes</label>
+    <textarea id="plan-notes" name="notes" rows="3" placeholder="Any additional context..."
+              class="input w-full">{{ item.notes|default:'' }}</textarea>
+  </div>
+
+  <div class="flex gap-2 pt-2">
+    <button type="submit" class="btn btn-primary">{% if item %}Save changes{% else %}Add to backlog{% endif %}</button>
+    {% if in_overlay %}
+    <button type="button" class="btn btn-ghost" data-overlay-close>Cancel</button>
+    {% else %}
+    <a href="{{ back_url }}" class="btn btn-ghost">Cancel</a>
+    {% endif %}
+    {% if item and item.plan_status in 'idea,planned' %}
+    {% comment %}The delete form sits after this one (forms can't nest: a nested form's
+    button would submit the save form); the button reaches it with form=.{% endcomment %}
+    <button type="submit" form="plan-delete-form" class="btn btn-danger-ghost text-sm ml-auto"
+            data-confirm="Delete this plan item?" data-confirm-danger data-confirm-label="Delete">Delete</button>
+    {% endif %}
+  </div>
+</form>
+{% if item and item.plan_status in 'idea,planned' %}
+<form id="plan-delete-form" method="post" action="{% url 'publishing:plan-delete' item.pk %}">
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{{ back_url }}">
+</form>
+{% endif %}

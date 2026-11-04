@@ -224,3 +224,169 @@ def test_every_studio_page_shows_the_workspace(shop, settings, flag, url):
     html = client.get(url).content.decode()
 
     assert "Review Shop" in html, json.dumps(url)
+
+
+# --- Phase 0 of the app-feel plan --------------------------------------------------------
+
+
+def test_a_post_published_straight_away_shows_on_the_calendar(shop):
+    account, client = shop
+    sent = timezone.now() - datetime.timedelta(days=1)
+    post = ContentPost.objects.create(
+        account=account,
+        caption="Went out now",
+        platforms=["instagram"],
+        status=ContentPost.Status.PUBLISHED,
+        published_at=sent,
+    )
+    ContentPostVariant.objects.create(
+        post=post, platform="instagram", status=S.PUBLISHED, published_at=sent
+    )
+    day = timezone.localtime(sent).date()
+
+    week = client.get(
+        reverse("publishing:calendar")
+        + f"?week={day.isocalendar()[0]}-W{day.isocalendar()[1]:02d}"
+    )
+    days = {d: posts for d, _, posts in week.context["week_days"]}
+
+    assert [e["post"].pk for e in days[day]] == [post.pk]
+
+
+def test_the_plan_form_returns_to_where_it_was_opened(shop):
+    account, client = shop
+    item = ContentPlanItem.objects.create(account=account, topic="Teaser")
+    back = reverse("publishing:calendar") + "?view=month&month=2026-11"
+    url = reverse("publishing:plan-edit", args=[item.pk])
+
+    page = client.get(url, {"next": back}).content.decode()
+    saved = client.post(url, {"topic": "Teaser 2", "plan_status": "idea", "next": back})
+    evil = client.post(
+        url, {"topic": "x", "plan_status": "idea", "next": "//evil.example/"}
+    )
+
+    assert "← Calendar" in page and 'name="next"' in page
+    assert saved.url == back
+    assert evil.url == reverse("publishing:planning")
+
+
+def test_plan_an_idea_from_a_day_fills_in_the_date(shop):
+    _, client = shop
+    html = client.get(
+        reverse("publishing:plan-new"), {"planned_date": "2026-12-10"}
+    ).content.decode()
+    assert 'value="2026-12-10"' in html
+
+
+def test_deleting_a_plan_item_uses_its_own_form(shop):
+    account, client = shop
+    item = ContentPlanItem.objects.create(account=account, topic="Gone")
+    html = client.get(reverse("publishing:plan-edit", args=[item.pk])).content.decode()
+
+    assert 'form="plan-delete-form"' in html
+    assert html.count("<form") == html.count("</form>")
+    form = html.split('id="plan-delete-form"')[0].rsplit("<form", 1)[0]
+    assert form.count("<form") == form.count("</form>")  # not nested in the save form
+
+
+# --- Phase 1: no forced full reloads -----------------------------------------------------
+
+BOOSTED = {
+    "HTTP_HX_REQUEST": "true",
+    "HTTP_HX_BOOSTED": "true",
+    "HTTP_X_AKILENT_SHELL": "app",
+}
+
+
+def test_the_composer_and_media_pages_swap_in_place(shop, settings):
+    account, client = shop
+    settings.RELEASED_FEATURES = frozenset({media_library.FLAG})
+    url = "https://media.example/p.png"
+    asset = MediaAsset.objects.create(
+        account=account, url=url, url_digest=media_library.url_digest(url), kind="image"
+    )
+
+    for page in (
+        reverse("publishing:post-new"),
+        reverse("publishing:media-library"),
+        reverse("publishing:media-edit", args=[asset.pk]),
+        reverse("publishing:calendar"),
+    ):
+        resp = client.get(page, **BOOSTED)
+        assert resp.status_code == 200, page
+        assert not resp.has_header("HX-Refresh") and not resp.has_header(
+            "HX-Redirect"
+        ), page
+        assert resp.get("HX-Push-Url") == page
+
+
+def test_the_page_scripts_load_with_the_shell(shop):
+    _, client = shop
+    html = client.get(reverse("publishing:index")).content.decode()
+    for script in ("js/cropper.min.js", "js/composer.js", "js/media_library.js"):
+        assert script in html
+
+
+def _seed(account, n, start=0):
+    now = timezone.now()
+    for i in range(start, start + n):
+        status = ("draft", "scheduled", "published", "failed")[i % 4]
+        when = None if status == "draft" else now + datetime.timedelta(days=i % 6 - 2)
+        post = ContentPost.objects.create(
+            account=account,
+            caption=f"post {i}",
+            platforms=["instagram", "facebook"],
+            media_type="image",
+            media_urls=[f"https://m.example/{i}.jpg"],
+            status=status,
+            scheduled_at=when,
+        )
+        for platform in ("instagram", "facebook"):
+            ContentPostVariant.objects.create(
+                post=post,
+                platform=platform,
+                status=status,
+                scheduled_at=when,
+                published_at=now if status == "published" else None,
+            )
+        ContentPlanItem.objects.create(
+            account=account, topic=f"plan {i}", planned_date=now.date()
+        )
+        url = f"https://m.example/asset{i}.jpg"
+        MediaAsset.objects.create(
+            account=account,
+            url=url,
+            url_digest=media_library.url_digest(url),
+            kind="image",
+        )
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "/publishing/",
+        "/publishing/planning/",
+        "/publishing/calendar/",
+        "/publishing/calendar/?view=month",
+        "/publishing/library/",
+        "/publishing/media/",
+        "/publishing/sales/",
+    ],
+)
+def test_tab_queries_dont_grow_with_the_number_of_posts(shop, settings, url):
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    account, client = shop
+    settings.RELEASED_FEATURES = frozenset(
+        {"cs_media_library", "cs_sales_report", "cs_scheduling"}
+    )
+    _seed(account, 4)
+    client.get(url)
+    with CaptureQueriesContext(connection) as few:
+        assert client.get(url).status_code == 200
+    _seed(account, 16, start=4)
+    with CaptureQueriesContext(connection) as many:
+        client.get(url)
+
+    assert len(many) - len(few) <= 2, [q["sql"][:90] for q in many.captured_queries]

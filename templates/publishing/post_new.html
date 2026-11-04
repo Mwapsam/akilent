@@ -11,7 +11,7 @@
 
 {% block content %}
 {{ editor_data|json_script:"post-editor-data" }}
-<div class="composer" x-data="composer()">
+<div class="composer" x-data="composer()" data-overlay-refresh="off">
 
   {% include "publishing/composer/_header.html" %}
 
@@ -61,7 +61,4 @@
 {% include "publishing/composer/_crop_modal.html" %}
 {% endblock %}
 
-{% block extra_js %}
-<script src="{% static 'js/cropper.min.js' %}"></script>
-<script src="{% static 'js/composer.js' %}"></script>
-{% endblock %}
+{% comment %}cropper.min.js and composer.js load with the shell (base.html).{% endcomment %}

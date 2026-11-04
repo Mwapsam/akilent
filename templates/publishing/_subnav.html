@@ -1,39 +1,52 @@
 {% load publishing_filters %}
 {% reconciling_count as needs_check %}
 {% with path=request.path %}
-<nav class="flex items-center gap-1 mb-6 border-b border-surface-subtle pb-0 -mt-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Content Studio">
-  <a href="{% url 'publishing:index' %}"
+{% comment %}
+  data-instant-tabs (static/js/app.js): the clicked tab takes the active look the moment its
+  request starts, and goes back if the navigation fails, is aborted or is undone with Back.
+  The server-rendered subnav in the new page is always the truth. data-skeleton names the
+  placeholder shown if the page is slow to arrive. No preload on these tabs: a click that
+  lands while a hover preload is in flight was dropped by htmx, and the tab never opened.
+  The style below keeps the header above the tabs one height on every Content Studio page,
+  with or without a subtitle or a button, so the tab row doesn't jump.
+{% endcomment %}
+<style>
+  #main :has(+ nav[data-instant-tabs]) { min-height: 3.5rem; }
+</style>
+<nav class="flex items-center gap-1 mb-6 border-b border-surface-subtle pb-0 -mt-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Content Studio"
+     data-instant-tabs data-active-class="border-accent text-accent" data-inactive-class="border-transparent text-ink-subtle hover:text-ink hover:border-gray-300">
+  <a href="{% url 'publishing:index' %}" data-skeleton="grid"
      {% if path == '/publishing/' %}aria-current="page"{% endif %}
      class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
        {% if path == '/publishing/' %}border-accent text-accent{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-gray-300{% endif %}">
     Overview
   </a>
-  <a href="{% url 'publishing:planning' %}"
+  <a href="{% url 'publishing:planning' %}" data-skeleton="grid"
      {% if '/planning' in path %}aria-current="page"{% endif %}
      class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
        {% if '/planning' in path %}border-accent text-accent{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-gray-300{% endif %}">
     Planning
   </a>
-  <a href="{% url 'publishing:calendar' %}"
+  <a href="{% url 'publishing:calendar' %}" data-skeleton="calendar"
      {% if '/calendar' in path or '/publishing/slots' in path or '/publishing/recurring' in path %}aria-current="page"{% endif %}
      class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
        {% if '/calendar' in path or '/publishing/slots' in path or '/publishing/recurring' in path %}border-accent text-accent{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-gray-300{% endif %}">
     Calendar
   </a>
-  <a href="{% url 'publishing:library' %}"
+  <a href="{% url 'publishing:library' %}" data-skeleton="table"
      {% if '/library' in path or '/publishing/import' in path %}aria-current="page"{% endif %}
      class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
        {% if '/library' in path or '/publishing/import' in path %}border-accent text-accent{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-gray-300{% endif %}">
     Library
   </a>
-  <a href="{% url 'publishing:channels' %}"
+  <a href="{% url 'publishing:channels' %}" data-skeleton="form"
      {% if '/channels' in path %}aria-current="page"{% endif %}
      class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
        {% if '/channels' in path %}border-accent text-accent{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-gray-300{% endif %}">
     Channels
   </a>
   {% if released.cs_media_library %}
-  <a href="{% url 'publishing:media-library' %}"
+  <a href="{% url 'publishing:media-library' %}" data-skeleton="grid"
      {% if '/publishing/media' in path %}aria-current="page"{% endif %}
      class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
        {% if '/publishing/media' in path %}border-accent text-accent{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-gray-300{% endif %}">
@@ -41,7 +54,7 @@
   </a>
   {% endif %}
   {% if released.cs_analytics %}
-  <a href="{% url 'publishing:analytics' %}"
+  <a href="{% url 'publishing:analytics' %}" data-skeleton="table"
      {% if '/publishing/analytics' in path %}aria-current="page"{% endif %}
      class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
        {% if '/publishing/analytics' in path %}border-accent text-accent{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-gray-300{% endif %}">
@@ -49,7 +62,7 @@
   </a>
   {% endif %}
   {% if released.cs_sales_report %}
-  <a href="{% url 'publishing:sales' %}"
+  <a href="{% url 'publishing:sales' %}" data-skeleton="table"
      {% if '/publishing/sales' in path %}aria-current="page"{% endif %}
      class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
        {% if '/publishing/sales' in path %}border-accent text-accent{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-gray-300{% endif %}">
@@ -57,7 +70,7 @@
   </a>
   {% endif %}
   {% if released.cs_ai_plus %}
-  <a href="{% url 'publishing:ai-tools' %}"
+  <a href="{% url 'publishing:ai-tools' %}" data-skeleton="form"
      {% if '/publishing/ai' in path %}aria-current="page"{% endif %}
      class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
        {% if '/publishing/ai' in path %}border-accent text-accent{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-gray-300{% endif %}">
@@ -65,7 +78,7 @@
   </a>
   {% endif %}
   {% if released.cs_bio_page %}
-  <a href="{% url 'publishing:bio' %}"
+  <a href="{% url 'publishing:bio' %}" data-skeleton="form"
      {% if '/bio' in path %}aria-current="page"{% endif %}
      class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
        {% if '/bio' in path %}border-accent text-accent{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-gray-300{% endif %}">
@@ -74,7 +87,7 @@
   {% endif %}
   {% url 'publishing:reconciliation-queue' as recon_url %}
   {% if needs_check or path == recon_url %}
-  <a href="{{ recon_url }}"
+  <a href="{{ recon_url }}" data-skeleton="table"
      {% if path == recon_url %}aria-current="page"{% endif %}
      class="px-3 py-2 text-sm font-medium border-b-2 transition-colors inline-flex items-center gap-1.5
        {% if path == recon_url %}border-accent text-accent{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-gray-300{% endif %}">

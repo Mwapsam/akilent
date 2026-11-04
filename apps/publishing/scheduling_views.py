@@ -8,7 +8,7 @@ import datetime
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -16,6 +16,7 @@ from django.views.decorators.http import require_POST
 
 from apps.accounts.api import is_account_admin
 from apps.accounts.utils import get_current_account
+from apps.core.htmx import overlay_or_page
 from apps.core.module_gate import module_required
 
 from . import scheduling
@@ -115,8 +116,9 @@ def slots_manage(request):
         )
         if platform in publishing_channels(account)
     ]
-    return render(
+    return overlay_or_page(
         request,
+        "publishing/_slots.html",
         "publishing/slots.html",
         {
             "account": account,
@@ -129,6 +131,8 @@ def slots_manage(request):
             "current_tz_name": timezone.get_current_timezone_name(),
             "next_free": scheduling.next_free_slot(account, ["instagram", "facebook"]),
         },
+        size="lg",
+        title="Posting slots",
     )
 
 

@@ -140,9 +140,9 @@
     <h3 class="font-semibold text-ink mb-3">Recent publishing failures</h3>
     <div class="space-y-3">
       {% for post in recent_failures %}
-      <div class="flex items-start justify-between gap-3">
+      <div class="flex items-start justify-between gap-3" data-row>
         <div class="flex-1 min-w-0">
-          <a href="{% url 'publishing:post-detail' post.pk %}"
+          <a href="{% url 'publishing:post-detail' post.pk %}" data-overlay-open="drawer"
              class="text-sm font-medium text-ink hover:underline truncate block">
             {{ post.caption|truncatechars:60|default:"(no caption)" }}
           </a>

@@ -50,9 +50,9 @@
     {% if work.needs_you or plans_due %}
     <ul class="space-y-2">
       {% for item in plans_due %}
-      <li class="p-2 rounded-lg bg-surface-subtle" data-plan-due="{{ item.pk }}">
+      <li class="p-2 rounded-lg bg-surface-subtle" data-plan-due="{{ item.pk }}" data-row>
         <div class="flex items-start justify-between gap-2">
-          <a href="{% url 'publishing:plan-edit' item.pk %}" class="flex-1 min-w-0">
+          <a href="{% url 'publishing:plan-edit' item.pk %}?next={{ request.get_full_path|urlencode }}" data-overlay-open="drawer" class="flex-1 min-w-0">
             <p class="text-sm font-medium text-ink truncate">{{ item.topic|truncatechars:50 }}</p>
             <p class="text-xs text-ink-subtle">Planned for {{ item.planned_date|date:"D, N j" }} · not written yet</p>
           </a>
@@ -64,9 +64,9 @@
       </li>
       {% endfor %}
       {% for row in work.needs_you %}
-      <li class="p-2 rounded-lg {% if row.bucket == 'needs_check' or row.bucket == 'failed' %}tone-coral-bg{% else %}bg-surface-subtle{% endif %}">
+      <li class="p-2 rounded-lg {% if row.bucket == 'needs_check' or row.bucket == 'failed' %}tone-coral-bg{% else %}bg-surface-subtle{% endif %}" data-row>
         <div class="flex items-start justify-between gap-2">
-          <a href="{% url 'publishing:post-detail' row.post.pk %}" class="flex-1 min-w-0">
+          <a href="{% url 'publishing:post-detail' row.post.pk %}" data-overlay-open="drawer" class="flex-1 min-w-0">
             <p class="text-sm font-medium text-ink truncate">{{ row.post.caption|truncatechars:50|default:"(no caption)" }}</p>
             <p class="text-xs text-ink-subtle">{{ row.bucket_label }}{% if row.bucket == 'failed' and row.post.error %} · <span class="tone-coral-fg">{{ row.post.error|truncatechars:70 }}</span>{% endif %}</p>
           </a>
@@ -93,7 +93,7 @@
     {% if upcoming %}
     <div class="space-y-2">
       {% for post in upcoming %}
-      <a href="{% url 'publishing:post-detail' post.pk %}"
+      <a href="{% url 'publishing:post-detail' post.pk %}" data-overlay-open="drawer" data-row
          class="flex items-start gap-3 p-2 rounded-lg hover:bg-surface-subtle transition-colors">
         {% include "publishing/_media_thumb.html" with url=post|first_media size="w-10 h-10" alt=post.caption|truncatechars:80 %}
         <div class="flex-1 min-w-0">

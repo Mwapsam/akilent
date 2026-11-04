@@ -1653,3 +1653,125 @@ All ten phases (0–9) are implemented and verified. Under the release rule, thr
 - your acceptance review of Phases 7–9 (Phase 8 committed as `ec74057`)
 - the real-device and screen-reader passes listed in each entry
 - the pilot-user validation of the flagged flows (inbox send and recover, scheduling a post, billing checkout, editing a workflow)
+
+## Entry 17: Content Studio app feel, Phases 0 and 1 (2026-11-03)
+
+Plan: "Content Studio: make it feel like an app" (2026-11-03). Approving it covered Phases 0 and 1 only. Working tree on `d96bf3f`, uncommitted.
+
+**Phase 0: bugs from the production walkthrough**
+- **Publish now on the calendar:** posts sent with Publish now (no schedule) now appear on the calendar, placed at the time they went out.
+- **Today:** the month view now tints today's cell and fills its date, like the week view.
+- **The plan form:**
+  - It returns to the page it was opened from (`?next=`, same-site only).
+  - "Plan an idea" from a calendar day now fills in the date.
+  - The Delete button no longer submits the save form: the forms were nested, and are now separate.
+- **The picture editor's crop area** has a fixed height, so it's no longer 100px tall.
+
+**Phase 1: navigation**
+- **No more full reloads for Media and the composer:**
+  - `cropper.min.js`, `composer.js` and `media_library.js` load with the shell (`base.html`).
+  - The composer's crop dialog wires itself through `akilent.onPage`, with cleanup.
+  - `post_new` lost its `@full_page_load`.
+- **Instant tabs:** `data-instant-tabs` (`static/js/app.js`).
+  - The tab takes the active look when its request goes out.
+  - It reverts on an error, abort, timeout, Back, or a newer navigation.
+  - No preload on the tabs: a click during a hover preload was dropped by htmx.
+- **Skeletons:** `templates/components/page_skeletons.html`. A slow page shows the tab's skeleton under the tabs after 150ms, and the old content comes back if the navigation fails.
+- **Steady header:** the header above the tabs has one minimum height, so the tab row doesn't jump.
+- **Submit-button guard:**
+  - Moved from `<body hx-disabled-elt>` into `app.js`, for forms only.
+  - It used to log a "returned no matches" console error on every boosted link click.
+- **Overview query fix:** Overview no longer runs a query per post (`requires_approval`, `can_review_any`).
+- **Analytics:** GA4 enhanced measurement counts history changes, and the session tracker records server-side per request, so in-place navigation is still counted. Overlays (Phase 2) will need an explicit page view.
+
+**Verification**
+- **Tests:** `test_studio_review_fixes.py` covers:
+  - the calendar entries;
+  - `next` handling, the date prefill and the unnested delete form;
+  - boosted Media, editor, composer and calendar navigation with no `HX-Refresh`;
+  - the shell scripts;
+  - query counts per tab that don't grow with the number of posts.
+- **Full suite:** 5,720 passed, 25 skipped. Ruff, format, mypy and `makemigrations --check` are clean.
+- **New harness:** `tools/qa/studio_feel_qa.mjs`, 11/11 on the dev server (SQLite, dark theme):
+  - the tab marks active 2–4ms after the click (`performance.mark`);
+  - Media, Overview and the composer swap in place;
+  - the crop dialog works after a swap;
+  - skeletons appear only on loads over 150ms;
+  - the tab reverts on a 500;
+  - today is highlighted;
+  - there are no console errors.
+- **Existing harness:** `tools/qa/publishing_qa.mjs` still passes, including the unsaved-work guard and the crop dialog.
+- **Server time:** every Content Studio tab renders in under 100ms locally with 40 posts.
+  - The roughly 600ms time-to-first-byte reported on production wasn't reproduced locally, so it needs measuring on the server (network, the database, and the shell's per-request billing and entitlement queries, four of each).
+
+**Open**
+- Phases 2–5 each need their own go-ahead.
+- A timing check on akilent.com after deploy.
+
+## Entry 18: Content Studio app feel, Phase 2: drawers and modals (2026-11-04)
+
+**What changed**
+- **One overlay host** (`templates/components/overlay_host.html`, styles in `static/css/overlay.css`, `static/js/app.js` "Overlay"):
+  - a right-hand drawer or a centred modal over the current page, chosen by the response's `data-overlay`;
+  - it sits outside `<main hx-history-elt>`, and `htmx:beforeHistorySave` closes it, so a history snapshot never holds an open overlay.
+- **History:**
+  - opening pushes the link's URL; Back, Esc, the backdrop, Close and a finished save all close it, popping that entry;
+  - a capture-phase `popstate` listener keeps htmx from re-fetching the page underneath;
+  - a navigation started inside the overlay first puts the page's URL back with `replaceState`.
+- **Server:** `overlay_or_page`, `overlay_done`, `partial_response` and `is_overlay` in `apps/core/htmx.py`:
+  - a partial sends `Vary: HX-Request, HX-Target` and `Cache-Control: no-store`;
+  - flash messages become an `X-Toast`;
+  - `ShellMiddleware` turns an overlay request answered by a view that can't show itself there into a real page load, with the message kept for that load.
+- **Forms inside the overlay** post back into it (`htmx:beforeProcessNode`):
+  - a 400/422 re-renders in place;
+  - a save answers `204` plus `HX-Trigger: overlay-close`;
+  - any successful post refreshes the page underneath with one request. The composer opts out (`data-overlay-refresh="off"`).
+- **J/K and the arrows in the drawer's title row** step through the `[data-row]` rows shown on screen, in screen order, with replaceState (no new history entries).
+- **Analytics:**
+  - GA4 counts the history change itself;
+  - an `akilent:pageview` event fires for each overlay, so the harness can check it.
+- **Converted:**
+  - **Drawers:**
+    - post (from Library, Overview, the calendar, Sales and Channels);
+    - plan item edit;
+    - posting slots;
+    - caption templates and hashtags (from Media and from the composer's caption box).
+  - **Modals:**
+    - Add idea / Plan an idea (with the date filled in);
+    - pillars;
+    - themes;
+    - CSV import (check and import in one modal);
+    - the media editor (xl);
+    - the "How posts are credited" help on Sales.
+  - Every URL is still the full page.
+
+**Verification**
+- **Full suite:** 5,789 tests, 0 failures, 25 skipped. Ruff, format, mypy and `makemigrations --check` are clean.
+- **Tests:** `apps/publishing/tests/test_studio_overlay.py`, 32 tests, covering:
+  - fragment and headers;
+  - the full page at the same URL;
+  - a drawer action that redirects back re-renders with a toast;
+  - Delete lands on a real page load with its message;
+  - saving 204 / refusing 422;
+  - each side page in its shape;
+  - the openers on each list.
+- **New harness:** `tools/qa/studio_overlay_qa.mjs` on the dev server:
+  - the drawer opens in place;
+  - focus is inside and the page is inert;
+  - the pageview is recorded;
+  - J steps without new history;
+  - Back closes it with no re-fetch and focus on the row;
+  - Esc closes it;
+  - the URL is the full page;
+  - the drawer is full width at 390px;
+  - Add idea opens with the day and focus on Topic;
+  - a refused save stays with its reason;
+  - a save closes it and the calendar shows the idea without a reload;
+  - delete in the drawer;
+  - the side pages open and close;
+  - the composer keeps typed text under its drawer;
+  - no console errors.
+
+**Open**
+- The help modal on Sales can't be exercised locally: the article belongs to the WhatsApp channel, which is off on the dev server.
+- Phases 3–5 each need their own go-ahead.

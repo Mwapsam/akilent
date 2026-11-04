@@ -1,0 +1,35 @@
+/* The overlay host (templates/components/overlay_host.html, static/js/app.js "Overlay"): one
+   drawer-or-modal over the current page. A file of its own rather than assets/app.css, which is
+   a Tailwind build checked byte for byte in CI; linked from base.html for signed-in pages. */
+#overlay-host { position: fixed; inset: 0; z-index: var(--z-modal); }
+#overlay-host[hidden] { display: none; }
+.ak-overlay-backdrop { position: fixed; inset: 0; background: rgb(17 24 39 / .5); opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-emphasized); }
+.ak-overlay-panel { position: fixed; display: flex; flex-direction: column; background: var(--color-surface);
+  box-shadow: var(--shadow-modal); outline: none;
+  transition: transform 200ms var(--ease-emphasized), opacity 200ms var(--ease-emphasized); }
+#overlay-host[data-kind="drawer"] .ak-overlay-panel { inset-block: 0; right: 0; width: 100%;
+  padding: var(--safe-top) var(--safe-right, 0px) var(--safe-bottom) 0; transform: translateX(100%); }
+#overlay-host[data-kind="modal"] .ak-overlay-panel { inset-inline: 0; bottom: 0; max-height: 92dvh;
+  border-radius: var(--radius-surface) var(--radius-surface) 0 0; padding-bottom: var(--safe-bottom);
+  transform: translateY(1rem); opacity: 0; }
+#overlay-host.is-open .ak-overlay-backdrop { opacity: 1; }
+#overlay-host.is-open .ak-overlay-panel { transform: none; opacity: 1; }
+@media (min-width: 640px) {
+  #overlay-host[data-kind="drawer"][data-size="md"] .ak-overlay-panel { width: 28rem; }
+  #overlay-host[data-kind="drawer"][data-size="lg"] .ak-overlay-panel { width: 36rem; }
+  #overlay-host[data-kind="drawer"][data-size="xl"] .ak-overlay-panel { width: 48rem; }
+  #overlay-host[data-kind="modal"] .ak-overlay-panel { inset: 8vh 0 auto; margin-inline: auto; max-height: 84vh;
+    border-radius: var(--radius-surface); padding-bottom: 0; width: calc(100% - 2rem); max-width: 32rem; }
+  #overlay-host[data-kind="modal"][data-size="lg"] .ak-overlay-panel { max-width: 42rem; }
+  #overlay-host[data-kind="modal"][data-size="xl"] .ak-overlay-panel { max-width: 56rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ak-overlay-backdrop, .ak-overlay-panel { transition: none; }
+}
+.ak-overlay-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  border-bottom: 1px solid var(--color-border); padding: .875rem 1.25rem; }
+.ak-overlay-step { display: inline-flex; align-items: center; gap: .125rem; }
+.ak-overlay-step[hidden] { display: none; }
+#overlay-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 1.25rem; }
+@media (min-width: 640px) { .ak-overlay-head, #overlay-body { padding-inline: 1.5rem; } }

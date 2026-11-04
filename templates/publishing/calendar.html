@@ -8,7 +8,7 @@
     <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
   </div>
   <div class="flex items-center gap-2">
-    {% if scheduling_on %}<a href="{% url 'publishing:slots' %}" class="btn btn-secondary">Posting slots</a>{% endif %}
+    {% if scheduling_on %}<a href="{% url 'publishing:slots' %}" data-overlay-open="drawer" data-overlay-size="lg" class="btn btn-secondary">Posting slots</a>{% endif %}
     {% if released.cs_recurring %}<a href="{% url 'publishing:recurring' %}" class="btn btn-secondary">Recurring</a>{% endif %}
     <a href="{% url 'publishing:post-new' %}" class="btn btn-primary">New post</a>
   </div>
@@ -120,7 +120,7 @@ to show (channel, status). The selects apply as soon as they change.{% endcommen
         {% for item in day_plan_items %}{% include "publishing/_cal_plan.html" %}{% endfor %}
         {% for entry in day_posts %}{% include "publishing/_cal_entry.html" %}{% endfor %}
         {% if not day_plan_items and not day_posts and day >= today %}
-        <a href="{% url 'publishing:plan-new' %}?planned_date={{ day|date:'Y-m-d' }}" class="cal-empty-add"
+        <a href="{% url 'publishing:plan-new' %}?planned_date={{ day|date:'Y-m-d' }}&amp;next={{ request.get_full_path|urlencode }}" data-overlay-open="modal" class="cal-empty-add"
            aria-label="Plan an idea for {{ day|date:'l, N j' }}">+ Plan an idea</a>
         {% endif %}
       </div>
@@ -143,7 +143,7 @@ to show (channel, status). The selects apply as soon as they change.{% endcommen
   <ul class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
     {% for post in unscheduled_drafts %}
     <li>
-      <a href="{% url 'publishing:post-detail' post.pk %}" class="card card-hover flex items-center gap-3 p-2.5 h-full">
+      <a href="{% url 'publishing:post-detail' post.pk %}" data-overlay-open="drawer" data-row class="card card-hover flex items-center gap-3 p-2.5 h-full">
         {% include "publishing/_media_thumb.html" with url=post|first_media size="w-12 h-12" alt="" %}
         <span class="min-w-0 flex-1">
           <span class="block text-sm text-ink line-clamp-2 break-words">{{ post.caption|default:"(no caption)" }}</span>

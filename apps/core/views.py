@@ -207,13 +207,20 @@ def help_article(request, slug):
         )
         return markdown_response(text)
 
-    return render(
+    from apps.core.htmx import overlay_or_page
+
+    # Linked from inside the app ("How posts are credited"), it opens in a modal there.
+    return overlay_or_page(
         request,
+        "help/_article_overlay.html",
         "help/article.html",
         {
             "article": article,
             "related": related,
         },
+        kind="modal",
+        size="lg",
+        title=article.title,
     )
 
 

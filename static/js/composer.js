@@ -1366,9 +1366,14 @@
     else document.getElementById("ig-crop-panel").focus();
   };
 
-  document.addEventListener("DOMContentLoaded", function () {
+  // Runs on every page (composer.js loads with the shell): wires the crop dialog when this
+  // page has one, and the returned cleanup unwires it before the page is swapped away.
+  window.akilent.onPage(function () {
     var m = modal();
     if (!m) return;
+    var onKey = function (e) {
+      if (e.key === "Escape" && !window.akDialog && !m.classList.contains("hidden")) closeCrop(null);
+    };
 
     m.addEventListener("click", function (e) {
       if (e.target === m) { closeCrop(null); return; }
@@ -1384,9 +1389,7 @@
     // Esc skips the crop (uploads the original), the same as the Skip button: handled by
     // window.akDialog, which only lets the topmost dialog take it. Without it (app.js not
     // loaded), the cropper handles Esc itself so the upload is never left waiting.
-    document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape" && !window.akDialog && !m.classList.contains("hidden")) closeCrop(null);
-    });
+    document.addEventListener("keydown", onKey);
 
     document.getElementById("ig-crop-skip").addEventListener("click", function () { closeCrop(null); });
 
@@ -1401,5 +1404,10 @@
         err.hidden = false;
       }
     });
+
+    return function () {
+      document.removeEventListener("keydown", onKey);
+      if (cropper) { cropper.destroy(); cropper = null; }
+    };
   });
 })();

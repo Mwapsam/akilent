@@ -212,7 +212,12 @@
             fd.append("csrfmiddlewaretoken", csrf());
             var data = await send(cfg.save, fd, function () {});
             self.saved = data;
-            window.location.href = cfg.library;
+            // Opened over the media grid: close and show the new picture in the grid.
+            if (self.$root.closest("#overlay-host") && window.akilent.overlaySaved) {
+              window.akilent.overlaySaved("Saved as a new picture.");
+            } else {
+              window.location.href = cfg.library;
+            }
           } catch (e) {
             self.error = e.message;
           } finally {

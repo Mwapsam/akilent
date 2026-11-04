@@ -100,65 +100,7 @@ Narrow: review and channels first (what needs doing), then the post, then detail
 
   {# ── Where it stands: review and channels ─────────────────────────────── #}
   <div class="pd-side space-y-5">
-    {% if requires_approval %}
-    <section class="card card-pad space-y-3" aria-labelledby="pd-review">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="pd-review" class="pd-section-title">Review</h2>
-        {% if approval_valid %}{% status_badge 'approved' 'Approved' %}{% elif post.approval_status == 'submitted' %}{% status_badge 'in_review' 'Waiting for review' %}{% elif post.approval_status == 'changes_requested' %}{% status_badge 'failed' 'Changes requested' %}{% else %}{% status_badge 'draft' 'Not submitted' %}{% endif %}
-      </div>
-      {% if post.ai_assisted %}<p class="text-xs text-ink-subtle">AI-assisted caption</p>{% endif %}
-
-      {% if approval_valid %}
-      <p class="text-sm text-ink-muted">Approved by {{ post.approved_by.get_full_name|default:post.approved_by.username }} on {{ post.approved_at|date:"N j, Y H:i" }}. You can now schedule or publish it.</p>
-      {% elif post.approval_status == 'submitted' %}
-        {% if can_review %}
-        <form method="post" action="{% url 'publishing:post-approve' post.pk %}">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-primary w-full">Approve</button>
-        </form>
-        <form method="post" action="{% url 'publishing:post-request-changes' post.pk %}" class="space-y-2">
-          {% csrf_token %}
-          <label for="pd-feedback" class="label">Or ask for changes</label>
-          <textarea id="pd-feedback" name="feedback" rows="2" required class="input w-full" placeholder="What should change?"></textarea>
-          <button type="submit" class="btn btn-secondary w-full">Request changes</button>
-        </form>
-        {% else %}
-        <p class="text-sm text-ink-muted">Waiting for an Owner or Admin to review this post.</p>
-        {% endif %}
-      {% elif post.approval_status == 'changes_requested' %}
-      <div class="tone-coral-bg rounded-xl p-3">
-        <p class="text-xs font-medium tone-coral-fg mb-0.5">Feedback</p>
-        <p class="text-sm tone-coral-fg whitespace-pre-wrap">{{ post.approval_feedback }}</p>
-      </div>
-      {% if post.created_by_id == request.user.pk %}
-      <form method="post" action="{% url 'publishing:post-resubmit-after-changes' post.pk %}">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-primary w-full">Resubmit for review</button>
-      </form>
-      {% endif %}
-      {% else %}
-      <p class="text-sm text-ink-muted">This workspace requires an Owner or Admin approval before posts are scheduled or published.</p>
-      <form method="post" action="{% url 'publishing:post-submit-for-review' post.pk %}">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-primary w-full">Submit for review</button>
-      </form>
-      {% endif %}
-
-      {% if approval_logs %}
-      <div class="pt-3 border-t border-border">
-        <p class="text-xs font-medium text-ink-subtle mb-1.5">History</p>
-        <ol class="space-y-1.5">
-          {% for log in approval_logs %}
-          <li class="text-xs text-ink-subtle">
-            {{ log.get_action_display }} by {{ log.performed_by.get_full_name|default:log.performed_by.username|default:"a former member" }} · {{ log.created_at|date:"N j, H:i" }}
-            {% if log.feedback %}<span class="block text-ink-muted whitespace-pre-wrap">“{{ log.feedback }}”</span>{% endif %}
-          </li>
-          {% endfor %}
-        </ol>
-      </div>
-      {% endif %}
-    </section>
-    {% endif %}
+    {% include "publishing/_post_review.html" %}
 
     {% if post.variants.exists %}
     <section class="card overflow-hidden" aria-labelledby="pd-channels">
@@ -331,7 +273,7 @@ Narrow: review and channels first (what needs doing), then the post, then detail
         <dt>Created</dt><dd>{{ post.created_at|date:"N j, Y H:i" }}</dd>
         {% if post.plan_item %}
         <dt>Plan item</dt>
-        <dd><a href="{% url 'publishing:plan-edit' post.plan_item.pk %}" class="text-accent hover:underline">{{ post.plan_item.topic|truncatechars:60 }}</a></dd>
+        <dd><a href="{% url 'publishing:plan-edit' post.plan_item.pk %}?next={{ request.get_full_path|urlencode }}" class="text-accent hover:underline">{{ post.plan_item.topic|truncatechars:60 }}</a></dd>
         {% endif %}
       </dl>
     </section>

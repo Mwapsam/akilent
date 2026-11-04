@@ -1,0 +1,79 @@
+{% load static %}
+{% comment %}The media editor: crop, turn and add a line of text to a picture (mediaEditor in
+static/js/media_library.js), or take a Reel cover from a video. The page media_edit.html and the
+modal opened from the media grid (overlay_or_page) both show this. In the modal the page's
+stylesheet for Cropper comes with the content, and a save closes it over the grid.{% endcomment %}
+<div class="{% if not in_overlay %}max-w-3xl {% endif %}space-y-4">
+  {% if in_overlay %}
+  {% if asset.kind == "image" %}<link rel="stylesheet" href="{% static 'css/cropper.min.css' %}">{% endif %}
+  {% else %}
+  <p class="text-sm"><a href="{% url 'publishing:media-library' %}" class="underline">Back to media</a></p>
+  {% endif %}
+
+  {% if asset.kind == "image" %}
+  {% url 'publishing:media-edit' asset.pk as save_url %}
+  {% url 'publishing:media-library' as library_url %}
+  <script type="application/json" id="media-editor-config">{"save": "{{ save_url|escapejs }}", "library": "{{ library_url|escapejs }}"}</script>
+  <section class="card card-pad space-y-3" aria-labelledby="me-title" x-data="mediaEditor()">
+    {% csrf_token %}
+    <h2 id="me-title" class="font-semibold text-ink">Edit {{ asset.name }}</h2>
+    <p class="text-sm text-ink-subtle">Crop to a channel's shape, turn it, and add one line of text. It's saved as a new picture; the original stays as it is.</p>
+    {% comment %}A fixed-height stage: Cropper sizes itself to its container, and an
+    unsized one gave it a 100px box.{% endcomment %}
+    <div class="overflow-hidden rounded-lg bg-surface-muted" style="height: min(70vh, 40rem)">
+      <img x-ref="image" src="{{ asset.url }}" crossorigin="anonymous" alt="{{ asset.name }}" class="block max-w-full">
+    </div>
+    <fieldset class="flex flex-wrap items-center gap-2">
+      <legend class="sr-only">Shape</legend>
+      <button type="button" class="btn btn-ghost btn-sm" @click="setRatio(1)" :aria-pressed="ratio === 1">Square 1:1</button>
+      <button type="button" class="btn btn-ghost btn-sm" @click="setRatio(4/5)" :aria-pressed="ratio === 4/5">Portrait 4:5</button>
+      <button type="button" class="btn btn-ghost btn-sm" @click="setRatio(1.91)" :aria-pressed="ratio === 1.91">Landscape 1.91:1</button>
+      <button type="button" class="btn btn-ghost btn-sm" @click="setRatio(9/16)" :aria-pressed="ratio === 9/16">Story or Reel 9:16</button>
+      <button type="button" class="btn btn-ghost btn-sm" @click="setRatio(NaN)">Free</button>
+      <span class="text-ink-subtle" aria-hidden="true">·</span>
+      <button type="button" class="btn btn-ghost btn-sm" @click="rotate(-90)">Turn left</button>
+      <button type="button" class="btn btn-ghost btn-sm" @click="rotate(90)">Turn right</button>
+    </fieldset>
+    <div class="grid gap-3 sm:grid-cols-3">
+      <div class="sm:col-span-3">
+        <label for="me-text" class="block text-sm font-medium text-ink mb-1">Text (optional)</label>
+        <input id="me-text" x-model="text" maxlength="80" class="input w-full" placeholder="e.g. New in this week">
+      </div>
+      <div>
+        <label for="me-pos" class="block text-sm text-ink mb-1">Where</label>
+        <select id="me-pos" x-model="textPos" class="select w-full"><option value="bottom">Bottom</option><option value="top">Top</option></select>
+      </div>
+      <div>
+        <label for="me-color" class="block text-sm text-ink mb-1">Colour</label>
+        <select id="me-color" x-model="textColor" class="select w-full"><option value="#ffffff">White</option><option value="#000000">Black</option></select>
+      </div>
+    </div>
+    <p class="text-sm tone-coral-fg" role="alert" x-show="error" x-text="error"></p>
+    <button type="button" class="btn btn-primary btn-sm" @click="save()" :disabled="saving" x-text="saving ? 'Saving…' : 'Save as a new picture'"></button>
+  </section>
+  {% else %}
+  <section class="card card-pad space-y-3" aria-labelledby="me-cover">
+    <h2 id="me-cover" class="font-semibold text-ink">Reel cover from {{ asset.name }}</h2>
+    <p class="text-sm text-ink-subtle">Pick the moment to use as the cover. The frame is saved as a new picture you can choose as a Reel's cover.</p>
+    {% include "publishing/_media_thumb.html" with url=asset.url size="w-full aspect-video" alt=asset.name controls=True %}
+    {% if cover_status.error %}<p class="text-sm tone-coral-fg" role="alert">{{ cover_status.error }}</p>{% endif %}
+    <form method="post" action="{% url 'publishing:media-cover' asset.pk %}" class="flex flex-wrap items-end gap-2"{% if not in_overlay %} hx-boost="false"{% endif %}>
+      {% csrf_token %}
+      <div>
+        <label for="me-seconds" class="block text-sm font-medium text-ink mb-1">Time (seconds)</label>
+        <input id="me-seconds" name="seconds" type="number" min="0" step="0.1" value="1" {% if asset.duration %}max="{{ asset.duration|floatformat:1 }}"{% endif %} class="input" required>
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">Take this frame</button>
+    </form>
+  </section>
+  {% endif %}
+
+  {% if derived %}
+  <section class="card card-pad space-y-2" aria-labelledby="me-derived">
+    <h2 id="me-derived" class="font-semibold text-ink">Made from this file</h2>
+    <ul class="grid gap-2 grid-cols-3 sm:grid-cols-4">
+      {% for d in derived %}<li>{% include "publishing/_media_thumb.html" with url=d.url size="w-full aspect-square" alt=d.name %}<p class="text-xs text-ink-subtle truncate">{{ d.get_source_display }}</p></li>{% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+</div>

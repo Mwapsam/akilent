@@ -8,51 +8,5 @@
   <p class="text-sm text-ink-subtle mt-0.5">Group related posts around a launch, an offer or a season. To message customers on WhatsApp, use <a href="/email/campaigns/?channel=whatsapp" class="text-accent hover:text-accent-strong">Campaigns</a>.</p>
 </div>
 
-<div class="max-w-2xl space-y-4">
-
-  <div class="card card-pad">
-    <h2 class="font-semibold text-ink mb-3">Your themes</h2>
-    {% if campaigns %}
-    <ul class="divide-y divide-border">
-      {% for campaign in campaigns %}
-      <li class="py-3" x-data="{ editing: false }">
-        <div x-show="!editing" class="flex items-start justify-between gap-3">
-          <div class="min-w-0">
-            <p class="text-sm font-medium text-ink">{{ campaign.name }}</p>
-            {% if campaign.objective %}<p class="text-xs text-ink-subtle mt-0.5">{{ campaign.objective|truncatechars:120 }}</p>{% endif %}
-            {% if campaign.start_date %}<p class="text-xs text-ink-subtle">{{ campaign.start_date|date:"j M Y" }}{% if campaign.end_date %} – {{ campaign.end_date|date:"j M Y" }}{% endif %}</p>{% endif %}
-          </div>
-          <div class="flex shrink-0 gap-1">
-            <button type="button" class="btn btn-ghost btn-sm" @click="editing = true">Edit</button>
-            <form method="post" data-confirm="Delete the theme “{{ campaign.name }}”? Its posts and plan items are kept." data-confirm-label="Delete">
-              {% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="pk" value="{{ campaign.pk }}">
-              <button class="btn btn-ghost btn-sm">Delete</button>
-            </form>
-          </div>
-        </div>
-        <form x-show="editing" x-cloak method="post" class="space-y-3">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="update"><input type="hidden" name="pk" value="{{ campaign.pk }}">
-          {% include "publishing/_theme_fields.html" with c=campaign prefix=campaign.pk %}
-          <div class="flex gap-2"><button class="btn btn-primary btn-sm">Save</button><button type="button" class="btn btn-ghost btn-sm" @click="editing = false">Cancel</button></div>
-        </form>
-      </li>
-      {% endfor %}
-    </ul>
-    {% else %}
-    <p class="text-sm text-ink-subtle text-center py-4">No themes yet.</p>
-    {% endif %}
-  </div>
-
-  <div class="card card-pad">
-    <h2 class="font-semibold text-ink mb-3">Add a theme</h2>
-    <form method="post" class="space-y-3">
-      {% csrf_token %}
-      <input type="hidden" name="action" value="create">
-      {% include "publishing/_theme_fields.html" with prefix="new" %}
-      <button type="submit" class="btn btn-primary">Add theme</button>
-    </form>
-  </div>
-
-</div>
+{% include "publishing/_campaigns.html" %}
 {% endblock %}

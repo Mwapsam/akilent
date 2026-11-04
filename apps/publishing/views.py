@@ -22,7 +22,7 @@ from django.views.decorators.http import require_POST
 from apps.accounts.api import is_account_admin
 from apps.accounts.fields import open_text, seal_text
 from apps.accounts.utils import get_current_account
-from apps.core.htmx import full_page_load
+from apps.core.htmx import full_page_load, is_overlay, overlay_done, overlay_or_page
 from apps.core.module_gate import module_required
 
 from . import ai_plus, direct_upload
@@ -480,15 +480,23 @@ def publishing_index(request):
 def _calendar_entries(account, start, end) -> list[dict]:
     """Calendar entries for posts with a time in [start, end], one per publish time.
 
-    A post whose channels share a time is one entry. A post with a different time per
-    channel shows one entry per channel time, each with that channel's own status.
+    A channel's time is when it was scheduled for or, for one published straight away
+    ("Publish now", no schedule), when it went out. A post whose channels share a time is
+    one entry. A post with a different time per channel shows one entry per channel time,
+    each with that channel's own status.
     """
+    from django.db.models import Prefetch, Q
+
     from .scheduling import can_move
 
+    def when(obj):
+        return obj.scheduled_at or obj.published_at
+
+    in_range = Q(scheduled_at__gte=start, scheduled_at__lte=end) | Q(
+        scheduled_at__isnull=True, published_at__gte=start, published_at__lte=end
+    )
     variants = (
-        ContentPostVariant.objects.filter(
-            post__account=account, scheduled_at__gte=start, scheduled_at__lte=end
-        )
+        ContentPostVariant.objects.filter(in_range, post__account=account)
         .exclude(status=ContentPostVariant.Status.CANCELLED)
         .select_related("post")
     )
@@ -500,12 +508,12 @@ def _calendar_entries(account, start, end) -> list[dict]:
     entries = []
     for post_variants in by_post.values():
         post = post_variants[0].post
-        times = {v.scheduled_at for v in post_variants}
+        times = {when(v) for v in post_variants}
         if len(times) == 1 and len(post_variants) == len(post.platforms or []):
             entries.append(
                 {
                     "post": post,
-                    "at": post_variants[0].scheduled_at,
+                    "at": when(post_variants[0]),
                     "platforms": post.platforms,
                     "status": post.status,
                     "status_label": post.get_status_display(),
@@ -519,7 +527,7 @@ def _calendar_entries(account, start, end) -> list[dict]:
             entries.append(
                 {
                     "post": post,
-                    "at": v.scheduled_at,
+                    "at": when(v),
                     "platforms": [v.platform],
                     "status": v.status,
                     "status_label": v.get_status_display(),
@@ -527,21 +535,24 @@ def _calendar_entries(account, start, end) -> list[dict]:
                 }
             )
 
-    # Posts scheduled only at post level (no variant time in range) keep one entry.
-    for post in ContentPost.objects.filter(
-        account=account, scheduled_at__gte=start, scheduled_at__lte=end
-    ).exclude(pk__in=by_post.keys()):
-        if (
-            post.variants.exclude(status=ContentPostVariant.Status.CANCELLED)
-            .filter(scheduled_at__isnull=False)
-            .exclude(scheduled_at=post.scheduled_at)
-            .exists()
+    # Posts timed only at post level (no channel time in range) keep one entry.
+    live_variants = ContentPostVariant.objects.exclude(
+        status=ContentPostVariant.Status.CANCELLED
+    )
+    for post in (
+        ContentPost.objects.filter(in_range, account=account)
+        .exclude(pk__in=by_post.keys())
+        .prefetch_related(Prefetch("variants", queryset=live_variants))
+    ):
+        if any(
+            v.scheduled_at is not None and v.scheduled_at != post.scheduled_at
+            for v in post.variants.all()
         ):
             continue  # its channels are scheduled in another week
         entries.append(
             {
                 "post": post,
-                "at": post.scheduled_at,
+                "at": when(post),
                 "platforms": post.platforms or [],
                 "status": post.status,
                 "status_label": post.get_status_display(),
@@ -1048,6 +1059,33 @@ def planning_overview(request):
     )
 
 
+# Where a plan form's Back, Cancel and Save return to, by the page it was opened from.
+_PLAN_BACK_LABELS = (
+    ("/publishing/calendar/", "Calendar"),
+    ("/publishing/planning/", "Planning"),
+    ("/publishing/posts/", "Post"),
+    ("/publishing/library/", "Library"),
+)
+
+
+def _plan_back(request) -> tuple[str, str]:
+    """``(url, label)`` for leaving a plan form: the page in ``next`` when it is on this
+    site, otherwise Planning."""
+    from django.utils.http import url_has_allowed_host_and_scheme
+
+    nxt = request.POST.get("next") or request.GET.get("next") or ""
+    if nxt and url_has_allowed_host_and_scheme(
+        nxt, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        path = nxt.split("?", 1)[0]
+        label = "Overview" if path == reverse("publishing:index") else None
+        label = label or next(
+            (lab for p, lab in _PLAN_BACK_LABELS if path.startswith(p)), "Back"
+        )
+        return nxt, label
+    return reverse("publishing:planning"), "Planning"
+
+
 @login_required
 @module_required("content_studio")
 def plan_item_new(request):
@@ -1055,32 +1093,47 @@ def plan_item_new(request):
     if account is None:
         return redirect("dashboard")
 
+    invalid = False
     if request.method == "POST":
         item = _save_plan_item(request, account, instance=None)
         if item:
             from django.utils.formats import date_format
 
-            messages.success(
+            return overlay_done(
                 request,
                 f"Planned for {date_format(item.planned_date, 'D, N j')}."
                 if item.planned_date
                 else "Idea added. Give it a date to put it on the calendar.",
+                _plan_back(request)[0],
             )
-            return redirect("publishing:planning")
+        invalid = True
 
     pillars = ContentPillar.objects.filter(account=account)
     campaigns = ContentCampaign.objects.filter(account=account)
-    return render(
+    back_url, back_label = _plan_back(request)
+    initial = request.GET.get("planned_date", "")
+    try:
+        initial_date = datetime.date.fromisoformat(initial).isoformat()
+    except ValueError:
+        initial_date = ""
+    return overlay_or_page(
         request,
+        "publishing/_plan_item_form.html",
         "publishing/plan_item_form.html",
         {
             "account": account,
+            "back_url": back_url,
+            "back_label": back_label,
+            "initial_date": initial_date,
             "pillars": pillars,
             "campaigns": campaigns,
             "media_type_choices": ContentPost.MediaType.choices,
             "plan_status_choices": ContentPlanItem.PlanStatus.choices,
             "item": None,
         },
+        kind="modal",
+        title="Add idea",
+        status=422 if invalid and is_overlay(request) else 200,
     )
 
 
@@ -1093,25 +1146,32 @@ def plan_item_edit(request, pk):
 
     item = get_object_or_404(ContentPlanItem, pk=pk, account=account)
 
+    invalid = False
     if request.method == "POST":
         updated = _save_plan_item(request, account, instance=item)
         if updated:
-            messages.success(request, "Plan item updated.")
-            return redirect("publishing:planning")
+            return overlay_done(request, "Plan item updated.", _plan_back(request)[0])
+        invalid = True
 
     pillars = ContentPillar.objects.filter(account=account)
     campaigns = ContentCampaign.objects.filter(account=account)
-    return render(
+    back_url, back_label = _plan_back(request)
+    return overlay_or_page(
         request,
+        "publishing/_plan_item_form.html",
         "publishing/plan_item_form.html",
         {
             "account": account,
+            "back_url": back_url,
+            "back_label": back_label,
             "item": item,
             "pillars": pillars,
             "campaigns": campaigns,
             "media_type_choices": ContentPost.MediaType.choices,
             "plan_status_choices": ContentPlanItem.PlanStatus.choices,
         },
+        title="Edit plan item",
+        status=422 if invalid and is_overlay(request) else 200,
     )
 
 
@@ -1182,8 +1242,7 @@ def plan_item_delete(request, pk):
         return redirect("publishing:planning")
 
     item.delete()
-    messages.success(request, "Plan item deleted.")
-    return redirect("publishing:planning")
+    return overlay_done(request, "Plan item deleted.", _plan_back(request)[0])
 
 
 @login_required
@@ -1239,10 +1298,13 @@ def pillar_manage(request):
         return redirect("publishing:pillars")
 
     pillars = ContentPillar.objects.filter(account=account)
-    return render(
+    return overlay_or_page(
         request,
+        "publishing/_pillars.html",
         "publishing/pillars.html",
         {"account": account, "pillars": pillars},
+        kind="modal",
+        title="Content pillars",
     )
 
 
@@ -1304,10 +1366,14 @@ def campaign_manage(request):
         return redirect("publishing:campaigns")
 
     campaigns = ContentCampaign.objects.filter(account=account)
-    return render(
+    return overlay_or_page(
         request,
+        "publishing/_campaigns.html",
         "publishing/campaigns.html",
         {"account": account, "campaigns": campaigns},
+        kind="modal",
+        size="lg",
+        title="Content themes",
     )
 
 
@@ -1687,7 +1753,8 @@ def composer_autosave(request):
     )
 
 
-@full_page_load
+# Swapped in place like any page: composer.js and Cropper load with the shell (base.html),
+# and the crop dialog wires itself through akilent.onPage.
 @login_required
 @module_required("content_studio")
 @_in_workspace_tz
@@ -1909,8 +1976,10 @@ def post_detail(request, pk):
     can_review = False
     if requires_approval and post.approval_status == "submitted":
         can_review, _ = _can_review(post, request.user, account)
-    return render(
+    # From a list (Library, Overview, the calendar...) it opens as a drawer over that list.
+    return overlay_or_page(
         request,
+        "publishing/_post_drawer.html",
         "publishing/post_detail.html",
         {
             "account": account,
@@ -1931,6 +2000,8 @@ def post_detail(request, pk):
             "cta_links": cta_links,
             "channel_options": _channel_options_for_display(post),
         },
+        size="lg",
+        title="Post",
     )
 
 

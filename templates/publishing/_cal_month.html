@@ -17,7 +17,9 @@ rebuild.{% endcomment %}
   .cal-m-day--out .cal-m-num { color: var(--color-ink-subtle); }
   .cal-m-day--over { outline: 2px dashed var(--color-accent); outline-offset: -3px; }
   .cal-m-num { font-size: .75rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--color-ink); }
-  .cal-today .cal-m-num { color: var(--color-accent); }
+  /* Today: a tinted cell and the date filled in the accent colour, as in the week view. */
+  .cal-m-day.cal-today { background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface)); }
+  .cal-today .cal-m-num { align-self: flex-start; min-width: 1.5rem; padding: 0 .375rem; border-radius: 999px; text-align: center; background: var(--color-accent); color: var(--color-surface); }
   .cal-m-entry { display: block; border: 1px solid var(--color-border); border-radius: .5rem; padding: .25rem .375rem; background: var(--color-surface); }
   .cal-m-entry[draggable="true"] { cursor: grab; }
   .cal-m-entry .cal-caption { -webkit-line-clamp: 1; }
@@ -49,8 +51,8 @@ rebuild.{% endcomment %}
            {% if entry.movable %}draggable="true"
            @dragstart="dragging = '{{ entry.move_id }}'; $event.dataTransfer.effectAllowed = 'move'; $event.dataTransfer.setData('text/plain', '{{ entry.move_id }}')"
            @dragend="dragging = null; over = null"{% endif %}
-           data-cal-entry="{{ entry.post.pk }}" data-movable="{{ entry.movable|yesno:'true,false' }}">
-        <a href="{% url 'publishing:post-detail' entry.post.pk %}" class="block min-w-0"{% if entry.movable %} draggable="false"{% endif %}>
+           data-cal-entry="{{ entry.post.pk }}" data-movable="{{ entry.movable|yesno:'true,false' }}" data-row>
+        <a href="{% url 'publishing:post-detail' entry.post.pk %}" data-overlay-open="drawer" class="block min-w-0"{% if entry.movable %} draggable="false"{% endif %}>
           <span class="cal-entry-top">
             <span class="cal-time"><time datetime="{{ entry.at|date:'c' }}">{{ entry.at|time:"H:i" }}</time></span>
             {% include "publishing/_platform_icons.html" with platforms=entry.platforms %}

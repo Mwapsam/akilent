@@ -9,46 +9,5 @@
 
 {% include "publishing/_subnav.html" %}
 
-<div class="max-w-3xl space-y-4">
-  <section class="card card-pad space-y-3" aria-labelledby="import-title">
-    <h2 id="import-title" class="font-semibold text-ink">Import posts from a CSV file</h2>
-    <p class="text-sm text-ink-subtle">Each row becomes a <strong>draft</strong>. Nothing is scheduled or published from here: open each draft to check it and schedule it, and it's reviewed first if your workspace reviews posts.</p>
-    <p class="text-sm text-ink-subtle">The first row names the columns: {% for c in columns %}<code>{{ c }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}. Channels are <code>instagram</code>, <code>facebook</code> or both (<code>instagram;facebook</code>). Media are links to images on Akilent or public https images, which are copied in; upload videos in the composer. <code>scheduled_at</code> (<code>YYYY-MM-DD HH:MM</code>, your business time) is kept on the draft as a suggestion. Up to {{ max_rows }} rows and 1 MB.</p>
-    <form method="post" enctype="multipart/form-data" class="flex flex-wrap items-end gap-2" hx-boost="false">
-      {% csrf_token %}
-      <div>
-        <label for="import-file" class="block text-sm font-medium text-ink mb-1">CSV file</label>
-        <input id="import-file" name="file" type="file" accept=".csv,text/csv" required class="text-sm">
-      </div>
-      <button type="submit" class="btn btn-secondary btn-sm">Check the file</button>
-    </form>
-  </section>
-
-  {% if preview %}
-  <section class="card card-pad space-y-3" aria-labelledby="import-preview">
-    <h2 id="import-preview" class="font-semibold text-ink">{{ ready }} of {{ preview|length }} row{{ preview|length|pluralize }} can be imported</h2>
-    <ol class="divide-y divide-border">
-      {% for r in preview %}
-      <li class="py-2 text-sm" data-import-row="{{ r.n }}" data-ok="{{ r.ok|yesno:'true,false' }}">
-        <p class="font-medium text-ink">Row {{ r.n }}: {{ r.caption|truncatechars:70|default:"(no caption)" }}</p>
-        <p class="text-xs text-ink-subtle">{{ r.platforms|platform_names|default:"no channel" }} · {{ r.media_type }} · {{ r.media_count }} file{{ r.media_count|pluralize }}{% if r.scheduled_at %} · suggested {{ r.scheduled_at|date:"N j, H:i" }}{% endif %}</p>
-        {% for e in r.errors %}<p class="text-xs tone-coral-fg">{{ e }}</p>{% endfor %}
-        {% if r.ok %}
-          {% for m in r.to_fix %}<p class="text-xs tone-amber-fg">To fix before scheduling: {{ m }}</p>{% endfor %}
-        {% else %}
-          <p class="text-xs text-ink-subtle">Won't be imported.</p>
-        {% endif %}
-      </li>
-      {% endfor %}
-    </ol>
-    {% if ready %}
-    <form method="post" hx-boost="false">
-      {% csrf_token %}
-      <input type="hidden" name="action" value="import">
-      <button type="submit" class="btn btn-primary btn-sm">Import {{ ready }} draft{{ ready|pluralize }}</button>
-    </form>
-    {% endif %}
-  </section>
-  {% endif %}
-</div>
+{% include "publishing/_csv_import.html" %}
 {% endblock %}

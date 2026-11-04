@@ -8,7 +8,7 @@
     <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
   </div>
   <div class="flex items-center gap-2">
-    {% if released.cs_csv_import %}<a href="{% url 'publishing:csv-import' %}" class="btn btn-secondary">Import CSV</a>{% endif %}
+    {% if released.cs_csv_import %}<a href="{% url 'publishing:csv-import' %}" data-overlay-open="modal" data-overlay-size="lg" class="btn btn-secondary">Import CSV</a>{% endif %}
     <a href="{% url 'publishing:post-new' %}" class="btn btn-primary">New post</a>
   </div>
 </div>
@@ -117,7 +117,7 @@ page before anything is selected.{% endcomment %}
       </thead>
       <tbody>
         {% for post in page_obj %}
-        <tr class="border-b border-surface-subtle hover:bg-surface-subtle">
+        <tr class="border-b border-surface-subtle hover:bg-surface-subtle" data-row>
           <td class="pl-3 pr-1 sm:px-3 py-2 text-center">
             <input type="checkbox" name="post_ids" value="{{ post.pk }}" class="rounded post-checkbox"
                    aria-label="Select post {{ post.caption|truncatechars:30|default:'(no caption)' }}">
@@ -126,7 +126,7 @@ page before anything is selected.{% endcomment %}
             {% include "publishing/_media_thumb.html" with url=post|first_media size="w-10 h-10" alt=post.caption|truncatechars:80 %}
           </td>
           <td class="px-3 sm:px-4 py-2">
-            <a href="{% url 'publishing:post-detail' post.pk %}" class="font-medium text-ink hover:underline line-clamp-2">
+            <a href="{% url 'publishing:post-detail' post.pk %}" data-overlay-open="drawer" class="font-medium text-ink hover:underline line-clamp-2">
               {{ post.caption|truncatechars:70|default:"(no caption)" }}
             </a>
             <span class="md:hidden block text-xs text-ink-subtle mt-0.5">{{ post.platforms|platform_names }} · {{ post.get_media_type_display }}<span class="sm:hidden"> · {{ post.created_at|date:"N j" }}</span></span>

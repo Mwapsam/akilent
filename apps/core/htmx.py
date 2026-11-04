@@ -51,6 +51,100 @@ def is_shell_swap(request) -> bool:
     )
 
 
+# The overlay host in base.html (a drawer or a modal over the current page) loads into this
+# element. A view that can show itself there uses overlay_or_page; every other view answers
+# an overlay request with a real page load (ShellMiddleware._overlay).
+OVERLAY_TARGET = "overlay-body"
+OVERLAY_HEADER = "X-Akilent-Overlay"
+
+
+def is_overlay(request) -> bool:
+    """A request from the overlay host: show the partial, not the page."""
+    return is_background(request) and request.headers.get("HX-Target") == OVERLAY_TARGET
+
+
+def partial_response(response):
+    """Mark a response whose HTML depends on HTMX headers as a fragment never to be reused.
+
+    The same URL answers a full page, so without this a browser (or CloudFront) could hand a
+    bare fragment to a refresh or to Back.
+    """
+    from django.utils.cache import patch_vary_headers
+
+    patch_vary_headers(response, ("HX-Request", "HX-Target"))
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+def overlay_or_page(
+    request,
+    partial: str,
+    page: str,
+    context: dict,
+    *,
+    kind: str = "drawer",
+    size: str = "md",
+    title: str = "",
+    status: int = 200,
+):
+    """Render ``partial`` inside the overlay chrome for the overlay host, else ``page``.
+
+    ``page`` includes ``partial`` itself, so the URL stays a real page: opened directly,
+    refreshed, or without JavaScript. Flash messages raised for this response become a toast,
+    since the overlay has no page load to show them.
+    """
+    from django.contrib import messages
+    from django.shortcuts import render
+
+    if not is_overlay(request):
+        return render(request, page, context, status=status)
+    ctx = {
+        **context,
+        "in_overlay": True,
+        "overlay_partial": partial,
+        "overlay_kind": kind,
+        "overlay_size": size,
+        "overlay_title": title,
+    }
+    response = render(request, "components/_overlay_body.html", ctx, status=status)
+    for message in messages.get_messages(request):
+        _toast(response, message.tags, str(message))
+    response[OVERLAY_HEADER] = "1"
+    return partial_response(response)
+
+
+def overlay_done(request, message: str, redirect_to: str, *, level: str = "success"):
+    """Finish a save made in the overlay: close it and refresh the page underneath.
+
+    Outside the overlay it is the usual flash message and redirect.
+    """
+    import json
+
+    from django.contrib import messages
+    from django.http import HttpResponse
+    from django.shortcuts import redirect
+
+    if not is_overlay(request):
+        getattr(messages, level)(request, message)
+        return redirect(redirect_to)
+    response = HttpResponse(status=204)
+    response["HX-Trigger"] = json.dumps({"overlay-close": True})
+    response[OVERLAY_HEADER] = "1"
+    _toast(response, level, message)
+    return partial_response(response)
+
+
+def _toast(response, tags: str, message: str):
+    from apps.accounts.utils import hx_toast
+
+    level = next(
+        (t for t in ("success", "warning", "info") if t in tags),
+        "danger" if "error" in tags else "info",
+    )
+    # One header: the latest message wins, which is the one that says what happened.
+    hx_toast(response, level, message)
+
+
 def full_page_load(view):
     """Always answer boosted navigations to this view with a real page load.
 
@@ -87,9 +181,29 @@ class ShellMiddleware:
         request.shell_swap = is_shell_swap(request)
         response = self.get_response(request)
         _vary(response)
+        if is_overlay(request):
+            return self._overlay(request, response)
         if not is_boosted(request):
             return response
         return self._boosted(request, response)
+
+    def _overlay(self, request, response):
+        """An overlay request answered by a view that can't show itself in the overlay.
+
+        Typically a save inside a drawer whose view redirects somewhere else (the browser
+        follows the redirect, and the page there is a whole page). Go there for real, with
+        its flash message kept for that load.
+        """
+        if response.has_header(OVERLAY_HEADER) or response.has_header("HX-Redirect"):
+            return response
+        if response.status_code != 200 or response.streaming:
+            return response
+        if "text/html" not in response.get("Content-Type", ""):
+            return response
+        storage = getattr(request, "_messages", None)
+        if storage is not None:
+            storage.used = False
+        return partial_response(_hx_redirect(request.get_full_path()))
 
     def _boosted(self, request, response):
         # Redirects: HTMX follows same-origin ones itself; another host needs the browser.

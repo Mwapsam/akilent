@@ -33,7 +33,7 @@
     <div class="flex flex-wrap items-center gap-2">
       <button type="button" class="btn btn-secondary btn-sm" @click="fillNextSlot()" :disabled="slotLoading">Next free slot</button>
       <span class="text-xs text-ink-subtle" role="status" x-text="slotNote"></span>
-      <a href="{% url 'publishing:slots' %}" class="text-xs underline" x-show="slotSetup" x-cloak>Set up posting slots</a>
+      <a href="{% url 'publishing:slots' %}" data-overlay-open="drawer" data-overlay-size="lg" class="text-xs underline" x-show="slotSetup" x-cloak>Set up posting slots</a>
     </div>
     {% endif %}
     <template x-if="selectedPlatforms.length > 1">

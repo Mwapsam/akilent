@@ -1,11 +1,11 @@
 {% load publishing_filters %}{% comment %}One post in the "Which posts sold" report (apps.publishing.sales).
   {% include "publishing/_sales_row.html" with row=row %}
   Only confirmed credits are in the main figures; less certain ones are listed under them.{% endcomment %}
-<li class="py-3 flex items-start gap-3" data-sales-post="{{ row.post.pk }}">
+<li class="py-3 flex items-start gap-3" data-sales-post="{{ row.post.pk }}" data-row>
   {% if row.rank %}<span class="w-6 shrink-0 text-sm font-semibold text-ink-subtle tabular-nums"><span class="sr-only">Rank </span>{{ row.rank }}</span>{% endif %}
   {% include "publishing/_media_thumb.html" with url=row.post|first_media size="w-10 h-10" alt=row.post.caption|truncatechars:80 %}
   <div class="flex-1 min-w-0">
-    <a href="{% url 'publishing:post-detail' row.post.pk %}" class="block text-sm font-medium text-ink truncate hover:underline">{{ row.post.caption|truncatechars:80|default:"(no caption)" }}</a>
+    <a href="{% url 'publishing:post-detail' row.post.pk %}" data-overlay-open="drawer" class="block text-sm font-medium text-ink truncate hover:underline">{{ row.post.caption|truncatechars:80|default:"(no caption)" }}</a>
     <p class="text-xs text-ink-subtle">{{ row.post.platforms|platform_names }}</p>
     {% with c=row.confirmed %}
     <dl class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs">

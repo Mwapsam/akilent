@@ -3,108 +3,11 @@
 
 {% block content %}
 <div class="mb-4">
-  <a href="{% url 'publishing:planning' %}" class="text-sm text-ink-subtle hover:text-ink">← Planning</a>
+  <a href="{{ back_url }}" class="text-sm text-ink-subtle hover:text-ink">← {{ back_label }}</a>
   <h1 class="text-xl font-semibold tracking-tight mt-1">{% if item %}Edit plan item{% else %}Add idea{% endif %}</h1>
 </div>
 
 <div class="max-w-lg">
-  <form method="post" class="card card-pad space-y-4">
-    {% csrf_token %}
-
-    <div>
-      <label class="block text-sm font-medium text-ink-muted mb-1" for="plan-topic">Topic <span class="tone-coral-fg">*</span></label>
-      <input id="plan-topic" type="text" name="topic" value="{{ item.topic|default:'' }}"
-             placeholder="What is this content about?"
-             class="input w-full" required>
-    </div>
-
-    <div>
-      <label class="block text-sm font-medium text-ink-muted mb-1" for="plan-objective">Objective</label>
-      <textarea id="plan-objective" name="objective" rows="2"
-                placeholder="What should this content achieve?"
-                class="input w-full">{{ item.objective|default:'' }}</textarea>
-    </div>
-
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <div>
-        <label class="block text-sm font-medium text-ink-muted mb-1" for="plan-media-type">Media type</label>
-        <select id="plan-media-type" name="media_type" class="input w-full">
-          {% for val, label in media_type_choices %}
-          <option value="{{ val }}" {% if item.media_type == val %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-ink-muted mb-1" for="plan-plan-status">Status</label>
-        <select id="plan-plan-status" name="plan_status" class="input w-full">
-          {% for val, label in plan_status_choices %}
-          <option value="{{ val }}" {% if item.plan_status == val %}selected{% elif not item and val == 'idea' %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-    </div>
-
-    <fieldset>
-      <legend class="block text-sm font-medium text-ink-muted mb-1">Platforms</legend>
-      <div class="flex gap-3">
-        <label class="flex items-center gap-1.5 text-sm">
-          <input type="checkbox" name="platforms" value="instagram"
-                 {% if 'instagram' in item.platforms|default:'' %}checked{% endif %}>
-          Instagram
-        </label>
-        <label class="flex items-center gap-1.5 text-sm">
-          <input type="checkbox" name="platforms" value="facebook"
-                 {% if 'facebook' in item.platforms|default:'' %}checked{% endif %}>
-          Facebook
-        </label>
-      </div>
-    </fieldset>
-
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <div>
-        <label class="block text-sm font-medium text-ink-muted mb-1" for="plan-pillar">Pillar</label>
-        <select id="plan-pillar" name="pillar" class="input w-full">
-          <option value="">— None —</option>
-          {% for pillar in pillars %}
-          <option value="{{ pillar.pk }}" {% if item.pillar_id == pillar.pk %}selected{% endif %}>{{ pillar.name }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-ink-muted mb-1" for="plan-campaign">Theme</label>
-        <select id="plan-campaign" name="campaign" class="input w-full">
-          <option value="">— None —</option>
-          {% for campaign in campaigns %}
-          <option value="{{ campaign.pk }}" {% if item.campaign_id == campaign.pk %}selected{% endif %}>{{ campaign.name }}</option>
-          {% endfor %}
-        </select>
-      </div>
-    </div>
-
-    <div>
-      <label class="block text-sm font-medium text-ink-muted mb-1" for="plan-planned-date">Planned date</label>
-      <input id="plan-planned-date" type="date" name="planned_date"
-             value="{{ item.planned_date|date:'Y-m-d'|default:'' }}"
-             class="input w-full">
-    </div>
-
-    <div>
-      <label class="block text-sm font-medium text-ink-muted mb-1" for="plan-notes">Notes</label>
-      <textarea id="plan-notes" name="notes" rows="3" placeholder="Any additional context..."
-                class="input w-full">{{ item.notes|default:'' }}</textarea>
-    </div>
-
-    <div class="flex gap-2 pt-2">
-      <button type="submit" class="btn btn-primary">{% if item %}Save changes{% else %}Add to backlog{% endif %}</button>
-      <a href="{% url 'publishing:planning' %}" class="btn btn-ghost">Cancel</a>
-      {% if item and item.plan_status in 'idea,planned' %}
-      <form method="post" action="{% url 'publishing:plan-delete' item.pk %}" class="ml-auto">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-danger-ghost text-sm"
-                data-confirm="Delete this plan item?" data-confirm-danger data-confirm-label="Delete">Delete</button>
-      </form>
-      {% endif %}
-    </div>
-  </form>
+  {% include "publishing/_plan_item_form.html" %}
 </div>
 {% endblock %}

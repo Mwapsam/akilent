@@ -1,0 +1,30 @@
+{% comment %}Placeholders for a page that is slow to arrive (static/js/app.js, data-instant-tabs and
+data-skeleton): shown under the tabs only once a navigation has taken more than 150ms, in the
+shape of the page that's coming, never as a spinner. Built from the .skeleton-* classes in
+assets/app.css; layout is inline so no new utility classes are needed.{% endcomment %}
+<template id="skeleton-grid">
+  <div role="status" aria-label="Loading" data-page-skeleton
+       style="display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: 1rem">
+    {% for i in "123456" %}<div class="skeleton-card"><div class="skeleton-text" style="width: 60%"></div><div class="skeleton-text"></div><div class="skeleton-text" style="width: 80%"></div></div>{% endfor %}
+  </div>
+</template>
+<template id="skeleton-table">
+  <div role="status" aria-label="Loading" data-page-skeleton class="skeleton-card" style="padding: 0">
+    {% for i in "1234567" %}<div class="skeleton-table-row"><span style="width: 2.5rem"></span><span style="flex: 1"></span><span style="width: 6rem"></span><span style="width: 5rem"></span></div>{% endfor %}
+  </div>
+</template>
+<template id="skeleton-calendar">
+  <div role="status" aria-label="Loading" data-page-skeleton class="skeleton-card"
+       style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .5rem">
+    {% for i in "12345678901234" %}<div class="skeleton" style="height: 6rem"></div>{% endfor %}
+  </div>
+</template>
+<template id="skeleton-form">
+  <div role="status" aria-label="Loading" data-page-skeleton class="skeleton-card" style="max-width: 42rem">
+    <div class="skeleton-text" style="width: 30%"></div>
+    <div class="skeleton" style="height: 2.75rem"></div>
+    <div class="skeleton-text" style="width: 40%"></div>
+    <div class="skeleton" style="height: 6rem"></div>
+    <div class="skeleton" style="height: 2.5rem; width: 8rem"></div>
+  </div>
+</template>

@@ -1,0 +1,27 @@
+{% comment %}The overlay host: one drawer-or-modal over the current page, driven by static/js/app.js
+("Overlay"). A link with data-overlay-open="drawer|modal" opens its own URL here instead of
+navigating; the view answers with components/_overlay_body.html (overlay_or_page in
+apps/core/htmx.py), whose data-overlay picks the shape. It sits outside <main hx-history-elt>,
+so a history snapshot never contains an open overlay. Below sm both shapes take the full width
+(the modal as a bottom sheet). Under reduced motion nothing slides or fades. Styles:
+static/css/overlay.css.{% endcomment %}
+<div id="overlay-host" hidden data-kind="drawer" data-size="md" role="dialog" aria-modal="true"
+     aria-labelledby="overlay-title">
+  <div class="ak-overlay-backdrop" data-overlay-close aria-hidden="true"></div>
+  <div class="ak-overlay-panel" data-dialog-panel tabindex="-1">
+    <div class="ak-overlay-head">
+      <h2 id="overlay-title" class="text-lg font-semibold text-ink truncate"></h2>
+      <div class="flex items-center gap-1 shrink-0">
+        <span class="ak-overlay-step" data-overlay-step hidden>
+          <button type="button" class="btn btn-ghost btn-icon btn-sm" data-overlay-prev aria-label="Previous (K)">{% include "components/icon.html" with name="chevron-left" class="w-4 h-4" %}</button>
+          <span class="text-xs text-ink-subtle tabular-nums" data-overlay-position></span>
+          <button type="button" class="btn btn-ghost btn-icon btn-sm" data-overlay-next aria-label="Next (J)">{% include "components/icon.html" with name="chevron-right" class="w-4 h-4" %}</button>
+        </span>
+        <button type="button" class="btn btn-ghost btn-icon touch-target -mr-2" data-overlay-close aria-label="Close">
+          {% include "components/icon.html" with name="x" class="w-5 h-5" %}
+        </button>
+      </div>
+    </div>
+    <div id="overlay-body" data-dialog-body data-error-region aria-busy="false"></div>
+  </div>
+</div>

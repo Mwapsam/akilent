@@ -39,6 +39,7 @@
   <link rel="preload" href="{% static 'fonts/inter-variable.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="icon" type="image/svg+xml" href="{% static 'img/brand/icon-color.svg' %}">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  {% if user.is_authenticated %}<link rel="stylesheet" href="{% static 'css/overlay.css' %}">{% endif %}
   
   {% comment %}
     HTMX drives every partial swap/poll. Deferred like Alpine so it does not
@@ -94,6 +95,15 @@
   {% endcomment %}
   <script defer src="{% static 'js/chat.js' %}"></script>
   <script defer src="{% static 'js/ai_draft.js' %}"></script>
+  {% comment %}
+    Content Studio's composer and media library, loaded with the shell for the same reason:
+    as page scripts they forced a full page load on every visit to the composer and Media.
+    They only define factories (composer, mediaLibrary, mediaEditor) and an onPage hook that
+    does nothing on other pages; the browser caches them.
+  {% endcomment %}
+  <script defer src="{% static 'js/cropper.min.js' %}"></script>
+  <script defer src="{% static 'js/composer.js' %}"></script>
+  <script defer src="{% static 'js/media_library.js' %}"></script>
   {% endif %}
   <script defer src="{% static 'js/alpine.min.js' %}"></script>
   {% block extra_head %}{% endblock %}
@@ -101,12 +111,12 @@
 <body class="h-full bg-canvas text-ink antialiased" x-data
       hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
       {% comment %}
-        hx-disabled-elt resolves "find [type=submit]" against whichever element triggers a given
-        request, not against <body> itself: a no-op for a boosted <a> (nothing to find), and for a
-        boosted <form> it disables that form's own submit button for the request's duration, so a
-        slow save can't be double-clicked. A page can override it with its own hx-disabled-elt.
+        A form's submit buttons are disabled while its htmx request is in flight, so a slow save
+        can't be double-clicked: static/js/app.js does that for forms (it used to be
+        hx-disabled-elt="find [type=submit]" here, which htmx also applied to every boosted link
+        and logged an error for each). A page can still set its own hx-disabled-elt.
       {% endcomment %}
-      {% if user.is_authenticated %}hx-boost="true" hx-ext="preload{% if REALTIME_SSE_ENABLED %}, sse{% endif %}" hx-disabled-elt="find [type=submit]"{% if REALTIME_SSE_ENABLED %} sse-connect="{% url 'events-stream' %}"{% endif %}{% endif %}>
+      {% if user.is_authenticated %}hx-boost="true" hx-ext="preload{% if REALTIME_SSE_ENABLED %}, sse{% endif %}"{% if REALTIME_SSE_ENABLED %} sse-connect="{% url 'events-stream' %}"{% endif %}{% endif %}>
 
   <a href="#main"
      class="sr-only focus:not-sr-only focus:absolute focus:z-[9999] focus:top-3 focus:left-3
@@ -392,6 +402,8 @@
   <template id="ak-error-state">{% include "components/error_state.html" with client=True %}</template>
   {% if user.is_authenticated %}
     {% include "components/command_palette.html" %}
+    {% include "components/page_skeletons.html" %}
+    {% include "components/overlay_host.html" %}
   {% endif %}
 
   {# ─── Onboarding (skip on the onboarding page itself) ────────────────── #}

@@ -19,7 +19,7 @@ every width, with ``skip_empty`` so only days with something on them are listed.
         <p class="cal-row-empty">
           <span class="basis-full sm:basis-auto">Nothing planned</span>
           <a href="{% url 'publishing:post-new' %}?scheduled_at={{ day|date:'Y-m-d' }}T09:00" class="text-accent font-medium hover:underline">Create a post</a>
-          <a href="{% url 'publishing:plan-new' %}?planned_date={{ day|date:'Y-m-d' }}" class="text-accent font-medium hover:underline">Plan an idea</a>
+          <a href="{% url 'publishing:plan-new' %}?planned_date={{ day|date:'Y-m-d' }}&amp;next={{ request.get_full_path|urlencode }}" data-overlay-open="modal" class="text-accent font-medium hover:underline">Plan an idea</a>
         </p>
         {% else %}
         <a href="{% url 'publishing:post-new' %}?scheduled_at={{ day|date:'Y-m-d' }}T09:00"

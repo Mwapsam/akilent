@@ -1,0 +1,72 @@
+{% load publishing_filters %}
+{% comment %}A post in the drawer (post_detail answering the overlay host): what it is, where it
+stands, and the actions that matter from a list (Edit and fix, Retry, Approve, a channel's own
+retry or new time). Everything else (results, performance, channel options, repeat) is on the
+full page, one link away. Forms post back into the drawer (static/js/app.js "Overlay"); "Edit
+and fix" stays a native form because it leaves for the composer.{% endcomment %}
+<div class="space-y-5" data-post-drawer="{{ post.pk }}">
+  <div class="flex items-start gap-3">
+    {% if post.media_urls %}
+      {% include "publishing/_media_thumb.html" with url=post.media_urls.0 size="w-16 h-16 shrink-0" alt="" %}
+    {% endif %}
+    <div class="min-w-0 flex-1">
+      <p class="font-semibold text-ink break-words line-clamp-2">{{ post|post_headline }}</p>
+      <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-subtle">
+        {% status_badge post.status post.get_status_display %}
+        <span class="inline-flex items-center gap-2">{% for p in post.platforms %}{% include "components/channel_tag.html" with channel=p compact=True %}{% endfor %}</span>
+        {% if post.published_at %}<span>Published {{ post.published_at|date:"D N j, H:i" }}</span>
+        {% elif post.scheduled_at and post.status == 'scheduled' %}<span>Goes out {{ post.scheduled_at|date:"D N j, H:i" }}</span>
+        {% elif post.scheduled_at %}<span>Set for {{ post.scheduled_at|date:"D N j, H:i" }}</span>
+        {% else %}<span>Not scheduled</span>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  {% if post.error %}
+  <div class="alert alert-danger" role="alert">
+    {% include "components/icon.html" with name="alert-circle" %}
+    <div class="flex-1 min-w-0">
+      <p class="font-semibold">This post didn't publish</p>
+      <p class="mt-0.5 break-words">{{ post.error }}</p>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="flex flex-wrap items-center gap-2">
+    {% if post.status == 'failed' and can_fix %}
+    <form method="post" action="{% url 'publishing:post-fix' post.pk %}" hx-boost="false">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary">{% include "components/icon.html" with name="pencil" class="w-4 h-4" %}Edit and fix</button>
+    </form>
+    {% elif editable %}
+    <a href="{% url 'publishing:post-new' %}?post_id={{ post.pk }}" class="btn {% if post.status == 'failed' %}btn-secondary{% else %}btn-primary{% endif %}">
+      {% include "components/icon.html" with name="pencil" class="w-4 h-4" %}Edit
+    </a>
+    {% endif %}
+    {% if post.status == 'failed' %}
+    <form method="post" action="{% url 'publishing:post-retry' post.pk %}">
+      {% csrf_token %}
+      <button type="submit" class="btn {% if can_fix or editable %}btn-secondary{% else %}btn-primary{% endif %}">{% include "components/icon.html" with name="refresh" class="w-4 h-4" %}Retry</button>
+    </form>
+    {% endif %}
+    <a href="{% url 'publishing:post-detail' post.pk %}" class="btn btn-ghost ml-auto" data-overlay-full>Open full page {% include "components/icon.html" with name="chevron-right" class="w-4 h-4" %}</a>
+  </div>
+
+  {% include "publishing/_post_review.html" %}
+
+  {% if post.variants.exists %}
+  <section class="card overflow-hidden" aria-labelledby="pdd-channels">
+    <h3 id="pdd-channels" class="pd-section-title px-5 pt-4 pb-1">Channels</h3>
+    <div class="mt-1">
+      {% for variant in post.variants.all %}
+        {% include "publishing/variant_result_card.html" %}
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <section aria-labelledby="pdd-caption">
+    <h3 id="pdd-caption" class="text-xs font-medium text-ink-subtle mb-1.5">Caption{% if post.ai_assisted %} · Started from an AI suggestion{% endif %}</h3>
+    <p class="text-sm leading-relaxed text-ink whitespace-pre-wrap break-words">{{ post.caption|default:"(none)" }}</p>
+  </section>
+</div>

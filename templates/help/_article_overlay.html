@@ -1,0 +1,11 @@
+{% comment %}A help article in the app's modal (help_article answering the overlay host), for the
+"how does this work" links inside the app, such as "How posts are credited" on Sales. The help
+centre's own styles come with it; the full article stays one link away.{% endcomment %}
+{% include "help/_styles.html" %}
+<p class="text-sm text-ink-muted mb-5">{{ article.summary }}</p>
+<div class="article-body" data-help-body>
+  {% include article.template %}
+</div>
+<p class="mt-6 pt-4 border-t border-border">
+  <a href="{% url 'help-article' article.slug %}" target="_blank" rel="noopener" class="text-sm font-medium text-accent hover:underline">Open in the Help centre</a>
+</p>
