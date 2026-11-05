@@ -752,7 +752,11 @@ def test_a_new_attempt_or_an_unusable_key_is_a_new_send(logged_in, open_conversa
     _reply(client, open_conversation, "Three", "bad:key")  # rejected: a random key
     _reply(client, open_conversation, "Four")  # no key: as before
     assert OutboundMessage.objects.filter(account=account).count() == 4
-    assert not OutboundMessage.objects.filter(idempotency_key__contains="bad").exists()
+    # "bad:key", not "bad": a key made for a send without one ends in a random uuid,
+    # whose hex can contain "bad" but never a colon.
+    assert not OutboundMessage.objects.filter(
+        idempotency_key__contains="bad:key"
+    ).exists()
 
 
 @pytest.mark.django_db
