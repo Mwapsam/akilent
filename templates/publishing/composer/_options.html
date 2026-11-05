@@ -34,7 +34,7 @@
               <svg class="w-3.5 h-3.5 text-ink-subtle flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
               <span class="truncate" x-text="opts.instagram.location.name"></span>
             </span>
-            <button type="button" class="text-xs text-ink-subtle hover:text-ink underline" @click="opts.instagram.location = null; touched()">Remove</button>
+            <button type="button" class="text-xs text-ink-subtle hover:text-ink cs-link" @click="opts.instagram.location = null; touched()">Remove</button>
           </div>
         </template>
         <div x-show="!opts.instagram.location" class="relative">
@@ -88,7 +88,7 @@
             <input type="file" accept="image/jpeg,image/png" class="sr-only" @change="uploadCover($event)">
             <span x-text="opts.instagram.cover_url ? 'Change cover image' : 'Upload a cover image'"></span>
           </label>
-          <button type="button" x-show="opts.instagram.cover_url" class="text-xs text-ink-subtle hover:text-ink underline"
+          <button type="button" x-show="opts.instagram.cover_url" class="text-xs text-ink-subtle hover:text-ink cs-link"
                   @click="opts.instagram.cover_url = ''; touched()">Remove</button>
           <span class="cmp-hint" x-show="coverUploading">Uploading…</span>
         </div>

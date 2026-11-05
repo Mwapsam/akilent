@@ -66,6 +66,38 @@ def calendar_move(request):
 
 @login_required
 @module_required("content_studio")
+@require_POST
+@_in_workspace_tz
+def plan_move(request):
+    """Move a planned idea to another day (drag and drop on the month calendar, or its
+    Move form). Not to a day that has passed, and not an idea already published."""
+    from django.utils.formats import date_format
+
+    from .models import ContentPlanItem
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    try:
+        day = datetime.date.fromisoformat(request.POST.get("date", ""))
+        pk = int(request.POST.get("item", ""))
+    except ValueError:
+        messages.error(request, "Choose a day to move the idea to.")
+        return _back(request)
+    item = ContentPlanItem.objects.filter(account=account, pk=pk).first()
+    if item is None or item.plan_status == ContentPlanItem.PlanStatus.PUBLISHED:
+        messages.error(request, "That idea can't be moved.")
+    elif day < timezone.localdate():
+        messages.error(request, "Choose today or a later day.")
+    else:
+        item.planned_date = day
+        item.save(update_fields=["planned_date"])
+        messages.success(request, f"Idea moved to {date_format(day, 'l, N j')}.")
+    return _back(request)
+
+
+@login_required
+@module_required("content_studio")
 @_in_workspace_tz
 def slots_manage(request):
     """The weekly posting slots, and when this business's posts have done best."""

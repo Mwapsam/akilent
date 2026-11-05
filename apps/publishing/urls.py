@@ -33,6 +33,7 @@ urlpatterns = [
     path("calendar/", views.publishing_calendar, name="calendar"),
     # Scheduling (release gate cs_scheduling)
     path("calendar/move/", scheduling_views.calendar_move, name="calendar-move"),
+    path("calendar/move-plan/", scheduling_views.plan_move, name="plan-move"),
     path("slots/", scheduling_views.slots_manage, name="slots"),
     path("slots/next/", scheduling_views.slot_next, name="slot-next"),
     # Library
@@ -141,6 +142,8 @@ urlpatterns = [
     path("ai/ideas/<int:draft_id>/save/", ai_views.idea_save, name="ai-idea-save"),
     path("media/", media_views.library, name="media-library"),
     path("media/<int:pk>/", media_views.asset_update, name="media-update"),
+    path("media/<int:pk>/", media_views.asset_update, name="media-detail"),
+    path("media/bulk/", media_views.bulk, name="media-bulk"),
     path("media/<int:pk>/edit/", media_views.asset_edit, name="media-edit"),
     path("media/<int:pk>/cover/", media_views.asset_cover, name="media-cover"),
     path("media/picker.json", media_views.picker, name="media-picker"),

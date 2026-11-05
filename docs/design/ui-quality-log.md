@@ -1848,3 +1848,22 @@ Plan: "Content Studio: make it feel like an app" (2026-11-03). Approving it cove
 - **The chosen shape looks chosen**: accent text, a tinted background and a 1px accent ring (`static/css/studio.css`). Harness: `side.media-editor-shape-shown-selected`.
 - **Preload and the tab underline** are still deliberately dropped (Entry 18c, the plan file). **Speed** is unchanged; the billing per-request memo awaits a decision.
 - **Verification:** full suite, 0 failures; ruff clean; `studio_overlay_qa` 36/36, `studio_feel_qa` 16/16.
+
+### Entry 19: Phases 4 and 5, with the Media redesign (2026-11-05)
+- **Media is a gallery.**
+  - The policy box is gone. A slim summary ("8 files · 100.2 KB") sits under the tabs, with an ⓘ popover holding the removal rules, and Upload is the primary button in the header (Templates & hashtags as an icon button).
+  - One sticky, blurred filter row (static on phones): a pill search over names and tags, segmented All · Images · Videos · Unused · Archived (`?kind=` and `?archived=1` still work), a tag select, sort (Newest · Most used · Name · Size) and Grid / List. It swaps `#media-results` in place and keeps the URL in step; focus stays in the search box.
+  - Cards are the pictures: a 4:5 frame, the picture contained in it over a blurred copy of itself, so a tall screenshot shows whole. On hover or focus (always on touch): a select box, a type badge (PNG, Video 0:42, Reel cover, Edited), and Edit, Use in a new post and ⋯ (Rename and tags, Download, Remove with the outcome spelled out). Under it, a clean name ("WhatsApp image · 10 Sep") and a usage chip ("2 posts", or "Unused" in teal).
+  - Grouped by date with sticky labels when sorted by newest. Copies are flagged ("Looks like 01_home.png") by content hash, or by the same size and name less " (1)".
+  - Clicking a picture opens its details as a drawer: a large preview (focused, so ← → and J/K step through the grid), facts, name and tags, "Used in" post thumbnails that open the post in the same drawer (Back returns), files made from it, and Edit · Use in new post · Download · Remove. Remove is disabled with the reason when a draft or scheduled post needs the file.
+  - Selection: tick (Shift for a range), then a bar up from the bottom: N selected · Add a tag · Tag · Remove (or Put back) · ✕. Esc clears it. `media_library.bulk` applies the one removal rule per file and the message says how each ended.
+  - Upload from the button or by dropping files anywhere ("Drop to upload"); each file is a card with a progress ring and a local preview until the grid refreshes in place (no page reload).
+  - "Use in post" opens the composer with the file (`?media=<id>`, this business's live files only).
+- **Phase 4 controls** (`static/css/controls.css`): a segmented control for the composer's six formats (three to a row below `sm`), Media's show and view, the calendar's Week/Month/List, and the Sales and Analytics periods. Switches (`role="switch"`) for Require review and the weekly email (they save when flipped; Save stays for no-JS), Bio's own colours, and Repeat on/off. The Library's two date fields are one popover with presets (7, 30, 90 days, this month, any time); a bottom sheet on phones.
+- **Phase 5**:
+  - The month calendar: a "+" on each day from today (on hover or focus, always on touch) opens Add idea for that day; planned ideas drag to another day through `plan_move` (not to a past day, not once published), behind `cs_scheduling`.
+  - Shortcuts: N (new post, Content Studio), / (the page's search), J/K (rows; Enter opens), ? (lists them in the command palette). Never while typing or with a dialog open.
+  - Visual finish: Content Studio's 36 underlined links use one quiet link style (`.cs-link`), and the Library table's rows a light divider and soft hover (`.cs-row`).
+  - Drawers: a link inside an open drawer loads in its place as a history entry; Close goes back past all of them.
+- **Not done in this pass:** Phase 3 (undo toasts, live filters on Library/Calendar/Sales) still needs its go-ahead, so archiving has no Undo toast yet (Put back is in Archived). Empty states and radii were swept on Media only.
+- **Verification:** full suite 0 failures (25 skipped); ruff clean; `studio_gallery_qa` 16/16 (new), `studio_overlay_qa` 36/36, `studio_feel_qa` 16/16, `publishing_qa` 21/21; no sideways scroll at 360px on Media, the composer, Calendar, Sales and Analytics.

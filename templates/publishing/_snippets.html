@@ -2,7 +2,7 @@
 drawer opened from Media and from the composer's caption box (overlay_or_page) both show this;
 in the drawer each form posts back into it.{% endcomment %}
 <div class="{% if not in_overlay %}max-w-3xl {% endif %}space-y-4">
-  {% if not in_overlay %}<p class="text-sm"><a href="{% url 'publishing:media-library' %}" class="underline">Back to media</a></p>{% endif %}
+  {% if not in_overlay %}<p class="text-sm"><a href="{% url 'publishing:media-library' %}" class="cs-link">Back to media</a></p>{% endif %}
 
   <section class="card card-pad space-y-3" aria-labelledby="sn-templates">
     <h2 id="sn-templates" class="font-semibold text-ink">Caption templates</h2>

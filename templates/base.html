@@ -40,7 +40,8 @@
   <link rel="icon" type="image/svg+xml" href="{% static 'img/brand/icon-color.svg' %}">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
   {% if user.is_authenticated %}<link rel="stylesheet" href="{% static 'css/overlay.css' %}">
-  <link rel="stylesheet" href="{% static 'css/studio.css' %}">{% endif %}
+  <link rel="stylesheet" href="{% static 'css/studio.css' %}">
+  <link rel="stylesheet" href="{% static 'css/controls.css' %}">{% endif %}
   
   {% comment %}
     HTMX drives every partial swap/poll. Deferred like Alpine so it does not

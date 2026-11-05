@@ -10,7 +10,7 @@ reviews posts.{% endcomment %}
   {% if rules %}
   <p class="text-sm text-ink-subtle">
     {% for rule in rules %}Every {{ rule.every_days }} days{% if rule.active %}, next {{ rule.next_run_at|date:"N j, H:i" }}{% else %} (paused){% endif %}{% if not forloop.last %}; {% endif %}{% endfor %}.
-    <a href="{% url 'publishing:recurring' %}" class="underline">Manage repeats</a>
+    <a href="{% url 'publishing:recurring' %}" class="cs-link">Manage repeats</a>
   </p>
   {% endif %}
   <form id="pd-repeat-form" method="post" action="{% url 'publishing:recurring-create' post.pk %}" class="space-y-3" hx-boost="false" x-show="open" x-cloak>

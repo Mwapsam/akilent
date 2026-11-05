@@ -33,7 +33,7 @@
     <div class="flex flex-wrap items-center gap-2">
       <button type="button" class="btn btn-secondary btn-sm" @click="fillNextSlot()" :disabled="slotLoading">Next free slot</button>
       <span class="text-xs text-ink-subtle" role="status" x-text="slotNote"></span>
-      <a href="{% url 'publishing:slots' %}" data-overlay-open="drawer" data-overlay-size="lg" class="text-xs underline" x-show="slotSetup" x-cloak>Set up posting slots</a>
+      <a href="{% url 'publishing:slots' %}" data-overlay-open="drawer" data-overlay-size="lg" class="text-xs cs-link" x-show="slotSetup" x-cloak>Set up posting slots</a>
     </div>
     {% endif %}
     <template x-if="selectedPlatforms.length > 1">
@@ -56,7 +56,7 @@
 
   <p class="cmp-hint mt-3">
     Times are in {{ current_tz_name }}.
-    {% if tz_is_default %}<a href="{% url 'settings-hours' %}" class="underline">Set your business timezone</a> so times match your clock.{% endif %}
+    {% if tz_is_default %}<a href="{% url 'settings-hours' %}" class="cs-link">Set your business timezone</a> so times match your clock.{% endif %}
   </p>
   {% if approved_for_publish %}
   <p class="cmp-hint mt-2">Approved. Changing the caption, media or channels sends it back for review.</p>

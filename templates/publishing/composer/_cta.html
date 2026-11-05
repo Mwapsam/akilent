@@ -24,7 +24,7 @@
     </label>
   </div>
   {% if not wa_number_ready %}
-  <p class="text-xs text-ink-subtle mt-3">Connect a WhatsApp number to add a chat link that shows which posts bring customers. <a href="{% url 'channels' %}" class="underline">Connect WhatsApp</a></p>
+  <p class="text-xs text-ink-subtle mt-3">Connect a WhatsApp number to add a chat link that shows which posts bring customers. <a href="{% url 'channels' %}" class="cs-link">Connect WhatsApp</a></p>
   {% endif %}
 
   <div x-show="cta.kind !== 'none'" x-cloak class="space-y-4 pt-4 mt-4 border-t border-border">

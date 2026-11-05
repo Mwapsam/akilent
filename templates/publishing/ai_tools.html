@@ -12,7 +12,7 @@
   {% if off_reason %}
   <div class="tone-info rounded-xl p-3 text-sm" role="status">
     AI tools are off: {{ off_reason }}
-    {% if can_admin %}<a href="{% url 'settings-ai' %}" class="underline font-medium">AI settings</a>{% endif %}
+    {% if can_admin %}<a href="{% url 'settings-ai' %}" class="cs-link font-medium">AI settings</a>{% endif %}
   </div>
   {% endif %}
 
@@ -44,7 +44,7 @@
     <ul class="text-sm divide-y divide-border">
       {% for s in sources %}
       <li class="py-2" data-source="{{ s.id }}">
-        <a class="underline" href="{% url 'publishing:post-detail' s.id %}">Post {{ s.id }}</a>:
+        <a class="cs-link" href="{% url 'publishing:post-detail' s.id %}">Post {{ s.id }}</a>:
         {{ s.chats }} chat{{ s.chats|pluralize }}, {{ s.leads }} lead{{ s.leads|pluralize }}, {{ s.paid_orders }} paid order{{ s.paid_orders|pluralize }}
         <span class="block text-xs text-ink-subtle truncate">{{ s.caption|default:"(no caption)" }}</span>
       </li>

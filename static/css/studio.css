@@ -24,6 +24,183 @@
   .me-layout--overlay .me-intro { grid-column: 2; grid-row: 1; }
   .me-layout--overlay .me-side { grid-column: 2; grid-row: 2; }
 }
+/* A text link in Content Studio: a quiet underline in the text's own colour that firms up on
+   hover, readable on any background (alerts included), instead of a heavy browser underline. */
+.cs-link { font-weight: 500; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  transition: text-decoration-color var(--duration-fast) var(--ease-emphasized), color var(--duration-fast); }
+.cs-link:hover, .cs-link:focus-visible { text-decoration-color: currentColor; }
+
+/* A list row (the Library table): a light divider and a soft hover, not a full-strength border. */
+.cs-row { border-bottom: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+  transition: background-color var(--duration-fast) var(--ease-emphasized); }
+.cs-row:hover, .cs-row:focus-within { background: var(--color-surface-muted); }
+@media (prefers-reduced-motion: reduce) { .cs-link, .cs-row { transition: none; } }
+
+/* --- The month calendar (templates/publishing/_cal_month.html): a day's "+" plans an idea for
+   it, shown on hover and focus (always on touch); a planned idea can be dragged. --------- */
+.cal-m-head { display: flex; align-items: center; justify-content: space-between; gap: .25rem; min-height: 1.5rem; }
+.cal-m-add { display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: .5rem;
+  color: var(--color-ink-subtle); transition: opacity var(--duration-fast) var(--ease-emphasized), background-color var(--duration-fast); }
+.cal-m-add:hover, .cal-m-add:focus-visible { color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 12%, transparent); outline: none; }
+@media (hover: hover) {
+  .cal-m-add { opacity: 0; }
+  .cal-m-day:hover .cal-m-add, .cal-m-day:focus-within .cal-m-add { opacity: 1; }
+}
+.cal-m-plan { cursor: grab; }
+.cal-m-plan:active { cursor: grabbing; }
+
+/* --- Media (templates/publishing/media_library.html): a gallery, pictures first. ---------- */
+.ml-toolbar { position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; align-items: center;
+  gap: .5rem; margin: 0 -.5rem 1rem; padding: .5rem;
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--color-canvas) 82%, transparent);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+/* On a phone the bar wraps to three rows: it scrolls away rather than covering a third of the screen. */
+@media (max-width: 639px) { .ml-toolbar { position: static; } .ml-group { top: 0; } }
+.ml-search { display: flex; align-items: center; gap: .5rem; flex: 1 1 14rem; min-width: 0; max-width: 22rem;
+  padding: 0 .875rem; height: 2.375rem; border: 1px solid var(--color-border); border-radius: 999px;
+  background: var(--color-surface); color: var(--color-ink-subtle); }
+.ml-search:focus-within { border-color: var(--color-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 18%, transparent); }
+.ml-search input { flex: 1; min-width: 0; border: 0; background: transparent; outline: none; color: var(--color-ink);
+  font-size: 1rem; }
+@media (min-width: 640px) { .ml-search input { font-size: .875rem; } }
+.ml-search input::-webkit-search-cancel-button { cursor: pointer; }
+.ml-summary { display: flex; align-items: center; gap: .375rem; margin-bottom: 1rem; font-size: .8125rem;
+  color: var(--color-ink-subtle); }
+
+.ml-grid { display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 640px) { .ml-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .ml-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 1440px) { .ml-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+.ml-group { grid-column: 1 / -1; position: sticky; top: 3.5rem; z-index: 5; padding-top: .5rem; }
+.ml-group:not(:first-child) { margin-top: .5rem; }
+.ml-group h2 { display: inline-block; padding: .125rem .625rem; border-radius: 999px; font-size: .75rem;
+  font-weight: 600; letter-spacing: .01em; color: var(--color-ink-muted);
+  background: color-mix(in srgb, var(--color-canvas) 85%, transparent);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+
+.ml-card { position: relative; min-width: 0; }
+/* Every picture whole: a 4:5 frame, the picture contained in it over a blurred copy of itself,
+   so a tall screenshot shows complete on its own colour wash instead of cut mid-screen. */
+.ml-frame { position: relative; aspect-ratio: 4 / 5; overflow: hidden; isolation: isolate;
+  border-radius: var(--radius-surface); border: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+  transition: transform var(--duration-fast) var(--ease-emphasized), box-shadow var(--duration-fast) var(--ease-emphasized); }
+.ml-card:hover .ml-frame, .ml-card:focus-within .ml-frame { transform: translateY(-2px); box-shadow: var(--shadow-pop); }
+.ml-card.is-selected .ml-frame { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.ml-wash { position: absolute; inset: -12%; z-index: -1; background-size: cover; background-position: center;
+  filter: blur(22px) saturate(1.15); opacity: .55; }
+.ml-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.ml-video { background: #0b1020; }
+/* A picture the browser couldn't load: a quiet note instead of a broken-image icon. */
+.ml-frame.is-broken .ml-img, .ml-frame.is-broken .ml-wash { display: none; }
+.ml-frame.is-broken::before { content: "Can't show this picture"; position: absolute; inset: 0; display: grid;
+  place-items: center; padding: 1rem; text-align: center; font-size: .75rem; color: var(--color-ink-subtle); }
+.ml-open { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
+.ml-open:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.ml-check, .ml-badge, .ml-actions { position: absolute; z-index: 2; }
+.ml-check { top: .5rem; left: .5rem; display: grid; place-items: center; width: 1.75rem; height: 1.75rem;
+  border-radius: .5rem; background: rgb(255 255 255 / .9); box-shadow: var(--shadow-card); cursor: pointer; }
+.ml-check input { width: 1rem; height: 1rem; accent-color: var(--color-accent); cursor: pointer; }
+.ml-badge { top: .5rem; right: .5rem; padding: .125rem .5rem; border-radius: 999px; font-size: .6875rem;
+  font-weight: 600; letter-spacing: .02em; color: #fff; background: rgb(11 16 32 / .62);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); pointer-events: none; }
+.ml-actions { left: 0; right: 0; bottom: 0; display: flex; justify-content: flex-end; gap: .25rem;
+  padding: 1.75rem .5rem .5rem; background: linear-gradient(to top, rgb(11 16 32 / .62), transparent);
+  pointer-events: none; }
+.ml-actions > * { pointer-events: auto; }
+.ml-act { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: .625rem; color: #fff;
+  background: rgb(255 255 255 / .16); border: 0; cursor: pointer;
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  transition: background-color var(--duration-fast) var(--ease-emphasized); }
+.ml-act:hover, .ml-act:focus-visible { background: rgb(255 255 255 / .3); outline: none; }
+.ml-act:focus-visible { box-shadow: 0 0 0 2px #fff; }
+.ml-act svg { width: 1rem; height: 1rem; }
+/* The controls show on hover and on focus; on touch screens they stay. A ticked card keeps
+   its checkbox, and once anything is ticked every checkbox shows. */
+@media (hover: hover) {
+  .ml-check, .ml-actions, .ml-badge { opacity: 0; transition: opacity var(--duration-fast) var(--ease-emphasized); }
+  .ml-card:hover :is(.ml-check, .ml-actions, .ml-badge),
+  .ml-card:focus-within :is(.ml-check, .ml-actions, .ml-badge),
+  .ml-card.is-selected .ml-check, .ml-selecting .ml-check, .ml-card:has(.ml-more[open]) .ml-actions { opacity: 1; }
+}
+.ml-meta { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .5rem .125rem 0; }
+.ml-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .8125rem;
+  font-weight: 500; color: var(--color-ink); }
+.ml-used { flex: none; padding: .0625rem .5rem; border-radius: 999px; font-size: .6875rem; font-weight: 500;
+  color: var(--color-ink-subtle); background: var(--color-surface-muted); border: 1px solid var(--color-border); }
+.ml-used.is-unused { color: var(--tone-teal-fg); background: var(--tone-teal-bg); border-color: transparent; }
+.ml-dup { margin-top: .25rem; font-size: .75rem; color: var(--tone-amber-fg, var(--color-ink-subtle)); }
+.ml-more .pop-panel { inset-block-start: auto; inset-block-end: calc(100% + .375rem); }
+
+/* Uploads in progress: a card per file with a ring that fills. */
+.ml-ring { position: absolute; inset: 0; display: grid; place-items: center; z-index: 2;
+  background: color-mix(in srgb, var(--color-surface) 45%, transparent); }
+.ml-ring svg { width: 3rem; height: 3rem; transform: rotate(-90deg); }
+.ml-ring circle { fill: none; stroke-width: 4; }
+.ml-ring .ring-bg { stroke: color-mix(in srgb, var(--color-ink) 15%, transparent); }
+.ml-ring .ring-fg { stroke: var(--color-accent); stroke-linecap: round; transition: stroke-dashoffset .2s linear; }
+
+/* Drop anywhere on the page. */
+.ml-drop { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 1.5rem;
+  background: color-mix(in srgb, var(--color-canvas) 80%, transparent);
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); pointer-events: none; }
+.ml-drop > div { display: grid; place-items: center; gap: .5rem; width: min(40rem, 100%); height: min(22rem, 60vh);
+  border: 2px dashed var(--color-accent); border-radius: var(--radius-surface); font-size: 1.125rem;
+  font-weight: 600; color: var(--color-ink); background: var(--color-surface); box-shadow: var(--shadow-modal); }
+
+/* The selection bar, up from the bottom once anything is ticked. */
+.ml-bulkbar { position: fixed; z-index: 30; left: 50%; bottom: calc(1rem + env(safe-area-inset-bottom));
+  transform: translateX(-50%); display: flex; flex-wrap: wrap; align-items: center; gap: .5rem;
+  max-width: calc(100vw - 2rem); padding: .5rem .5rem .5rem 1rem; border-radius: var(--radius-surface);
+  background: var(--color-ink); color: var(--color-surface); box-shadow: var(--shadow-modal); }
+.ml-bulkbar .input { height: 2rem; width: 9rem; font-size: 1rem; }
+@media (min-width: 640px) { .ml-bulkbar .input { font-size: .8125rem; } }
+.ml-bulkbar .btn { --tw-ring-color: transparent; }
+.ml-bulk-btn { padding: .3125rem .75rem; border-radius: .625rem; font-size: .8125rem; font-weight: 500;
+  color: inherit; background: color-mix(in srgb, var(--color-surface) 14%, transparent); border: 0; cursor: pointer; }
+.ml-bulk-btn:hover, .ml-bulk-btn:focus-visible { background: color-mix(in srgb, var(--color-surface) 26%, transparent); outline: none; }
+.ml-bulk-btn--danger { color: #fca5a5; }
+
+/* The list view. */
+.ml-table { width: 100%; font-size: .875rem; border-collapse: separate; border-spacing: 0; }
+.ml-table th { padding: .5rem .75rem; text-align: left; font-size: .75rem; font-weight: 500; color: var(--color-ink-subtle);
+  border-bottom: 1px solid var(--color-border); }
+.ml-table td { padding: .5rem .75rem; border-bottom: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+  vertical-align: middle; }
+.ml-table tbody tr { transition: background-color var(--duration-fast) var(--ease-emphasized); }
+.ml-table tbody tr:hover { background: var(--color-surface-muted); }
+.ml-thumb { position: relative; width: 2.75rem; height: 2.75rem; overflow: hidden; border-radius: .625rem;
+  border: 1px solid var(--color-border); background: var(--color-surface-muted); }
+
+.ml-col-sm, .ml-col-md { display: none; }
+@media (min-width: 640px) { .ml-col-sm { display: table-cell; } }
+@media (min-width: 768px) { .ml-col-md { display: table-cell; } }
+.ml-row-link { display: flex; align-items: center; gap: .75rem; min-width: 0; }
+.ml-row-link:hover, .ml-link:hover { color: var(--color-accent); }
+.ml-link { color: var(--color-accent); }
+.ml-info-btn { display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 999px; }
+.ml-info-btn:hover, .ml-info-btn:focus-visible { background: var(--color-surface-muted); color: var(--color-ink); }
+
+/* The file's details (templates/publishing/_media_detail.html). */
+.md { display: grid; gap: 1.25rem; }
+@media (min-width: 1024px) { .md { grid-template-columns: minmax(0, 1fr) 20rem; align-items: start; } }
+.md-preview { position: relative; overflow: hidden; isolation: isolate; height: min(60vh, 36rem);
+  border-radius: var(--radius-surface); border: 1px solid var(--color-border); background: var(--color-surface-muted); }
+@media (min-width: 1024px) { .md-preview { position: sticky; top: 0; height: calc(100dvh - 9rem); } }
+.md-preview:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.md-preview video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #0b1020; }
+.md-facts { display: grid; grid-template-columns: auto 1fr; gap: .375rem 1rem; font-size: .8125rem; }
+.md-facts dt { color: var(--color-ink-subtle); }
+.md-facts dd { color: var(--color-ink); min-width: 0; overflow-wrap: anywhere; }
+.md-posts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ml-frame, .ml-act, .ml-check, .ml-actions, .ml-badge, .ml-table tbody tr { transition: none; }
+  .ml-card:hover .ml-frame, .ml-card:focus-within .ml-frame { transform: none; }
+}
+
 /* The chosen shape looks chosen, in the active tab's colours (not only aria-pressed). */
 .me-shapes .btn[aria-pressed="true"] { color: var(--color-accent);
   background: color-mix(in srgb, var(--color-accent) 14%, transparent);

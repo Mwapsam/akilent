@@ -30,7 +30,7 @@ rebuild.{% endcomment %}
 </style>
 
 <div class="hidden lg:block mb-6">
-  <p class="text-xs text-ink-subtle mb-2" id="cal-month-help">Drag a post that hasn't gone out to another day to move it. It keeps its time. Or use <strong>Move</strong> on the post.</p>
+  <p class="text-xs text-ink-subtle mb-2" id="cal-month-help">Drag a post that hasn't gone out, or a planned idea, to another day to move it. A post keeps its time. Or use <strong>Move</strong> on the post, or change an idea's date in it. <strong>+</strong> on a day plans an idea for it.</p>
   <div class="card overflow-hidden cal-month" role="list" aria-label="{{ month_first|date:'F Y' }}" aria-describedby="cal-month-help"
        x-data="{ dragging: null, over: null }">
     {% for cell in month_weeks.0 %}<div class="cal-m-dow" aria-hidden="true">{{ cell.date|date:"D" }}</div>{% endfor %}
@@ -44,8 +44,25 @@ rebuild.{% endcomment %}
          @dragleave="if (over === '{{ iso }}') over = null"
          @drop.prevent="if (dragging) { const f = document.getElementById(dragging); f.querySelector('[name=date]').value = '{{ iso }}'; dragging = null; over = null; f.requestSubmit(); }"
          {% endif %}>
-      <span class="cal-m-num">{{ cell.date|date:"j" }}<span class="sr-only"> {{ cell.date|date:"F" }}{% if cell.date == today %}, today{% endif %}</span></span>
-      {% for item in cell.plans %}{% include "publishing/_cal_plan.html" %}{% endfor %}
+      <div class="cal-m-head">
+        <span class="cal-m-num">{{ cell.date|date:"j" }}<span class="sr-only"> {{ cell.date|date:"F" }}{% if cell.date == today %}, today{% endif %}</span></span>
+        {% if cell.date >= today %}<a href="{% url 'publishing:plan-new' %}?planned_date={{ iso }}&amp;next={{ request.get_full_path|urlencode }}" data-overlay-open="modal" class="cal-m-add" title="Plan an idea" aria-label="Plan an idea on {{ cell.date|date:'l, F j' }}">{% include "components/icon.html" with name="plus" class="w-3.5 h-3.5" %}</a>{% endif %}
+      </div>
+      {% for item in cell.plans %}
+      {% if item.plan_status != "published" %}
+      <div class="cal-m-plan" draggable="true"
+           @dragstart="dragging = 'plan-move-{{ item.pk }}'; $event.dataTransfer.effectAllowed = 'move'; $event.dataTransfer.setData('text/plain', 'plan-move-{{ item.pk }}')"
+           @dragend="dragging = null; over = null">
+        {% include "publishing/_cal_plan.html" with plan_draggable=True %}
+        <form id="plan-move-{{ item.pk }}" method="post" action="{% url 'publishing:plan-move' %}" hx-boost="false" hidden>
+          {% csrf_token %}
+          <input type="hidden" name="item" value="{{ item.pk }}">
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <input type="hidden" name="date" value="{{ iso }}">
+        </form>
+      </div>
+      {% else %}{% include "publishing/_cal_plan.html" %}{% endif %}
+      {% endfor %}
       {% for entry in cell.entries %}
       <div class="cal-m-entry cal-entry" data-tone="{{ entry.status|status_tone }}"
            {% if entry.movable %}draggable="true"

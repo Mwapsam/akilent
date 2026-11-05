@@ -19,7 +19,7 @@
       <div class="flex-1 min-w-0">
         <p class="text-sm font-medium text-ink">{{ idea.topic }}</p>
         {% if idea.angle %}<p class="text-sm text-ink-subtle whitespace-pre-line">{{ idea.angle }}</p>{% endif %}
-        <p class="text-xs text-ink-subtle mt-1">{{ idea.media_type|capfirst }} · builds on <a class="underline" href="{% url 'publishing:post-detail' idea.based_on %}">post {{ idea.based_on }}</a></p>
+        <p class="text-xs text-ink-subtle mt-1">{{ idea.media_type|capfirst }} · builds on <a class="cs-link" href="{% url 'publishing:post-detail' idea.based_on %}">post {{ idea.based_on }}</a></p>
       </div>
       <form method="post" action="{% url 'publishing:ai-idea-save' draft.pk %}" hx-boost="false">
         {% csrf_token %}

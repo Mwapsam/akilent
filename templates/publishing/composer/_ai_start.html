@@ -52,7 +52,7 @@
 
     <div x-show="genError" x-cloak class="tone-coral p-3 rounded-xl text-sm flex items-center justify-between gap-3" role="alert">
       <span x-text="genError"></span>
-      <button type="button" @click="genError = ''; generateCaptions()" class="text-xs underline">Try again</button>
+      <button type="button" @click="genError = ''; generateCaptions()" class="text-xs cs-link">Try again</button>
     </div>
 
     <div x-show="captionOptions.length > 0" x-cloak class="space-y-2">

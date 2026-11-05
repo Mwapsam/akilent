@@ -1,9 +1,11 @@
 /*
  * Media library (templates/publishing/media_library.html, media_edit.html).
  *
- * mediaLibrary(): upload several files at once, through the same endpoints as the
- * composer (straight to S3 when direct upload is on, otherwise through the server),
- * and search and add Pexels stock photos. The library records each upload itself.
+ * mediaLibrary(): upload several files at once (the button, or dropped anywhere on the
+ * page), through the same endpoints as the composer (straight to S3 when direct upload is
+ * on, otherwise through the server), each shown as a card with its progress until the grid
+ * is refreshed in place; tick files (Shift for a range) for the selection bar; and search
+ * and add Pexels stock photos. The library records each upload itself.
  *
  * mediaEditor(): crop and rotate with Cropper.js at a channel's shape, add one line of
  * text, and save the result as a new picture. The original is never changed.
@@ -53,21 +55,89 @@
     });
   }
 
+  var ACCEPTED = /^(image\/(jpeg|png|webp|gif)|video\/(mp4|quicktime))$/;
+  var uploadSeq = 0;
+
+  // The grid (#media-results) again, in place: after uploads, a stock photo, or anything else
+  // that adds files. Falls back to a reload without htmx.
+  function refreshResults() {
+    if (!window.htmx || !document.getElementById("media-results")) { window.location.reload(); return Promise.resolve(); }
+    return window.htmx.ajax("GET", window.location.pathname + window.location.search,
+      { target: "#media-results", select: "#media-results", swap: "outerHTML" });
+  }
+
   window.mediaLibrary = function mediaLibrary() {
     var cfg = config("media-library-config");
     return {
       uploads: [],
       busy: false,
+      dragging: false,
+      dragDepth: 0,
+      selected: [],
+      lastPicked: null,
       stockQuery: "",
       stockPhotos: [],
       stockError: "",
       stockLoading: false,
       adding: null,
 
+      // Tick or untick one file; with Shift, every file between it and the last one picked
+      // takes the same state, in the order they're shown.
+      toggle: function (e, id) {
+        var on = e.target.checked;
+        var ids = [id];
+        if (e.shiftKey && this.lastPicked !== null) {
+          var order = Array.prototype.map.call(document.querySelectorAll("#media-results [data-asset]"),
+            function (el) { return Number(el.getAttribute("data-asset")); });
+          var a = order.indexOf(this.lastPicked);
+          var b = order.indexOf(id);
+          if (a !== -1 && b !== -1) ids = order.slice(Math.min(a, b), Math.max(a, b) + 1);
+        }
+        var set = this.selected.filter(function (x) { return ids.indexOf(x) === -1; });
+        this.selected = on ? set.concat(ids) : set;
+        this.lastPicked = id;
+      },
+
+      // Files dragged anywhere over the page. dragenter/dragleave fire for every element
+      // crossed, so a depth count says when the drag has really left the window.
+      hasFiles: function (e) {
+        return !!(e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], "Files") !== -1);
+      },
+      dragEnter: function (e) {
+        if (!this.hasFiles(e) || document.getElementById("overlay-host") && !document.getElementById("overlay-host").hidden) return;
+        e.preventDefault();
+        this.dragDepth++;
+        this.dragging = true;
+      },
+      dragOver: function (e) {
+        if (!this.hasFiles(e) || !this.dragging) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+      },
+      dragLeave: function (e) {
+        if (!this.dragging) return;
+        this.dragDepth = Math.max(0, this.dragDepth - 1);
+        if (!this.dragDepth) this.dragging = false;
+      },
+      drop: function (e) {
+        if (!this.dragging) return;
+        e.preventDefault();
+        this.dragging = false;
+        this.dragDepth = 0;
+        if (e.dataTransfer && e.dataTransfer.files.length) this.onFiles(e.dataTransfer.files);
+      },
+
       onFiles: async function (files) {
         var self = this;
         this.busy = true;
-        Array.prototype.forEach.call(files, function (f) { self.uploads.push({ name: f.name, progress: 0, error: "", done: false, file: f }); });
+        Array.prototype.forEach.call(files, function (f) {
+          var ok = ACCEPTED.test(f.type);
+          self.uploads.push({
+            key: ++uploadSeq, name: f.name, progress: 0, done: false, file: f,
+            error: ok ? "" : "Not a picture or video this library takes (JPEG, PNG, WebP, GIF, MP4 or MOV).",
+            preview: ok && f.type.indexOf("image/") === 0 && window.URL ? URL.createObjectURL(f) : "",
+          });
+        });
         for (var i = 0; i < this.uploads.length; i++) {
           var u = this.uploads[i];
           if (u.done || u.error) continue;
@@ -80,7 +150,10 @@
           }
         }
         this.busy = false;
-        if (this.uploads.every(function (u) { return u.done; })) window.location.reload();
+        if (this.uploads.some(function (u) { return u.done; })) await refreshResults();
+        // Finished ones are in the grid now; failed ones stay, with why.
+        this.uploads.filter(function (u) { return u.done && u.preview; }).forEach(function (u) { URL.revokeObjectURL(u.preview); });
+        this.uploads = this.uploads.filter(function (u) { return !u.done; });
       },
 
       uploadOne: async function (u) {
@@ -121,7 +194,8 @@
         this.stockError = "";
         try {
           await postForm(cfg.stock_import, { photo: photo.id });
-          window.location.reload();
+          await refreshResults();
+          if (window.toast) window.toast("success", "Added to the library.");
         } catch (e) {
           this.stockError = e.message;
         } finally {

@@ -8,14 +8,16 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.paginator import Paginator
+from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import get_current_account
-from apps.core.htmx import overlay_or_page
+from apps.core.htmx import overlay_done, overlay_or_page
 from apps.core.module_gate import module_required
 
 from . import direct_upload, media_library
@@ -28,33 +30,122 @@ def _account_or_none(request):
     return get_current_account(request)
 
 
+SHOW_CHOICES = [
+    ("all", "All"),
+    ("image", "Images"),
+    ("video", "Videos"),
+    ("unused", "Unused"),
+    ("archived", "Archived"),
+]
+SORT_CHOICES = [
+    ("new", "Newest"),
+    ("used", "Most used"),
+    ("name", "Name"),
+    ("size", "Size"),
+]
+
+
+def _badge(asset) -> str:
+    """The small label on a file's picture: "Video 0:42", "Reel cover", "PNG"."""
+    if asset.kind == "video":
+        if asset.duration:
+            seconds = round(asset.duration)
+            return f"Video {seconds // 60}:{seconds % 60:02d}"
+        return "Video"
+    if asset.source == MediaAsset.Source.COVER:
+        return "Reel cover"
+    if asset.source == MediaAsset.Source.EDIT:
+        return "Edited"
+    sub = (asset.mime or "").rpartition("/")[2]
+    ext = sub if sub else asset.name.rpartition(".")[2] if "." in asset.name else ""
+    return {"jpeg": "JPG", "quicktime": "MOV"}.get(ext.lower(), ext.upper()[:4])
+
+
+def _decorate(account, assets, counts=None) -> None:
+    """What the grid and the details show beyond the model: uses, a clean name, the
+    badge, and the older file it looks like a copy of."""
+    if counts is None:
+        counts = media_library.usage_counts(account, assets)
+    dups = media_library.duplicates(account, assets)
+    for asset in assets:
+        asset.used_in = counts.get(asset.pk, 0)  # type: ignore[attr-defined]
+        asset.display = media_library.display_name(asset.name)  # type: ignore[attr-defined]
+        asset.badge = _badge(asset)  # type: ignore[attr-defined]
+        asset.duplicate_of = dups.get(asset.pk)  # type: ignore[attr-defined]
+
+
 @login_required
 @module_required("content_studio")
 def library(request):
+    """The library as a gallery: one filter row (search, All/Images/Videos/Unused/
+    Archived, sort, grid or list) whose results region is swapped in place, and a count
+    of what's in it. ``?kind=`` and ``?archived=1`` from older links still work."""
+    from django.db.models import Count, F, Sum
+    from django.db.models.functions import Lower
+
     account = _account_or_none(request)
     if account is None:
         return redirect("dashboard")
-    archived = request.GET.get("archived") == "1"
-    kind = request.GET.get("kind", "")
+    show = request.GET.get("show", "")
+    if show not in dict(SHOW_CHOICES):
+        show = (
+            "archived"
+            if request.GET.get("archived") == "1"
+            else request.GET.get("kind", "")
+            if request.GET.get("kind") in ("image", "video")
+            else "all"
+        )
+    sort = request.GET.get("sort", "new")
+    if sort not in dict(SORT_CHOICES):
+        sort = "new"
+    view = "list" if request.GET.get("view") == "list" else "grid"
     tag = request.GET.get("tag", "").strip().lower()
     q = request.GET.get("q", "").strip()
+    archived = show == "archived"
+
+    live = MediaAsset.objects.filter(account=account, archived_at__isnull=True)
+    totals = live.aggregate(files=Count("pk"), size=Sum("size_bytes"))
     qs = MediaAsset.objects.filter(account=account, archived_at__isnull=not archived)
-    if kind in ("image", "video"):
-        qs = qs.filter(kind=kind)
+    if show in ("image", "video"):
+        qs = qs.filter(kind=show)
     if tag:
         qs = qs.filter(tags__icontains=f'"{tag}"')
     if q:
-        qs = qs.filter(name__icontains=q)
-    page = Paginator(qs.select_related("parent"), PAGE_SIZE).get_page(
-        request.GET.get("page")
+        qs = qs.filter(Q(name__icontains=q) | Q(tags__icontains=q.lower()))
+    all_counts = (
+        media_library.usage_counts_all(account)
+        if sort == "used" or show == "unused"
+        else None
     )
-    assets = list(page)
+    if show == "unused" and all_counts is not None:
+        qs = qs.exclude(pk__in=[pk for pk, n in all_counts.items() if n])
+    if sort == "used" and all_counts is not None:
+        rows = sorted(
+            qs.values_list("pk", "created_at"),
+            key=lambda r: (-all_counts.get(r[0], 0), -r[1].timestamp()),
+        )
+        page = Paginator([pk for pk, _ in rows], PAGE_SIZE).get_page(
+            request.GET.get("page")
+        )
+        found = MediaAsset.objects.select_related("parent").in_bulk(list(page))
+        assets = [found[pk] for pk in page if pk in found]
+    else:
+        ordering = {
+            "name": [Lower("name"), "-pk"],
+            "size": [F("size_bytes").desc(nulls_last=True), "-pk"],
+        }.get(sort, ["-created_at", "-pk"])
+        page = Paginator(
+            qs.select_related("parent").order_by(*ordering), PAGE_SIZE
+        ).get_page(request.GET.get("page"))
+        assets = list(page)
     media_library.sync_from_checks(assets)
-    counts = media_library.usage_counts(account, assets)
-    for asset in assets:
-        asset.used_in = counts.get(asset.pk, 0)  # type: ignore[attr-defined]
+    _decorate(account, assets, all_counts)
+    if sort == "new" and view == "grid":
+        today = timezone.localdate()
+        for asset in assets:
+            asset.group = media_library.date_group(asset.created_at, today)  # type: ignore[attr-defined]
     tags = sorted(
-        {t for tags in qs.values_list("tags", flat=True) for t in (tags or [])}
+        {t for tags in live.values_list("tags", flat=True) for t in (tags or [])}
     )
     return render(
         request,
@@ -62,8 +153,17 @@ def library(request):
         {
             "account": account,
             "page": page,
+            "assets": assets,
             "archived": archived,
-            "kind": kind,
+            "show": show,
+            "show_choices": SHOW_CHOICES,
+            "sort": sort,
+            "sort_choices": SORT_CHOICES,
+            "view": view,
+            "filtered": bool(q or tag or show != "all"),
+            "clear_url": reverse("publishing:media-library"),
+            "remove_rules": REMOVE_RULES,
+            "totals": totals,
             "tag": tag,
             "q": q,
             "tags": tags,
@@ -80,49 +180,123 @@ def library(request):
     )
 
 
-@login_required
-@module_required("content_studio")
-@require_POST
-def asset_update(request, pk):
-    """Tags, name, remove (blocked, archived or deleted), or put an archived one back."""
-    account = _account_or_none(request)
-    if account is None:
-        return redirect("dashboard")
-    asset = get_object_or_404(MediaAsset, pk=pk, account=account)
-    action = request.POST.get("action")
+REMOVE_RULES = (
+    "A file a draft or scheduled post uses stays until that post no longer needs it. "
+    "One only published posts use is archived: hidden here, with the file kept so those "
+    "posts keep working. One no post uses is deleted for good."
+)
+
+
+def _back(request) -> str:
     back = request.POST.get("next", "")
     if not url_has_allowed_host_and_scheme(
         back, allowed_hosts={request.get_host()}, require_https=request.is_secure()
     ):
         back = reverse("publishing:media-library")
+    return back
+
+
+def _remove_message(outcome: str, posts) -> tuple[str, str]:
+    if outcome == "blocked":
+        return "error", (
+            "This file is in a draft, scheduled or publishing post, so it can't be "
+            "removed yet: " + ", ".join(f"post {p.pk}" for p in posts) + "."
+        )
+    if outcome == "archived":
+        return "success", (
+            "Archived: published posts still use this file, so it's kept but "
+            "hidden from the library."
+        )
+    return "success", "Deleted."
+
+
+@login_required
+@module_required("content_studio")
+def asset_update(request, pk):
+    """GET: the file's details (a drawer over the grid). POST: tags and name, remove
+    (blocked, archived or deleted), or put an archived one back."""
+    account = _account_or_none(request)
+    if account is None:
+        return redirect("dashboard")
+    asset = get_object_or_404(MediaAsset, pk=pk, account=account)
+    if request.method != "POST":
+        return _asset_detail(request, account, asset)
+    action = request.POST.get("action")
+    back = _back(request)
+    level, message = "success", "Saved."
     if action == "tags":
         media_library.set_tags(asset, request.POST.get("tags", ""))
         name = " ".join(request.POST.get("name", "").split())[:200]
         if name and name != asset.name:
             asset.name = name
             asset.save(update_fields=["name"])
-        messages.success(request, "Saved.")
     elif action == "remove":
-        outcome, posts = media_library.remove(asset)
-        if outcome == "blocked":
-            messages.error(
-                request,
-                "This file is in a draft, scheduled or publishing post, so it can't be "
-                "removed yet: " + ", ".join(f"post {p.pk}" for p in posts) + ".",
-            )
-        elif outcome == "archived":
-            messages.success(
-                request,
-                "Archived: published posts still use this file, so it's kept but "
-                "hidden from the library.",
-            )
-        else:
-            messages.success(request, "Deleted.")
+        level, message = _remove_message(*media_library.remove(asset))
     elif action == "restore" and asset.archived_at:
         asset.archived_at = None
         asset.save(update_fields=["archived_at"])
-        messages.success(request, "Back in the library.")
-    return redirect(back)
+        message = "Back in the library."
+    return overlay_done(request, message, back, level=level)
+
+
+def _asset_detail(request, account, asset):
+    media_library.sync_from_check(asset)
+    _decorate(account, [asset])
+    used = list(
+        media_library.usage(asset)
+        .order_by("-created_at")
+        .only("pk", "caption", "status", "media_urls", "created_at")[:12]
+    )
+    outcome, blocking = media_library.remove_preview(asset)
+    return overlay_or_page(
+        request,
+        "publishing/_media_detail.html",
+        "publishing/media_detail.html",
+        {
+            "account": account,
+            "asset": asset,
+            "used_posts": used,
+            "remove_outcome": outcome,
+            "remove_blocking": blocking,
+            "remove_rules": REMOVE_RULES,
+            "derived": asset.derived.filter(archived_at__isnull=True)[:8],
+        },
+        kind="drawer",
+        size="xl",
+        title="File",
+    )
+
+
+@login_required
+@module_required("content_studio")
+@require_POST
+def bulk(request):
+    """Tag, remove or put back several files at once (the selection bar)."""
+    account = _account_or_none(request)
+    if account is None:
+        return redirect("dashboard")
+    ids = [int(i) for i in request.POST.getlist("ids") if i.isdigit()]
+    action = request.POST.get("action", "")
+    done = media_library.bulk(account, ids, action, request.POST.get("tags", ""))
+    parts = []
+    for key, words in (
+        ("tagged", "tagged"),
+        ("deleted", "deleted"),
+        ("archived", "archived (published posts use them)"),
+        ("blocked", "kept (a draft or scheduled post uses them)"),
+        ("restored", "back in the library"),
+    ):
+        if done.get(key):
+            n = done[key]
+            parts.append(f"{n} file{'s' if n != 1 else ''} {words}")
+    if parts:
+        level = "warning" if done.get("blocked") else "success"
+        getattr(messages, level)(request, "; ".join(parts).capitalize() + ".")
+    elif action == "tag":
+        messages.error(request, "Type a tag to add.")
+    else:
+        messages.error(request, "Choose some files first.")
+    return redirect(_back(request))
 
 
 @login_required

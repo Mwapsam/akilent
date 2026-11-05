@@ -5,134 +5,195 @@
 {% block content %}
 <div class="cs-head">
   <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
-  <a href="{% url 'publishing:media-snippets' %}" data-overlay-open="drawer" data-overlay-size="lg" class="btn btn-secondary">Caption templates and hashtags</a>
+  <div class="flex items-center gap-2">
+    <a href="{% url 'publishing:media-snippets' %}" data-overlay-open="drawer" data-overlay-size="lg" class="btn btn-secondary btn-icon" title="Caption templates and hashtags" aria-label="Caption templates and hashtags">{% include "components/icon.html" with name="layout-template" class="w-4 h-4" %}</a>
+    <label class="btn btn-primary cursor-pointer" for="ml-file">{% include "components/icon.html" with name="upload" class="w-4 h-4" %}Upload</label>
+  </div>
 </div>
 
 {% include "publishing/_subnav.html" %}
 
 {{ uploader|json_script:"media-library-config" }}
-<div class="space-y-4" x-data="mediaLibrary()">
-  <section class="card card-pad space-y-3" aria-labelledby="ml-upload">
-    <div class="flex flex-wrap items-center justify-between gap-2">
-      <h2 id="ml-upload" class="font-semibold text-ink">Media</h2>
-      <label class="btn btn-primary btn-sm cursor-pointer">
-        <input type="file" class="sr-only" multiple accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime"
-               @change="onFiles($event.target.files); $event.target.value = ''" :disabled="busy">
-        Upload files
-      </label>
-    </div>
-    <p class="text-sm text-ink-subtle">Everything uploaded in Content Studio lands here. A file used by a draft or scheduled post can't be removed; one only published posts use is archived, so those posts keep working.</p>
-    <ul class="space-y-1 text-sm" x-show="uploads.length" x-cloak aria-live="polite">
-      <template x-for="u in uploads">
-        <li class="flex flex-wrap items-center gap-2">
-          <span class="truncate max-w-xs" x-text="u.name"></span>
-          <span class="text-xs text-ink-subtle tabular-nums" x-show="!u.error" x-text="u.done ? 'Done' : u.progress + '%'"></span>
-          <span class="text-xs tone-coral-fg" x-show="u.error" x-text="u.error"></span>
-        </li>
-      </template>
-    </ul>
-  </section>
+{% comment %}
+  mediaLibrary() (static/js/media_library.js): uploads (the button, or files dropped anywhere on
+  the page), the selection and its bar, and stock photos. The filter row swaps #media-results
+  in place and keeps the URL in step (hx-replace-url); without JavaScript its hidden submit
+  sends it as a plain GET. Removing follows one rule, spelled out in the ⓘ and in each confirm.
+{% endcomment %}
+<div x-data="mediaLibrary()" :class="selected.length && 'ml-selecting'"
+     @dragenter.window="dragEnter($event)" @dragover.window="dragOver($event)" @dragleave.window="dragLeave($event)" @drop.window="drop($event)"
+     @htmx:after-swap.window="if ($event.detail.target.id === 'media-results') selected = []">
+  <input id="ml-file" type="file" class="sr-only" multiple accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime"
+         @change="onFiles($event.target.files); $event.target.value = ''" :disabled="busy" tabindex="-1">
 
-  <form method="get" class="flex flex-wrap items-end gap-2" aria-label="Filter media">
-    <div>
-      <label for="ml-q" class="block text-xs text-ink-subtle mb-1">Name</label>
-      <input id="ml-q" name="q" value="{{ q }}" class="input" placeholder="Search">
-    </div>
-    <div>
-      <label for="ml-kind" class="block text-xs text-ink-subtle mb-1">Type</label>
-      <select id="ml-kind" name="kind" class="select select-sm">
-        <option value="">All</option>
-        <option value="image" {% if kind == 'image' %}selected{% endif %}>Pictures</option>
-        <option value="video" {% if kind == 'video' %}selected{% endif %}>Videos</option>
-      </select>
-    </div>
+  <form method="get" action="{% url 'publishing:media-library' %}" class="ml-toolbar" role="search" aria-label="Filter media"
+        hx-get="{% url 'publishing:media-library' %}" hx-target="#media-results" hx-select="#media-results" hx-swap="outerHTML"
+        hx-replace-url="true" hx-trigger="submit, change, input changed delay:300ms from:find input[name=q]">
+    <label class="ml-search">
+      {% include "components/icon.html" with name="search" class="w-4 h-4 shrink-0" %}
+      <span class="sr-only">Search by name or tag</span>
+      <input type="search" name="q" value="{{ q }}" placeholder="Search by name or tag…" autocomplete="off" data-search>
+    </label>
+    <fieldset class="seg">
+      <legend class="sr-only">Show</legend>
+      {% for value, label in show_choices %}
+      <label class="seg-item"><input type="radio" name="show" value="{{ value }}" class="sr-only" {% if value == show %}checked{% endif %}><span>{{ label }}</span></label>
+      {% endfor %}
+    </fieldset>
     {% if tags %}
-    <div>
-      <label for="ml-tag" class="block text-xs text-ink-subtle mb-1">Tag</label>
-      <select id="ml-tag" name="tag" class="select select-sm">
-        <option value="">All</option>
-        {% for t in tags %}<option value="{{ t }}" {% if t == tag %}selected{% endif %}>{{ t }}</option>{% endfor %}
-      </select>
-    </div>
+    <label class="sr-only" for="ml-tag">Tag</label>
+    <select id="ml-tag" name="tag" class="select select-sm w-auto">
+      <option value="">Any tag</option>
+      {% for t in tags %}<option value="{{ t }}" {% if t == tag %}selected{% endif %}>#{{ t }}</option>{% endfor %}
+    </select>
     {% endif %}
-    <label class="flex items-center gap-2 text-sm pb-1"><input type="checkbox" name="archived" value="1" {% if archived %}checked{% endif %}> Archived</label>
-    <button type="submit" class="btn btn-secondary btn-sm">Show</button>
+    <div class="flex items-center gap-2 ml-auto">
+      <label class="sr-only" for="ml-sort">Sort</label>
+      <select id="ml-sort" name="sort" class="select select-sm w-auto">
+        {% for value, label in sort_choices %}<option value="{{ value }}" {% if value == sort %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+      <fieldset class="seg">
+        <legend class="sr-only">View</legend>
+        <label class="seg-item" title="Grid"><input type="radio" name="view" value="grid" class="sr-only" {% if view == 'grid' %}checked{% endif %}>{% include "components/icon.html" with name="dashboard" %}<span class="sr-only">Grid</span></label>
+        <label class="seg-item" title="List"><input type="radio" name="view" value="list" class="sr-only" {% if view == 'list' %}checked{% endif %}>{% include "components/icon.html" with name="list" %}<span class="sr-only">List</span></label>
+      </fieldset>
+    </div>
+    <button type="submit" class="sr-only">Show</button>
   </form>
 
-  {% if page.object_list %}
-  <ul class="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4" aria-label="Media files">
-    {% for a in page %}
-    <li class="card overflow-hidden flex flex-col" data-asset="{{ a.pk }}">
-      {% include "publishing/_media_thumb.html" with url=a.url size="w-full aspect-square !rounded-none" alt=a.name controls=False %}
-      <div class="p-2.5 space-y-1 flex-1 flex flex-col">
-        <p class="text-sm text-ink truncate" title="{{ a.name }}">{{ a.name }}</p>
-        <p class="text-xs text-ink-subtle">
-          {% if a.width %}{{ a.width }}×{{ a.height }}{% endif %}{% if a.duration %} · {{ a.duration|floatformat:1 }} s{% endif %}
-          {% if a.parent_id %} · {{ a.get_source_display }}{% endif %}
-          · <span data-used="{{ a.used_in }}">{% if a.used_in %}in {{ a.used_in }} post{{ a.used_in|pluralize }}{% else %}not used{% endif %}</span>
-        </p>
-        {% if a.credit %}<p class="text-xs text-ink-subtle"><a href="{{ a.credit_url }}" target="_blank" rel="noopener" class="underline">{{ a.credit }}</a></p>{% endif %}
-        {% if a.tags %}<p class="text-xs text-ink-subtle">{% for t in a.tags %}<span class="mr-1">#{{ t }}</span>{% endfor %}</p>{% endif %}
-        <details class="text-xs mt-auto">
-          <summary class="cursor-pointer text-ink-subtle">Details</summary>
-          <form method="post" action="{% url 'publishing:media-update' a.pk %}" class="space-y-1 mt-1" hx-boost="false">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="tags">
-            <input type="hidden" name="next" value="{{ request.get_full_path }}">
-            <label class="sr-only" for="ml-name-{{ a.pk }}">Name</label>
-            <input id="ml-name-{{ a.pk }}" name="name" value="{{ a.name }}" class="input w-full">
-            <label class="sr-only" for="ml-tags-{{ a.pk }}">Tags</label>
-            <input id="ml-tags-{{ a.pk }}" name="tags" value="{{ a.tags|join:', ' }}" class="input w-full" placeholder="Tags, separated by commas">
-            <button type="submit" class="btn btn-ghost btn-sm">Save</button>
-          </form>
-        </details>
-        <div class="flex flex-wrap gap-1 pt-1">
-          {% if not archived %}<a href="{% url 'publishing:media-edit' a.pk %}" data-overlay-open="modal" data-overlay-size="full" class="btn btn-ghost btn-sm">{% if a.kind == 'video' %}Cover{% else %}Edit{% endif %}</a>{% endif %}
-          <form method="post" action="{% url 'publishing:media-update' a.pk %}" hx-boost="false">
-            {% csrf_token %}
-            <input type="hidden" name="next" value="{{ request.get_full_path }}">
-            {% if archived %}
-            <button type="submit" name="action" value="restore" class="btn btn-ghost btn-sm">Put back</button>
-            {% else %}
-            <button type="submit" name="action" value="remove" class="btn btn-ghost btn-sm">Remove</button>
-            {% endif %}
-          </form>
+  {% comment %}Files on their way up: a card each with a ring that fills, then the grid is
+  refreshed in place and they take their place in it.{% endcomment %}
+  <ul class="ml-grid mb-4" x-show="uploads.length" x-cloak aria-label="Uploading" aria-live="polite">
+    <template x-for="u in uploads" :key="u.key">
+      <li class="ml-card">
+        <div class="ml-frame">
+          <img x-show="u.preview" :src="u.preview" alt="" class="ml-img">
+          <div class="ml-ring" x-show="!u.error">
+            <svg viewBox="0 0 48 48" aria-hidden="true"><circle class="ring-bg" cx="24" cy="24" r="20"></circle><circle class="ring-fg" cx="24" cy="24" r="20" stroke-dasharray="125.66" :stroke-dashoffset="125.66 * (1 - u.progress / 100)"></circle></svg>
+            <span class="sr-only" x-text="u.done ? 'Done' : u.progress + '%'"></span>
+          </div>
+          <div class="ml-ring text-sm tone-coral-fg p-3 text-center" x-show="u.error" x-text="u.error"></div>
         </div>
-      </div>
-    </li>
-    {% endfor %}
+        <div class="ml-meta"><p class="ml-name" x-text="u.name"></p></div>
+      </li>
+    </template>
   </ul>
-  {% if page.has_other_pages %}
-  <nav class="flex items-center gap-2 text-sm" aria-label="Pages">
-    {% if page.has_previous %}<a href="{% querystring page=page.previous_page_number %}" class="btn btn-ghost btn-sm">Previous</a>{% endif %}
-    <span class="text-ink-subtle">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
-    {% if page.has_next %}<a href="{% querystring page=page.next_page_number %}" class="btn btn-ghost btn-sm">Next</a>{% endif %}
-  </nav>
-  {% endif %}
-  {% else %}
-  <section class="card card-pad">
-    <p class="text-sm text-ink-subtle" data-media-empty>{% if archived %}Nothing archived.{% elif q or kind or tag %}Nothing matches.{% else %}No media yet. Upload files here, or add them in the composer.{% endif %}</p>
-  </section>
-  {% endif %}
+
+  <div id="media-results">
+    <div class="ml-summary">
+      <span data-media-total>{{ totals.files }} file{{ totals.files|pluralize }}{% if totals.size %} · {{ totals.size|filesizeformat }}{% endif %}</span>
+      <details class="pop">
+        <summary class="ml-info-btn" title="How removing works" aria-label="How removing works">{% include "components/icon.html" with name="info" class="w-4 h-4" %}</summary>
+        <div class="pop-panel pop-panel--start pop-panel--sheet w-80 p-3 text-sm text-ink-muted">{{ remove_rules }}</div>
+      </details>
+      {% if filtered %}<span aria-hidden="true">·</span><span>{{ page.paginator.count }} shown</span><a href="{% url 'publishing:media-library' %}" class="ml-link">Clear filters</a>{% endif %}
+    </div>
+
+    {% if assets %}
+    {% if view == "list" %}
+    <div class="card overflow-x-auto">
+      <table class="ml-table" aria-label="Media files">
+        <thead><tr><th class="w-10"><span class="sr-only">Select</span></th><th>File</th><th>Type</th><th class="ml-col-sm">Size</th><th>Used</th><th class="ml-col-md">Added</th></tr></thead>
+        <tbody>
+          {% for a in assets %}
+          <tr data-asset="{{ a.pk }}" data-row :class="selected.includes({{ a.pk }}) && 'bg-surface-muted'">
+            <td><input type="checkbox" value="{{ a.pk }}" :checked="selected.includes({{ a.pk }})" @click="toggle($event, {{ a.pk }})" aria-label="Select {{ a.display }}" class="w-4 h-4"></td>
+            <td>
+              <a href="{% url 'publishing:media-detail' a.pk %}" data-overlay-open="drawer" data-overlay-size="xl" data-overlay-title="File" class="ml-row-link">
+                <span class="ml-thumb">{% if a.kind == "video" %}<video src="{{ a.url }}#t=0.1" preload="metadata" muted playsinline class="ml-img" aria-hidden="true"></video>{% else %}<img src="{{ a.url }}" alt="" loading="lazy" decoding="async" class="ml-img" onerror="this.hidden=true">{% endif %}</span>
+                <span class="min-w-0"><span class="block truncate font-medium" title="{{ a.name }}">{{ a.display }}</span>{% if a.duplicate_of %}<span class="ml-dup block" data-duplicate-of="{{ a.duplicate_of.pk }}">Looks like {{ a.duplicate_of.name }}</span>{% endif %}</span>
+              </a>
+            </td>
+            <td class="text-ink-subtle">{{ a.badge }}</td>
+            <td class="ml-col-sm text-ink-subtle tabular-nums">{% if a.size_bytes %}{{ a.size_bytes|filesizeformat }}{% else %}—{% endif %}</td>
+            <td><span class="ml-used{% if not a.used_in %} is-unused{% endif %}" data-used="{{ a.used_in }}">{% if a.used_in %}{{ a.used_in }} post{{ a.used_in|pluralize }}{% else %}Unused{% endif %}</span></td>
+            <td class="ml-col-md text-ink-subtle">{{ a.created_at|date:"j M Y" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <ul class="ml-grid" aria-label="Media files">
+      {% for a in assets %}
+      {% if a.group %}{% ifchanged a.group %}<li class="ml-group" role="presentation"><h2>{{ a.group }}</h2></li>{% endifchanged %}{% endif %}
+      {% include "publishing/_media_card.html" %}
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if page.has_other_pages %}
+    <nav class="flex items-center justify-center gap-2 text-sm mt-6" aria-label="Pages">
+      {% if page.has_previous %}<a href="{% querystring page=page.previous_page_number %}" class="btn btn-ghost btn-sm">Previous</a>{% endif %}
+      <span class="text-ink-subtle">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+      {% if page.has_next %}<a href="{% querystring page=page.next_page_number %}" class="btn btn-ghost btn-sm">Next</a>{% endif %}
+    </nav>
+    {% endif %}
+    {% elif filtered %}
+    <div class="card card-pad" data-media-empty>
+      {% if archived %}
+      {% include "components/empty_state.html" with icon="image" title="Nothing archived" message="A file only published posts use is archived when you remove it, and shows here." %}
+      {% else %}
+      {% include "components/empty_state.html" with icon="search" title="Nothing matches" message="Try other words, or clear the filters." action_url=clear_url action_label="Clear filters" %}
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="card card-pad" data-media-empty>
+      <div class="empty-state">
+        <span class="empty-state-icon">{% include "components/icon.html" with name="image" class="w-6 h-6" %}</span>
+        <p class="empty-state-title">Your media library is empty</p>
+        <p class="empty-state-message">Upload pictures and videos, or drag files anywhere on this page. Files added in the composer land here too.</p>
+        <label for="ml-file" class="btn btn-primary btn-sm mt-4 cursor-pointer">Upload files</label>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {% comment %}The selection bar: ticked files (shift-click ticks a range), then one action for all
+  of them. Esc or ✕ clears the selection.{% endcomment %}
+  <form method="post" action="{% url 'publishing:media-bulk' %}" class="ml-bulkbar" x-show="selected.length" x-cloak
+        x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0 translate-y-2"
+        @keydown.escape.window="selected = []" aria-label="Selected files">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <template x-for="id in selected" :key="id"><input type="hidden" name="ids" :value="id"></template>
+    <span class="text-sm font-medium tabular-nums" x-text="selected.length + ' selected'" aria-live="polite"></span>
+    <label class="sr-only" for="ml-bulk-tags">Tags to add</label>
+    <input id="ml-bulk-tags" name="tags" class="input" placeholder="Add a tag">
+    <button type="submit" name="action" value="tag" class="ml-bulk-btn">Tag</button>
+    {% if archived %}
+    <button type="submit" name="action" value="restore" class="ml-bulk-btn">Put back</button>
+    {% else %}
+    <button type="submit" name="action" value="remove" class="ml-bulk-btn ml-bulk-btn--danger" data-confirm-danger data-confirm-label="Remove"
+      data-confirm="Remove the selected files? {{ remove_rules }}">Remove</button>
+    {% endif %}
+    <button type="button" class="ml-bulk-btn" @click="selected = []" aria-label="Clear the selection">{% include "components/icon.html" with name="x" class="w-4 h-4" %}</button>
+  </form>
+
+  <div class="ml-drop" x-show="dragging" x-cloak aria-hidden="true">
+    <div>{% include "components/icon.html" with name="upload" class="w-8 h-8 text-accent" %}Drop to upload</div>
+  </div>
 
   {% if stock %}
-  <section class="card card-pad space-y-3" aria-labelledby="ml-stock">
+  <section class="card card-pad space-y-3 mt-8" aria-labelledby="ml-stock">
     <div class="flex flex-wrap items-baseline justify-between gap-2">
       <h2 id="ml-stock" class="font-semibold text-ink">Stock photos</h2>
-      <a href="https://www.pexels.com" target="_blank" rel="noopener" class="text-xs underline">Photos provided by Pexels</a>
+      <a href="https://www.pexels.com" target="_blank" rel="noopener" class="text-xs text-ink-subtle hover:text-ink">Photos provided by Pexels</a>
     </div>
     <form class="flex flex-wrap gap-2" @submit.prevent="searchStock()">
-      <label class="sr-only" for="ml-stock-q">Search stock photos</label>
-      <input id="ml-stock-q" class="input flex-1 min-w-0" x-model="stockQuery" placeholder="e.g. summer sandals">
+      <label class="ml-search max-w-none flex-1">
+        {% include "components/icon.html" with name="search" class="w-4 h-4 shrink-0" %}
+        <span class="sr-only">Search stock photos</span>
+        <input id="ml-stock-q" type="search" x-model="stockQuery" placeholder="e.g. summer sandals">
+      </label>
       <button type="submit" class="btn btn-secondary btn-sm" :disabled="stockLoading || !stockQuery">Search</button>
     </form>
     <p class="text-xs tone-coral-fg" role="alert" x-show="stockError" x-text="stockError"></p>
-    <ul class="grid gap-2 grid-cols-2 sm:grid-cols-4" x-show="stockPhotos.length" x-cloak>
+    <ul class="ml-grid" x-show="stockPhotos.length" x-cloak>
       <template x-for="p in stockPhotos" :key="p.id">
-        <li class="space-y-1">
-          <img :src="p.thumb" :alt="p.alt" class="w-full aspect-square object-cover rounded-lg" loading="lazy">
-          <p class="text-xs text-ink-subtle truncate">Photo by <a :href="p.photographer_url" target="_blank" rel="noopener" class="underline" x-text="p.photographer"></a> on <a :href="p.page_url" target="_blank" rel="noopener" class="underline">Pexels</a></p>
-          <button type="button" class="btn btn-ghost btn-sm" @click="addStock(p)" :disabled="adding !== null" x-text="adding === p.id ? 'Adding…' : 'Add to library'"></button>
+        <li class="ml-card">
+          <div class="ml-frame"><div class="ml-wash" :style="'background-image: url(' + p.thumb + ')'" aria-hidden="true"></div><img :src="p.thumb" :alt="p.alt" class="ml-img" loading="lazy"></div>
+          <p class="text-xs text-ink-subtle truncate mt-2">Photo by <a :href="p.photographer_url" target="_blank" rel="noopener" class="hover:text-ink" x-text="p.photographer"></a> on <a :href="p.page_url" target="_blank" rel="noopener" class="hover:text-ink">Pexels</a></p>
+          <button type="button" class="btn btn-ghost btn-sm mt-1" @click="addStock(p)" :disabled="adding !== null" x-text="adding === p.id ? 'Adding…' : 'Add to library'"></button>
         </li>
       </template>
     </ul>

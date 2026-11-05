@@ -1430,6 +1430,7 @@
       if (!history.state) { history.replaceState({ htmx: true }, "", overlay.base); overlay.baseState = history.state; }
       history.pushState(state, "", url);
       overlay.pushed = true;
+      overlay.depth = (overlay.depth || 0) + 1; // entries to go back to close it
     }
     else if (opts.history === "replace") history.replaceState(state, "", url);
     overlayPageview(url);
@@ -1442,6 +1443,7 @@
     const body = overlayBody();
     overlay.open = false;
     overlay.pushed = false;
+    overlay.depth = 0;
     htmx.trigger(body, "htmx:abort");
     host.classList.remove("is-open");
     document.documentElement.style.overflow = "";
@@ -1453,7 +1455,7 @@
   // (popstate, below, then hides it), or just hide it if it never pushed one.
   function closeOverlay() {
     if (!overlay.open) return;
-    if (overlay.pushed && history.state && history.state.akOverlay) history.back();
+    if (overlay.pushed && history.state && history.state.akOverlay) history.go(-Math.max(1, overlay.depth || 1));
     else hideOverlay();
   }
   function stepOverlay(delta) {
@@ -1481,7 +1483,17 @@
     if (overlay.open && t.closest("#overlay-host [data-overlay-prev]")) { stepOverlay(-1); return; }
     if (overlay.open && t.closest("#overlay-host [data-overlay-next]")) { stepOverlay(1); return; }
     const link = t.closest("a[data-overlay-open][href]");
-    if (!link || link.closest("#overlay-host")) return;
+    if (!link) return;
+    // One inside the open overlay (a file's "Used in" posts, its edit) loads in its place, as a
+    // new history entry: Back returns to what was there. The grid's J/K order no longer applies.
+    if (link.closest("#overlay-host")) {
+      if (!overlay.open) return;
+      e.preventDefault();
+      overlay.rows = [];
+      overlay.index = -1;
+      openOverlay(link.getAttribute("href"), { history: overlay.pushed ? "push" : "none" });
+      return;
+    }
     // Captured before htmx's boost sees the click, so the page underneath stays.
     e.preventDefault();
     e.stopPropagation();
@@ -1495,8 +1507,47 @@
     if (!akDialog.isTop(overlayHost())) return;
     const t = e.target;
     if (t && (t.isContentEditable || (t.matches && t.matches("input, textarea, select")))) return;
-    if (e.key === "j" || e.key === "J") { e.preventDefault(); stepOverlay(1); }
-    else if (e.key === "k" || e.key === "K") { e.preventDefault(); stepOverlay(-1); }
+    // ← → too where the content is a picture to step through (the media details).
+    const arrows = !!overlayBody().querySelector("[data-overlay-arrows]");
+    if (e.key === "j" || e.key === "J" || (arrows && e.key === "ArrowRight")) { e.preventDefault(); stepOverlay(1); }
+    else if (e.key === "k" || e.key === "K" || (arrows && e.key === "ArrowLeft")) { e.preventDefault(); stepOverlay(-1); }
+  });
+
+  // Page shortcuts (Content Studio app feel, Phase 5), never while typing or with a dialog
+  // open: N a new post (Content Studio pages), / the page's search ([data-search]), J/K the
+  // next and previous row ([data-row]; Enter then opens it, as any link), ? lists them in the
+  // command palette.
+  function modalOpen() {
+    return Array.prototype.some.call(document.querySelectorAll('[role="dialog"][aria-modal="true"], [data-dialog-panel]'),
+      function (d) { return d.offsetParent !== null || d.getClientRects().length > 0; });
+  }
+  document.addEventListener("keydown", function (e) {
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || overlay.open) return;
+    const t = e.target;
+    if (t && (t.isContentEditable || (t.matches && t.matches("input, textarea, select")))) return;
+    if (modalOpen()) return;
+    if (e.key === "?") {
+      e.preventDefault();
+      window.dispatchEvent(new CustomEvent("palette-open", { detail: { shortcuts: true } }));
+    } else if (e.key === "/") {
+      const search = document.querySelector("#main [data-search]");
+      if (!search || !shown(search)) return;
+      e.preventDefault();
+      search.focus();
+      if (search.select) search.select();
+    } else if ((e.key === "n" || e.key === "N") && location.pathname.indexOf("/publishing/") === 0
+               && location.pathname !== "/publishing/new/") {
+      e.preventDefault();
+      akilent.navigate("/publishing/new/");
+    } else if (e.key === "j" || e.key === "k") {
+      const rows = Array.prototype.filter.call(document.querySelectorAll("#main [data-row]"), shown);
+      if (!rows.length) return;
+      e.preventDefault();
+      const at = rows.findIndex(function (r) { return r.contains(document.activeElement); });
+      const next = rows[Math.min(rows.length - 1, Math.max(0, at === -1 ? 0 : at + (e.key === "j" ? 1 : -1)))];
+      const target = next.matches("a[href], button") ? next : next.querySelector("a[href], button, input");
+      if (target) { target.focus({ preventScroll: true }); next.scrollIntoView({ block: "nearest" }); }
+    }
   });
 
   // Back and Forward. Capture phase, ahead of htmx's window.onpopstate: landing back on the
@@ -1504,7 +1555,16 @@
   window.addEventListener("popstate", function (e) {
     const state = e.state;
     if (overlay.open) {
-      if (state && state.akOverlay && state.base === overlay.base) return; // still inside
+      if (state && state.akOverlay && state.base === overlay.base) {
+        // Still inside: Back from something opened within the overlay shows what was before.
+        if (state.akOverlay !== overlay.url) {
+          overlay.depth = Math.max(1, (overlay.depth || 1) - 1);
+          overlay.url = state.akOverlay;
+          syncOverlayStep();
+          loadOverlay(state.akOverlay);
+        }
+        return;
+      }
       hideOverlay();
       if (location.href === overlay.base) e.stopImmediatePropagation();
       return;

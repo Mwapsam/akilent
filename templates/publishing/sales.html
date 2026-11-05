@@ -14,19 +14,20 @@
       <h2 class="text-lg font-semibold text-ink">Which posts sold</h2>
       <p class="text-sm text-ink-subtle">Chats, leads, orders and paid revenue credited to each post. Only chats that came through a post's chat link or a reply to its comments count, so these are the least each post brought in.</p>
     </div>
-    <form method="get" class="flex items-center gap-2" x-data="{ busy: false }" @submit="busy = true">
-      <label class="sr-only" for="sales-period">Period</label>
-      <select id="sales-period" name="period" class="select" onchange="this.form.requestSubmit()" :disabled="busy">
+    <form method="get" class="flex items-center gap-2" x-data="{ busy: false }" @submit="busy = true" @change="$el.requestSubmit()">
+      <fieldset class="seg" :disabled="busy">
+        <legend class="sr-only">Period</legend>
         {% for choice in periods %}
-        <option value="{{ choice }}" {% if choice == days %}selected{% endif %}>Last {{ choice }} days{% if choice == 90 and period_locked %} (upgrade){% endif %}</option>
+        <label class="seg-item"{% if choice == 90 and period_locked %} title="On higher plans"{% endif %}><input type="radio" name="period" value="{{ choice }}" class="sr-only" {% if choice == days %}checked{% endif %}><span>{{ choice }} days{% if choice == 90 and period_locked %} ·  upgrade{% endif %}</span></label>
         {% endfor %}
-      </select>
+      </fieldset>
+      <noscript><button type="submit" class="btn btn-secondary btn-sm">Show</button></noscript>
     </form>
   </header>
 
   {% if period_locked %}
   <div class="alert alert-info" role="status">
-    <span>The 90-day view is available on higher plans. Showing the last 30 days. <a href="{% url 'billing:plans' %}" class="underline">Upgrade</a></span>
+    <span>The 90-day view is available on higher plans. Showing the last 30 days. <a href="{% url 'billing:plans' %}" class="cs-link">Upgrade</a></span>
   </div>
   {% endif %}
 
@@ -85,7 +86,7 @@
       {% endif %}
       {% endwith %}
     </dl>
-    <p class="text-xs text-ink-subtle"><a href="{% url 'help-article' 'post-results' %}" data-overlay-open="modal" data-overlay-size="lg" class="underline">How posts are credited</a></p>
+    <p class="text-xs text-ink-subtle"><a href="{% url 'help-article' 'post-results' %}" data-overlay-open="modal" data-overlay-size="lg" class="cs-link">How posts are credited</a></p>
   </section>
   {% endif %}
 </div>

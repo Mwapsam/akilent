@@ -4,15 +4,15 @@
          @drop.prevent="onDropFiles($event)">
   <div class="cmp-section-head flex-wrap">
     <h2 id="media-title" class="cmp-section-title">Media</h2>
-    <div class="flex items-center gap-2">
-      <label for="media-type" class="cmp-hint">Format</label>
-      <select id="media-type" name="media_type" class="input !py-1.5" x-model="mediaType" @change="touched()">
-        {% for value, label in media_types %}
-        <option value="{{ value }}">{{ label }}</option>
-        {% endfor %}
-      </select>
-    </div>
   </div>
+  {% comment %}The format as a segmented control (static/css/controls.css): six side by side, three
+  to a row on a phone. id="media-type" is where a readiness problem with the format sends focus.{% endcomment %}
+  <fieldset id="media-type" tabindex="-1" class="seg seg-block mb-3" data-cols="3">
+    <legend class="sr-only">Format</legend>
+    {% for value, label in media_types %}
+    <label class="seg-item" title="{{ label }}"><input type="radio" name="media_type" value="{{ value }}" class="sr-only" data-label="{{ label }}" x-model="mediaType" @change="touched()"><span>{{ label|cut:" (Facebook only)" }}</span></label>
+    {% endfor %}
+  </fieldset>
   <input type="hidden" name="media_urls_json" :value="JSON.stringify(mediaUrls())">
 
   <p class="cmp-hint mb-3" x-text="mediaHint()"></p>
@@ -47,8 +47,8 @@
         <div class="cmp-tile-state" x-show="item.status === 'error'" role="alert">
           <span x-text="item.error"></span>
           <span class="flex gap-2">
-            <button type="button" class="underline" x-show="item.file" @click="retryUpload(item)">Retry</button>
-            <button type="button" class="underline" @click="removeMedia(i)">Remove</button>
+            <button type="button" class="cs-link" x-show="item.file" @click="retryUpload(item)">Retry</button>
+            <button type="button" class="cs-link" @click="removeMedia(i)">Remove</button>
           </span>
         </div>
 
@@ -76,7 +76,7 @@
            @change="onFiles($event.target.files); $event.target.value = ''">
     <svg class="w-7 h-7 text-ink-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
     <span class="text-sm text-ink-muted">Drag files here or
-      <label for="media-file-input" id="media-add" tabindex="0" class="text-accent underline cursor-pointer"
+      <label for="media-file-input" id="media-add" tabindex="0" class="text-accent cs-link cursor-pointer"
              @keydown.enter.prevent="$el.click()" @keydown.space.prevent="$el.click()">browse</label></span>
     <span class="cmp-hint">JPEG, PNG, WebP, GIF or MP4, up to 100 MB each. Images open in the cropper first.</span>
   </div>

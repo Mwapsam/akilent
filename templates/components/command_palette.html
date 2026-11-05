@@ -102,6 +102,15 @@ Open programmatically with: window.dispatchEvent(new CustomEvent('palette-open')
         { group: "Action", label: "New template", href: "/email/templates/create/" },
         {% elif WHATSAPP_ENABLED %}{ group: "Action", label: "New campaign", href: "/whatsapp/campaigns/new/" },{% endif %}
         { group: "Action", label: "Invite teammate", href: "{% url 'settings-team' %}" },
+        // The page shortcuts (static/js/app.js); "?" opens the palette on these. No href: choosing
+        // one just closes the palette.
+        { group: "Shortcut", label: "N  New post (in Content Studio)", href: "" },
+        { group: "Shortcut", label: "/  Search on this page", href: "" },
+        { group: "Shortcut", label: "J / K  Next or previous row", href: "" },
+        { group: "Shortcut", label: "Enter  Open the row", href: "" },
+        { group: "Shortcut", label: "← →  Previous or next file, in a file's details", href: "" },
+        { group: "Shortcut", label: "Esc  Close a drawer or dialog", href: "" },
+        { group: "Shortcut", label: "Ctrl K or ⌘K  This list of pages and actions", href: "" },
       ],
       get filtered() {
         const q = this.q.trim().toLowerCase();
@@ -117,7 +126,8 @@ Open programmatically with: window.dispatchEvent(new CustomEvent('palette-open')
       },
       openPalette(e) {
         this.trigger = e && e.target; // Save the element that triggered open
-        this.open = true; this.q = ""; this.active = 0;
+        this.open = true; this.active = 0;
+        this.q = e && e.detail && e.detail.shortcuts ? "Shortcut" : "";
         this.$nextTick(() => this.$refs.input && this.$refs.input.focus());
       },
       close() {
@@ -136,6 +146,7 @@ Open programmatically with: window.dispatchEvent(new CustomEvent('palette-open')
       },
       // In place when the shell can (static/js/app.js), a normal page load otherwise.
       go(href) {
+        if (!href) { this.close(); return; }
         this.open = false;
         this.trigger = null;
         if (window.akilent && window.akilent.navigate) window.akilent.navigate(href);

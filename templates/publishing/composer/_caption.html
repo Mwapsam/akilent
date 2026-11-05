@@ -21,7 +21,7 @@
     </div>
     {% comment %}Opens over the composer, which is never refreshed under it (unsaved work), so a
     template added there shows in these lists the next time the composer opens.{% endcomment %}
-    <a href="{% url 'publishing:media-snippets' %}" data-overlay-open="drawer" data-overlay-size="lg" class="text-xs text-ink-subtle hover:text-ink underline">Manage templates</a>
+    <a href="{% url 'publishing:media-snippets' %}" data-overlay-open="drawer" data-overlay-size="lg" class="text-xs text-ink-subtle hover:text-ink cs-link">Manage templates</a>
     {% endif %}
   </div>
 
@@ -59,7 +59,7 @@
                     :placeholder="'Your ' + platformName(p) + ' version. Leave it empty to use the shared caption.'"></textarea>
           <div class="flex flex-wrap items-center justify-between gap-2 mt-2">
             <p class="cmp-hint">Only <span x-text="platformName(p)"></span> uses this version.</p>
-            <button type="button" class="text-xs font-medium text-ink-muted hover:text-ink underline" @click="resetOverride(p)">
+            <button type="button" class="text-xs font-medium text-ink-muted hover:text-ink cs-link" @click="resetOverride(p)">
               Use the shared caption again
             </button>
           </div>
@@ -81,7 +81,7 @@
 
   <div class="tone-info rounded-xl px-3 py-2 mt-3 text-xs flex items-center justify-between gap-3" x-show="undo" x-cloak role="status">
     <span x-text="undo ? undo.message : ''"></span>
-    <button type="button" class="underline font-medium" @click="undoLast()">Undo</button>
+    <button type="button" class="cs-link font-medium" @click="undoLast()">Undo</button>
   </div>
 
   {% comment %}
@@ -143,7 +143,7 @@
         <button type="button" class="text-xs rounded-full border border-border px-2 py-0.5 hover:bg-surface"
                 @click="addSuggestedTag(tag)" :aria-label="'Add hashtag ' + tag" x-text="'#' + tag"></button>
       </template>
-      <button type="button" class="text-xs underline text-ink-subtle" @click="aiTool.tags = []">Dismiss</button>
+      <button type="button" class="text-xs cs-link text-ink-subtle" @click="aiTool.tags = []">Dismiss</button>
     </div>
     <p class="cmp-meter" x-show="selectedPlatforms.includes('instagram') && hashtags().length" x-cloak>
       <span :class="hashtags().length > limits.hashtags_max.instagram ? 'is-over' : ''"

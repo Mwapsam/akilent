@@ -40,6 +40,7 @@ from .models import (
     ContentPost,
     ContentPostVariant,
     FacebookPageConnection,
+    MediaAsset,
     PublishingSettings,
 )
 from .providers.facebook import (
@@ -1846,6 +1847,18 @@ def post_new(request):
         existing_post.status in AUTOSAVE_STATUSES and not existing_post.caption
     )
     plan_item = existing_post.plan_item if existing_post else None
+    # "Use in post" from the media library (?media=<file>): a new post starting with it.
+    library_file = None
+    if existing_post is None and request.GET.get("media", "").isdigit():
+        library_file = MediaAsset.objects.filter(
+            account=account, pk=int(request.GET["media"]), archived_at__isnull=True
+        ).first()
+    start_media = [library_file.url] if library_file else []
+    start_type = (
+        ContentPost.MediaType.VIDEO
+        if library_file and library_file.kind == "video"
+        else ContentPost.MediaType.IMAGE
+    )
     return render(
         request,
         "publishing/post_new.html",
@@ -1896,13 +1909,13 @@ def post_new(request):
                 "platform_captions": existing_post.platform_captions
                 if existing_post
                 else {},
-                "media_urls": existing_post.media_urls if existing_post else [],
+                "media_urls": existing_post.media_urls
+                if existing_post
+                else start_media,
                 "platforms": existing_post.platforms
                 if existing_post
                 else ["instagram"],
-                "media_type": existing_post.media_type
-                if existing_post
-                else ContentPost.MediaType.IMAGE,
+                "media_type": existing_post.media_type if existing_post else start_type,
                 "scheduled_at": initial_scheduled.strftime("%Y-%m-%dT%H:%M")
                 if initial_scheduled
                 else "",

@@ -13,7 +13,7 @@ a post is already credited. Three states, never blurred:
   <p class="text-ink-subtle mb-1">Where this came from</p>
   {% if att.credits_post %}
   <p class="font-medium text-ink">From a post:
-    <a href="{% url 'publishing:post-detail' att.source_post_id %}" class="underline">{{ att.source_post.caption|truncatechars:60|default:"(no caption)" }}</a>
+    <a href="{% url 'publishing:post-detail' att.source_post_id %}" class="cs-link">{{ att.source_post.caption|truncatechars:60|default:"(no caption)" }}</a>
   </p>
   <p class="text-xs text-ink-subtle">
     {% if att.source_variant %}{{ att.source_variant.get_platform_display }} · {% endif %}{% if att.entry_point.kind == 'tracked_link' %}{% if att.entry_point.bio_tile_id %}the customer used the post's tile on your bio page · {% else %}the customer used the post's WhatsApp link · {% endif %}{% elif att.entry_point %}a reply to their comment on the post · {% else %}the chat started from the post · {% endif %}{% if att.source_campaign %}{{ att.source_campaign.name }} · {% endif %}made from this chat{% if att.workflow_run_id %} by an automation{% endif %}
@@ -23,7 +23,7 @@ a post is already credited. Three states, never blurred:
   {% endif %}{% endwith %}
   {% elif att.is_guess %}
   <p class="font-medium text-ink">Linked to a recent chat (a guess)</p>
-  <p class="text-xs text-ink-subtle">No chat was chosen, so Akilent linked the customer's latest chat{% if att.conversation %} (<a href="{% url 'conversations:detail' att.conversation.public_id %}" class="underline">view it</a>){% endif %}. Because it's a guess, no post is credited with this.</p>
+  <p class="text-xs text-ink-subtle">No chat was chosen, so Akilent linked the customer's latest chat{% if att.conversation %} (<a href="{% url 'conversations:detail' att.conversation.public_id %}" class="cs-link">view it</a>){% endif %}. Because it's a guess, no post is credited with this.</p>
   {% elif att %}
   <p class="font-medium text-ink">From a chat, not from a tracked post</p>
   <p class="text-xs text-ink-subtle">It was made from a chat, but the customer didn't arrive through a post's chat link or a comment reply.</p>

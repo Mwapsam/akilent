@@ -47,7 +47,7 @@
               @click="navigator.clipboard.writeText('{{ page_url|escapejs }}'); copied = true; setTimeout(() => copied = false, 2000)">
         <span x-show="!copied">Copy</span><span x-show="copied" x-cloak>Copied</span>
       </button>
-      <a href="{{ page_url }}" target="_blank" rel="noopener" class="text-sm underline">View</a>
+      <a href="{{ page_url }}" target="_blank" rel="noopener" class="text-sm cs-link">View</a>
     </div>
     {% if not page.is_active %}
     <p class="text-sm tone-amber-fg">The page is turned off. Its buttons still work for anyone who already has them.</p>
@@ -77,7 +77,7 @@
     <div class="flex flex-wrap items-center gap-2 py-2{% if not forloop.first %} border-t border-border{% endif %}">
       <div class="flex-1 min-w-0">
         <p class="text-sm text-ink truncate">{% if tile.pinned %}<span class="text-xs tone-teal-fg mr-1">Pinned</span>{% endif %}{{ tile.label }}</p>
-        <p class="text-xs text-ink-subtle"><a href="{% url 'publishing:post-detail' tile.link.post_id %}" class="underline">Open post</a> · added {{ tile.created_at|date:"j M" }}</p>
+        <p class="text-xs text-ink-subtle"><a href="{% url 'publishing:post-detail' tile.link.post_id %}" class="cs-link">Open post</a> · added {{ tile.created_at|date:"j M" }}</p>
         <p class="text-xs text-ink-subtle" data-tile-stats="{{ tile.pk }}">{{ tile.stats.clicks }} click{{ tile.stats.clicks|pluralize }} · {{ tile.stats.chats }} chat{{ tile.stats.chats|pluralize }} in {{ stats_days }} days</p>
       </div>
       <form method="post" action="{% url 'publishing:bio-tile-update' tile.pk %}" class="flex gap-1" hx-boost="false">
@@ -140,7 +140,7 @@
       </fieldset>
       <fieldset class="space-y-2" x-data="{ custom: {% if page.background_color or page.button_color %}true{% else %}false{% endif %} }">
         <legend class="block text-sm font-medium text-ink mb-1">Colours</legend>
-        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="custom_colors" x-model="custom"> Use my own colours</label>
+        <label class="switch-row text-sm"><input type="checkbox" role="switch" class="switch" name="custom_colors" x-model="custom"> Use my own colours</label>
         <div class="grid grid-cols-2 gap-3" x-show="custom" x-cloak>
           <div>
             <label for="bio-bg" class="block text-sm text-ink mb-1">Background</label>

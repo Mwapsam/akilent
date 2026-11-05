@@ -7,7 +7,7 @@ stylesheet for Cropper comes with the content, and a save closes it over the gri
   {% if in_overlay %}
   {% if asset.kind == "image" %}<link rel="stylesheet" href="{% static 'css/cropper.min.css' %}">{% endif %}
   {% else %}
-  <p class="text-sm"><a href="{% url 'publishing:media-library' %}" class="underline">Back to media</a></p>
+  <p class="text-sm"><a href="{% url 'publishing:media-library' %}" class="cs-link">Back to media</a></p>
   {% endif %}
 
   {% if asset.kind == "image" %}

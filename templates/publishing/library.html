@@ -21,7 +21,7 @@
   <div class="flex flex-wrap gap-3 items-end">
     <div class="flex-1 min-w-[11rem]">
       <label class="block text-xs font-medium text-ink-subtle mb-1" for="library-q">Search</label>
-      <input type="text" id="library-q" name="q" value="{{ q }}" placeholder="Search captions…" class="input w-full py-1">
+      <input type="text" id="library-q" name="q" data-search value="{{ q }}" placeholder="Search captions…" class="input w-full py-1">
     </div>
     <button type="button" class="btn btn-ghost text-sm py-1 sm:hidden" @click="more = !more" :aria-expanded="more" aria-controls="library-more-filters">
       Filters{% if status_filter or bucket_filter or platform_filter or media_type_filter or date_from or date_to %} <span class="inline-block w-2 h-2 rounded-full bg-brand-500" aria-label="(active)"></span>{% endif %}
@@ -62,13 +62,43 @@
         {% endfor %}
       </select>
     </div>
-    <div>
-      <label class="block text-xs font-medium text-ink-subtle mb-1" for="library-from">From</label>
-      <input type="date" name="date_from" id="library-from" value="{{ date_from }}" class="input w-full sm:w-auto py-1">
-    </div>
-    <div>
-      <label class="block text-xs font-medium text-ink-subtle mb-1" for="library-to">To</label>
-      <input type="date" name="date_to" id="library-to" value="{{ date_to }}" class="input w-full sm:w-auto py-1">
+    {% comment %}Dates as one popover (a sheet on phones): presets that fill both dates and show the
+    posts at once, and the two native date fields for anything else.{% endcomment %}
+    <div class="col-span-2">
+      <span class="block text-xs font-medium text-ink-subtle mb-1" id="library-dates-label">Dates</span>
+      <details class="pop" x-data="{ from: '{{ date_from|escapejs }}', to: '{{ date_to|escapejs }}',
+          day(d) { return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); },
+          last(days) { const t = new Date(); const f = new Date(t); f.setDate(t.getDate() - days + 1); this.pick(this.day(f), this.day(t)); },
+          month() { const t = new Date(); this.pick(this.day(new Date(t.getFullYear(), t.getMonth(), 1)), this.day(t)); },
+          pick(f, t) { this.from = f; this.to = t; this.$nextTick(() => this.$el.closest('form').requestSubmit()); } }">
+        <summary class="input w-full sm:w-auto py-1 flex items-center gap-2 cursor-pointer" aria-labelledby="library-dates-label library-dates-value">
+          {% include "components/icon.html" with name="clock" class="w-4 h-4 text-ink-subtle" %}
+          <span id="library-dates-value">{% if date_from or date_to %}{{ date_from|default:"…" }} – {{ date_to|default:"…" }}{% else %}Any time{% endif %}</span>
+          {% include "components/icon.html" with name="chevron-down" class="w-4 h-4 text-ink-subtle" %}
+        </summary>
+        <div class="pop-panel pop-panel--start pop-panel--sheet w-72 space-y-3 p-3">
+          <div class="grid grid-cols-2 gap-1">
+            <button type="button" class="pop-item" @click="last(7)">Last 7 days</button>
+            <button type="button" class="pop-item" @click="last(30)">Last 30 days</button>
+            <button type="button" class="pop-item" @click="last(90)">Last 90 days</button>
+            <button type="button" class="pop-item" @click="month()">This month</button>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs font-medium text-ink-subtle mb-1" for="library-from">From</label>
+              <input type="date" name="date_from" id="library-from" value="{{ date_from }}" x-model="from" class="input w-full py-1">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-ink-subtle mb-1" for="library-to">To</label>
+              <input type="date" name="date_to" id="library-to" value="{{ date_to }}" x-model="to" class="input w-full py-1">
+            </div>
+          </div>
+          <div class="flex justify-between gap-2">
+            <button type="button" class="btn btn-ghost btn-sm" @click="pick('', '')">Any time</button>
+            <button type="submit" class="btn btn-primary btn-sm">Show</button>
+          </div>
+        </div>
+      </details>
     </div>
     </div>
     <button type="submit" class="btn btn-ghost text-sm py-1">Filter</button>
@@ -117,7 +147,7 @@ page before anything is selected.{% endcomment %}
       </thead>
       <tbody>
         {% for post in page_obj %}
-        <tr class="border-b border-surface-subtle hover:bg-surface-subtle" data-row>
+        <tr class="cs-row" data-row>
           <td class="pl-3 pr-1 sm:px-3 py-2 text-center">
             <input type="checkbox" name="post_ids" value="{{ post.pk }}" class="rounded post-checkbox"
                    aria-label="Select post {{ post.caption|truncatechars:30|default:'(no caption)' }}">

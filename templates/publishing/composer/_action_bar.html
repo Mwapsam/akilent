@@ -20,7 +20,7 @@
                   <span class="block text-xs text-ink-subtle mt-0.5" x-text="issue.blocks.includes(primaryAction()) ? 'Fix this to ' + actionVerb(primaryAction()) : 'Worth checking'"></span>
                 </span>
               </button>
-              <a :href="issue.fix_url" x-show="issue.fix_url" class="block pl-8 pb-2 text-xs underline text-ink">Open channel settings</a>
+              <a :href="issue.fix_url" x-show="issue.fix_url" class="block pl-8 pb-2 text-xs cs-link text-ink">Open channel settings</a>
             </div>
           </template>
           <p class="px-2 py-3 text-sm text-ink-muted" x-show="!visibleIssues().length">Everything checks out.</p>

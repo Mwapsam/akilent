@@ -26,6 +26,7 @@ import hashlib
 import io
 import json
 import logging
+import re
 import shutil
 import subprocess
 import uuid
@@ -235,6 +236,138 @@ def usage_counts(account, assets) -> dict[int, int]:
     return {pk: len(post_ids) for pk, post_ids in used.items()}
 
 
+def _strings(value, out: set[str]) -> None:
+    if isinstance(value, str):
+        out.add(value.lower())
+    elif isinstance(value, dict):
+        for v in value.values():
+            _strings(v, out)
+    elif isinstance(value, list):
+        for v in value:
+            _strings(v, out)
+
+
+def usage_counts_all(account) -> dict[int, int]:
+    """``usage_counts`` for every file of the business, for sorting by use and the Unused
+    filter: two queries whatever the library's size. A post counts once per file, matched
+    on the URL exactly (as media or as any option, a Reel cover among them)."""
+    urls: dict[str, list[int]] = {}
+    for pk, url in MediaAsset.objects.filter(account=account).values_list("pk", "url"):
+        urls.setdefault(url.lower(), []).append(pk)
+    if not urls:
+        return {}
+    posts = (
+        ContentPost.objects.filter(account=account)
+        .only("pk", "media_urls")
+        .prefetch_related(
+            Prefetch(
+                "variants",
+                queryset=ContentPostVariant.objects.only("post_id", "options"),
+            )
+        )
+    )
+    counts: dict[int, int] = {}
+    for post in posts:
+        found: set[str] = set()
+        _strings(post.media_urls or [], found)
+        for v in post.variants.all():
+            _strings(v.options or {}, found)
+        for url in found & urls.keys():
+            for pk in urls[url]:
+                counts[pk] = counts.get(pk, 0) + 1
+    return counts
+
+
+# A copy's name as phones and computers save it: "WhatsApp Image 2026-09-10 at 14.22.01",
+# "Screenshot 2026-09-10 at 14.22.01", "Screenshot_20260910-142201", "IMG_20260910_142201".
+_CAMERA_NAME = re.compile(
+    r"^(?P<what>whatsapp (?:image|video)|screenshot|screen shot|img|vid|pxl)"
+    r"[ _-]*(?P<y>20\d\d)-?(?P<m>\d\d)-?(?P<d>\d\d)(?!\d).*$",
+    re.IGNORECASE,
+)
+_LABELS = {
+    "whatsapp image": "WhatsApp image",
+    "whatsapp video": "WhatsApp video",
+    "screenshot": "Screenshot",
+    "screen shot": "Screenshot",
+    "img": "Photo",
+    "pxl": "Photo",
+    "vid": "Video",
+}
+
+
+def display_name(name: str) -> str:
+    """A file's name for the grid: no extension, underscores as spaces, and a phone's
+    "WhatsApp Image 2026-09-10 at 14.22.01" as "WhatsApp image · 10 Sep". The full name
+    stays on the file and in its details."""
+    import datetime
+
+    base = (name or "").strip()
+    stem, dot, ext = base.rpartition(".")
+    if dot and stem and 1 <= len(ext) <= 5 and ext.isalnum():
+        base = stem
+    match = _CAMERA_NAME.match(base)
+    if match:
+        try:
+            day = datetime.date(int(match["y"]), int(match["m"]), int(match["d"]))
+        except ValueError:
+            day = None
+        if day:
+            label = _LABELS[" ".join(match["what"].lower().split())]
+            return f"{label} · {day.day} {day:%b}"
+    return " ".join(base.replace("_", " ").split()) or "Untitled"
+
+
+def _plain_name(name: str) -> str:
+    """A name with its extension and a copy's " (1)" or " copy" left off, for spotting
+    the same file uploaded twice."""
+    base = (name or "").lower().rsplit(".", 1)[0]
+    base = re.sub(r"(\s*\(\d+\)|\s+copy(\s*\d+)?)+$", "", base)
+    return " ".join(base.replace("_", " ").split())
+
+
+def duplicates(account, assets) -> dict[int, MediaAsset]:
+    """For each file on the page that looks like an older file of the business, that
+    older file: the same content (sha256), or the same size and name once a copy's
+    " (1)" is left off. One query."""
+    shas = {a.sha256 for a in assets if a.sha256}
+    sizes = {a.size_bytes for a in assets if a.size_bytes}
+    if not shas and not sizes:
+        return {}
+    others = list(
+        MediaAsset.objects.filter(account=account, archived_at__isnull=True)
+        .filter(Q(sha256__in=shas) | Q(size_bytes__in=sizes))
+        .only("pk", "name", "sha256", "size_bytes", "created_at")
+        .order_by("created_at", "pk")
+    )
+    found: dict[int, MediaAsset] = {}
+    for a in assets:
+        for o in others:
+            if (o.created_at, o.pk) >= (a.created_at, a.pk):
+                break
+            same = (a.sha256 and o.sha256 == a.sha256) or (
+                a.size_bytes
+                and o.size_bytes == a.size_bytes
+                and _plain_name(o.name) == _plain_name(a.name)
+            )
+            if same:
+                found[a.pk] = o
+                break
+    return found
+
+
+def date_group(created_at, today) -> str:
+    """The label a file is grouped under in the newest-first grid."""
+    day = timezone.localtime(created_at).date()
+    if (today - day).days < 7:
+        return "This week"
+    if (day.year, day.month) == (today.year, today.month):
+        return "Earlier this month"
+    if day.year == today.year:
+        return f"{day:%B}"
+    return f"{day:%B %Y}"
+
+
 # --- Where it's used, and removing it ----------------------------------------------------
 
 
@@ -268,6 +401,15 @@ def _storage_name(url: str) -> str | None:
     return None
 
 
+def remove_preview(asset: MediaAsset) -> tuple[str, list]:
+    """What ``remove`` would do, without doing it, for the confirm that says so."""
+    blocking = list(blocking_posts(asset)[:5])
+    if blocking:
+        return "blocked", blocking
+    used = list(usage(asset)[:5])
+    return ("archived", used) if used else ("deleted", [])
+
+
 def remove(asset: MediaAsset) -> tuple[str, list]:
     """``("blocked", posts)``, ``("archived", posts)`` or ``("deleted", [])``."""
     blocking = list(blocking_posts(asset)[:5])
@@ -288,14 +430,45 @@ def remove(asset: MediaAsset) -> tuple[str, list]:
     return "deleted", []
 
 
-def set_tags(asset: MediaAsset, raw: str) -> None:
-    tags = []
+def _parse_tags(raw: str) -> list[str]:
+    tags: list[str] = []
     for t in (raw or "").replace("#", "").split(","):
         t = " ".join(t.split()).lower()[:TAG_MAX]
         if t and t not in tags:
             tags.append(t)
-    asset.tags = tags[:TAGS_MAX]
+    return tags
+
+
+def set_tags(asset: MediaAsset, raw: str) -> None:
+    asset.tags = _parse_tags(raw)[:TAGS_MAX]
     asset.save(update_fields=["tags"])
+
+
+def bulk(account, ids, action: str, raw_tags: str = "") -> dict[str, int]:
+    """One action on several files of this business: ``tag`` (adds tags), ``remove``
+    (each by the one rule: blocked, archived or deleted) or ``restore``. Returns how many
+    files ended each way, for the message."""
+    assets = list(MediaAsset.objects.filter(account=account, pk__in=list(ids)[:200]))
+    done: dict[str, int] = {}
+    if action == "tag":
+        new = _parse_tags(raw_tags)
+        if not new:
+            return done
+        for asset in assets:
+            asset.tags = list(dict.fromkeys([*(asset.tags or []), *new]))[:TAGS_MAX]
+            asset.save(update_fields=["tags"])
+        done["tagged"] = len(assets)
+    elif action == "remove":
+        for asset in assets:
+            if asset.archived_at:
+                continue
+            outcome, _ = remove(asset)
+            done[outcome] = done.get(outcome, 0) + 1
+    elif action == "restore":
+        done["restored"] = MediaAsset.objects.filter(
+            pk__in=[a.pk for a in assets], archived_at__isnull=False
+        ).update(archived_at=None)
+    return done
 
 
 # --- Edited copies -----------------------------------------------------------------------

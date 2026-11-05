@@ -35,7 +35,7 @@
     {% if d.status == "off" %}{{ d.label }} publishing is switched off on Akilent right now. You can keep writing; a scheduled post goes out once it's back on.
     {% elif d.status == "reconnect" %}{{ d.label }}'s connection expired. You can keep writing; reconnect before it publishes.
     {% else %}{{ d.label }} isn't connected yet. You can write and save now, and connect it before publishing.{% endif %}
-    {% if d.status != "off" %}<a href="{{ d.connect_url }}" class="underline text-ink">{% if d.status == "reconnect" %}Reconnect{% else %}Connect {{ d.label }}{% endif %}</a>{% endif %}
+    {% if d.status != "off" %}<a href="{{ d.connect_url }}" class="cs-link text-ink">{% if d.status == "reconnect" %}Reconnect{% else %}Connect {{ d.label }}{% endif %}</a>{% endif %}
   </p>
   {% endif %}{% endfor %}
 </section>

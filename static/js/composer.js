@@ -295,8 +295,8 @@
       fmt: function (n) { return Number(n || 0).toLocaleString(); },
 
       mediaTypeLabel: function () {
-        var o = document.querySelector('#media-type option[value="' + this.mediaType + '"]');
-        return o ? o.textContent.trim().toLowerCase() : this.mediaType;
+        var o = document.querySelector('#media-type input[value="' + this.mediaType + '"]');
+        return o ? o.getAttribute("data-label").trim().toLowerCase() : this.mediaType;
       },
 
       igName: function () {

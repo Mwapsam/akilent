@@ -52,10 +52,10 @@ to show (channel, status). The selects apply as soon as they change.{% endcommen
   </div>
 
   <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-    <nav class="segmented" aria-label="View">
-      <a href="{% querystring view='week' %}" {% if view_mode == 'week' %}aria-current="page"{% endif %}>Week</a>
-      {% if scheduling_on %}<a href="{% querystring view='month' %}" {% if view_mode == 'month' %}aria-current="page"{% endif %}>Month</a>{% endif %}
-      <a href="{% querystring view='list' %}" {% if view_mode == 'list' %}aria-current="page"{% endif %}>List</a>
+    <nav class="seg" aria-label="View">
+      <a href="{% querystring view='week' %}" class="seg-item" {% if view_mode == 'week' %}aria-current="page"{% endif %}>Week</a>
+      {% if scheduling_on %}<a href="{% querystring view='month' %}" class="seg-item" {% if view_mode == 'month' %}aria-current="page"{% endif %}>Month</a>{% endif %}
+      <a href="{% querystring view='list' %}" class="seg-item" {% if view_mode == 'list' %}aria-current="page"{% endif %}>List</a>
     </nav>
     <form method="get" class="flex basis-full sm:basis-auto items-center gap-2" x-data @change="$el.requestSubmit()">
       <input type="hidden" name="week" value="{{ week_param }}">

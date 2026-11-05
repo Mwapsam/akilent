@@ -15,11 +15,12 @@
       <p class="text-sm text-ink-subtle">Your Instagram and Facebook accounts day by day, and what your posts brought in.</p>
     </div>
     <div class="flex flex-wrap items-center gap-2">
-      <form method="get" x-data="{ busy: false }" @submit="busy = true">
-        <label class="sr-only" for="an-period">Period</label>
-        <select id="an-period" name="period" class="select" onchange="this.form.requestSubmit()" :disabled="busy">
-          {% for choice in periods %}<option value="{{ choice }}" {% if choice == days %}selected{% endif %}>Last {{ choice }} days</option>{% endfor %}
-        </select>
+      <form method="get" x-data="{ busy: false }" @submit="busy = true" @change="$el.requestSubmit()">
+        <fieldset class="seg" :disabled="busy">
+          <legend class="sr-only">Period</legend>
+          {% for choice in periods %}<label class="seg-item"><input type="radio" name="period" value="{{ choice }}" class="sr-only" {% if choice == days %}checked{% endif %}><span>{{ choice }} days</span></label>{% endfor %}
+        </fieldset>
+        <noscript><button type="submit" class="btn btn-secondary btn-sm">Show</button></noscript>
       </form>
       <a href="{% url 'publishing:analytics-csv' %}?period={{ days }}" class="btn btn-secondary btn-sm" hx-boost="false" download>CSV</a>
       <a href="{% url 'publishing:analytics-print' %}?period={{ days }}" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">Print or save as PDF</a>
@@ -34,8 +35,9 @@
     {% if can_admin %}
     <form method="post" action="{% url 'publishing:analytics-weekly' %}" class="flex flex-wrap items-center gap-3" hx-boost="false">
       {% csrf_token %}
-      <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="weekly_report" {% if weekly_report %}checked{% endif %}> Send the weekly email</label>
-      <button type="submit" class="btn btn-secondary btn-sm">Save</button>
+      {% comment %}A switch saves when flipped; the Save button is only for pages without JavaScript.{% endcomment %}
+      <label class="switch-row text-sm"><input type="checkbox" role="switch" class="switch" name="weekly_report" {% if weekly_report %}checked{% endif %} onchange="this.form.requestSubmit()"> Send the weekly email</label>
+      <noscript><button type="submit" class="btn btn-secondary btn-sm">Save</button></noscript>
     </form>
     {% else %}
     <p class="text-sm text-ink-subtle">{% if weekly_report %}It's on.{% else %}It's off.{% endif %} An Owner or Admin can change this.</p>

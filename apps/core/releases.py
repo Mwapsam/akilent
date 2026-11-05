@@ -25,7 +25,11 @@ UNRELEASED_FEATURES: dict[str, tuple[str, ...]] = {
     "cs_sales_report": ("publishing/sales/",),
     # Month calendar with drag to reschedule, posting slots and best times
     # (apps/publishing/scheduling.py). The month view itself checks the flag.
-    "cs_scheduling": ("publishing/calendar/move/", "publishing/slots/"),
+    "cs_scheduling": (
+        "publishing/calendar/move/",
+        "publishing/calendar/move-plan/",
+        "publishing/slots/",
+    ),
     # Account analytics, CSV/print reports and the weekly email
     # (apps/publishing/account_metrics.py).
     "cs_analytics": ("publishing/analytics/",),

@@ -23,7 +23,7 @@
       </div>
       <form method="post" action="{% url 'publishing:recurring-update' rule.pk %}" class="flex gap-1" hx-boost="false">
         {% csrf_token %}
-        <button type="submit" name="action" value="{% if rule.active %}pause{% else %}resume{% endif %}" class="btn btn-ghost btn-sm">{% if rule.active %}Pause{% else %}Resume{% endif %}</button>
+        <button type="submit" name="action" value="{% if rule.active %}pause{% else %}resume{% endif %}" class="switch self-center mr-2" role="switch" aria-checked="{% if rule.active %}true{% else %}false{% endif %}" aria-label="Repeat on" title="{% if rule.active %}On. Pause it{% else %}Paused. Turn it back on{% endif %}"></button>
         <button type="submit" name="action" value="delete" class="btn btn-ghost btn-sm">Delete</button>
       </form>
     </div>
@@ -33,7 +33,7 @@
       <li data-run="{{ run.outcome }}">
         <span class="font-medium text-ink">{{ run.run_for|date:"N j, H:i" }}</span> ·
         <span class="{% if run.outcome == 'skipped' or run.outcome == 'held' %}tone-amber-fg{% else %}text-ink-subtle{% endif %}">{{ run.get_outcome_display }}</span>
-        {% if run.post %} · <a href="{% url 'publishing:post-detail' run.post_id %}" class="underline">Open</a>{% endif %}
+        {% if run.post %} · <a href="{% url 'publishing:post-detail' run.post_id %}" class="cs-link">Open</a>{% endif %}
         {% if run.reason %}<span class="block text-ink-subtle">{{ run.reason }}</span>{% endif %}
       </li>
       {% endfor %}

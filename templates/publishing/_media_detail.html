@@ -1,0 +1,97 @@
+{% comment %}A file's details (media_views.asset_update, GET): a drawer over the media grid, or the
+page media_detail.html. The picture large on the left (← → and J/K step through the grid in the
+drawer); its facts, name and tags, the posts that use it and its actions on the right. Remove
+says what will happen to this file before it happens (media_library.remove_preview).{% endcomment %}
+<div class="md" data-overlay-arrows>
+  {% comment %}Focused first (not the Name field), so ← → step through the files at once.{% endcomment %}
+  <div class="md-preview" tabindex="0" autofocus role="group" aria-label="{{ asset.display }}{% if in_overlay %}. Left and right arrows show the previous and next file{% endif %}">
+    {% if asset.kind == "video" %}
+    <video src="{{ asset.url }}#t=0.1" preload="metadata" controls playsinline aria-label="{{ asset.display }}"></video>
+    {% else %}
+    <div class="ml-wash" style="background-image: url('{{ asset.url }}')" aria-hidden="true"></div>
+    <img src="{{ asset.url }}" alt="{{ asset.display }}" class="ml-img" decoding="async">
+    {% endif %}
+  </div>
+
+  <div class="space-y-5 min-w-0">
+    <div>
+      <h2 class="text-lg font-semibold text-ink break-words">{{ asset.display }}</h2>
+      {% if asset.display != asset.name %}<p class="text-xs text-ink-subtle break-all">{{ asset.name }}</p>{% endif %}
+      {% if asset.duplicate_of %}<p class="ml-dup mt-1" data-duplicate-of="{{ asset.duplicate_of.pk }}">Looks like {{ asset.duplicate_of.name }}, already in the library. If it's the same file, remove this copy.</p>{% endif %}
+    </div>
+
+    <dl class="md-facts">
+      <dt>Type</dt><dd>{{ asset.badge|default:asset.kind }}</dd>
+      {% if asset.width %}<dt>Size</dt><dd>{{ asset.width }} × {{ asset.height }} px</dd>{% endif %}
+      {% if asset.size_bytes %}<dt>File</dt><dd>{{ asset.size_bytes|filesizeformat }}</dd>{% endif %}
+      <dt>Added</dt><dd>{{ asset.created_at|date:"j M Y" }}{% if asset.uploaded_by %} by {{ asset.uploaded_by.get_full_name|default:asset.uploaded_by.username }}{% endif %}</dd>
+      <dt>From</dt><dd>{{ asset.get_source_display }}{% if asset.parent %} of {{ asset.parent.name }}{% endif %}</dd>
+      {% if asset.credit %}<dt>Credit</dt><dd><a href="{{ asset.credit_url }}" target="_blank" rel="noopener" class="ml-link">{{ asset.credit }}</a></dd>{% endif %}
+      {% if asset.archived_at %}<dt>Archived</dt><dd>{{ asset.archived_at|date:"j M Y" }}</dd>{% endif %}
+    </dl>
+
+    <form method="post" action="{% url 'publishing:media-update' asset.pk %}" class="space-y-3" aria-label="Name and tags">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="tags">
+      <input type="hidden" name="next" value="{% url 'publishing:media-library' %}">
+      <div>
+        <label for="md-name" class="block text-sm font-medium text-ink mb-1">Name</label>
+        <input id="md-name" name="name" value="{{ asset.name }}" maxlength="200" class="input w-full">
+      </div>
+      <div>
+        <label for="md-tags" class="block text-sm font-medium text-ink mb-1">Tags</label>
+        <input id="md-tags" name="tags" value="{{ asset.tags|join:', ' }}" class="input w-full" placeholder="e.g. summer, sandals">
+        <p class="text-xs text-ink-subtle mt-1">Separated by commas. Search finds files by tag.</p>
+      </div>
+      <button type="submit" class="btn btn-secondary btn-sm">Save</button>
+    </form>
+
+    <section aria-labelledby="md-used" class="space-y-2">
+      <h3 id="md-used" class="text-sm font-semibold text-ink">Used in {% if asset.used_in %}{{ asset.used_in }} post{{ asset.used_in|pluralize }}{% else %}no posts yet{% endif %}</h3>
+      {% if used_posts %}
+      <ul class="md-posts">
+        {% for p in used_posts %}
+        <li>
+          <a href="{% url 'publishing:post-detail' p.pk %}" data-overlay-open="drawer" data-overlay-size="lg" data-overlay-title="Post" class="block" title="{{ p.caption|truncatechars:80|default:'Post' }} ({{ p.get_status_display }})">
+            {% include "publishing/_media_thumb.html" with url=p.media_urls.0 size="w-full aspect-square" alt=p.caption|truncatechars:60 %}
+            <span class="block text-xs text-ink-subtle truncate mt-1">{{ p.get_status_display }}</span>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </section>
+
+    {% if derived %}
+    <section aria-labelledby="md-derived" class="space-y-2">
+      <h3 id="md-derived" class="text-sm font-semibold text-ink">Made from this file</h3>
+      <ul class="md-posts">
+        {% for d in derived %}<li><a href="{% url 'publishing:media-detail' d.pk %}" data-overlay-open="drawer" data-overlay-size="xl" data-overlay-title="File" class="block" title="{{ d.name }}">{% include "publishing/_media_thumb.html" with url=d.url size="w-full aspect-square" alt=d.name %}<span class="block text-xs text-ink-subtle truncate mt-1">{{ d.get_source_display }}</span></a></li>{% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    <div class="flex flex-wrap gap-2 pt-1 border-t border-surface-subtle pt-4">
+      {% if not asset.archived_at %}
+      <a href="{% url 'publishing:media-edit' asset.pk %}" data-overlay-open="modal" data-overlay-size="full" class="btn btn-secondary btn-sm">{% include "components/icon.html" with name="pencil" class="w-4 h-4" %}{% if asset.kind == "video" %}Reel cover{% else %}Edit{% endif %}</a>
+      <a href="{% url 'publishing:post-new' %}?media={{ asset.pk }}" class="btn btn-primary btn-sm">{% include "components/icon.html" with name="paper-plane" class="w-4 h-4" %}Use in new post</a>
+      {% endif %}
+      <a href="{{ asset.url }}" target="_blank" rel="noopener" download hx-boost="false" class="btn btn-ghost btn-sm">{% include "components/icon.html" with name="download" class="w-4 h-4" %}Download</a>
+      <form method="post" action="{% url 'publishing:media-update' asset.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{% url 'publishing:media-library' %}">
+        {% if asset.archived_at %}
+        <button type="submit" name="action" value="restore" class="btn btn-ghost btn-sm">Put back</button>
+        {% elif remove_outcome == "blocked" %}
+        <button type="button" class="btn btn-ghost btn-sm" disabled aria-describedby="md-remove-why">Remove</button>
+        {% else %}
+        <button type="submit" name="action" value="remove" class="btn btn-ghost btn-sm tone-coral-fg" data-confirm-danger data-confirm-label="{% if remove_outcome == 'deleted' %}Delete{% else %}Archive{% endif %}"
+          data-confirm="{% if remove_outcome == 'deleted' %}Delete {{ asset.display }}? No post uses it, so the file is deleted for good.{% else %}Archive {{ asset.display }}? Published posts use it, so it's hidden from the library and the file is kept for them. You can put it back from Archived.{% endif %}">{% include "components/icon.html" with name="trash" class="w-4 h-4" %}Remove</button>
+        {% endif %}
+      </form>
+    </div>
+    {% if remove_outcome == "blocked" and not asset.archived_at %}
+    <p id="md-remove-why" class="text-xs text-ink-subtle">Can't be removed yet: {% for p in remove_blocking %}post {{ p.pk }}{% if not forloop.last %}, {% endif %}{% endfor %} {{ remove_blocking|length|pluralize:"is,are" }} a draft or scheduled and still need{{ remove_blocking|length|pluralize:"s," }} it.</p>
+    {% endif %}
+  </div>
+</div>

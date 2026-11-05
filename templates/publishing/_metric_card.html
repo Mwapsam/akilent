@@ -38,9 +38,9 @@ reason, never 0. Expects ``variant`` (a published ContentPostVariant).
   <p class="text-xs text-ink-subtle">
     Some numbers need permission.
     {% if variant.platform == 'instagram' %}
-    <a href="{% url 'instagram-accounts' %}" class="underline">Reconnect Instagram</a> and allow access to insights.
+    <a href="{% url 'instagram-accounts' %}" class="cs-link">Reconnect Instagram</a> and allow access to insights.
     {% else %}
-    <a href="{% url 'publishing:channels' %}" class="underline">Reconnect your Facebook Page</a> and allow access to insights.
+    <a href="{% url 'publishing:channels' %}" class="cs-link">Reconnect your Facebook Page</a> and allow access to insights.
     {% endif %}
   </p>
   {% endif %}
