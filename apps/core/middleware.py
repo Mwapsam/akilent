@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import time
 
 from apps.core.browser_session import (
     reset_browser_session_id,
@@ -10,6 +11,7 @@ from apps.core.browser_session import (
 )
 from apps.core.request_context import (
     new_request_id,
+    request_memo,
     reset_request_id,
     set_request_id,
 )
@@ -424,3 +426,52 @@ class ChannelGateMiddleware:
                 )  # not set up on this server: dropped, as before
             raise Http404(f"{ch.label} is not enabled")
         return self.get_response(request)
+
+
+class ServerTimingMiddleware:
+    """``Server-Timing: db;dur=..;desc="42 q", app;dur=..`` on every response to a signed-in
+    person, so the browser's network panel shows whether a slow page spent its time in the
+    database, in Django or on the network. Outermost, so it covers every other middleware."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from django.db import connection
+
+        stats = {"n": 0, "db": 0.0}
+
+        def timed(execute, sql, params, many, context):
+            start = time.perf_counter()
+            try:
+                return execute(sql, params, many, context)
+            finally:
+                stats["n"] += 1
+                stats["db"] += time.perf_counter() - start
+
+        start = time.perf_counter()
+        with connection.execute_wrapper(timed):
+            response = self.get_response(request)
+        total = time.perf_counter() - start
+        # A person signed in (API keys put the Account here, which has no is_authenticated).
+        if getattr(getattr(request, "user", None), "is_authenticated", False) is True:
+            db_ms, app_ms = stats["db"] * 1000, max(total - stats["db"], 0) * 1000
+            response["Server-Timing"] = (
+                f'db;dur={db_ms:.1f};desc="{stats["n"]} q", app;dur={app_ms:.1f}'
+            )
+        return response
+
+
+class RequestMemoMiddleware:
+    """GET and HEAD only: a page that renders asks the same small questions many times and
+    changes nothing (``request_context.remembered``). A POST reads fresh every time, so a change
+    it makes is always seen at once."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.method not in ("GET", "HEAD"):
+            return self.get_response(request)
+        with request_memo():
+            return self.get_response(request)

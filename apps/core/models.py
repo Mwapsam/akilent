@@ -103,15 +103,21 @@ class SiteSettings(models.Model):
 
     @classmethod
     def load(cls):
-        obj, _ = cls.objects.get_or_create(pk=1)
-        return obj
+        """The one row, read once per page (``request_context.remembered``)."""
+        from apps.core.request_context import remembered
+
+        return remembered(
+            ("site_settings",), lambda: cls.objects.get_or_create(pk=1)[0]
+        )
 
 
 @receiver(post_save, sender=SiteSettings)
 def _reset_channel_cache(sender, **kwargs):
     from apps.core.channels import invalidate_channel_cache
+    from apps.core.request_context import forget
 
     invalidate_channel_cache()
+    forget("site_settings")
 
 
 class MailProviderSettings(models.Model):

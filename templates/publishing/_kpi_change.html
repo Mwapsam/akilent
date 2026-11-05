@@ -1,0 +1,12 @@
+{% comment %}A tile's change against the period before (apps.publishing.sales._change). Up is good
+for every Sales number. The arrow and the words carry it; the colour only repeats them.
+  {% include "publishing/_kpi_change.html" with change=k.change days=report.days %}{% endcomment %}
+{% if change is None %}
+<p class="kpi-delta">No activity in either period</p>
+{% elif change.new %}
+<p class="kpi-delta is-up"><span aria-hidden="true">↑</span> New <span class="kpi-delta-vs">vs previous {{ days }} days</span></p>
+{% elif change.flat %}
+<p class="kpi-delta">No change <span class="kpi-delta-vs">vs previous {{ days }} days</span></p>
+{% else %}
+<p class="kpi-delta {% if change.up %}is-up{% else %}is-down{% endif %}"><span aria-hidden="true">{% if change.up %}↑{% else %}↓{% endif %}</span><span class="sr-only">{% if change.up %}Up{% else %}Down{% endif %}</span> {{ change.pct }}% <span class="kpi-delta-vs">vs previous {{ days }} days</span></p>
+{% endif %}

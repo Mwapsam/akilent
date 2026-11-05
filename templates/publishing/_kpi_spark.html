@@ -1,0 +1,10 @@
+{% comment %}A tile's trend across the period (apps.publishing.sales._Trend.spark): one line, the
+latest point marked, and each slot's count on hover (an invisible column per slot, so the target
+is wider than the line). The numbers are also the tile's text, so the line is decoration for
+screen readers.
+  {% include "publishing/_kpi_spark.html" with trend=k.trend label=k.label %}{% endcomment %}
+<svg class="kpi-spark" viewBox="0 0 100 28" aria-hidden="true" focusable="false">
+  <polyline points="{{ trend.points }}" class="kpi-spark-line" vector-effect="non-scaling-stroke"/>
+  <circle cx="{{ trend.end.0 }}" cy="{{ trend.end.1 }}" r="1.6" class="kpi-spark-dot"/>
+  {% for s in trend.slots %}<rect x="{{ s.x }}" y="0" width="{{ s.w }}" height="28" class="kpi-spark-hit"><title>{{ label }} from {{ s.label }}: {{ s.value }}</title></rect>{% endfor %}
+</svg>

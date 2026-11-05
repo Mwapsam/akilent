@@ -1903,3 +1903,31 @@ Plan: "Content Studio: make it feel like an app" (2026-11-03). Approving it cove
     - Week view drags posts and ideas through the same Move checks.
   - **Unchanged:** preload and the tab underline stay dropped (reasons in Entry 18c). Speed is the billing memo, which awaits a decision.
 - **Verification:** full suite 5,841 passed, 0 failures, 25 skipped; ruff, format and mypy clean. `studio_gallery_qa` 26/26, `studio_overlay_qa` 36/36, `studio_feel_qa` 16/16, `publishing_qa` 21/21; `area_scan /publishing` 0 issues.
+
+### Entry 22: sixth review, server speed, Sales, and the studio's look (2026-11-05)
+- **Sixth review fixes:**
+  - The Library's date trigger resets when its chip is removed: the results region carries the dates it was filtered by (`#library-dates`), and the popover syncs from it after every swap.
+  - A file a draft uses keeps **Remove** in its ⋯ menu, disabled, with the reason under it.
+- **Server speed** (production measured 430–1,030 ms to first byte; every query is a round trip):
+  - `apps.core.request_context.remembered`: small repeated reads happen once per page. `RequestMemoMiddleware` opens the memo for GET and HEAD only; POSTs, Celery and shells read fresh. Never the shared cache.
+  - Used for entitlement (`billing.api._state`, read 4–10 times per page), `SiteSettings.load` (2–3) and opening hours (2–4). Saves of the models they come from call `forget` (signals, plus the billing writes that skip signals). Onboarding's "awaiting first payment" reads the same billing state.
+  - The suspended-member check asks the usual case first (one query instead of two). Two "next action" suggestions drop an `exists()` their link query already answers.
+  - **Sales had an N+1:** `bio.credit_basis` re-read the bio page for every credited chat when a workspace has none (`page=None` meant "not given"). Now a sentinel; 75 → 34 queries on the local demo.
+  - Queries per tab (tests, 12 posts): Overview 38 → 25, Library 27 → 15, Calendar 29 → 17, Channels 30 → 17, Sales 39 → 21, AI 40 → 22, Analytics 53 → 20.
+  - `Server-Timing: db;dur=…;desc="N q", app;dur=…` on every response to a signed-in person (`ServerTimingMiddleware`, outermost).
+  - `CONN_HEALTH_CHECKS = True`. `CONN_MAX_AGE` was already 60 with sync gunicorn workers, so connections are reused. Not checked from here: whether the database is in the app servers' region and zone (the host is a deploy secret). The new header will show it.
+  - Locked in by `test_studio_speed.py`: a query budget per tab, entitlement and settings read once per page, a change during a page seen at once, the header's format. Plus a Sales test that its queries don't grow with chats.
+- **Sales:**
+  - Four tiles: Chats, Leads, Orders, and Paid revenue per currency. Each has a trend line and the change against the period before. Confirmed credits only, the same rule that ranks posts.
+  - The report reads both periods in the same queries (a date range twice as long).
+  - Each post row has a funnel (chats → leads → orders → paid, each a share of the widest step), a larger picture and its revenue on the right.
+  - Full width: the posts on the left, the revenue breakdown on the right. The rules sit behind an ⓘ, and empty states have an icon and a next step.
+  - Marks use one hue (the accent; its lighter step for tracks). Up and down colours only repeat the arrow and the words.
+- **Look and feel:**
+  - The title is the tab's name, under a "Content Studio" crumb (`_cs_title.html`, `studio_tab` tag); Overview keeps "Content Studio".
+  - A four-size type scale with tighter headings.
+  - One card treatment: hairline, `--radius-surface`, no shadow; only clickable cards lift.
+  - Setup progress is "Setup N/M" with a ring in the top bar. It opens the checklist under the bar (Esc or a click outside closes it) and goes once setup is done. The corner bubble is gone.
+  - Yellow stays for the page's one main action. In-card saves use `.btn-tonal` (navy), and so do empty-state actions in the studio.
+  - Things swapped in place (chips, cards, rows, tiles) fade and grow in over 150 ms. A media card being removed fades out first (`swap:150ms`). Page changes are left to their own transition. Toasts scale in. Reduced motion turns all of it off.
+- **Not built:** tab preload and the sliding underline (Entry 18c), and the rest of the studio redesign proposal (Overview data, Planning board, Bio preview, Channel health, copy trimming), which wasn't part of this go-ahead.

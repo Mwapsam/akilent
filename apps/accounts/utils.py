@@ -135,9 +135,10 @@ def is_suspended_member(request) -> bool:
     if not user or not user.is_authenticated:
         return False
     memberships = Membership.objects.filter(user=user)
+    # The usual answer (an active workspace) takes one query.
     return (
-        memberships.exists()
-        and not memberships.filter(account__is_active=True).exists()
+        not memberships.filter(account__is_active=True).exists()
+        and memberships.exists()
     )
 
 

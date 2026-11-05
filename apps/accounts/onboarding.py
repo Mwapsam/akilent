@@ -160,11 +160,10 @@ def advance_onboarding(account) -> str:
 def awaiting_first_payment(account) -> bool:
     """A new paid signup that hasn't paid yet (only signup leaves a subscription INCOMPLETE).
     Setup comes after payment, so nothing prompts it until then."""
+    from apps.billing import api as billing_api
     from apps.billing.models import Subscription
 
-    return Subscription.objects.filter(
-        account=account, status=Subscription.INCOMPLETE
-    ).exists()
+    return billing_api.subscription_status(account) == Subscription.INCOMPLETE
 
 
 def first_setup_url(account) -> str:
@@ -1102,6 +1101,12 @@ def _all(*checks) -> Callable:
     return lambda ctx: all(check(ctx) for check in checks)
 
 
+def _by_url(ctx) -> bool:
+    """For a suggestion whose link is the newest matching row: that one query decides (no row,
+    no link, no suggestion), so there's no separate exists() first."""
+    return True
+
+
 NEXT_ACTIONS: tuple[NextActionDef, ...] = (
     NextActionDef(
         key="mark_lead",
@@ -1132,7 +1137,7 @@ NEXT_ACTIONS: tuple[NextActionDef, ...] = (
         url=_latest_url(
             "commerce.Order", "commerce:detail", "public_id", status="pending"
         ),
-        when=_has("commerce.Order", status="pending"),
+        when=_by_url,
         feature="orders",
     ),
     NextActionDef(
@@ -1143,7 +1148,7 @@ NEXT_ACTIONS: tuple[NextActionDef, ...] = (
         url=_latest_url(
             "publishing.ContentPost", "publishing:post-detail", "pk", status="published"
         ),
-        when=_has("publishing.ContentPost", status="published"),
+        when=_by_url,
         feature="content_studio",
     ),
 )

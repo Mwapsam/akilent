@@ -5,7 +5,7 @@
 {% block content %}
 <div class="cs-head">
   <div>
-    <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
+    {% include "publishing/_cs_title.html" %}
   </div>
   <div class="flex items-center gap-2">
     {% if scheduling_on %}<a href="{% url 'publishing:slots' %}" data-overlay-open="drawer" data-overlay-size="lg" class="btn btn-secondary">Posting slots</a>{% endif %}

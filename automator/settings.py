@@ -72,8 +72,12 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # Outermost: times everything below it (database vs Django) for the browser.
+    "apps.core.middleware.ServerTimingMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "apps.core.middleware.SecurityHeadersMiddleware",
+    # Small repeated reads (entitlement, site settings) happen once per page from here down.
+    "apps.core.middleware.RequestMemoMiddleware",
     # Serve built static assets (CSS/JS/fonts) compressed + cache-busted.
     # WhiteNoise is only useful when static files are served locally.
     # When USE_S3_STORAGE is True it is omitted (see below).
@@ -142,6 +146,8 @@ else:
             "HOST": os.getenv("POSTGRES_HOST", "db"),
             "PORT": os.getenv("POSTGRES_PORT", "5432"),
             "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
+            # A kept connection that the database dropped is replaced, not an error page.
+            "CONN_HEALTH_CHECKS": True,
             "OPTIONS": {
                 # Uncomment if your Postgres requires SSL
                 # "sslmode": "require",

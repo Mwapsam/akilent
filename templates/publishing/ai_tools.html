@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="cs-head">
-  <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
+  {% include "publishing/_cs_title.html" %}
 </div>
 
 {% include "publishing/_subnav.html" %}
@@ -28,7 +28,7 @@
                 {% if not can_admin %}disabled{% endif %}
                 placeholder="Warm and plain-spoken, like talking to a neighbour. Short sentences. One emoji at most. Never say &quot;cheap&quot;; say &quot;good value&quot;.">{{ brand_voice }}</textarea>
       {% if can_admin %}
-      <button type="submit" class="btn btn-primary btn-sm">Save brand voice</button>
+      <button type="submit" class="btn btn-tonal btn-sm">Save brand voice</button>
       {% else %}
       <p class="text-xs text-ink-subtle">Only an Owner or Admin can change the brand voice.</p>
       {% endif %}

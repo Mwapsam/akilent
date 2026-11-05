@@ -67,6 +67,7 @@ from apps.billing.models import (
     UsageReservation,  # noqa: F401
     UsageSummary,
 )
+from apps.core import request_context
 
 logger = logging.getLogger(__name__)
 
@@ -95,13 +96,29 @@ class _State:
     plan: Plan | None
     has_subscription: bool
     plan_keys: frozenset
+    status: str = ""
     overrides: dict = field(default_factory=dict)
     owner_off: frozenset = frozenset()
 
 
+def forget() -> None:
+    """Drop what this request remembered of entitlement, after a change to plans, features,
+    switches or a subscription (apps.billing.signals, and the writes below that skip signals)."""
+    request_context.forget("billing")
+
+
 def _state(account: Account) -> _State:
-    """Everything entitlement depends on for one business, read fresh (a handful of small
-    queries). Not cached on the account object: the same object often outlives a change."""
+    """Everything entitlement depends on for one business (a handful of small queries), read
+    once per page (``apps.core.request_context.remembered``; a page asks entitled()/usable()
+    many times). Not cached on the account object: the same object often outlives a change."""
+    if account.pk is None:
+        return _read_state(account)
+    return request_context.remembered(
+        ("billing", account.pk), lambda: _read_state(account)
+    )
+
+
+def _read_state(account: Account) -> _State:
     sub = Subscription.objects.filter(account=account).select_related("plan").first()
     plan = sub.plan if sub else None
     # A plan only gives its features while it's paid for (or trialing, or past due within the
@@ -133,6 +150,7 @@ def _state(account: Account) -> _State:
     return _State(
         plan=plan,
         has_subscription=sub is not None,
+        status=sub.status if sub else "",
         plan_keys=plan_keys,
         overrides=overrides,
         owner_off=frozenset(
@@ -162,6 +180,11 @@ def _decide(state: _State, feature: catalog.Feature) -> tuple[bool, str]:
     if override is not None and override.grant:
         return True, SOURCE_GRANT
     return False, SOURCE_NOT_IN_PLAN
+
+
+def subscription_status(account: Account) -> str:
+    """The subscription's status ("" when there is none), from the same read as entitlement."""
+    return _state(account).status
 
 
 def entitled(account: Account, key: str) -> bool:
@@ -385,6 +408,7 @@ def set_plan_channels(plan: Plan, channels) -> dict:
         [PlanFeature(plan=plan, key=k) for k in added], ignore_conflicts=True
     )
     PlanFeature.objects.filter(plan=plan, key__in=removed).delete()
+    forget()  # bulk_create sends no signal
     return {"added": added, "removed": removed}
 
 

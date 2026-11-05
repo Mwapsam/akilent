@@ -378,6 +378,22 @@ check("confirm.cancel-keeps-focus", focusAfter.tag !== "BODY" && focusAfter.inCa
 const blocked = await evaluate(`(() => { const b = document.querySelector('#media-results .ml-more button[disabled]'); if (!b) return { none: true }; const why = document.getElementById(b.getAttribute('aria-describedby')); return { label: b.textContent.trim(), why: why && why.textContent.trim() }; })()`);
 check("media.blocked-remove-says-why", !blocked.none && blocked.label === "Remove" && /draft/.test(blocked.why || ""), blocked);
 
+// Setup progress lives in the top bar: it opens the checklist under the bar, and Esc closes it.
+const obPanel = `(() => { const w = document.querySelector('.ob-widget > div'); return !!w && getComputedStyle(w).display !== 'none'; })()`;
+const hasLaunch = await evaluate(`!!document.querySelector('header .ob-launch')`);
+if (hasLaunch) {
+  const before = await evaluate(obPanel);
+  await evaluate(`document.querySelector('header .ob-launch').click(); 0`);
+  await sleep(300);
+  const opened = await evaluate(`(() => ({ shown: ${obPanel}, top: Math.round(document.querySelector('.ob-widget').getBoundingClientRect().top), bar: Math.round(document.querySelector('header').getBoundingClientRect().bottom) }))()`);
+  await key("Escape", "Escape", 27);
+  await sleep(300);
+  const closed = !(await evaluate(obPanel));
+  check("setup.in-the-bar-opens-under-it", !before && opened.shown && opened.top >= opened.bar && closed, { before, opened, closed });
+} else {
+  check("setup.in-the-bar-opens-under-it", !(await evaluate(`!!document.querySelector('.ob-widget')`)), "setup done: no launcher, no widget");
+}
+
 check("console.no-errors", consoleErrors.filter((e) => !/favicon|ERR_BLOCKED_BY_CLIENT|status of 4\d\d|leather-sandals|CORS/.test(e)).length === 0, consoleErrors.slice(0, 5));
 const failed = results.filter((r) => !r.pass);
 writeFileSync(join(outDir, "studio_gallery_qa.json"), JSON.stringify({ results, log }, null, 2));

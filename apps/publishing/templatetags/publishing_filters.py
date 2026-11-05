@@ -231,3 +231,33 @@ def credit_label(entry) -> str:
     from apps.publishing.bio import credit_label as label
 
     return label(entry) if entry is not None else ""
+
+
+# The tab each Content Studio page belongs to (the same rules as _subnav.html's active tab).
+_STUDIO_TABS = (
+    (
+        ("/publishing/calendar", "/publishing/slots", "/publishing/recurring"),
+        "Calendar",
+    ),
+    (("/publishing/library", "/publishing/import"), "Library"),
+    (("/publishing/planning",), "Planning"),
+    (("/publishing/channels",), "Channels"),
+    (("/publishing/media",), "Media"),
+    (("/publishing/analytics",), "Analytics"),
+    (("/publishing/sales",), "Sales"),
+    (("/publishing/ai",), "AI"),
+    (("/publishing/bio",), "Bio page"),
+    (("/publishing/reconciliation",), "Needs check"),
+)
+
+
+@register.simple_tag(takes_context=True)
+def studio_tab(context) -> str:
+    """The page's title: its tab's name, or "" on Overview and pages outside the tabs (which
+    keep "Content Studio" as their title)."""
+    request = context.get("request")
+    path = getattr(request, "path", "")
+    for prefixes, label in _STUDIO_TABS:
+        if path.startswith(prefixes):
+            return label
+    return ""

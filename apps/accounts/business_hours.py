@@ -121,9 +121,16 @@ def schedule_from_form(data) -> dict:
 
 
 def get_hours(account):
+    """Read once per page (``request_context.remembered``); saving hours forgets it."""
     from apps.accounts.models import BusinessHours
+    from apps.core.request_context import remembered
 
-    return BusinessHours.objects.filter(account=account).first()
+    if account.pk is None:
+        return BusinessHours.objects.filter(account=account).first()
+    return remembered(
+        ("business_hours", account.pk),
+        lambda: BusinessHours.objects.filter(account=account).first(),
+    )
 
 
 def workspace_timezone(account) -> str:
@@ -155,6 +162,9 @@ def save_hours(account, *, tz: str, schedule: dict | None):
         account=account,
         defaults={"timezone": clean_timezone(tz), "schedule": clean_schedule(schedule)},
     )
+    from apps.core.request_context import forget
+
+    forget("business_hours")
     return hours
 
 

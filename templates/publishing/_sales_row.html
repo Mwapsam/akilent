@@ -1,23 +1,30 @@
 {% load publishing_filters %}{% comment %}One post in the "Which posts sold" report (apps.publishing.sales).
   {% include "publishing/_sales_row.html" with row=row %}
-  Only confirmed credits are in the main figures; less certain ones are listed under them.{% endcomment %}
+  Only confirmed credits are in the main figures and the funnel; less certain ones are listed
+  under them. The funnel's bars are each step as a share of the widest one (sales._funnel).{% endcomment %}
 <li class="py-3 flex items-start gap-3" data-sales-post="{{ row.post.pk }}" data-row>
-  {% if row.rank %}<span class="w-6 shrink-0 text-sm font-semibold text-ink-subtle tabular-nums"><span class="sr-only">Rank </span>{{ row.rank }}</span>{% endif %}
-  {% include "publishing/_media_thumb.html" with url=row.post|first_media size="w-10 h-10" alt=row.post.caption|truncatechars:80 %}
-  <div class="flex-1 min-w-0">
-    <a href="{% url 'publishing:post-detail' row.post.pk %}" data-overlay-open="drawer" class="block text-sm font-medium text-ink truncate hover:underline">{{ row.post.caption|truncatechars:80|default:"(no caption)" }}</a>
-    <p class="text-xs text-ink-subtle">{{ row.post.platforms|platform_names }}</p>
+  {% if row.rank %}<span class="w-5 shrink-0 pt-1 text-sm font-semibold text-ink-subtle tabular-nums"><span class="sr-only">Rank </span>{{ row.rank }}</span>{% endif %}
+  {% include "publishing/_media_thumb.html" with url=row.post|first_media size="w-14 h-14" alt=row.post.caption|truncatechars:80 %}
+  <div class="flex-1 min-w-0 space-y-2">
+    <div class="flex items-start justify-between gap-3">
+      <div class="min-w-0">
+        <a href="{% url 'publishing:post-detail' row.post.pk %}" data-overlay-open="drawer" class="block text-sm font-medium text-ink truncate hover:underline">{{ row.post.caption|truncatechars:80|default:"(no caption)" }}</a>
+        <p class="text-xs text-ink-subtle">{{ row.post.platforms|platform_names }}</p>
+      </div>
+      <p class="shrink-0 text-right text-sm font-semibold text-ink tabular-nums" data-sales-revenue>{% for r in row.confirmed.revenue %}{{ r.currency }} {{ r.total }}{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="font-normal text-ink-subtle">No revenue</span>{% endfor %}</p>
+    </div>
     {% with c=row.confirmed %}
-    <dl class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-      <div><dt class="inline text-ink-subtle">Chats</dt> <dd class="inline font-medium text-ink tabular-nums">{{ c.chats }}</dd></div>
-      <div><dt class="inline text-ink-subtle">Leads</dt> <dd class="inline font-medium text-ink tabular-nums">{{ c.leads }}</dd></div>
-      <div><dt class="inline text-ink-subtle">Orders</dt> <dd class="inline font-medium text-ink tabular-nums">{{ c.orders }}</dd></div>
-      <div><dt class="inline text-ink-subtle">Paid</dt> <dd class="inline font-medium text-ink tabular-nums">{{ c.paid_orders }}</dd></div>
-      <div><dt class="inline text-ink-subtle">Revenue</dt> <dd class="inline font-medium text-ink tabular-nums" data-sales-revenue>{% for r in c.revenue %}{{ r.currency }} {{ r.total }}{% if not forloop.last %} · {% endif %}{% empty %}—{% endfor %}</dd></div>
+    <dl class="sf" aria-label="{{ c.chats }} chat{{ c.chats|pluralize }}, {{ c.leads }} lead{{ c.leads|pluralize }}, {{ c.orders }} order{{ c.orders|pluralize }}, {{ c.paid_orders }} paid">
+      {% for step in row.funnel %}
+      <div class="sf-step">
+        <div class="sf-text"><dt>{{ step.label }}</dt><dd class="tabular-nums">{{ step.value }}</dd></div>
+        <span class="sf-track" aria-hidden="true"><span class="sf-fill" style="width: {{ step.pct }}%"></span></span>
+      </div>
+      {% endfor %}
     </dl>
     {% endwith %}
     {% for u in row.unconfirmed %}
-    <p class="mt-1 text-xs text-ink-subtle" data-sales-unconfirmed="{{ u.basis }}">
+    <p class="text-xs text-ink-subtle" data-sales-unconfirmed="{{ u.basis }}">
       Also {{ u.label }}: {{ u.chats }} chat{{ u.chats|pluralize }}, {{ u.leads }} lead{{ u.leads|pluralize }}, {{ u.orders }} order{{ u.orders|pluralize }}{% for r in u.revenue %}{% if forloop.first %}, {% endif %}{{ r.currency }} {{ r.total }}{% if not forloop.last %} · {% endif %}{% endfor %}. Not used to rank.
     </p>
     {% endfor %}

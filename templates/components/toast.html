@@ -21,7 +21,7 @@
               top-[calc(1rem+var(--safe-top))]"
        style="z-index: var(--z-toast)">
     <template x-for="t in $store.toasts.items" :key="t.id">
-      <div x-transition.opacity.duration.200ms
+      <div x-transition.opacity.scale.96.duration.150ms
            @mouseenter="$store.toasts.pause(t.id)" @mouseleave="$store.toasts.resume(t.id)"
            @focusin="$store.toasts.pause(t.id)" @focusout="$store.toasts.resume(t.id)"
            class="card !p-3 !pl-4 flex items-start gap-3 shadow-pop border-l-4"

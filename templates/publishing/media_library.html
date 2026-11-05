@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="cs-head">
-  <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
+  {% include "publishing/_cs_title.html" %}
   <div class="flex items-center gap-2">
     <a href="{% url 'publishing:media-snippets' %}" data-overlay-open="drawer" data-overlay-size="lg" class="btn btn-secondary btn-icon" title="Caption templates and hashtags" aria-label="Caption templates and hashtags">{% include "components/icon.html" with name="layout-template" class="w-4 h-4" %}</a>
     <label class="btn btn-primary cursor-pointer" for="ml-file">{% include "components/icon.html" with name="upload" class="w-4 h-4" %}Upload</label>
@@ -150,7 +150,7 @@
         <span class="empty-state-icon">{% include "components/icon.html" with name="image" class="w-6 h-6" %}</span>
         <p class="empty-state-title">Your media library is empty</p>
         <p class="empty-state-message">Upload pictures and videos, or drag files anywhere on this page. Files added in the composer land here too.</p>
-        <label for="ml-file" class="btn btn-primary btn-sm mt-4 cursor-pointer">Upload files</label>
+        <label for="ml-file" class="btn btn-tonal btn-sm mt-4 cursor-pointer">Upload files</label>
       </div>
     </div>
     {% endif %}

@@ -5,7 +5,7 @@
 {% block content %}
 <div class="cs-head">
   <div>
-    <h1 class="text-2xl font-semibold tracking-tight">Content Studio</h1>
+    {% include "publishing/_cs_title.html" %}
   </div>
   <a href="{% url 'publishing:post-new' %}" class="btn btn-primary">New post</a>
 </div>
@@ -51,7 +51,7 @@
             <input id="puburl-{{ variant.pk }}" name="publication_url" placeholder="Public URL (optional)" class="input w-full">
             <label class="sr-only" for="evidence-{{ variant.pk }}">Evidence</label>
             <input id="evidence-{{ variant.pk }}" name="evidence_notes" placeholder="How you checked (optional)" class="input w-full">
-            <button type="submit" class="btn btn-primary text-sm">Confirm published</button>
+            <button type="submit" class="btn btn-tonal text-sm">Confirm published</button>
           </form>
 
           <form method="post" action="{% url 'publishing:reconciliation-retry' variant.pk %}" class="space-y-2">

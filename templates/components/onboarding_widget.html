@@ -1,30 +1,12 @@
-{% comment %}Floating, always-available setup checklist. Rendered app-wide (via
-the onboarding_status context processor) while setup is incomplete. Collapses to
-a small launcher so it stays available without getting in the way.{% endcomment %}
-<div x-data="{ open: localStorage.getItem('obWidget') === 'open',
-               set(v){ this.open = v; localStorage.setItem('obWidget', v ? 'open' : 'closed'); } }"
-     class="ob-widget fixed bottom-4 right-4 print:hidden" style="z-index: var(--z-sticky)">
+{% comment %}The setup checklist. Rendered app-wide (via the onboarding_status context processor)
+while setup is incomplete, opened from "Setup N/M" in the top bar.{% endcomment %}
+<div x-data="{ open: false, set(v){ this.open = v; } }"
+     @ob-toggle.window="set(!open)" @keydown.escape.window="open && set(false)"
+     @click.outside="if (open && !$event.target.closest('.ob-launch')) set(false)"
+     class="ob-widget fixed right-4 print:hidden" style="z-index: var(--z-sticky); top: calc(4rem + var(--safe-top, 0px) + .5rem)">
 
-  {% comment %}Collapsed launcher: an icon-only circle, not a wide text pill — pinned to a screen
-     corner, it sits over whatever page content happens to be there, and a full "Finish
-     setup N/5" pill was wide enough to clip a stat's label on the Insights page. A small
-     circle still gets seen (amber, always-visible corner) but only ever covers a corner
-     of a card instead of an entire line of text. "Finish setup" stays in the DOM (aria-label
-     + sr-only) so it's still announced to assistive tech and screen readers, and so it still
-     matches by text content wherever that's asserted.{% endcomment %}
-  <button type="button" x-show="!open" @click="set(true)"
-          class="relative flex items-center justify-center rounded-full bg-amber-400 hover:bg-amber-500 text-ink
-                 w-12 h-12 shadow-pop"
-          aria-label="Finish setup: {{ onboarding.required_done }} of {{ onboarding.required_total }} done">
-    {% include "components/icon.html" with name="sparkles" class="w-5 h-5" %}
-    <span class="sr-only">Finish setup</span>
-    <span aria-hidden="true"
-          class="absolute -top-1 -right-1 inline-flex items-center justify-center h-5 min-w-5 px-1
-                 rounded-full bg-ink text-surface text-xs font-semibold leading-none">
-      {{ onboarding.required_done }}/{{ onboarding.required_total }}
-    </span>
-  </button>
-
+  {% comment %}Opened from "Setup N/M" in the top bar (base.html). It used to be a floating
+  circle in the corner, which covered buttons and content on every page.{% endcomment %}
   {# Expanded panel #}
   <div x-show="open" x-cloak x-transition
        class="card shadow-modal w-80 overflow-hidden" style="max-width: calc(100vw - 2rem)">

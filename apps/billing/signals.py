@@ -1,11 +1,32 @@
 import logging
 from datetime import timedelta
 
-from django.db.models.signals import post_save
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+
+_ENTITLEMENT_MODELS = (
+    "billing.Subscription",
+    "billing.Plan",
+    "billing.PlanFeature",
+    "billing.AccountFeatureOverride",
+    "billing.ModuleSubscription",
+)
+
+
+def _forget_entitlements(sender, **kwargs):
+    """A change to what entitlement reads: drop what this request remembered of it."""
+    from apps.billing.api import forget
+
+    forget()
+
+
+for _model in _ENTITLEMENT_MODELS:
+    post_save.connect(_forget_entitlements, sender=_model, weak=False)
+    post_delete.connect(_forget_entitlements, sender=_model, weak=False)
 
 
 @receiver(post_save, sender="billing.Plan")
@@ -27,6 +48,7 @@ def seed_new_plan_features(sender, instance, created, raw=False, **kwargs):
     PlanFeature.objects.bulk_create(
         [PlanFeature(plan=instance, key=k) for k in sorted(keys)], ignore_conflicts=True
     )
+    _forget_entitlements(sender)
 
     # Limits, the same way migration 0022 set up existing plans: the old max_* column where one
     # was enforced, otherwise unlimited.

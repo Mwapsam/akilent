@@ -4,10 +4,32 @@
 /* The header above the tabs (templates/publishing/_subnav.html): one height on every page, with
    or without buttons, so the tab row never moves between tabs. Below sm the buttons may wrap,
    so it only has a minimum there. */
-.cs-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-  gap: .75rem; min-height: 2.75rem; margin-bottom: 1rem; }
+.cs-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+  gap: .75rem; min-height: 3.5rem; margin-bottom: 1rem; }
 @media (min-width: 640px) {
-  .cs-head { flex-wrap: nowrap; height: 2.75rem; }
+  .cs-head { flex-wrap: nowrap; height: 3.5rem; }
+}
+/* The title is the tab's name, under a small "Content Studio" crumb (_cs_title.html). */
+.cs-title { display: flex; flex-direction: column; justify-content: flex-end; min-width: 0; }
+.cs-crumb { font-size: .75rem; font-weight: 500; color: var(--color-ink-subtle); line-height: 1rem; }
+.cs-crumb:hover { color: var(--color-ink); }
+.cs-h1 { font-size: 1.75rem; line-height: 2.25rem; font-weight: 600; letter-spacing: -.022em; color: var(--color-ink); }
+
+/* Four sizes across the studio: the title (.cs-h1), a section (h2), a card's heading (h3) and
+   body text, with captions at .75rem. Headings are tighter and heavier than the text under them.
+   Scoped to what follows .cs-head, so only Content Studio pages change. */
+.cs-head ~ * h2, .cs-head ~ h2 { font-size: 1.125rem; line-height: 1.5rem; font-weight: 600; letter-spacing: -.014em; }
+.cs-head ~ * h3, .cs-head ~ h3 { font-size: .9375rem; line-height: 1.375rem; font-weight: 600; letter-spacing: -.008em; }
+
+/* One surface for every card in the studio: the page's surface, a 1px hairline, the surface
+   radius, no shadow. Only a card you can click lifts on hover. */
+.cs-head ~ * .card, .cs-head ~ .card { border-radius: var(--radius-surface); box-shadow: none; }
+.cs-head ~ * :is(a.card, .card-hover), .cs-head ~ :is(a.card, .card-hover) {
+  transition: transform 150ms var(--ease-emphasized, ease), box-shadow 150ms var(--ease-emphasized, ease); }
+.cs-head ~ * :is(a.card, .card-hover):hover, .cs-head ~ :is(a.card, .card-hover):hover {
+  transform: translateY(-1px); box-shadow: var(--shadow-pop); }
+@media (prefers-reduced-motion: reduce) {
+  .cs-head ~ * :is(a.card, .card-hover):hover, .cs-head ~ :is(a.card, .card-hover):hover { transform: none; }
 }
 
 /* The media editor (templates/publishing/_media_edit.html). The stage has an explicit height
@@ -229,3 +251,47 @@
 .me-shapes .btn[aria-pressed="true"] { color: var(--color-accent);
   background: color-mix(in srgb, var(--color-accent) 14%, transparent);
   box-shadow: inset 0 0 0 1px var(--color-accent); }
+
+/* Sales (templates/publishing/sales.html): headline tiles with a trend line, then the posts.
+   One hue for every mark (the accent); up/down colours only repeat the arrow and the words. */
+.cs-info { display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 999px;
+  color: var(--color-ink-subtle); cursor: pointer; list-style: none; }
+.cs-info::-webkit-details-marker { display: none; }
+.cs-info:hover, .cs-info:focus-visible { background: var(--color-surface-muted); color: var(--color-ink); }
+.kpi-row { display: grid; gap: .75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 1024px) { .kpi-row { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.kpi { display: flex; flex-direction: column; gap: .125rem; min-width: 0; padding: .875rem 1rem .75rem;
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-surface); }
+.kpi-label { font-size: .8125rem; color: var(--color-ink-subtle); }
+.kpi-value { font-size: 1.625rem; line-height: 2rem; font-weight: 600; letter-spacing: -.02em; color: var(--color-ink); }
+.kpi-value-more { font-size: .9375rem; font-weight: 600; color: var(--color-ink); }
+.kpi-note { font-size: .75rem; color: var(--color-ink-subtle); }
+.kpi-delta { font-size: .75rem; font-weight: 500; color: var(--color-ink-subtle); }
+.kpi-delta.is-up { color: var(--tone-teal-fg); }
+.kpi-delta.is-down { color: var(--tone-coral-fg); }
+.kpi-delta-vs { font-weight: 400; color: var(--color-ink-subtle); }
+.kpi-spark { display: block; width: 100%; height: auto; margin-top: auto; padding-top: .5rem; overflow: visible; }
+.kpi-spark-line { fill: none; stroke: var(--color-accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.kpi-spark-dot { fill: var(--color-accent); stroke: var(--color-surface); stroke-width: .8; }
+.kpi-spark-hit { fill: transparent; }
+.kpi-spark-hit:hover { fill: color-mix(in srgb, var(--color-accent) 10%, transparent); }
+.sales-layout { display: grid; gap: 1rem; align-items: start; }
+@media (min-width: 1024px) { .sales-layout { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); } }
+.sales-main { min-width: 0; }
+/* A post's funnel: chats → leads → orders → paid, each bar a share of the widest step. */
+.sf { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem; max-width: 32rem; }
+.sf-text { display: flex; justify-content: space-between; gap: .25rem; font-size: .75rem; }
+.sf-text dt { color: var(--color-ink-subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sf-text dd { font-weight: 600; color: var(--color-ink); }
+.sf-track { display: block; height: 6px; margin-top: .25rem; border-radius: 999px;
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent); overflow: hidden; }
+.sf-fill { display: block; height: 100%; border-radius: 999px; background: var(--color-accent); }
+.sales-head { display: flex; flex-direction: column; gap: .75rem; }
+@media (min-width: 768px) { .sales-head { flex-direction: row; align-items: center; justify-content: space-between; } }
+@media (max-width: 639px) { .kpi { padding: .75rem; } .kpi-value { font-size: 1.375rem; line-height: 1.75rem; } }
+
+/* Yellow is for the page's one main action, in .cs-head. An empty state's action inside the page
+   (components/empty_state.html) is a secondary one here, in the accent. */
+.cs-head ~ * .empty-state .btn-primary { color: var(--color-accent); font-weight: 600;
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent); }
+.cs-head ~ * .empty-state .btn-primary:hover { background: color-mix(in srgb, var(--color-accent) 20%, transparent); }

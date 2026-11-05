@@ -26,7 +26,7 @@ and the Manage themes modal (overlay_or_page) both show this.{% endcomment %}
           {% csrf_token %}
           <input type="hidden" name="action" value="update"><input type="hidden" name="pk" value="{{ campaign.pk }}">
           {% include "publishing/_theme_fields.html" with c=campaign prefix=campaign.pk %}
-          <div class="flex gap-2"><button class="btn btn-primary btn-sm">Save</button><button type="button" class="btn btn-ghost btn-sm" @click="editing = false">Cancel</button></div>
+          <div class="flex gap-2"><button class="btn btn-tonal btn-sm">Save</button><button type="button" class="btn btn-ghost btn-sm" @click="editing = false">Cancel</button></div>
         </form>
       </li>
       {% endfor %}
@@ -42,7 +42,7 @@ and the Manage themes modal (overlay_or_page) both show this.{% endcomment %}
       {% csrf_token %}
       <input type="hidden" name="action" value="create">
       {% include "publishing/_theme_fields.html" with prefix="new" %}
-      <button type="submit" class="btn btn-primary">Add theme</button>
+      <button type="submit" class="btn btn-tonal">Add theme</button>
     </form>
   </div>
 

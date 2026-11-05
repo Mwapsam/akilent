@@ -22,6 +22,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import datetime, timedelta
+from typing import Any
 
 import requests
 from django.conf import settings
@@ -305,10 +306,16 @@ def _platform(entry) -> str:
     return variant.platform if variant else ""
 
 
-def credit_basis(entry, page: BioPage | None = None) -> str:
+_UNREAD: Any = (
+    object()
+)  # ``page`` not passed: read it (None means "there's no bio page")
+
+
+def credit_basis(entry, page: BioPage | None = _UNREAD) -> str:
     """How sure a post's credit from ``entry`` (a ConversationEntryPoint) is.
 
-    Pass ``page`` when labelling many entries of one workspace; otherwise it is read.
+    Pass ``page`` (the workspace's BioPage, or None when it has none) when labelling many
+    entries of one workspace; otherwise it is read.
     """
     from apps.conversations.models import ConversationEntryPoint
 
@@ -318,7 +325,7 @@ def credit_basis(entry, page: BioPage | None = None) -> str:
         return CONFIRMED
     if entry.bio_tile_id:
         return CONFIRMED
-    if page is None:
+    if page is _UNREAD:
         page = BioPage.objects.filter(account_id=entry.account_id).first()
     if (
         page is None
@@ -330,7 +337,7 @@ def credit_basis(entry, page: BioPage | None = None) -> str:
     return DIRECT_LINK
 
 
-def credit_label(entry, page: BioPage | None = None) -> str:
+def credit_label(entry, page: BioPage | None = _UNREAD) -> str:
     return LABELS[credit_basis(entry, page)]
 
 

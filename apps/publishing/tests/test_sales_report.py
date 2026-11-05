@@ -374,6 +374,91 @@ def test_the_page_says_when_nothing_can_be_tracked(shop, released, settings):
     assert "data-sales-unavailable" in html
 
 
+# --- Tiles, trends and funnels ------------------------------------------------------------
+
+
+def _kpi(report, key):
+    return next(k for k in report["kpis"] if k["key"] == key)
+
+
+def test_the_tiles_compare_with_the_period_before(shop):
+    post = shop.post("Sandals")
+    shop.chats(post, 5, at=timezone.now() - timedelta(days=40))  # the 30 days before
+    shop.chats(post, 99, at=timezone.now() - timedelta(days=70))  # older still: ignored
+    recent = shop.chats(post, 2)
+    shop.order(recent[0], "10.00", "USD")
+
+    report = shop.report()
+
+    chats = _kpi(report, "chats")
+    assert chats["value"] == 2
+    assert chats["change"] == {"pct": 60, "up": False, "flat": False}
+    assert _kpi(report, "leads")["change"] is None  # nothing either side: no 0%
+    assert report["revenue"] == [
+        {
+            "currency": "USD",
+            "total": Decimal("10.00"),
+            "change": {"new": True, "up": True},
+        }
+    ]
+    # The row and the ranking still only count this period.
+    assert _row(report, post)["confirmed"]["chats"] == 2
+
+
+def test_a_trend_has_a_point_per_day_and_adds_up_to_the_tile(shop):
+    post = shop.post("Sandals")
+    for days_ago in (0, 0, 2, 5):
+        shop.chat(post, at=timezone.now() - timedelta(days=days_ago, minutes=5))
+
+    trend = _kpi(shop.report(days=7), "chats")["trend"]
+
+    values = [s["value"] for s in trend["slots"]]
+    assert len(values) == 7 and sum(values) == 4 and values[-1] == 2
+    assert len(trend["points"].split()) == 7
+    assert trend["end"] == (100.0, 2.0)  # the busiest point sits at the top
+
+
+def test_the_report_reads_the_same_whatever_the_number_of_chats(shop):
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    post = shop.post(
+        "Sandals", platform="instagram"
+    )  # Instagram asks about the bio page
+    for c in shop.chats(post, 2):
+        shop.order(c)
+    shop.report()  # warms the channel cache
+    with CaptureQueriesContext(connection) as few:
+        shop.report()
+    for c in shop.chats(post, 8):
+        shop.order(c)
+    with CaptureQueriesContext(connection) as many:
+        shop.report()
+
+    assert len(many) == len(few), [q["sql"][:80] for q in many.captured_queries]
+
+
+def test_a_post_row_draws_its_funnel(shop, released):
+    post = shop.post("Sandals")
+    chats = shop.chats(post, 4)
+    shop.lead(chats[0])
+    shop.lead(chats[1])
+    shop.order(chats[0])
+
+    report = shop.report()
+    html = shop.client.get(reverse("publishing:sales")).content.decode()
+
+    assert [(s["label"], s["pct"]) for s in _row(report, post)["funnel"]] == [
+        ("Chats", 100),
+        ("Leads", 50),
+        ("Orders", 25),
+        ("Paid orders", 25),
+    ]
+    assert 'class="sf-fill" style="width: 50%"' in html
+    assert 'data-kpi="chats"' in html and 'data-kpi="revenue"' in html
+    assert "New <span" in html  # nothing in the 30 days before
+
+
 # --- Bio page polish ---------------------------------------------------------------------
 
 
