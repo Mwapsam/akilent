@@ -1566,11 +1566,28 @@
     overlayHost().querySelector("#overlay-title").textContent = content.dataset.overlayTitle || "";
     syncOverlayStep();
     overlayBody().scrollTop = 0;
-    const invalid = content.querySelector('[aria-invalid="true"]');
-    if (invalid && invalid.focus) invalid.focus();
-    else focusInitial(overlayHost(), true);
+    // A frame later, once Alpine has set the new content up: before that, controls it disables
+    // (the media editor's, until its picture is ready) still look enabled, and focus put on one
+    // of them fell to <body> when Alpine disabled it.
+    requestAnimationFrame(function () {
+      if (!overlay.open || !content.isConnected) return;
+      const invalid = content.querySelector('[aria-invalid="true"]');
+      if (invalid && invalid.focus) invalid.focus({ preventScroll: true });
+      else focusInitial(overlayHost(), true);
+      overlayBody().scrollTop = 0;
+    });
   });
   document.addEventListener("overlay-close", function () { closeOverlay(); });
+  // A control disabled while it has focus drops focus to <body>, outside the open overlay (and
+  // out of reach of its Esc and Tab handling): put it on Close instead.
+  document.addEventListener("focusout", function (e) {
+    if (!overlay.open || !e.target.closest || !e.target.closest("#overlay-host") || e.relatedTarget) return;
+    setTimeout(function () {
+      if (!overlay.open || document.activeElement !== document.body || !akDialog.isTop(overlayHost())) return;
+      const close = overlayHost().querySelector(".ak-overlay-head [data-overlay-close]");
+      if (close) close.focus({ preventScroll: true });
+    }, 0);
+  });
 
   // One request refreshes the page under the overlay after a save: its [data-cs-region]
   // parts if it marks any, else everything in <main>. Focus that was on a link inside goes
@@ -1631,16 +1648,22 @@
     closeOverlay();
   };
 
-  // Never strand a navigation: if the in-place request can't complete, load the page.
+  // Never strand a navigation: if the in-place request can't complete, load the page. Why it
+  // happened is kept (sessionStorage "akilent:hard-nav", and the console), so a reload nobody
+  // asked for can be explained afterwards.
+  function hardNavigate(e, reason) {
+    const path = e.detail.requestConfig.path;
+    const why = { reason: reason, path: path, from: location.pathname, status: e.detail.xhr ? e.detail.xhr.status : null,
+      online: navigator.onLine, at: new Date().toISOString() };
+    try { sessionStorage.setItem("akilent:hard-nav", JSON.stringify(why)); } catch (err) { /* private mode */ }
+    console.warn("In-place navigation failed, loading the page instead:", why);
+    window.location.href = path;
+  }
   document.addEventListener("htmx:sendError", function (e) {
-    if (isBoosted(e.detail) && e.detail.requestConfig.verb === "get") {
-      window.location.href = e.detail.requestConfig.path;
-    }
+    if (isBoosted(e.detail) && e.detail.requestConfig.verb === "get") hardNavigate(e, "send-error");
   });
   document.addEventListener("htmx:timeout", function (e) {
-    if (isBoosted(e.detail) && e.detail.requestConfig.verb === "get") {
-      window.location.href = e.detail.requestConfig.path;
-    }
+    if (isBoosted(e.detail) && e.detail.requestConfig.verb === "get") hardNavigate(e, "timeout");
   });
 
   document.addEventListener("DOMContentLoaded", function () {

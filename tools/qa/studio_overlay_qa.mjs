@@ -88,7 +88,7 @@ ws.addEventListener("message", async (ev) => {
     if (act && act.delay) { await sleep(act.delay); await send("Fetch.continueRequest", { requestId }); }
     else if (!act) await send("Fetch.continueRequest", { requestId });
     else if (act.fail) await send("Fetch.failRequest", { requestId, errorReason: act.fail });
-    else if (act.raw) await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: act.type }], body: act.raw });
+    else if (act.raw) { if (act.wait) await sleep(act.wait); await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: act.type }], body: act.raw }); }
     else await send("Fetch.fulfillRequest", { requestId, responseCode: act.status,
       responseHeaders: [{ name: "Content-Type", value: act.html !== undefined ? "text/html" : "application/json" }, ...(act.headers || [])],
       body: Buffer.from(act.html !== undefined ? act.html : JSON.stringify(act.body)).toString("base64") });
@@ -289,12 +289,14 @@ for (let [page, sel, kind, ready] of [
   const png = readFileSync(join(repo, "static/img/demo/leather-sandals.png")).toString("base64");
   // An https host (the page's CSP allows https images) that's answered here, never with CORS
   // headers; the request never leaves the browser.
-  rules.unshift({ match: (r) => new URL(r.url).host === "media.qa.invalid", act: { raw: png, type: "image/png" } });
+  rules.unshift({ match: (r) => new URL(r.url).host === "media.qa.invalid", act: { raw: png, type: "image/png", wait: 1500 } });
   await go("/publishing/media/", 1400);
   const editHref = await evaluate(`(() => { let el = document.querySelector('#main img[src*="leather-sandals"], #main [style*="leather-sandals"]'); while (el && !(el.querySelector && el.querySelector('a[href$="/edit/"]'))) el = el.parentElement; const a = el && el.querySelector('a[href$="/edit/"]'); return a ? a.getAttribute('href') : null; })()`);
   if (!editHref) { check("editor.no-cors-shows-preview", false, "no localhost picture in the grid"); }
   else {
     await clickSel(`#main a[href="${editHref}"]`);
+    // Sample where focus and the scroll position are while the (slow) picture loads and fails.
+    await evaluate(`window.__samples = []; window.__sampler = setInterval(() => { const a = document.activeElement; window.__samples.push({ t: Math.round(performance.now()), top: (document.getElementById('overlay-body') || {}).scrollTop, focus: a ? (a.id || a.tagName + (a.getAttribute('aria-label') ? '[' + a.getAttribute('aria-label') + ']' : '') + (a.textContent ? ':' + a.textContent.trim().slice(0, 15) : '')) : null, inHost: !!(a && a.closest && a.closest('#overlay-host')) }); }, 50); 0`);
     await waitFor("!!document.querySelector('#overlay-body [x-data^=mediaEditor]')");
     const shownOk = await waitFor(`(() => { const i = document.querySelector('#overlay-body img[data-media-preview]'); return i && !i.hasAttribute('crossorigin') && i.complete && i.naturalWidth > 0; })()`);
     const cors = await evaluate(`(() => { const i = document.querySelector('#overlay-body img[data-media-preview]');
@@ -305,7 +307,13 @@ for (let [page, sel, kind, ready] of [
     const pv = await evaluate(`(() => { const ctl = [...document.querySelectorAll('#overlay-body fieldset button, #overlay-body fieldset input, #overlay-body fieldset select')];
       return { controls: ctl.length, enabled: ctl.filter((c) => !c.matches(':disabled')).map((c) => c.textContent.trim() || c.id), scrollTop: document.getElementById('overlay-body').scrollTop }; })()`);
     check("editor.preview-only-controls-disabled", pv.controls > 5 && pv.enabled.length === 0, pv);
-    check("editor.opens-at-top", pv.scrollTop === 0, pv);
+    await sleep(2500);
+    const samples = await evaluate(`(clearInterval(window.__sampler), window.__samples)`);
+    const maxTop = Math.max(...samples.map((x) => x.top || 0));
+    const outside = samples.filter((x) => !x.inHost).map((x) => x.focus);
+    const last = samples[samples.length - 1];
+    check("editor.opens-at-top", pv.scrollTop === 0 && maxTop === 0, { maxTop, last });
+    check("editor.focus-stays-in-editor", last.inHost && outside.length <= 2, { last, outsideSamples: [...new Set(outside)] });
     await key("Escape", "Escape", 27);
     await waitFor(`document.getElementById('overlay-host').hidden`);
   }

@@ -1829,3 +1829,15 @@ Plan: "Content Studio: make it feel like an app" (2026-11-03). Approving it cove
 - **Verification:**
   - full suite 5,802 tests, 0 failures, 25 skipped;
   - `studio_overlay_qa` 33/33, `studio_feel_qa` 14/14, `publishing_qa` 21/21.
+
+### Entry 18c: third review of Phases 0–2 (2026-11-05)
+- **Existing pictures still opened as preview only.** CloudFront was already fixed (SimpleCORS adds the header on cache hits too, checked). The stale copy was the browser's: the grid's no-CORS load is cached for a year without the header, and Chrome handed it to the editor's CORS load. The editor now asks for `?cors=1`, a separate entry in the browser's cache that CloudFront ignores (its cache policy drops query strings). A URL that already has a query is left alone.
+- **Focus fell to `<body>` and the editor opened scrolled.**
+  - The overlay focused its content before Alpine had set it up, so focus landed on "Square 1:1" just before Alpine disabled it. Focus now moves a frame later, then the scroll is reset.
+  - If a focused control in the overlay is ever disabled, focus moves to Close.
+  - Harness: `editor.opens-at-top` (max scrollTop 0 over 2.5s with a slow, failing picture) and `editor.focus-stays-in-editor` (ends on Close).
+- **The follow-ups badge was fetched twice per navigation.** The nav is re-rendered out of band on each in-place navigation, and both new badges (desktop and mobile) fetched on `load`. Each badge now has an id and `hx-preserve`. Harness: `nav.badge-not-refetched-per-page` (0 fetches over a 7-tab loop).
+- **The unexplained full reload.** The only app-side causes are the "never strand a navigation" fallbacks (send error or timeout on a boosted GET). They now record why in `sessionStorage["akilent:hard-nav"]` and in the console. Harness: `tabs.loop-never-reloads` over the 7-tab loop with the cache disabled.
+- **Verification:**
+  - full suite 5,804 tests, 0 failures, 25 skipped;
+  - `studio_feel_qa` 16/16, `studio_overlay_qa` 34/34, `publishing_qa` 21/21.

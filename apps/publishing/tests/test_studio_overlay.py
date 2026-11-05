@@ -514,3 +514,28 @@ def test_an_idea_without_channels_still_becomes_a_post(shop):
     assert f"post_id={post.pk}" in response["Location"]
     assert post.platforms  # the channels switched on, changeable in the composer
     assert post.variants.count() == len(post.platforms)
+
+
+def test_the_editor_loads_its_picture_apart_from_the_grids_copy(shop, settings):
+    """The browser kept the grid's copy of a picture (cached for a year, no CORS header) and
+    handed it to the editor's CORS load, which failed: the editor asks for its own copy."""
+    account, client = shop
+    settings.RELEASED_FEATURES = ALL_FLAGS
+    asset = _asset(account)
+
+    html = client.get(
+        reverse("publishing:media-edit", args=[asset.pk]), **OVERLAY
+    ).content.decode()
+
+    assert f'src="{asset.url}?cors=1" crossorigin="anonymous"' in html
+
+
+def test_the_follow_ups_badge_survives_an_in_place_navigation(shop):
+    """The nav is re-rendered out of band on every in-place navigation; a new badge fetched its
+    count on load, twice per page (desktop and mobile navs)."""
+    _account, client = shop
+
+    html = client.get(reverse("publishing:library")).content.decode()
+
+    assert 'id="nav-badge-follow-ups-desktop" hx-preserve' in html
+    assert 'id="nav-badge-follow-ups-mobile" hx-preserve' in html

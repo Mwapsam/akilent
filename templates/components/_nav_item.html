@@ -39,7 +39,11 @@
     <span>{{ label }}</span>
   {% endif %}
   {% if badge_url %}
-  <span class="ml-auto" hx-get="{{ badge_url }}" hx-swap="innerHTML" data-auto-refresh="followup-changed"
+  {% comment %}hx-preserve with an id per nav (desktop/mobile): an in-place navigation re-renders the
+  nav out of band for its active item, and a new badge fetched its count on load, twice per
+  page. The existing one is kept, with its count and timers.{% endcomment %}
+  <span class="ml-auto" id="nav-badge-{{ label|slugify }}-{% if collapsible %}desktop{% else %}mobile{% endif %}" hx-preserve
+        hx-get="{{ badge_url }}" hx-swap="innerHTML" data-auto-refresh="followup-changed"
         hx-trigger="load, every 120s, sse:followup.due, sse:followup.updated, followup-changed from:body"></span>
   {% endif %}
 </a>

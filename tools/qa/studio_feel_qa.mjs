@@ -193,6 +193,8 @@ await go("/publishing/new/", 1500);
 await clickSel("#shell-nav-desktop a[href='/publishing/']"); // the composer has no tabs: the sidebar link
 await waitFor("location.pathname === '/publishing/' && !document.querySelector('#main[aria-busy]')"); await sleep(600);
 check("main.classes-restored-after-composer", await evaluate(`!/composer-main/.test(document.getElementById('main').className) && /max-w-7xl/.test(document.getElementById('main').className)`), await evaluate("document.getElementById('main').className"));
+await evaluate("window.__loopKeep = 'same page'; 0");
+const badgeBefore = log.filter((l) => l.startsWith("GET /inbox/followups/badge/")).length;
 const tabTops = {};
 for (const href of ["/publishing/", "/publishing/library/", "/publishing/calendar/", "/publishing/planning/", "/publishing/channels/", "/publishing/sales/", "/publishing/media/"]) {
   await waitFor("!document.documentElement.classList.contains('ak-page-vt') && !document.querySelector('#main[aria-busy]')"); await sleep(150);
@@ -201,6 +203,9 @@ for (const href of ["/publishing/", "/publishing/library/", "/publishing/calenda
   tabTops[href] = await evaluate(`Math.round(document.querySelector('[data-instant-tabs]').getBoundingClientRect().top + scrollY)`);
 }
 check("tabs.same-height-on-every-tab", new Set(Object.values(tabTops)).size === 1, tabTops);
+// The whole loop stays one page load (the cache is disabled, so every asset is cold).
+check("nav.badge-not-refetched-per-page", log.filter((l) => l.startsWith("GET /inbox/followups/badge/")).length - badgeBefore === 0, { fetches: log.filter((l) => l.startsWith("GET /inbox/followups/badge/")).length - badgeBefore });
+check("tabs.loop-never-reloads", (await evaluate("window.__loopKeep")) === "same page", { hardNav: await evaluate(`sessionStorage.getItem('akilent:hard-nav')`) });
 
 // 5c. Quick tab clicks skip view transitions without unhandled errors (checked at the end).
 for (const href of ["/publishing/library/", "/publishing/calendar/", "/publishing/planning/", "/publishing/"]) {
