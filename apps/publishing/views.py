@@ -1259,14 +1259,24 @@ def plan_item_create_post(request, pk):
 
     item = get_object_or_404(ContentPlanItem, pk=pk, account=account)
 
+    from .composer import CONNECTED, OFF, destinations
     from .services import initialize_post_with_variants
 
+    # Add idea doesn't ask for channels, so an idea often has none: the draft starts on the
+    # channels connected now (else every one switched on), changeable in the composer. It used
+    # to fail with "At least one platform must be selected".
+    platforms = list(item.platforms or [])
+    if not platforms:
+        dests = destinations(account)
+        platforms = [p for p, d in dests.items() if d["status"] == CONNECTED] or [
+            p for p, d in dests.items() if d["status"] != OFF
+        ]
     try:
         with transaction.atomic():
             post = ContentPost.objects.create(
                 account=account,
                 plan_item=item,
-                platforms=item.platforms,
+                platforms=platforms,
                 media_type=item.media_type,
                 status=ContentPost.Status.DRAFT,
                 created_by=request.user,
@@ -1274,7 +1284,7 @@ def plan_item_create_post(request, pk):
             )
             item.plan_status = ContentPlanItem.PlanStatus.IN_PRODUCTION
             item.save(update_fields=["plan_status", "updated_at"])
-            initialize_post_with_variants(post, item.platforms)
+            initialize_post_with_variants(post, platforms)
     except ValueError as exc:
         messages.error(request, f"Cannot create a post from this plan item: {exc!s}")
         return redirect("publishing:planning")

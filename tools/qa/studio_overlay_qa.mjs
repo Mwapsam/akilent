@@ -245,7 +245,7 @@ check("plan.delete-in-drawer", gone && (await evaluate("window.__keep")) === "st
 rules.shift();
 
 // 11. The other side pages open over their page, each in its shape.
-for (const [page, sel, kind, ready] of [
+for (let [page, sel, kind, ready] of [
   ["/publishing/media/", '#main a[href$="/edit/"][data-overlay-open="modal"]', "modal", "!!document.querySelector('#overlay-body [x-data^=mediaEditor], #overlay-body #me-seconds')"],
   ["/publishing/media/", '#main a[href="/publishing/media/snippets/"]', "drawer", "!!document.querySelector('#overlay-body [aria-labelledby=sn-templates]')"],
   ["/publishing/calendar/", '#main a[href="/publishing/slots/"]', "drawer", "!!document.querySelector('#overlay-body [aria-labelledby=slots-title]')"],
@@ -259,6 +259,9 @@ for (const [page, sel, kind, ready] of [
   }
   await go(page, 1400);
   await evaluate(`window.__keep = 'still here'; 0`);
+  // The editor check uses a picture this server can read back (not the CORS test asset).
+  if (sel.includes("/edit/")) await evaluate(`(() => { let el = document.querySelector('#main img[src*="linen-dress"]'); while (el && !(el.querySelector && el.querySelector('a[href$="/edit/"]'))) el = el.parentElement; const a = el && el.querySelector('a[href$="/edit/"]'); if (a) a.setAttribute('data-qa-readable', ''); return 0; })()`);
+  if (sel.includes("/edit/") && await evaluate("!!document.querySelector('#main a[data-qa-readable]')")) sel = "#main a[data-qa-readable]";
   const has = await evaluate(`!!document.querySelector(${JSON.stringify(sel)})`);
   if (!has) { check(`side.${page}${sel}`, false, "no opener"); continue; }
   await clickSel(sel);
@@ -266,8 +269,13 @@ for (const [page, sel, kind, ready] of [
   await sleep(500);
   const st = await evaluate(`({ kind: document.getElementById('overlay-host').dataset.kind, keep: window.__keep, path: location.pathname,
     stage: (() => { const s = document.querySelector('#overlay-body .cropper-container'); return s ? Math.round(s.getBoundingClientRect().height) : null; })() })`);
-  const name = sel.match(/href[$]?="([^"]+)"/)[1];
-  if (name === "/edit/") { await shot("overlay-media-editor"); check("side.media-editor-cropper-sized", st.stage === null || st.stage > 200, st); }
+  const name = sel.includes("data-qa-readable") ? "/edit/" : sel.match(/href[$]?="([^"]+)"/)[1];
+  if (name === "/edit/") {
+    await shot("overlay-media-editor");
+    check("side.media-editor-cropper-sized", st.stage === null || st.stage > 200, st);
+    const ed = await evaluate(`({ disabled: [...document.querySelectorAll('#overlay-body fieldset button, #overlay-body fieldset input')].filter((c) => c.matches(':disabled')).length, scrollTop: document.getElementById('overlay-body').scrollTop })`);
+    check("side.media-editor-controls-ready-and-at-top", st.stage > 200 && ed.disabled === 0 && ed.scrollTop === 0, ed);
+  }
   check(`side.${name}`, ok && st.kind === kind && st.keep === "still here", st);
   await key("Escape", "Escape", 27);
   await waitFor(`document.getElementById('overlay-host').hidden`);
@@ -294,6 +302,10 @@ for (const [page, sel, kind, ready] of [
         img: i && { src: i.getAttribute('src'), co: i.getAttribute('crossorigin'), complete: i.complete, w: i.naturalWidth, h: Math.round(i.getBoundingClientRect().height), display: getComputedStyle(i).display } }; })()`);
     await shot("overlay-media-editor-no-cors");
     check("editor.no-cors-shows-preview", shownOk && /preview only/.test(cors.msg || "") && cors.saveDisabled, cors);
+    const pv = await evaluate(`(() => { const ctl = [...document.querySelectorAll('#overlay-body fieldset button, #overlay-body fieldset input, #overlay-body fieldset select')];
+      return { controls: ctl.length, enabled: ctl.filter((c) => !c.matches(':disabled')).map((c) => c.textContent.trim() || c.id), scrollTop: document.getElementById('overlay-body').scrollTop }; })()`);
+    check("editor.preview-only-controls-disabled", pv.controls > 5 && pv.enabled.length === 0, pv);
+    check("editor.opens-at-top", pv.scrollTop === 0, pv);
     await key("Escape", "Escape", 27);
     await waitFor(`document.getElementById('overlay-host').hidden`);
   }

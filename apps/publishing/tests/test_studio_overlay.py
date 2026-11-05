@@ -499,3 +499,18 @@ def test_overviews_action_on_a_post_opens_the_drawer(shop):
     for line in html.splitlines():
         if "/publishing/posts/" in line and "href=" in line:
             assert "data-overlay-open" in line, line
+
+
+def test_an_idea_without_channels_still_becomes_a_post(shop):
+    """Add idea doesn't ask for channels; "→ Post" and "Write the post" used to fail with
+    "At least one platform must be selected"."""
+    account, client = shop
+    item = ContentPlanItem.objects.create(account=account, topic="No channels yet")
+
+    response = client.post(reverse("publishing:plan-create-post", args=[item.pk]))
+
+    post = ContentPost.objects.get(plan_item=item)
+    assert response.status_code == 302
+    assert f"post_id={post.pk}" in response["Location"]
+    assert post.platforms  # the channels switched on, changeable in the composer
+    assert post.variants.count() == len(post.platforms)

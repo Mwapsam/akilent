@@ -339,7 +339,10 @@
       });
     }
   }
-  function focusInitial(root) {
+  // preventScroll: move focus without scrolling to it (the overlay opens at its top even when
+  // the first control sits below a tall picture, as in the media editor).
+  function focusInitial(root, preventScroll) {
+    const how = { preventScroll: !!preventScroll };
     const auto = root.querySelector("[autofocus]");
     if (auto && shown(auto)) { auto.focus(); return; }
     const body = root.querySelector("[data-dialog-body]");
@@ -347,10 +350,10 @@
       return scope && Array.prototype.find.call(scope.querySelectorAll(FOCUSABLE), shown);
     };
     const first = pick(body) || pick(root);
-    if (first) { first.focus(); return; }
+    if (first) { first.focus(how); return; }
     const panel = root.querySelector("[data-dialog-panel]") || root;
     if (!panel.hasAttribute("tabindex")) panel.setAttribute("tabindex", "-1");
-    panel.focus();
+    panel.focus(how);
   }
   function restoreFocus(opener) {
     if (opener && opener.isConnected && opener !== document.body && !opener.closest("[inert]")) {
@@ -371,7 +374,8 @@
       syncInert();
       // After Alpine has shown it: focus() on a display:none element does nothing.
       requestAnimationFrame(function () {
-        requestAnimationFrame(function () { if (root.isConnected) focusInitial(root); });
+        // Without scrolling: a dialog opens at its top, even if its first control is lower down.
+        requestAnimationFrame(function () { if (root.isConnected) focusInitial(root, true); });
       });
     },
     close(root) {
@@ -1564,7 +1568,7 @@
     overlayBody().scrollTop = 0;
     const invalid = content.querySelector('[aria-invalid="true"]');
     if (invalid && invalid.focus) invalid.focus();
-    else focusInitial(overlayHost());
+    else focusInitial(overlayHost(), true);
   });
   document.addEventListener("overlay-close", function () { closeOverlay(); });
 

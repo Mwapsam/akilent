@@ -33,8 +33,16 @@ def test_publish_now_with_no_platform_leaves_no_active_post(client_for_owner):
     assert ContentPost.objects.filter(account=account).count() == 0
 
 
-def test_plan_item_with_no_platform_redirects_instead_of_500(client_for_owner):
+def test_plan_item_with_no_platform_redirects_instead_of_500(
+    client_for_owner, monkeypatch
+):
+    """An idea without channels starts its draft on the channels switched on (see
+    test_studio_overlay); with every channel off there is none to start on: back to Planning,
+    nothing half-made."""
     client, account = client_for_owner
+    monkeypatch.setattr(
+        "apps.publishing.composer.channel_state", lambda platform: "disabled"
+    )
     item = ContentPlanItem.objects.create(
         account=account, topic="t", platforms=[], media_type="image"
     )

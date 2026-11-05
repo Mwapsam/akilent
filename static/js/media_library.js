@@ -140,6 +140,7 @@
       textPos: "bottom",
       textColor: "#ffffff",
       saving: false,
+      previewOnly: false,
       error: "",
       saved: null,
 
@@ -155,6 +156,7 @@
         // on it, since a picture the page can't read back can't be saved).
         var fail = function () {
           img.removeEventListener("load", start);
+          self.previewOnly = true;
           self.error = "This picture can't be edited yet: the media server doesn't allow it " +
             "to be read back, so it's shown as a preview only. Your files and posts aren't affected.";
           // A new element: the same one, with crossorigin removed, kept its failed load.

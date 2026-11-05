@@ -1802,3 +1802,30 @@ Plan: "Content Studio: make it feel like an app" (2026-11-03). Approving it cove
   - full suite 5,801 tests, 0 failures, 25 skipped; ruff, format and mypy clean;
   - `studio_feel_qa.mjs` 14/14 (cache disabled);
   - `studio_overlay_qa.mjs` 30/30.
+
+### Entry 18b: second review of Phases 0–2 (2026-11-05)
+- **Media editor:**
+  - all its controls sit in one fieldset that stays disabled until Cropper runs, and for good in preview-only mode;
+  - the "preview only" message sits under the picture;
+  - overlays and dialogs move focus without scrolling (`focusInitial(root, preventScroll)`), so the editor opens at its top.
+  - Harness: `editor.preview-only-controls-disabled` (11 of 11 controls disabled), `editor.opens-at-top`, `side.media-editor-controls-ready-and-at-top`.
+- **Plan file:** the two dropped Phase 1 items (tab `preload`, the `cs-tab` underline) are marked dropped, with their reasons.
+- **Ideas without channels** become a post on the connected channels (else every one switched on). They used to fail with "At least one platform must be selected"; found in a local end-to-end run.
+- **Speed, measured locally on the QA workspace** (SQLite):
+
+  | Page | Time | Queries |
+  |---|---|---|
+  | Composer | 74ms | 37 |
+  | Channels | 54ms | 36 |
+  | AI | 112ms | 65 |
+  | Library | 81ms | 33 |
+  | Overview | 136ms | 45 |
+  | Calendar | 299ms | 36 |
+  | Sales | 122ms | 68 |
+
+  - No page queries per row, and no page calls Meta while rendering.
+  - The shell repeats its entitlement reads 4–5 times per request (`billing.api._state` is uncached): subscription ×5, membership/plan features/overrides/module subscriptions ×4, site settings ×3, about 17 queries on every page.
+  - **Proposed** (not built): a per-request memo, cleared on any save of those models.
+- **Verification:**
+  - full suite 5,802 tests, 0 failures, 25 skipped;
+  - `studio_overlay_qa` 33/33, `studio_feel_qa` 14/14, `publishing_qa` 21/21.

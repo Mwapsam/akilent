@@ -23,7 +23,12 @@ stylesheet for Cropper comes with the content, and a save closes it over the gri
     <div class="overflow-hidden rounded-lg bg-surface-muted" style="height: min(70vh, 40rem)">
       <img x-ref="image" src="{{ asset.url }}" crossorigin="anonymous" alt="{{ asset.name }}" class="block max-w-full mx-auto" style="max-height: 100%">
     </div>
-    <fieldset class="flex flex-wrap items-center gap-2">
+    <p class="text-sm tone-coral-fg" role="alert" x-show="error" x-text="error"></p>
+    {% comment %}Every control waits for the editor: disabled while the picture loads, and for
+    good when it can only be shown as a preview (the media server doesn't allow reading it back).{% endcomment %}
+    <fieldset class="space-y-3 min-w-0" :disabled="!cropper" :aria-hidden="previewOnly ? 'true' : null" :class="previewOnly && 'opacity-50'">
+    <legend class="sr-only">Edit the picture</legend>
+    <div role="group" aria-label="Shape and turn" class="flex flex-wrap items-center gap-2">
       <legend class="sr-only">Shape</legend>
       <button type="button" class="btn btn-ghost btn-sm" @click="setRatio(1)" :aria-pressed="ratio === 1">Square 1:1</button>
       <button type="button" class="btn btn-ghost btn-sm" @click="setRatio(4/5)" :aria-pressed="ratio === 4/5">Portrait 4:5</button>
@@ -33,7 +38,7 @@ stylesheet for Cropper comes with the content, and a save closes it over the gri
       <span class="text-ink-subtle" aria-hidden="true">·</span>
       <button type="button" class="btn btn-ghost btn-sm" @click="rotate(-90)">Turn left</button>
       <button type="button" class="btn btn-ghost btn-sm" @click="rotate(90)">Turn right</button>
-    </fieldset>
+    </div>
     <div class="grid gap-3 sm:grid-cols-3">
       <div class="sm:col-span-3">
         <label for="me-text" class="block text-sm font-medium text-ink mb-1">Text (optional)</label>
@@ -48,8 +53,8 @@ stylesheet for Cropper comes with the content, and a save closes it over the gri
         <select id="me-color" x-model="textColor" class="select w-full"><option value="#ffffff">White</option><option value="#000000">Black</option></select>
       </div>
     </div>
-    <p class="text-sm tone-coral-fg" role="alert" x-show="error" x-text="error"></p>
     <button type="button" class="btn btn-primary btn-sm" @click="save()" :disabled="saving || !cropper" x-text="saving ? 'Saving…' : 'Save as a new picture'"></button>
+    </fieldset>
   </section>
   {% else %}
   <section class="card card-pad space-y-3" aria-labelledby="me-cover">
