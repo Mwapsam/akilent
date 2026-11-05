@@ -56,7 +56,9 @@ and ?status= links still work).{% endcomment %}
       last(days) { const t = new Date(); const f = new Date(t); f.setDate(t.getDate() - days + 1); this.pick(this.day(f), this.day(t), 'Last ' + days + ' days'); },
       month() { const t = new Date(); this.pick(this.day(new Date(t.getFullYear(), t.getMonth(), 1)), this.day(t), 'This month'); },
       pick(f, t, label) { this.from = f; this.to = t; this.label = label; this.$root.open = false; this.$nextTick(() => this.$root.closest('form').requestSubmit()); },
-      typed() { this.label = this.from || this.to ? (this.from || '…') + ' – ' + (this.to || '…') : 'Any time'; } }">
+      typed() { this.label = this.from || this.to ? (this.from || '…') + ' – ' + (this.to || '…') : 'Any time'; },
+      sync() { const d = document.getElementById('library-dates'); if (d) { this.from = d.dataset.from; this.to = d.dataset.to; this.label = d.dataset.label; } } }"
+      @htmx:after-swap.window="sync()">
     <summary class="select select-sm w-auto flex items-center gap-2" aria-label="Dates">
       {% include "components/icon.html" with name="clock" class="w-4 h-4 text-ink-subtle" %}
       <span x-text="label">{{ dates_label }}</span>
@@ -88,6 +90,9 @@ and ?status= links still work).{% endcomment %}
 </form>
 
 <div id="library-results">
+{% comment %}The dates the results were filtered by, so the trigger above (outside this region)
+catches up when a chip clears them or the filter changes another way.{% endcomment %}
+<span id="library-dates" hidden data-from="{{ date_from }}" data-to="{{ date_to }}" data-label="{{ dates_label }}"></span>
 {% include "publishing/_filter_chips.html" %}
 
 {# Bulk action form #}

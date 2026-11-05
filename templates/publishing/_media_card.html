@@ -38,7 +38,8 @@ line: a clean name and how many posts use it. a: a decorated MediaAsset (media_v
             <button type="submit" name="action" value="restore" class="pop-item">{% include "components/icon.html" with name="refresh" %}Put back</button>
             {% elif a.remove_outcome == "blocked" %}
             {% comment %}What Remove would do is known before it's pressed (media_views._decorate).{% endcomment %}
-            <p class="pop-item text-ink-subtle cursor-default text-xs">{% include "components/icon.html" with name="lock" %}A draft or scheduled post uses it, so it can't be removed yet.</p>
+            <button type="button" class="pop-item" disabled aria-describedby="ml-why-{{ a.pk }}">{% include "components/icon.html" with name="lock" %}Remove</button>
+            <p id="ml-why-{{ a.pk }}" class="px-2.5 pb-1 text-xs text-ink-subtle">Used by a draft or scheduled post, so it can't be removed yet.</p>
             {% elif a.remove_outcome == "archived" %}
             <button type="submit" name="action" value="remove" class="pop-item" data-confirm-label="Archive"
               data-confirm="Archive {{ a.display }}? {{ a.used_in }} published post{{ a.used_in|pluralize }} use{{ a.used_in|pluralize:'s,' }} it, so it's hidden here and the file is kept for {{ a.used_in|pluralize:'it,them' }}. You can undo it.">{% include "components/icon.html" with name="minus-circle" %}Archive</button>

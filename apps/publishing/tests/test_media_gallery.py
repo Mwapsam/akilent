@@ -88,9 +88,11 @@ def test_each_card_says_what_remove_will_do(shop):
 
     assert 'data-confirm-label="Delete"' in card(free)
     assert 'data-confirm-label="Archive"' in card(published)
-    assert "can't be removed yet" in card(drafted) and 'value="remove"' not in card(
-        drafted
-    )
+    # Remove stays in the menu, disabled, with the reason under it.
+    blocked = card(drafted)
+    assert 'disabled aria-describedby="ml-why-' in blocked
+    assert "Used by a draft or scheduled post" in blocked
+    assert 'value="remove"' not in blocked
 
 
 def test_archiving_from_the_selection_bar_can_be_undone(shop):

@@ -342,6 +342,12 @@ await evaluate(`document.querySelector('h1').click(); 0`);
 await sleep(150);
 const afterOutside = await evaluate(panelShown);
 check("library.date-popover-closes-and-names-preset", openedWide.shown && openedWide.wide <= 0 && !preset.shown && preset.trigger === "Last 7 days" && /Last 7 days/.test(preset.chip || "") && !afterEsc && !afterOutside, { openedWide, preset, afterEsc, afterOutside });
+// Removing the date chip resets the trigger too (it sits outside the swapped region).
+await evaluate(`document.querySelector('#library-results [data-chip-clear="date_from date_to"]').click(); 0`);
+await waitFor(`!location.search.includes('date_from=2')`);
+await sleep(300);
+const reset = await evaluate(`({ trigger: document.querySelector('form[data-live-filter] details.pop summary').innerText.trim(), from: document.getElementById('library-from').value })`);
+check("library.date-chip-resets-trigger", reset.trigger === "Any time" && reset.from === "", reset);
 
 await go("/publishing/media/", 1500);
 await evaluate(`window.scrollTo(0, 900); 0`);
@@ -367,6 +373,10 @@ await evaluate(`Alpine.store('confirm').respond(false); 0`);
 await sleep(400);
 const focusAfter = await evaluate(`(() => { const a = document.activeElement; return { tag: a.tagName, inCard: !!(a.closest && a.closest('[data-asset]')) }; })()`);
 check("confirm.cancel-keeps-focus", focusAfter.tag !== "BODY" && focusAfter.inCard, focusAfter);
+
+// A file a draft needs still lists Remove in its menu, disabled, with the reason.
+const blocked = await evaluate(`(() => { const b = document.querySelector('#media-results .ml-more button[disabled]'); if (!b) return { none: true }; const why = document.getElementById(b.getAttribute('aria-describedby')); return { label: b.textContent.trim(), why: why && why.textContent.trim() }; })()`);
+check("media.blocked-remove-says-why", !blocked.none && blocked.label === "Remove" && /draft/.test(blocked.why || ""), blocked);
 
 check("console.no-errors", consoleErrors.filter((e) => !/favicon|ERR_BLOCKED_BY_CLIENT|status of 4\d\d|leather-sandals|CORS/.test(e)).length === 0, consoleErrors.slice(0, 5));
 const failed = results.filter((r) => !r.pass);

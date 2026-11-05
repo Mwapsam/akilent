@@ -112,6 +112,13 @@ def test_library_dates_are_one_popover_that_keeps_the_dates(shop):  # noqa: F811
     assert "1 Oct \N{EN DASH} 31 Oct" in html  # the trigger and the chip
     assert 'name="date_from" id="library-from" value="2026-10-01"' in html
     assert "Any time" in html  # the preset that clears them
+    # The results region carries the dates, so the trigger (outside it) catches up when a
+    # chip clears them.
+    assert (
+        'id="library-dates" hidden data-from="2026-10-01" data-to="2026-10-31"'
+        ' data-label="1 Oct \N{EN DASH} 31 Oct"'
+    ) in html
+    assert '@htmx:after-swap.window="sync()"' in html
     # It opens to the left of its trigger (it sits at the right of the bar), not off-screen.
     assert (
         "pop-panel--start"
