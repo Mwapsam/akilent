@@ -275,6 +275,17 @@ for (let [page, sel, kind, ready] of [
     check("side.media-editor-cropper-sized", st.stage === null || st.stage > 200, st);
     const ed = await evaluate(`({ disabled: [...document.querySelectorAll('#overlay-body fieldset button, #overlay-body fieldset input')].filter((c) => c.matches(':disabled')).length, scrollTop: document.getElementById('overlay-body').scrollTop })`);
     check("side.media-editor-controls-ready-and-at-top", st.stage > 200 && ed.disabled === 0 && ed.scrollTop === 0, ed);
+    // A short window (the review's 631px): the whole picture and the Save button on screen at once.
+    await viewport(1280, 631, false);
+    await sleep(400);
+    const fit = await evaluate(`(() => { const s = document.querySelector('#overlay-body .me-stage').getBoundingClientRect(); const b = document.querySelector('#overlay-body button.btn-primary').getBoundingClientRect();
+      return { stageTop: Math.round(s.top), stageBottom: Math.round(s.bottom), saveBottom: Math.round(b.bottom), vh: innerHeight }; })()`);
+    check("side.media-editor-fits-short-window", fit.stageTop >= 0 && fit.stageBottom <= fit.vh && fit.saveBottom <= fit.vh, fit);
+    await viewport(1280, 800, false);
+    // The chosen shape looks chosen, not only to screen readers.
+    const shape = await evaluate(`(() => { const btns = [...document.querySelectorAll('#overlay-body .me-shapes button')]; const sq = btns.find((b) => b.textContent.trim() === 'Square 1:1'); const other = btns.find((b) => b.textContent.trim() === 'Turn left');
+      sq.click(); return new Promise((r) => requestAnimationFrame(() => r({ pressed: sq.getAttribute('aria-pressed'), bg: getComputedStyle(sq).backgroundColor, ring: getComputedStyle(sq).boxShadow, otherBg: getComputedStyle(other).backgroundColor }))); })()`);
+    check("side.media-editor-shape-shown-selected", shape.pressed === "true" && shape.bg !== shape.otherBg && shape.ring !== "none", shape);
   }
   check(`side.${name}`, ok && st.kind === kind && st.keep === "still here", st);
   await key("Escape", "Escape", 27);

@@ -9,3 +9,22 @@
 @media (min-width: 640px) {
   .cs-head { flex-wrap: nowrap; height: 2.75rem; }
 }
+
+/* The media editor (templates/publishing/_media_edit.html). The stage has an explicit height
+   because Cropper sizes itself to its container. In the modal it's kept short enough below lg
+   that the controls start on screen. From lg up the controls sit beside the picture, and the
+   stage takes the modal's height: 94dvh (overlay.css, size full) less its head and paddings. */
+.me-layout { display: flex; flex-direction: column; gap: .75rem; }
+.me-stage { height: min(70vh, 40rem); }
+.me-layout--overlay .me-stage { height: min(55dvh, 40rem); }
+@media (min-width: 1024px) {
+  .me-layout--overlay { display: grid; grid-template-columns: minmax(0, 1fr) 18rem;
+    grid-template-rows: auto 1fr; column-gap: 1.25rem; align-items: start; }
+  .me-layout--overlay .me-stage { grid-column: 1; grid-row: 1 / span 2; height: calc(94dvh - 9.5rem); }
+  .me-layout--overlay .me-intro { grid-column: 2; grid-row: 1; }
+  .me-layout--overlay .me-side { grid-column: 2; grid-row: 2; }
+}
+/* The chosen shape looks chosen, in the active tab's colours (not only aria-pressed). */
+.me-shapes .btn[aria-pressed="true"] { color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  box-shadow: inset 0 0 0 1px var(--color-accent); }

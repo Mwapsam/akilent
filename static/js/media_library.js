@@ -148,7 +148,9 @@
         var img = this.$refs.image;
         var self = this;
         var start = function () {
-          self.cropper = new window.Cropper(img, { viewMode: 1, autoCropArea: 1, background: false });
+          // No wheel zoom: over a picture this tall it caught the wheel, and the modal
+          // couldn't be scrolled from there.
+          self.cropper = new window.Cropper(img, { viewMode: 1, autoCropArea: 1, background: false, zoomOnWheel: false });
         };
         // A picture that failed to load is "complete" too, with no size: usually the media
         // server not allowing it to be read back (CORS), which editing needs.

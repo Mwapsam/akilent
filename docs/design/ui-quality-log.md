@@ -1841,3 +1841,10 @@ Plan: "Content Studio: make it feel like an app" (2026-11-03). Approving it cove
 - **Verification:**
   - full suite 5,804 tests, 0 failures, 25 skipped;
   - `studio_feel_qa` 16/16, `studio_overlay_qa` 34/34, `publishing_qa` 21/21.
+
+### Entry 18d: fourth review of Phases 0–2 (2026-11-05)
+- **`ReferenceError: previewOnly is not defined`, and the editor opening scrolled 310px, on akilent.com.** Neither happens with the current code (closing by Esc, Close and Back logs nothing; the editor opens at scrollTop 0). Production was running old JavaScript: static files kept fixed names (`static/js/app.js`) under `max-age=31536000`, so browsers and CloudFront kept last deploy's `media_library.js` (no `previewOnly`) and `app.js` (focus without `preventScroll`) against the new templates. `StaticToS3Storage` is now `S3ManifestStaticStorage` (content-hashed names, not strict), so every deploy's files are new URLs. A trial collectstatic hashed all 209 files in 9s. Tests: `apps/core/tests/test_static_hashing.py`.
+- **The editor in a short window.** In the modal from `lg` up, the controls sit beside the picture and the stage takes the modal's height (`calc(94dvh - 9.5rem)`). Below `lg` the stage is `min(55dvh, 40rem)`. At 1280×631 the whole picture and the Save button are on screen (body content 531px in 520px, was 836px). Cropper's wheel zoom is off, so the wheel scrolls the modal. Harness: `side.media-editor-fits-short-window`.
+- **The chosen shape looks chosen**: accent text, a tinted background and a 1px accent ring (`static/css/studio.css`). Harness: `side.media-editor-shape-shown-selected`.
+- **Preload and the tab underline** are still deliberately dropped (Entry 18c, the plan file). **Speed** is unchanged; the billing per-request memo awaits a decision.
+- **Verification:** full suite, 0 failures; ruff clean; `studio_overlay_qa` 36/36, `studio_feel_qa` 16/16.

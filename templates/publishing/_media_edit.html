@@ -14,25 +14,32 @@ stylesheet for Cropper comes with the content, and a save closes it over the gri
   {% url 'publishing:media-edit' asset.pk as save_url %}
   {% url 'publishing:media-library' as library_url %}
   <script type="application/json" id="media-editor-config">{"save": "{{ save_url|escapejs }}", "library": "{{ library_url|escapejs }}"}</script>
-  <section class="card card-pad space-y-3" aria-labelledby="me-title" x-data="mediaEditor()">
+  <section class="card card-pad" aria-labelledby="me-title" x-data="mediaEditor()">
     {% csrf_token %}
-    <h2 id="me-title" class="font-semibold text-ink">Edit {{ asset.name }}</h2>
-    <p class="text-sm text-ink-subtle">Crop to a channel's shape, turn it, and add one line of text. It's saved as a new picture; the original stays as it is.</p>
+    {% comment %}.me-layout (static/css/studio.css): in the modal on a wide screen, the picture on
+    the left at the modal's full height and the controls beside it, so a short window still shows
+    the whole picture and the controls without scrolling. Stacked otherwise.{% endcomment %}
+    <div class="me-layout{% if in_overlay %} me-layout--overlay{% endif %}">
+    <div class="me-intro space-y-1">
+      <h2 id="me-title" class="font-semibold text-ink">Edit {{ asset.name }}</h2>
+      <p class="text-sm text-ink-subtle">Crop to a channel's shape, turn it, and add one line of text. It's saved as a new picture; the original stays as it is.</p>
+    </div>
     {% comment %}A fixed-height stage: Cropper sizes itself to its container, and an
     unsized one gave it a 100px box.{% endcomment %}
-    <div class="overflow-hidden rounded-lg bg-surface-muted" style="height: min(70vh, 40rem)">
+    <div class="me-stage overflow-hidden rounded-lg bg-surface-muted">
       {% comment %}?cors=1: its own entry in the browser's cache. The grid shows the same picture
       without CORS, and the browser kept that copy (cached for a year, no CORS header), then
       handed it to this CORS load, which failed. CloudFront ignores the query string. A URL that
       already has a query (a signed one) is left alone.{% endcomment %}
       <img x-ref="image" src="{{ asset.url }}{% if '?' not in asset.url %}?cors=1{% endif %}" crossorigin="anonymous" alt="{{ asset.name }}" class="block max-w-full mx-auto" style="max-height: 100%">
     </div>
+    <div class="me-side space-y-3 min-w-0">
     <p class="text-sm tone-coral-fg" role="alert" x-show="error" x-text="error"></p>
     {% comment %}Every control waits for the editor: disabled while the picture loads, and for
     good when it can only be shown as a preview (the media server doesn't allow reading it back).{% endcomment %}
     <fieldset class="space-y-3 min-w-0" :disabled="!cropper" :aria-hidden="previewOnly ? 'true' : null" :class="previewOnly && 'opacity-50'">
     <legend class="sr-only">Edit the picture</legend>
-    <div role="group" aria-label="Shape and turn" class="flex flex-wrap items-center gap-2">
+    <div role="group" aria-label="Shape and turn" class="me-shapes flex flex-wrap items-center gap-2">
       <legend class="sr-only">Shape</legend>
       <button type="button" class="btn btn-ghost btn-sm" @click="setRatio(1)" :aria-pressed="ratio === 1">Square 1:1</button>
       <button type="button" class="btn btn-ghost btn-sm" @click="setRatio(4/5)" :aria-pressed="ratio === 4/5">Portrait 4:5</button>
@@ -43,8 +50,8 @@ stylesheet for Cropper comes with the content, and a save closes it over the gri
       <button type="button" class="btn btn-ghost btn-sm" @click="rotate(-90)">Turn left</button>
       <button type="button" class="btn btn-ghost btn-sm" @click="rotate(90)">Turn right</button>
     </div>
-    <div class="grid gap-3 sm:grid-cols-3">
-      <div class="sm:col-span-3">
+    <div class="me-text grid gap-3 grid-cols-2">
+      <div class="col-span-2">
         <label for="me-text" class="block text-sm font-medium text-ink mb-1">Text (optional)</label>
         <input id="me-text" x-model="text" maxlength="80" class="input w-full" placeholder="e.g. New in this week">
       </div>
@@ -59,6 +66,8 @@ stylesheet for Cropper comes with the content, and a save closes it over the gri
     </div>
     <button type="button" class="btn btn-primary btn-sm" @click="save()" :disabled="saving || !cropper" x-text="saving ? 'Saving…' : 'Save as a new picture'"></button>
     </fieldset>
+    </div>
+    </div>
   </section>
   {% else %}
   <section class="card card-pad space-y-3" aria-labelledby="me-cover">
