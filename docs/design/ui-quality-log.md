@@ -1931,3 +1931,17 @@ Plan: "Content Studio: make it feel like an app" (2026-11-03). Approving it cove
   - Yellow stays for the page's one main action. In-card saves use `.btn-tonal` (navy), and so do empty-state actions in the studio.
   - Things swapped in place (chips, cards, rows, tiles) fade and grow in over 150 ms. A media card being removed fades out first (`swap:150ms`). Page changes are left to their own transition. Toasts scale in. Reduced motion turns all of it off.
 - **Not built:** tab preload and the sliding underline (Entry 18c), and the rest of the studio redesign proposal (Overview data, Planning board, Bio preview, Channel health, copy trimming), which wasn't part of this go-ahead.
+- **Verification:** full suite 0 failures; ruff, format, mypy and `makemigrations --check` clean. `studio_gallery_qa` 29/29 (new: date chip resets the trigger, blocked Remove says why, setup opens under the bar), `studio_overlay_qa` 36/36, `studio_feel_qa` 16/16, `publishing_qa` 21/21; `area_scan /publishing` 14 pages, 0 issues.
+
+### Entry 23: seventh review (2026-11-05)
+- **Overview title:** "Overview" under the "Content Studio" crumb, like the other tabs (`studio_tab`).
+- **Setup stuck at 4/5:** a paused channel's step stays on the checklist, marked "Not counted", but is left out of the count. Setup is still not complete while a channel is paused (unchanged rule). When only the paused step is left, the top bar shows "Setup paused" with a pause icon instead of a ring short of full, and the checklist says everything you can do today is done.
+- **Narrow pages:** Channels, AI and Bio page use the full width with `.cs-cols` (two columns from lg, one below).
+  - Channels: the accounts side by side, then review and recent failures.
+  - AI: brand voice beside post ideas.
+  - Bio page: the link and posts on the left, the settings on the right (sticky). The "Set up your bio page" card keeps a readable width.
+- **Sales:** a post with no confirmed credit at all moves out of "Too early to judge" into a folded "Only unconfirmed credits (N)" group. It's kept, because such a post can still show real activity (e.g. 6 bio-link chats and a paid order), but it isn't read as a sample.
+- **Bio picture field** (found by the scan once a local bio page existed): labelled, 16px on phones, and fits its column at 360px.
+- **Analytics tab:** behind the `cs_analytics` release gate. Production's `RELEASED_FEATURES` doesn't include it, so it's hidden there by design; local runs had it on.
+- **Signed out mid-tour:** sessions are in the database (`SESSION_ENGINE` default) and the deploy doesn't clear them, so a redeploy doesn't sign anyone out. The limit is `SESSION_COOKIE_AGE` = 8 hours from sign-in, not from the last request (`SESSION_SAVE_EVERY_REQUEST` is off), plus `SESSION_EXPIRE_AT_BROWSER_CLOSE`. A long review session hits the 8 hours. Left as is: a policy decision.
+- **Verification:** ruff, format and mypy clean. `studio_gallery_qa` 29/29, `studio_overlay_qa` 36/36, `studio_feel_qa` 16/16, `publishing_qa` 21/21; `area_scan /publishing` 14 pages, 0 issues. Full suite: one failure, `test_the_next_app_code_works_after_an_old_sign_in` (time-based authenticator codes), which passes on its own (4/4 in its file).

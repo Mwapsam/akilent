@@ -154,7 +154,7 @@ def shop():
 
 
 def _row(report, post):
-    for row in report["ranked"] + report["too_early"]:
+    for row in report["ranked"] + report["too_early"] + report["unconfirmed_only"]:
         if row["post"].pk == post.pk:
             return row
     return None
@@ -285,8 +285,8 @@ def test_unconfirmed_instagram_credits_are_shown_but_never_rank(shop):
 
     report = shop.report()
 
-    assert report["ranked"] == []
-    row = report["too_early"][0]
+    assert report["ranked"] == [] and report["too_early"] == []
+    row = report["unconfirmed_only"][0]  # folded away: not a sample
     assert row["confirmed"]["chats"] == 0
     (unconfirmed,) = row["unconfirmed"]
     assert unconfirmed["basis"] == bio.BIO_UNCONFIRMED

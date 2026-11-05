@@ -295,3 +295,10 @@
 .cs-head ~ * .empty-state .btn-primary { color: var(--color-accent); font-weight: 600;
   background: color-mix(in srgb, var(--color-accent) 12%, transparent); }
 .cs-head ~ * .empty-state .btn-primary:hover { background: color-mix(in srgb, var(--color-accent) 20%, transparent); }
+
+/* Two columns from lg (Channels, AI, Bio page), so a settings page uses the width like Sales. */
+.cs-cols { display: grid; gap: 1rem; align-items: start; }
+@media (min-width: 1024px) { .cs-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.cs-cols > * { min-width: 0; }
+.cs-stack { display: grid; gap: 1rem; }
+@media (min-width: 1024px) { .cs-side { position: sticky; top: calc(4rem + var(--safe-top, 0px) + 1rem); } }

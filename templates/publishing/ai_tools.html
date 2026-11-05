@@ -8,7 +8,8 @@
 
 {% include "publishing/_subnav.html" %}
 
-<div class="max-w-3xl space-y-4">
+{% comment %}Full width: brand voice beside the post ideas (.cs-cols, one column below lg).{% endcomment %}
+<div class="space-y-4">
   {% if off_reason %}
   <div class="tone-info rounded-xl p-3 text-sm" role="status">
     AI tools are off: {{ off_reason }}
@@ -16,6 +17,7 @@
   </div>
   {% endif %}
 
+  <div class="cs-cols">
   <section class="card card-pad space-y-3" aria-labelledby="ai-voice-title">
     <div>
       <h2 id="ai-voice-title" class="font-semibold text-ink">Brand voice</h2>
@@ -61,5 +63,6 @@
     {% endif %}
     {% include "publishing/_ai_ideas.html" %}
   </section>
+  </div>
 </div>
 {% endblock %}

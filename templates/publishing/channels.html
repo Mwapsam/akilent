@@ -9,7 +9,10 @@
 
 {% include "publishing/_subnav.html" %}
 
-<div class="max-w-xl space-y-4">
+{% comment %}Full width: the accounts side by side, then the review switch and recent failures
+(.cs-cols, one column below lg).{% endcomment %}
+<div class="space-y-4">
+<div class="cs-cols">
 
   {# Instagram #}
   <div class="card card-pad">
@@ -116,6 +119,9 @@
     </div>
   </div>
 
+</div>
+
+<div class="cs-cols">
   {# Review before publishing #}
   <div class="card card-pad">
     <h3 class="font-semibold text-ink mb-1">Review before publishing</h3>
@@ -161,6 +167,7 @@
     </div>
   </div>
   {% endif %}
+</div>
 
 </div>
 {% endblock %}

@@ -144,7 +144,8 @@ def _zone(name: str):
 
 
 def report(account, period, min_chats: int = MIN_CHATS) -> dict | None:
-    """``{ranked, too_early, credited, unconfirmed, not_credited, min_chats}``, or None
+    """``{kpis, revenue, ranked, too_early, unconfirmed_only, credited, unconfirmed,
+    not_credited, min_chats}``, or None
     when the business can't publish posts at all."""
     from apps.commerce.models import Order
     from apps.conversations.models import ConversationEntryPoint
@@ -269,8 +270,19 @@ def report(account, period, min_chats: int = MIN_CHATS) -> dict | None:
     )
     for i, row in enumerate(ranked, 1):
         row["rank"] = i
+
+    def confirmed_any(row) -> bool:
+        return any(row["confirmed"][m] for m, _ in KPI_LABELS)
+
+    # Too early: some confirmed credit, too few chats to judge. A post with only unconfirmed
+    # credits (a bio-link chat, say) is listed on its own, folded away: it isn't a sample.
     too_early = sorted(
-        (r for r in rows if r["confirmed"]["chats"] < min_chats), key=rank_key
+        (r for r in rows if r["confirmed"]["chats"] < min_chats and confirmed_any(r)),
+        key=rank_key,
+    )
+    unconfirmed_only = sorted(
+        (r for r in rows if not confirmed_any(r)),
+        key=lambda r: (-sum(u["chats"] for u in r["unconfirmed"]), -r["post"].pk),
     )
     from apps.accounts.business_hours import workspace_timezone
 
@@ -296,6 +308,7 @@ def report(account, period, min_chats: int = MIN_CHATS) -> dict | None:
         "days": period.days,
         "ranked": ranked,
         "too_early": too_early,
+        "unconfirmed_only": unconfirmed_only,
         "min_chats": min_chats,
         "credited": _revenue_list(totals[bio.CONFIRMED]),
         "unconfirmed": [

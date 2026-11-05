@@ -400,6 +400,24 @@ def test_both_with_one_channel_off(db, all_wired):
 
 
 @pytest.mark.django_db
+def test_a_paused_step_is_listed_but_not_counted(db, all_wired, client):
+    _switch_off("email")
+    acc = _make_account(BOTH)
+    n = _wa_number(acc, registration_status="registered")
+    n.connection_tests.create(recipient="+260971234567", status="sent")
+
+    state = ob.get_state(acc, essentials_only=True)
+
+    assert "email_paused" in [s["key"] for s in state["steps"]]
+    assert state["required_done"] == state["required_total"]  # not stuck at 3 of 4
+    assert state["only_paused_left"] and not state["complete"]  # still not complete
+    client.force_login(acc.owner)
+    html = client.get("/publishing/").content.decode()
+    assert "Setup paused" in html and "Not counted" not in html
+    assert "Not counted" in client.get("/onboarding/").content.decode()
+
+
+@pytest.mark.django_db
 def test_both_channels_off(db, all_wired):
     _switch_off("email", "whatsapp")
     acc = _make_account(BOTH)

@@ -110,6 +110,20 @@
         </ul>
       </section>
       {% endif %}
+
+      {% if report.unconfirmed_only %}
+      {% comment %}Posts with no confirmed credit at all (only a bio-link or direct-link chat, say):
+      kept, but folded away, so they don't read as posts that are about to rank.{% endcomment %}
+      <details class="card card-pad" data-sales-unconfirmed-only>
+        <summary class="flex items-baseline justify-between gap-2 cursor-pointer">
+          <h3 class="font-semibold text-ink">Only unconfirmed credits <span class="text-ink-subtle font-normal">({{ report.unconfirmed_only|length }})</span></h3>
+          <span class="text-xs text-ink-subtle">Not a sample: no chat confirmed for the post</span>
+        </summary>
+        <ul class="divide-y divide-border mt-2">
+          {% for row in report.unconfirmed_only %}{% include "publishing/_sales_row.html" with row=row %}{% endfor %}
+        </ul>
+      </details>
+      {% endif %}
     </div>
 
     <section class="card card-pad space-y-3" aria-labelledby="sales-totals">

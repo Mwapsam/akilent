@@ -39,7 +39,7 @@
         {% if complete %}
           The essentials are done.{% if recommended_total %} {{ recommended_done }} of {{ recommended_total }} suggestions tried — each one takes a few minutes.{% endif %}
         {% else %}
-          {{ required_done }} of {{ required_total }} essentials done. Finish them to start reaching your customers.
+          {% if only_paused_left %}Everything you can set up today is done. The paused setup carries on here when that channel is back.{% else %}{{ required_done }} of {{ required_total }} essentials done. Finish them to start reaching your customers.{% endif %}
         {% endif %}
       </p>
     </div>
@@ -80,7 +80,7 @@
         <div class="min-w-0 flex-1 flex flex-col sm:flex-row sm:items-center gap-3 pt-1.5">
           <div class="min-w-0 flex-1">
             <p class="font-medium {% if step.state == 'done' %}text-ink-subtle{% else %}text-ink{% endif %}">
-              {{ step.title }}
+              {{ step.title }}{% if step.state == "paused" %} <span class="badge badge-neutral" title="Nothing you do can finish this step, so it isn't in the count">Not counted</span>{% endif %}
               <span class="sr-only">— {% if step.state == "done" %}done{% elif step.state == "paused" %}paused{% elif step.state == "current" %}next{% else %}to do{% endif %}</span>
             </p>
             {% if step.state != "done" %}

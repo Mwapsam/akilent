@@ -278,6 +278,15 @@
         {% comment %}Setup progress lives in the bar, not floating over the page: it opens the
         checklist (components/onboarding_widget.html) just under the bar, and goes once setup is done.{% endcomment %}
         {% if onboarding and request.path != "/onboarding/" and not viewing_as %}
+        {% if onboarding.only_paused_left %}
+        {% comment %}Everything that can be done is done; a paused channel is all that's left, so a
+        count would sit short of full for good.{% endcomment %}
+        <button type="button" class="ob-launch" x-data @click="$dispatch('ob-toggle')"
+                aria-label="Setup paused: everything you can do now is done">
+          {% include "components/icon.html" with name="pause" class="w-4 h-4 text-ink-subtle" %}
+          <span class="hidden sm:inline">Setup paused</span>
+        </button>
+        {% else %}
         <button type="button" class="ob-launch" x-data @click="$dispatch('ob-toggle')"
                 aria-label="Finish setup: {{ onboarding.required_done }} of {{ onboarding.required_total }} done">
           <svg viewBox="0 0 20 20" class="ob-ring" aria-hidden="true"><circle cx="10" cy="10" r="8" class="ob-ring-track"/><circle cx="10" cy="10" r="8" class="ob-ring-fill" stroke-dasharray="{% widthratio onboarding.pct 100 50.27 %} 50.27"/></svg>
@@ -285,6 +294,7 @@
           <span class="tabular-nums" aria-hidden="true">{{ onboarding.required_done }}/{{ onboarding.required_total }}</span>
           <span class="sr-only">Finish setup</span>
         </button>
+        {% endif %}
         {% endif %}
 
         {# + Send #}

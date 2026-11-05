@@ -19,7 +19,7 @@ while setup is incomplete, opened from "Setup N/M" in the top bar.{% endcomment 
 
     <div class="px-4 py-3 border-b border-border">
       <div class="flex items-center justify-between text-xs text-ink-subtle mb-1.5">
-        <span>{{ onboarding.required_done }} of {{ onboarding.required_total }} done</span>
+        <span>{% if onboarding.only_paused_left %}All you can do now is done{% else %}{{ onboarding.required_done }} of {{ onboarding.required_total }} done{% endif %}</span>
         <span>{{ onboarding.pct }}%</span>
       </div>
       <div class="h-1.5 bg-canvas rounded-full overflow-hidden">
@@ -40,7 +40,7 @@ while setup is incomplete, opened from "Setup N/M" in the top bar.{% endcomment 
           </span>
           <span class="min-w-0 flex-1">
             <span class="block text-sm {% if step.done %}text-ink-subtle line-through{% else %}text-ink font-medium{% endif %}">
-              {{ step.title }}{% if step.optional %} <span class="text-xs font-normal text-ink-subtle no-underline">optional</span>{% endif %}
+              {{ step.title }}{% if step.state == "paused" %} <span class="text-xs font-normal text-ink-subtle">not counted</span>{% endif %}{% if step.optional %} <span class="text-xs font-normal text-ink-subtle no-underline">optional</span>{% endif %}
             </span>
             {% if not step.done and step.key == onboarding.next_step.key %}
               <span class="block text-xs text-ink-subtle mt-0.5">{{ step.desc }}</span>

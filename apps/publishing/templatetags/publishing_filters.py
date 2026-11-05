@@ -253,10 +253,12 @@ _STUDIO_TABS = (
 
 @register.simple_tag(takes_context=True)
 def studio_tab(context) -> str:
-    """The page's title: its tab's name, or "" on Overview and pages outside the tabs (which
-    keep "Content Studio" as their title)."""
+    """The page's title: its tab's name, or "" on pages outside the tabs (which keep "Content
+    Studio" as their title)."""
     request = context.get("request")
     path = getattr(request, "path", "")
+    if path == "/publishing/":
+        return "Overview"
     for prefixes, label in _STUDIO_TABS:
         if path.startswith(prefixes):
             return label

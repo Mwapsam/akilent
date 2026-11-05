@@ -987,7 +987,11 @@ def _build_state(ctx, essentials_only: bool) -> dict:
 
     required = [s for s in steps if not s["optional"]]
     recommended = [s for s in steps if s["optional"]]
-    required_done = sum(1 for s in required if s["done"])
+    # A paused channel's step stays on the list (setup isn't complete while it's paused) but
+    # isn't counted: nothing the business does can tick it, so counting it would hold the
+    # progress at "4 of 5" for as long as the channel is off.
+    counted = [s for s in required if not s["key"].endswith("_paused")]
+    required_done = sum(1 for s in counted if s["done"])
     # Only essentials drive "next up", so finishing them surfaces the
     # completion state even if a recommendation remains. Something the business can
     # do now always comes before a paused channel.
@@ -1031,7 +1035,9 @@ def _build_state(ctx, essentials_only: bool) -> dict:
         "sections": sections,
         "complete": required_done == len(required),
         "required_done": required_done,
-        "required_total": len(required),
+        "required_total": len(counted),
+        # Everything that can be done today is done; only a paused channel is left.
+        "only_paused_left": bool(ctx.paused) and required_done == len(counted),
         "recommended_done": sum(1 for s in recommended if s["done"]),
         "recommended_total": len(recommended),
         "done_count": sum(1 for s in steps if s["done"]),
@@ -1045,7 +1051,7 @@ def _build_state(ctx, essentials_only: bool) -> dict:
         "wants_instagram": ctx.wants_instagram,
         "wants_facebook": ctx.wants_facebook,
         "wants_email": ctx.wants_email,
-        "pct": round(required_done / len(required) * 100) if required else 100,
+        "pct": round(required_done / len(counted) * 100) if counted else 100,
     }
 
 
