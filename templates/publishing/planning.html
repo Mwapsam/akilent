@@ -74,7 +74,7 @@
       {% endfor %}
     </div>
     {% else %}
-    <p class="text-sm text-ink-subtle text-center py-8">No content planned for the next 7 days. <a href="{% url 'publishing:plan-new' %}" data-overlay-open="modal" class="text-accent hover:text-accent-strong cs-link">Plan a post</a></p>
+    {% url 'publishing:plan-new' as plan_url %}{% include "components/empty_state.html" with icon="layout-template" title="Nothing planned for the next 7 days" message="Plan an idea for a day, then turn it into a post when you're ready." action_url=plan_url action_label="Plan an idea" action_overlay="modal" compact=True %}
     {% endif %}
   </div>
 

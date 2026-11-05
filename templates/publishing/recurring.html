@@ -41,8 +41,8 @@
     {% endif %}
   </section>
   {% empty %}
-  <section class="card card-pad">
-    <p class="text-sm text-ink-subtle" data-recurring-empty>No recurring posts yet. Open a post and choose <strong>Repeat this post</strong>.</p>
+  <section class="card" data-recurring-empty>
+    {% include "components/empty_state.html" with icon="refresh" title="No recurring posts yet" message="Open a post and choose Repeat this post to send it again every few weeks." %}
   </section>
   {% endfor %}
 </div>

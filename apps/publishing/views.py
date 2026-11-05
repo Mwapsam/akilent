@@ -881,13 +881,11 @@ def publishing_library(request):
                 ),
             )
         )
+    from .live_filters import date_range_label
+
+    dates_label = date_range_label(date_from, date_to, timezone.localdate())
     if date_from or date_to:
-        active.append(
-            (
-                ("date_from", "date_to"),
-                f"{date_from or '…'} \N{EN DASH} {date_to or '…'}",
-            )
-        )
+        active.append((("date_from", "date_to"), dates_label))
     return render(
         request,
         "publishing/library.html",
@@ -903,6 +901,7 @@ def publishing_library(request):
             "platform_filter": platform_filter,
             "date_from": date_from,
             "date_to": date_to,
+            "dates_label": dates_label,
             "media_type_choices": ContentPost.MediaType.choices,
             "chips": chips(request, active),
             "clear_url": reverse("publishing:library"),

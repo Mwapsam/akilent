@@ -700,7 +700,17 @@
         confirmLabel: el.getAttribute("data-confirm-label") || "Confirm",
         cancelLabel: el.getAttribute("data-confirm-cancel") || "Cancel",
       })
-      .then(function (ok) { if (ok) proceed(); });
+      .then(function (ok) {
+        if (ok) { proceed(); return; }
+        // Cancelled: back to where you were, not <body>. A button in a menu that has
+        // closed hands focus to the menu's own trigger.
+        setTimeout(function () {
+          if (!el.isConnected || (document.activeElement && document.activeElement !== document.body)) return;
+          const menu = el.closest("details");
+          const target = shown(el) ? el : menu && menu.querySelector("summary");
+          if (target) target.focus({ preventScroll: true });
+        }, 50);
+      });
   }
   function proceedUnguarded(fn) {
     confirmBypass = true;
@@ -1597,6 +1607,24 @@
       });
     });
     liveFilter(form);
+  }, true);
+
+  // Popovers (<details class="pop">, static/css/controls.css) close like menus: a click
+  // outside, or Esc (focus back on the trigger). A choice inside closes its own.
+  document.addEventListener("click", function (e) {
+    document.querySelectorAll("details.pop[open]").forEach(function (d) {
+      if (!d.contains(e.target)) d.open = false;
+    });
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    const open = Array.prototype.slice.call(document.querySelectorAll("details.pop[open]"));
+    if (!open.length) return;
+    e.preventDefault();
+    e.stopImmediatePropagation(); // just the popover, not the drawer or dialog under it
+    open.forEach(function (d) { d.open = false; });
+    const summary = open[open.length - 1].querySelector("summary");
+    if (summary) summary.focus();
   }, true);
 
   // Page shortcuts (Content Studio app feel, Phase 5), never while typing or with a dialog

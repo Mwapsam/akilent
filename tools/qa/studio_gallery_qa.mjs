@@ -296,6 +296,78 @@ else {
 }
 rules.shift();
 
+// A copy of a file already in the library: asked "keep both?" before it's added; Skip adds nothing.
+await go("/publishing/media/", 1500);
+const uploadsBefore = log.filter((l) => /^POST \/publishing\/posts\/media\//.test(l)).length;
+const dupName = await evaluate(`(async () => {
+  const img = document.querySelector('#media-results img[src*="/media/publishing/9/demo/"]');
+  if (!img) return null;
+  const name = img.closest('[data-asset]').querySelector('.ml-name').getAttribute('title');
+  const blob = await (await fetch(img.getAttribute('src'))).blob();
+  const file = new File([blob], name.replace(/(\\.[a-z]+)$/i, ' (2)$1'), { type: blob.type });
+  Alpine.$data(document.querySelector('[x-data^="mediaLibrary"]')).onFiles([file]);
+  return file.name;
+})()`);
+if (!dupName) check("media.duplicate-asked-before-upload", false, "no demo picture to copy");
+else {
+  const asked = await waitFor(`(() => { const a = document.querySelector('.ml-ask'); return a && getComputedStyle(a).display !== 'none'; })()`, 6000);
+  const text = await evaluate(`(document.querySelector('.ml-ask') || {}).innerText || ''`);
+  await shot("gallery-duplicate-ask");
+  await evaluate(`[...document.querySelectorAll('.ml-ask button')].find((b) => b.textContent.trim() === 'Skip').click(); 0`);
+  await waitFor(`!document.querySelector('.ml-ask')`, 4000);
+  await sleep(300);
+  const uploadsAfter = log.filter((l) => /^POST \/publishing\/posts\/media\//.test(l)).length;
+  check("media.duplicate-asked-before-upload", asked && /Looks like/.test(text) && uploadsAfter === uploadsBefore, { dupName, text, uploads: uploadsAfter - uploadsBefore });
+}
+
+// ---- Review round: the date popover, the toolbar under the header, the heading's ring, focus after Cancel ----
+await viewport(1280, 860, false);
+await go("/publishing/library/", 1500);
+const panelShown = `(() => { const p = document.querySelector('form[data-live-filter] details.pop .pop-panel'); return !!p && getComputedStyle(p).display !== 'none'; })()`;
+await evaluate(`document.querySelector('form[data-live-filter] details.pop summary').click(); 0`);
+await sleep(200);
+const openedWide = await evaluate(`({ shown: ${panelShown}, wide: document.documentElement.scrollWidth - innerWidth })`);
+await evaluate(`[...document.querySelectorAll('form[data-live-filter] .pop-item')].find((b) => b.textContent.trim() === 'Last 7 days').click(); 0`);
+await waitFor(`location.search.includes('date_from=')`);
+await sleep(300);
+const preset = await evaluate(`({ shown: ${panelShown}, trigger: document.querySelector('form[data-live-filter] details.pop summary').innerText.trim(), chip: (document.querySelector('#library-results [data-chip-clear="date_from date_to"]') || {}).innerText })`);
+await evaluate(`document.querySelector('form[data-live-filter] details.pop summary').click(); 0`);
+await sleep(150);
+await key("Escape", "Escape", 27);
+await sleep(150);
+const afterEsc = await evaluate(panelShown);
+await evaluate(`document.querySelector('form[data-live-filter] details.pop summary').click(); 0`);
+await sleep(150);
+await evaluate(`document.querySelector('h1').click(); 0`);
+await sleep(150);
+const afterOutside = await evaluate(panelShown);
+check("library.date-popover-closes-and-names-preset", openedWide.shown && openedWide.wide <= 0 && !preset.shown && preset.trigger === "Last 7 days" && /Last 7 days/.test(preset.chip || "") && !afterEsc && !afterOutside, { openedWide, preset, afterEsc, afterOutside });
+
+await go("/publishing/media/", 1500);
+await evaluate(`window.scrollTo(0, 900); 0`);
+await sleep(300);
+const bar = await evaluate(`({ toolbarTop: Math.round(document.querySelector('.ml-toolbar').getBoundingClientRect().top), headerBottom: Math.round(document.querySelector('header.sticky, body > div header').getBoundingClientRect().bottom) })`);
+check("media.toolbar-below-header", bar.toolbarTop >= bar.headerBottom - 1, bar);
+await evaluate(`window.scrollTo(0, 0); 0`);
+const group = await evaluate(`(() => { const g = document.querySelector('.ml-group'); const c = document.querySelector('.ml-card .ml-check'); if (!g || !c) return { none: true }; const a = g.getBoundingClientRect(), b = c.getBoundingClientRect(); return { overlap: !(a.bottom <= b.top || b.bottom <= a.top || a.right <= b.left || b.right <= a.left), position: getComputedStyle(g).position }; })()`);
+check("media.date-label-clear-of-cards", group.none || (!group.overlap && group.position !== "sticky"), group);
+
+// After an in-place page change focus goes to the heading, without a visible ring.
+await clickSel('[data-instant-tabs] a[href="/publishing/library/"]');
+await waitFor(`location.pathname === '/publishing/library/'`);
+await sleep(600);
+const ring = await evaluate(`(() => { const a = document.activeElement; return { tag: a && a.tagName, outline: a && getComputedStyle(a).outlineStyle }; })()`);
+check("nav.heading-focus-without-ring", ring.tag === "BODY" || ring.outline === "none", ring);
+
+// Cancelling a confirm puts focus back on the card's menu, not <body>.
+await go("/publishing/media/", 1500);
+await evaluate(`(() => { const li = document.querySelector('#media-results [data-asset]'); const m = li.querySelector('.ml-more'); m.open = true; const b = m.querySelector('button[value=remove]'); b.focus(); b.click(); return 0; })()`);
+await waitFor(`!!Alpine.store('confirm').message`, 3000);
+await evaluate(`Alpine.store('confirm').respond(false); 0`);
+await sleep(400);
+const focusAfter = await evaluate(`(() => { const a = document.activeElement; return { tag: a.tagName, inCard: !!(a.closest && a.closest('[data-asset]')) }; })()`);
+check("confirm.cancel-keeps-focus", focusAfter.tag !== "BODY" && focusAfter.inCard, focusAfter);
+
 check("console.no-errors", consoleErrors.filter((e) => !/favicon|ERR_BLOCKED_BY_CLIENT|status of 4\d\d|leather-sandals|CORS/.test(e)).length === 0, consoleErrors.slice(0, 5));
 const failed = results.filter((r) => !r.pass);
 writeFileSync(join(outDir, "studio_gallery_qa.json"), JSON.stringify({ results, log }, null, 2));

@@ -52,6 +52,8 @@ button.switch { border: 0; padding: 0; }  /* a switch that submits its form (Rep
    On phones it becomes a sheet at the bottom of the screen. */
 .pop { position: relative; }
 .pop > summary { list-style: none; cursor: pointer; }
+/* Closed means hidden, whatever else styles the panel (a sheet is position: fixed). */
+.pop:not([open]) > .pop-panel { display: none; }
 .pop > summary::-webkit-details-marker { display: none; }
 .pop-panel { position: absolute; z-index: 40; inset-inline-end: 0; inset-block-start: calc(100% + .375rem);
   min-inline-size: 13rem; padding: .375rem; border: 1px solid var(--color-border);
@@ -67,3 +69,7 @@ button.switch { border: 0; padding: 0; }  /* a switch that submits its form (Rep
   .pop-panel--sheet { position: fixed; inset: auto 0 0 0; min-inline-size: 0; padding: .75rem .75rem
     calc(.75rem + env(safe-area-inset-bottom)); border-radius: var(--radius-surface) var(--radius-surface) 0 0; }
 }
+
+/* Focus moved to a heading or region by script (after a page change, tabindex="-1") is for
+   screen readers and the next Tab; it shouldn't draw a ring each time. */
+[tabindex="-1"]:focus { outline: none; }

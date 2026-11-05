@@ -1880,3 +1880,26 @@ Plan: "Content Studio: make it feel like an app" (2026-11-03). Approving it cove
 - **Undoing a cancel** (`services.undo_cancel`, `posts/undo-cancel/?ids=`): if every cancelled channel's time is still more than 2 minutes ahead, the post goes back to scheduled at those times, through the readiness check and approval (it goes to review if it needs an approval it no longer has, or stays a draft with the reason if a check stops it). Otherwise it comes back as a draft with no schedule, and the toast says so. Offered on a single cancel and on the Library's bulk cancel.
 - **Confirms spell out the outcome**: Delete drafts (deleted for good; other ticked posts untouched), Cancel scheduled (unpublished channels won't go out; Undo follows), Delete post, and Channels → Disconnect (posting and new Messenger messages and comments stop, conversations kept, scheduled Facebook posts wait for a reconnect).
 - **Verification:** full suite 5,831 passed, 0 failures, 25 skipped; ruff, `ruff format --check` and mypy clean. `studio_gallery_qa` 20/20 (new: Library live search keeps focus, a chip clears its filter, Show applies on change, archive in place, then Undo brings the card back); `studio_overlay_qa` 36/36, `studio_feel_qa` 16/16, `publishing_qa` 21/21.
+
+### Entry 21: the remaining plan items, and the fifth review (2026-11-05)
+- **Remaining plan items:**
+  - Media's whole-library sort and Unused filter join the query-count test (`test_tab_queries_dont_grow_with_the_number_of_posts`, which already covered seven tabs).
+  - Nine section empty states use `components/empty_state.html`, which gains `action_overlay` and `compact`: Overview (twice), Planning, Reconciliation, Recurring, Themes, Pillars, Slots and Bio.
+  - Radii in Content Studio's inline styles and `studio.css` use the tokens (the in-between values snapped by 2–4px).
+  - Before each upload the page asks the server (`media-similar`: the same SHA-256, hashed in the browser up to 25 MB, or the same size and name less " (1)") and the card asks "Keep both / Skip".
+  - Area scan of Content Studio: 12 pages at 360 and 1280px in light and dark, 0 issues.
+- **Review fixes:**
+  1. **The date popover closes:** after a preset (`$root`, not the button's `$el`), on Esc (focus back on the trigger) and on an outside click, for every `details.pop`. Closed panels get `display: none` whatever else styles them. It opens leftward from the right of the bar, with no sideways scroll. The trigger and chip both read "Last 7 days" or "This month" (`live_filters.date_range_label`).
+  2. **CloudFront:** not fixable in the app. A random query string is a cache hit, and responses now carry S3's own CORS headers, not the `*` the SimpleCORS response policy added before. A copy cached from a request without `Origin` has no CORS header for anyone. Fix in AWS (see the report).
+  3. **The Media toolbar** sticks under the 4rem top bar (`top: calc(4rem + var(--safe-top))`).
+  4. **Date labels** are their own non-sticky row and no longer cover the first card.
+  5. **No focus ring** on the heading focused after a page change (`[tabindex="-1"]:focus`).
+  - **Should fix:**
+    - each card says what Remove will do before it's pressed: Delete, Archive (with how many published posts use the file), or "can't be removed yet" (`media_library.needed_ids`, one query a page);
+    - cancelling a confirm returns focus to the button or its menu's trigger;
+    - the selection bar has Archive, with Undo (`media-restore-many`);
+    - the file drawer always shows dimensions (read from the picture if the server doesn't know them) and file size;
+    - the Library's filters use Media's toolbar;
+    - Week view drags posts and ideas through the same Move checks.
+  - **Unchanged:** preload and the tab underline stay dropped (reasons in Entry 18c). Speed is the billing memo, which awaits a decision.
+- **Verification:** full suite 5,841 passed, 0 failures, 25 skipped; ruff, format and mypy clean. `studio_gallery_qa` 26/26, `studio_overlay_qa` 36/36, `studio_feel_qa` 16/16, `publishing_qa` 21/21; `area_scan /publishing` 0 issues.

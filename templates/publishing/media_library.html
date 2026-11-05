@@ -66,7 +66,16 @@
       <li class="ml-card">
         <div class="ml-frame">
           <img x-show="u.preview" :src="u.preview" alt="" class="ml-img">
-          <div class="ml-ring" x-show="!u.error">
+          {% comment %}Already in the library (same content, or same size and name less " (1)"): asked
+          before it's added, not flagged afterwards.{% endcomment %}
+          <div class="ml-ring ml-ask" x-show="u.duplicate" role="group" aria-label="Possible duplicate">
+            <p class="text-xs text-ink">Looks like <strong x-text="u.duplicate && u.duplicate.name"></strong>, already in the library.</p>
+            <div class="flex gap-1.5">
+              <button type="button" class="btn btn-secondary btn-sm" @click="u.decide('keep')">Keep both</button>
+              <button type="button" class="btn btn-ghost btn-sm" @click="u.decide('skip')">Skip</button>
+            </div>
+          </div>
+          <div class="ml-ring" x-show="!u.error && !u.duplicate">
             <svg viewBox="0 0 48 48" aria-hidden="true"><circle class="ring-bg" cx="24" cy="24" r="20"></circle><circle class="ring-fg" cx="24" cy="24" r="20" stroke-dasharray="125.66" :stroke-dashoffset="125.66 * (1 - u.progress / 100)"></circle></svg>
             <span class="sr-only" x-text="u.done ? 'Done' : u.progress + '%'"></span>
           </div>
@@ -162,6 +171,8 @@
     {% if archived %}
     <button type="submit" name="action" value="restore" class="ml-bulk-btn">Put back</button>
     {% else %}
+    <button type="submit" name="action" value="archive" class="ml-bulk-btn"
+      data-confirm="Archive the selected files? They're hidden here and the files are kept, so posts that use them keep working. You can undo it." data-confirm-label="Archive">Archive</button>
     <button type="submit" name="action" value="remove" class="ml-bulk-btn ml-bulk-btn--danger" data-confirm-danger data-confirm-label="Remove"
       data-confirm="Remove the selected files? {{ remove_rules }}">Remove</button>
     {% endif %}

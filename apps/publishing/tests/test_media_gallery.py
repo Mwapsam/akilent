@@ -73,6 +73,68 @@ def test_a_second_upload_of_the_same_file_is_flagged(shop):
     assert f'data-duplicate-of="{first.pk}"' in _get(shop)
 
 
+def test_each_card_says_what_remove_will_do(shop):
+    free = shop.asset("free.png", data=b"a" * 11)
+    published = shop.asset("pub.png", data=b"b" * 12)
+    drafted = shop.asset("draft.png", data=b"c" * 13)
+    shop.post(published.url, Post.PUBLISHED, Variant.PUBLISHED)
+    shop.post(drafted.url, Post.DRAFT)
+
+    html = _get(shop)
+
+    def card(asset):
+        start = html.index(f'data-asset="{asset.pk}"')
+        return html[start : html.index("</li>", start)]
+
+    assert 'data-confirm-label="Delete"' in card(free)
+    assert 'data-confirm-label="Archive"' in card(published)
+    assert "can't be removed yet" in card(drafted) and 'value="remove"' not in card(
+        drafted
+    )
+
+
+def test_archiving_from_the_selection_bar_can_be_undone(shop):
+    from django.contrib.messages import get_messages
+
+    used = shop.asset("used.png", data=b"d" * 14)
+    shop.post(used.url, Post.DRAFT)  # archiving is safe even for a file a draft uses
+    other = shop.asset("other.png", data=b"e" * 15)
+    ids = [used.pk, other.pk]
+
+    resp = shop.client.post(
+        reverse("publishing:media-bulk"), {"action": "archive", "ids": ids}
+    )
+
+    assert MediaAsset.objects.filter(pk__in=ids, archived_at__isnull=False).count() == 2
+    message = next(iter(get_messages(resp.wsgi_request)))
+    assert "2 files archived" in str(message)
+    undo = next(t for t in message.tags.split() if t.startswith("undo:"))[5:]
+    back = shop.client.post(undo, HTTP_HX_REQUEST="true")
+    assert back.status_code == 204
+    assert MediaAsset.objects.filter(pk__in=ids, archived_at__isnull=True).count() == 2
+
+
+def test_before_an_upload_the_page_can_ask_if_its_a_copy(shop):
+    first = shop.asset("01_home.png")
+    url = reverse("publishing:media-similar")
+
+    by_name = shop.client.get(
+        url, {"name": "01_home (1).png", "size": first.size_bytes}
+    ).json()
+    by_hash = shop.client.get(
+        url, {"name": "other.png", "size": 1, "sha256": first.sha256}
+    ).json()
+    different = shop.client.get(url, {"name": "menu.png", "size": 5}).json()
+    theirs = (
+        Shop("other")
+        .client.get(url, {"name": "01_home.png", "size": first.size_bytes})
+        .json()
+    )
+
+    assert by_name["match"]["id"] == first.pk and by_hash["match"]["id"] == first.pk
+    assert different["match"] is None and theirs["match"] is None
+
+
 def test_show_filters_and_old_links(shop):
     used = shop.asset("used.png")
     unused = shop.asset("unused.png")

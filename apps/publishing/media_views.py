@@ -79,6 +79,16 @@ def _decorate(account, assets, counts=None) -> None:
     dups = media_library.duplicates(account, assets)
     for asset in assets:
         asset.used_in = counts.get(asset.pk, 0)  # type: ignore[attr-defined]
+    # What Remove would do, said on the card before anyone presses it (the dry run).
+    needed = media_library.needed_ids(account, assets)
+    for asset in assets:
+        asset.remove_outcome = (  # type: ignore[attr-defined]
+            "blocked"
+            if asset.pk in needed
+            else "archived"
+            if asset.used_in  # type: ignore[attr-defined]
+            else "deleted"
+        )
         asset.display = media_library.display_name(asset.name)  # type: ignore[attr-defined]
         asset.badge = _badge(asset)  # type: ignore[attr-defined]
         asset.duplicate_of = dups.get(asset.pk)  # type: ignore[attr-defined]
@@ -201,6 +211,7 @@ def library(request):
                 "upload_start": reverse("publishing:post-media-direct-start"),
                 "upload_confirm": reverse("publishing:post-media-direct-confirm"),
                 "stock_search": reverse("publishing:media-stock-search"),
+                "similar": reverse("publishing:media-similar"),
                 "stock_import": reverse("publishing:media-stock-import"),
             },
         },
@@ -314,6 +325,25 @@ def asset_restore(request, pk):
     )
 
 
+@login_required
+@module_required("content_studio")
+@require_POST
+def restore_many(request):
+    """Put several archived files back (the Undo of an archive from the selection bar)."""
+    account = _account_or_none(request)
+    if account is None:
+        return redirect("dashboard")
+    ids = [int(x) for x in request.GET.get("ids", "").split(",") if x.isdigit()][:200]
+    n = MediaAsset.objects.filter(
+        account=account, pk__in=ids, archived_at__isnull=False
+    ).update(archived_at=None)
+    return action_done(
+        request,
+        f"{n} file{'s' if n != 1 else ''} back in the library.",
+        reverse("publishing:media-library"),
+    )
+
+
 def _asset_detail(request, account, asset):
     media_library.sync_from_check(asset)
     _decorate(account, [asset])
@@ -354,10 +384,15 @@ def bulk(request):
     action = request.POST.get("action", "")
     done = media_library.bulk(account, ids, action, request.POST.get("tags", ""))
     parts = []
+    archived_words = (
+        "archived (hidden here, the files kept)"
+        if action == "archive"
+        else "archived (published posts use them)"
+    )
     for key, words in (
         ("tagged", "tagged"),
         ("deleted", "deleted"),
-        ("archived", "archived (published posts use them)"),
+        ("archived", archived_words),
         ("blocked", "kept (a draft or scheduled post uses them)"),
         ("restored", "back in the library"),
     ):
@@ -365,8 +400,16 @@ def bulk(request):
             n = done[key]
             parts.append(f"{n} file{'s' if n != 1 else ''} {words}")
     if parts:
+        from apps.accounts.utils import flash
+
         level = "warning" if done.get("blocked") else "success"
-        getattr(messages, level)(request, "; ".join(parts).capitalize() + ".")
+        # Archiving keeps every file, so it can be undone; a delete can't.
+        undo = (
+            f"{reverse('publishing:media-restore-many')}?ids={','.join(map(str, ids))}"
+            if done.get("archived")
+            else None
+        )
+        flash(request, level, "; ".join(parts).capitalize() + ".", undo)
     elif action == "tag":
         messages.error(request, "Type a tag to add.")
     else:
@@ -449,6 +492,38 @@ def picker(request):
             "items": media_library.picker_items(
                 account, request.GET.get("kind", ""), request.GET.get("q", "").strip()
             )
+        }
+    )
+
+
+@login_required
+@module_required("content_studio")
+def similar(request):
+    """Before an upload: a file in the library this one looks like, if any (JSON), so the
+    page can ask "keep both?" rather than add a copy without a word."""
+    import re
+
+    account = _account_or_none(request)
+    if account is None:
+        return JsonResponse({"error": "Not found"}, status=404)
+    size = request.GET.get("size", "")
+    sha = request.GET.get("sha256", "").lower()
+    match = media_library.similar(
+        account,
+        request.GET.get("name", "")[:200],
+        int(size) if size.isdigit() else None,
+        sha if re.fullmatch(r"[0-9a-f]{64}", sha) else "",
+    )
+    if match is None:
+        return JsonResponse({"match": None})
+    return JsonResponse(
+        {
+            "match": {
+                "id": match.pk,
+                "name": match.name,
+                "url": match.url,
+                "kind": match.kind,
+            }
         }
     )
 

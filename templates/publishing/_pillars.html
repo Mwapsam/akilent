@@ -14,7 +14,7 @@ modal (overlay_or_page) both show this; a save in the modal comes back to it.{% 
       {% endfor %}
     </div>
     {% else %}
-    <p class="text-sm text-ink-subtle text-center py-4">No pillars yet.</p>
+    {% include "components/empty_state.html" with icon="layout-template" title="No pillars yet" message="Pillars are the topics you post about again and again. Add one above." compact=True %}
     {% endif %}
   </div>
 

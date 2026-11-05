@@ -236,6 +236,42 @@ def usage_counts(account, assets) -> dict[int, int]:
     return {pk: len(post_ids) for pk, post_ids in used.items()}
 
 
+def needed_ids(account, assets) -> set[int]:
+    """Files on the page that a draft, scheduled or publishing post uses, so ``remove``
+    would refuse them: the card says so instead of offering Remove. One query (and its
+    prefetch), whatever the page size."""
+    urls = {a.url.lower(): a.pk for a in assets if getattr(a, "used_in", 1)}
+    if not urls:
+        return set()
+    match = Q()
+    for url in urls:
+        match |= Q(media_urls__icontains=url) | Q(variants__options__icontains=url)
+    posts = (
+        ContentPost.objects.filter(account=account)
+        .filter(match)
+        .filter(
+            Q(status__in=LIVE_POST_STATUSES)
+            | Q(variants__status__in=LIVE_VARIANT_STATUSES)
+        )
+        .distinct()
+        .only("pk", "media_urls")
+        .prefetch_related(
+            Prefetch(
+                "variants",
+                queryset=ContentPostVariant.objects.only("post_id", "options"),
+            )
+        )
+    )
+    found: set[int] = set()
+    for post in posts:
+        text = json.dumps(
+            [post.media_urls or [], [v.options or {} for v in post.variants.all()]],
+            ensure_ascii=False,
+        ).lower()
+        found.update(pk for url, pk in urls.items() if url in text)
+    return found
+
+
 def _strings(value, out: set[str]) -> None:
     if isinstance(value, str):
         out.add(value.lower())
@@ -356,6 +392,25 @@ def duplicates(account, assets) -> dict[int, MediaAsset]:
     return found
 
 
+def similar(
+    account, name: str, size: int | None, sha256: str = ""
+) -> MediaAsset | None:
+    """A live file of the business that a file about to be uploaded looks like: the same
+    content, or the same size and name once a copy's " (1)" is left off."""
+    live = MediaAsset.objects.filter(account=account, archived_at__isnull=True)
+    if sha256:
+        found = live.filter(sha256=sha256).first()
+        if found:
+            return found
+    if not size:
+        return None
+    plain = _plain_name(name)
+    for other in live.filter(size_bytes=size).only("pk", "name", "url", "kind")[:20]:
+        if _plain_name(other.name) == plain:
+            return other
+    return None
+
+
 def date_group(created_at, today) -> str:
     """The label a file is grouped under in the newest-first grid."""
     day = timezone.localtime(created_at).date()
@@ -464,6 +519,11 @@ def bulk(account, ids, action: str, raw_tags: str = "") -> dict[str, int]:
                 continue
             outcome, _ = remove(asset)
             done[outcome] = done.get(outcome, 0) + 1
+    elif action == "archive":
+        # Hidden from the library, the file kept: safe whatever uses it, and undoable.
+        done["archived"] = MediaAsset.objects.filter(
+            pk__in=[a.pk for a in assets], archived_at__isnull=True
+        ).update(archived_at=timezone.now())
     elif action == "restore":
         done["restored"] = MediaAsset.objects.filter(
             pk__in=[a.pk for a in assets], archived_at__isnull=False

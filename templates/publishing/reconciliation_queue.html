@@ -83,8 +83,8 @@
     </div>
   {% endif %}
 {% else %}
-  <div class="card card-pad text-center py-12">
-    <p class="text-sm text-ink-subtle">Nothing needs checking. Every publication has a confirmed outcome.</p>
+  <div class="card">
+    {% include "components/empty_state.html" with icon="check-circle" title="Nothing needs checking" message="Every publication has a confirmed outcome." %}
   </div>
 {% endif %}
 {% endblock %}

@@ -89,7 +89,7 @@
       </form>
     </div>
     {% empty %}
-    <p class="text-sm text-ink-subtle">No posts yet. Open a published Instagram post with a WhatsApp chat link and choose <strong>Add to bio page</strong> on its Results card.</p>
+    {% include "components/empty_state.html" with icon="image" title="No posts on your bio page yet" message="Open a published Instagram post with a WhatsApp chat link and choose Add to bio page on its Results card." compact=True %}
     {% endfor %}
     <p class="text-xs text-ink-subtle">The newest {{ page.max_tiles }} posts show. Posts are removed after {{ page.archive_after_days }} days unless pinned. A removed post's button keeps working for anyone who already has it.</p>
   </section>

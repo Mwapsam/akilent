@@ -105,9 +105,19 @@ to show (channel, status). The selects apply as soon as they change.{% endcommen
   {% comment %}Seven columns from xl, where each day has room for a caption. Today is marked
   in the accent colour; past days sit on a muted ground. Hovering a day (or tabbing into
   it) shows its + button; on touch it is always shown.{% endcomment %}
-  <ol class="card cal-week hidden xl:grid mb-6" aria-label="Week">
+  {% comment %}With scheduling on, a post that hasn't gone out and a planned idea drag to another day
+  from today on, as in the month view: dropping fills in and sends a hidden Move form, so the
+  server checks it the same way (calendar-move keeps the post's time; plan-move).{% endcomment %}
+  <ol class="card cal-week hidden xl:grid mb-6" aria-label="Week"{% if scheduling_on %} x-data="{ dragging: null, over: null }"{% endif %}>
     {% for day, day_plan_items, day_posts in week_days %}
-    <li class="cal-col{% if day < today %} cal-col--past{% endif %}{% if day == today %} cal-today{% endif %}"{% if day == today %} aria-current="date"{% endif %}>
+    {% with iso=day|date:"Y-m-d" %}
+    <li class="cal-col{% if day < today %} cal-col--past{% endif %}{% if day == today %} cal-today{% endif %}"{% if day == today %} aria-current="date"{% endif %}
+        {% if scheduling_on and day >= today %}
+        :class="over === '{{ iso }}' && 'cal-m-day--over'"
+        @dragover.prevent="if (dragging) over = '{{ iso }}'"
+        @dragleave="if (over === '{{ iso }}') over = null"
+        @drop.prevent="if (dragging) { const f = document.getElementById(dragging); f.querySelector('[name=date]').value = '{{ iso }}'; dragging = null; over = null; f.requestSubmit(); }"
+        {% endif %}>
       <div class="cal-col-head">
         <h3 class="flex items-center gap-1.5">
           <span class="cal-dow">{{ day|date:"D" }}</span>
@@ -120,14 +130,37 @@ to show (channel, status). The selects apply as soon as they change.{% endcommen
         {% endif %}
       </div>
       <div class="cal-col-body">
-        {% for item in day_plan_items %}{% include "publishing/_cal_plan.html" %}{% endfor %}
-        {% for entry in day_posts %}{% include "publishing/_cal_entry.html" %}{% endfor %}
+        {% for item in day_plan_items %}
+        {% if scheduling_on and item.plan_status != "published" %}
+        <div class="cal-m-plan" draggable="true"
+             @dragstart="dragging = 'wplan-{{ item.pk }}'; $event.dataTransfer.effectAllowed = 'move'; $event.dataTransfer.setData('text/plain', 'wplan-{{ item.pk }}')"
+             @dragend="dragging = null; over = null">
+          {% include "publishing/_cal_plan.html" with plan_draggable=True %}
+          <form id="wplan-{{ item.pk }}" method="post" action="{% url 'publishing:plan-move' %}" hx-boost="false" hidden>
+            {% csrf_token %}<input type="hidden" name="item" value="{{ item.pk }}"><input type="hidden" name="next" value="{{ request.get_full_path }}"><input type="hidden" name="date" value="{{ iso }}">
+          </form>
+        </div>
+        {% else %}{% include "publishing/_cal_plan.html" %}{% endif %}
+        {% endfor %}
+        {% for entry in day_posts %}
+        {% if scheduling_on and entry.movable %}
+        <div class="cal-m-plan" draggable="true" data-week-movable="{{ entry.post.pk }}"
+             @dragstart="dragging = 'wmove-{{ entry.post.pk }}-{{ entry.platforms|join:'-' }}'; $event.dataTransfer.effectAllowed = 'move'; $event.dataTransfer.setData('text/plain', 'x')"
+             @dragend="dragging = null; over = null">
+          {% include "publishing/_cal_entry.html" with entry_draggable=True %}
+          <form id="wmove-{{ entry.post.pk }}-{{ entry.platforms|join:'-' }}" method="post" action="{% url 'publishing:calendar-move' %}" hx-boost="false" hidden>
+            {% csrf_token %}<input type="hidden" name="post" value="{{ entry.post.pk }}">{% for p in entry.platforms %}<input type="hidden" name="platforms" value="{{ p }}">{% endfor %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><input type="hidden" name="date" value="{{ iso }}">
+          </form>
+        </div>
+        {% else %}{% include "publishing/_cal_entry.html" %}{% endif %}
+        {% endfor %}
         {% if not day_plan_items and not day_posts and day >= today %}
         <a href="{% url 'publishing:plan-new' %}?planned_date={{ day|date:'Y-m-d' }}&amp;next={{ request.get_full_path|urlencode }}" data-overlay-open="modal" class="cal-empty-add"
            aria-label="Plan an idea for {{ day|date:'l, N j' }}">+ Plan an idea</a>
         {% endif %}
       </div>
     </li>
+    {% endwith %}
     {% endfor %}
   </ol>
 

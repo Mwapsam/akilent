@@ -37,6 +37,10 @@
 .cs-row:hover, .cs-row:focus-within { background: var(--color-surface-muted); }
 @media (prefers-reduced-motion: reduce) { .cs-link, .cs-row { transition: none; } }
 
+/* An empty list inside a card or drawer (components/empty_state.html compact=True). */
+.empty-state--compact { padding-top: 1.25rem; padding-bottom: 1.25rem; }
+.empty-state--compact .empty-state-icon { width: 2.5rem; height: 2.5rem; }
+
 /* Filters in use, as chips (templates/publishing/_filter_chips.html). */
 .cs-chips { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem; margin-bottom: .75rem; }
 .cs-chip { display: inline-flex; align-items: center; gap: .25rem; padding: .1875rem .5rem .1875rem .625rem;
@@ -52,7 +56,7 @@
 /* --- The month calendar (templates/publishing/_cal_month.html): a day's "+" plans an idea for
    it, shown on hover and focus (always on touch); a planned idea can be dragged. --------- */
 .cal-m-head { display: flex; align-items: center; justify-content: space-between; gap: .25rem; min-height: 1.5rem; }
-.cal-m-add { display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: .5rem;
+.cal-m-add { display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: var(--radius-lg);
   color: var(--color-ink-subtle); transition: opacity var(--duration-fast) var(--ease-emphasized), background-color var(--duration-fast); }
 .cal-m-add:hover, .cal-m-add:focus-visible { color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 12%, transparent); outline: none; }
 @media (hover: hover) {
@@ -60,16 +64,19 @@
   .cal-m-day:hover .cal-m-add, .cal-m-day:focus-within .cal-m-add { opacity: 1; }
 }
 .cal-m-plan { cursor: grab; }
+/* The day a dragged post or idea would land on (month and week views). */
+.cal-m-day--over { outline: 2px dashed var(--color-accent); outline-offset: -3px; }
 .cal-m-plan:active { cursor: grabbing; }
 
 /* --- Media (templates/publishing/media_library.html): a gallery, pictures first. ---------- */
-.ml-toolbar { position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; align-items: center;
+/* Under the app's sticky top bar (base.html: 4rem plus the safe area), not behind it. */
+.ml-toolbar { position: sticky; top: calc(4rem + var(--safe-top, 0px)); z-index: 20; display: flex; flex-wrap: wrap; align-items: center;
   gap: .5rem; margin: 0 -.5rem 1rem; padding: .5rem;
   border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--color-canvas) 82%, transparent);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
 /* On a phone the bar wraps to three rows: it scrolls away rather than covering a third of the screen. */
-@media (max-width: 639px) { .ml-toolbar { position: static; } .ml-group { top: 0; } }
+@media (max-width: 639px) { .ml-toolbar { position: static; } }
 .ml-search { display: flex; align-items: center; gap: .5rem; flex: 1 1 14rem; min-width: 0; max-width: 22rem;
   padding: 0 .875rem; height: 2.375rem; border: 1px solid var(--color-border); border-radius: 999px;
   background: var(--color-surface); color: var(--color-ink-subtle); }
@@ -85,7 +92,8 @@
 @media (min-width: 640px) { .ml-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (min-width: 1024px) { .ml-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (min-width: 1440px) { .ml-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
-.ml-group { grid-column: 1 / -1; position: sticky; top: 3.5rem; z-index: 5; padding-top: .5rem; }
+/* A row of its own, not sticky: stuck, it sat over the first card's checkbox. */
+.ml-group { grid-column: 1 / -1; padding-top: .25rem; }
 .ml-group:not(:first-child) { margin-top: .5rem; }
 .ml-group h2 { display: inline-block; padding: .125rem .625rem; border-radius: 999px; font-size: .75rem;
   font-weight: 600; letter-spacing: .01em; color: var(--color-ink-muted);
@@ -113,7 +121,7 @@
 .ml-open:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 .ml-check, .ml-badge, .ml-actions { position: absolute; z-index: 2; }
 .ml-check { top: .5rem; left: .5rem; display: grid; place-items: center; width: 1.75rem; height: 1.75rem;
-  border-radius: .5rem; background: rgb(255 255 255 / .9); box-shadow: var(--shadow-card); cursor: pointer; }
+  border-radius: var(--radius-lg); background: rgb(255 255 255 / .9); box-shadow: var(--shadow-card); cursor: pointer; }
 .ml-check input { width: 1rem; height: 1rem; accent-color: var(--color-accent); cursor: pointer; }
 .ml-badge { top: .5rem; right: .5rem; padding: .125rem .5rem; border-radius: 999px; font-size: .6875rem;
   font-weight: 600; letter-spacing: .02em; color: #fff; background: rgb(11 16 32 / .62);
@@ -122,7 +130,7 @@
   padding: 1.75rem .5rem .5rem; background: linear-gradient(to top, rgb(11 16 32 / .62), transparent);
   pointer-events: none; }
 .ml-actions > * { pointer-events: auto; }
-.ml-act { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: .625rem; color: #fff;
+.ml-act { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: var(--radius-control); color: #fff;
   background: rgb(255 255 255 / .16); border: 0; cursor: pointer;
   -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
   transition: background-color var(--duration-fast) var(--ease-emphasized); }
@@ -154,6 +162,10 @@
 .ml-ring .ring-bg { stroke: color-mix(in srgb, var(--color-ink) 15%, transparent); }
 .ml-ring .ring-fg { stroke: var(--color-accent); stroke-linecap: round; transition: stroke-dashoffset .2s linear; }
 
+.ml-ask { align-content: center; gap: .625rem; padding: .75rem; text-align: center;
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent); }
+.ml-ask p { overflow-wrap: anywhere; }
+
 /* Drop anywhere on the page. */
 .ml-drop { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 1.5rem;
   background: color-mix(in srgb, var(--color-canvas) 80%, transparent);
@@ -170,7 +182,7 @@
 .ml-bulkbar .input { height: 2rem; width: 9rem; font-size: 1rem; }
 @media (min-width: 640px) { .ml-bulkbar .input { font-size: .8125rem; } }
 .ml-bulkbar .btn { --tw-ring-color: transparent; }
-.ml-bulk-btn { padding: .3125rem .75rem; border-radius: .625rem; font-size: .8125rem; font-weight: 500;
+.ml-bulk-btn { padding: .3125rem .75rem; border-radius: var(--radius-control); font-size: .8125rem; font-weight: 500;
   color: inherit; background: color-mix(in srgb, var(--color-surface) 14%, transparent); border: 0; cursor: pointer; }
 .ml-bulk-btn:hover, .ml-bulk-btn:focus-visible { background: color-mix(in srgb, var(--color-surface) 26%, transparent); outline: none; }
 .ml-bulk-btn--danger { color: #fca5a5; }
@@ -183,7 +195,7 @@
   vertical-align: middle; }
 .ml-table tbody tr { transition: background-color var(--duration-fast) var(--ease-emphasized); }
 .ml-table tbody tr:hover { background: var(--color-surface-muted); }
-.ml-thumb { position: relative; width: 2.75rem; height: 2.75rem; overflow: hidden; border-radius: .625rem;
+.ml-thumb { position: relative; width: 2.75rem; height: 2.75rem; overflow: hidden; border-radius: var(--radius-control);
   border: 1px solid var(--color-border); background: var(--color-surface-muted); }
 
 .ml-col-sm, .ml-col-md { display: none; }

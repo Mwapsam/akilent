@@ -79,7 +79,7 @@
       {% endfor %}
     </ul>
     {% else %}
-    <p class="text-sm text-ink-subtle text-center py-6">Nothing is waiting on you.</p>
+    {% include "components/empty_state.html" with icon="check-circle" title="Nothing is waiting on you" message="Posts that need a check, a fix or an approval show here." compact=True %}
     {% endif %}
   </div>
 
@@ -106,7 +106,7 @@
       {% endfor %}
     </div>
     {% else %}
-    <p class="text-sm text-ink-subtle text-center py-6">No scheduled posts. <a href="{% url 'publishing:post-new' %}" class="text-accent hover:text-accent-strong cs-link">Create a post</a></p>
+    {% url 'publishing:post-new' as new_url %}{% include "components/empty_state.html" with icon="clock" title="No scheduled posts" message="Posts you schedule show here with their time." action_url=new_url action_label="Create a post" compact=True %}
     {% endif %}
   </div>
 

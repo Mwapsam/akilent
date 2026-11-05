@@ -32,7 +32,7 @@ and the Manage themes modal (overlay_or_page) both show this.{% endcomment %}
       {% endfor %}
     </ul>
     {% else %}
-    <p class="text-sm text-ink-subtle text-center py-4">No themes yet.</p>
+    {% include "components/empty_state.html" with icon="layout-template" title="No themes yet" message="A theme groups posts for a season or a launch. Add one above." compact=True %}
     {% endif %}
   </div>
 

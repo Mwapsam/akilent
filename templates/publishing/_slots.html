@@ -32,7 +32,7 @@ native posts; in the drawer they post back into it.{% endcomment %}
     </ul>
     <p class="text-xs text-ink-subtle" data-next-free>{% if next_free %}Next free slot: {{ next_free|date:"l, N j" }} at {{ next_free|time:"H:i" }}.{% else %}Every slot in the next 8 weeks is taken.{% endif %}</p>
     {% else %}
-    <p class="text-sm text-ink-subtle" data-no-slots>No slots yet. Add the days and times you like to post.</p>
+    <div data-no-slots>{% include "components/empty_state.html" with icon="clock" title="No slots yet" message="Add the days and times you like to post, and the composer suggests the next free one." compact=True %}</div>
     {% endif %}
 
     {% if can_admin %}

@@ -56,6 +56,19 @@
   }
 
   var ACCEPTED = /^(image\/(jpeg|png|webp|gif)|video\/(mp4|quicktime))$/;
+  var HASH_MAX = 25 * 1024 * 1024;
+
+  // A file's SHA-256 (hex), for spotting one already in the library; "" for large files or
+  // where the browser can't (it's only a hint, the server records its own on upload).
+  async function sha256Of(file) {
+    if (!window.crypto || !crypto.subtle || file.size > HASH_MAX) return "";
+    try {
+      var digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+      return Array.prototype.map.call(new Uint8Array(digest), function (b) { return ("0" + b.toString(16)).slice(-2); }).join("");
+    } catch (e) {
+      return "";
+    }
+  }
   var uploadSeq = 0;
 
   // The grid (#media-results) again, in place: after uploads, a stock photo, or anything else
@@ -134,14 +147,24 @@
           var ok = ACCEPTED.test(f.type);
           self.uploads.push({
             key: ++uploadSeq, name: f.name, progress: 0, done: false, file: f,
+            sha: "", duplicate: null, decide: null, skipped: false,
             error: ok ? "" : "Not a picture or video this library takes (JPEG, PNG, WebP, GIF, MP4 or MOV).",
             preview: ok && f.type.indexOf("image/") === 0 && window.URL ? URL.createObjectURL(f) : "",
           });
         });
         for (var i = 0; i < this.uploads.length; i++) {
           var u = this.uploads[i];
-          if (u.done || u.error) continue;
+          if (u.done || u.error || u.skipped) continue;
           try {
+            // Already in the library? Ask before adding a copy (the card shows Keep both / Skip).
+            u.sha = await sha256Of(u.file);
+            var match = await this.lookSimilar(u);
+            if (match) {
+              u.duplicate = match;
+              var choice = await new Promise(function (resolve) { u.decide = resolve; });
+              u.duplicate = null;
+              if (choice === "skip") { u.skipped = true; continue; }
+            }
             await this.uploadOne(u);
             u.done = true;
             u.progress = 100;
@@ -151,9 +174,21 @@
         }
         this.busy = false;
         if (this.uploads.some(function (u) { return u.done; })) await refreshResults();
-        // Finished ones are in the grid now; failed ones stay, with why.
-        this.uploads.filter(function (u) { return u.done && u.preview; }).forEach(function (u) { URL.revokeObjectURL(u.preview); });
-        this.uploads = this.uploads.filter(function (u) { return !u.done; });
+        // Finished and skipped ones go (the finished are in the grid now); failed ones stay, with why.
+        this.uploads.filter(function (u) { return (u.done || u.skipped) && u.preview; }).forEach(function (u) { URL.revokeObjectURL(u.preview); });
+        this.uploads = this.uploads.filter(function (u) { return !u.done && !u.skipped; });
+      },
+
+      lookSimilar: async function (u) {
+        if (!cfg.similar) return null;
+        var q = "?name=" + encodeURIComponent(u.name) + "&size=" + u.file.size + (u.sha ? "&sha256=" + u.sha : "");
+        try {
+          var r = await fetch(cfg.similar + q, { headers: { Accept: "application/json" } });
+          var data = r.ok ? await r.json() : {};
+          return data.match || null;
+        } catch (e) {
+          return null; // the check is a courtesy: never block an upload on it
+        }
       },
 
       uploadOne: async function (u) {
@@ -165,7 +200,7 @@
           fd.append("csrfmiddlewaretoken", csrf());
           return send(cfg.upload, fd, progress);
         }
-        var started = await postForm(cfg.upload_start, { name: f.name, content_type: f.type, size: f.size, sha256: "" });
+        var started = await postForm(cfg.upload_start, { name: f.name, content_type: f.type, size: f.size, sha256: u.sha || "" });
         var s3 = new FormData();
         Object.keys(started.fields).forEach(function (k) { s3.append(k, started.fields[k]); });
         s3.append("file", f);

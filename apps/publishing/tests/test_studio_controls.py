@@ -109,9 +109,69 @@ def test_library_dates_are_one_popover_that_keeps_the_dates(shop):  # noqa: F811
         {"date_from": "2026-10-01", "date_to": "2026-10-31"},
     ).content.decode()
 
-    assert "2026-10-01 \N{EN DASH} 2026-10-31" in html
+    assert "1 Oct \N{EN DASH} 31 Oct" in html  # the trigger and the chip
     assert 'name="date_from" id="library-from" value="2026-10-01"' in html
     assert "Any time" in html  # the preset that clears them
+    # It opens to the left of its trigger (it sits at the right of the bar), not off-screen.
+    assert (
+        "pop-panel--start"
+        not in html.split('id="library-from"')[0].rsplit("<details", 1)[1]
+    )
+
+
+@pytest.mark.parametrize(
+    "days_back, label",
+    [
+        (6, "Last 7 days"),
+        (29, "Last 30 days"),
+        (89, "Last 90 days"),
+        (None, "This month"),
+    ],
+)
+def test_a_date_preset_reads_as_its_name(days_back, label):
+    from apps.publishing.live_filters import date_range_label
+
+    today = datetime.date(2026, 11, 20)
+    start = (
+        today.replace(day=1)
+        if days_back is None
+        else today - datetime.timedelta(days=days_back)
+    )
+
+    assert date_range_label(start.isoformat(), today.isoformat(), today) == label
+    assert date_range_label("", "", today) == "Any time"
+    assert date_range_label("2026-10-03", "", today) == "From 3 Oct"
+    assert date_range_label("2025-12-30", "2026-01-02", today) == (
+        "30 Dec 2025 \N{EN DASH} 2 Jan"
+    )
+
+
+def test_the_week_view_drags_too(shop, scheduling):  # noqa: F811
+    from apps.publishing.models import ContentPost, ContentPostVariant
+
+    account, client = shop
+    when = timezone.now() + datetime.timedelta(days=1)
+    post = ContentPost.objects.create(
+        account=account,
+        caption="Moves",
+        platforms=["instagram"],
+        media_type="image",
+        status=ContentPost.Status.SCHEDULED,
+        scheduled_at=when,
+    )
+    ContentPostVariant.objects.create(
+        post=post,
+        platform="instagram",
+        status=ContentPostVariant.Status.SCHEDULED,
+        scheduled_at=when,
+    )
+    idea = _idea(account, timezone.localdate())
+
+    html = client.get(reverse("publishing:calendar")).content.decode()
+
+    assert f'data-week-movable="{post.pk}"' in html
+    assert f'id="wmove-{post.pk}-instagram"' in html
+    assert f'id="wplan-{idea.pk}"' in html
 
 
 def test_the_palette_lists_the_page_shortcuts(shop):  # noqa: F811

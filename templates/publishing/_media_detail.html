@@ -6,10 +6,10 @@ says what will happen to this file before it happens (media_library.remove_previ
   {% comment %}Focused first (not the Name field), so ← → step through the files at once.{% endcomment %}
   <div class="md-preview" tabindex="0" autofocus role="group" aria-label="{{ asset.display }}{% if in_overlay %}. Left and right arrows show the previous and next file{% endif %}">
     {% if asset.kind == "video" %}
-    <video src="{{ asset.url }}#t=0.1" preload="metadata" controls playsinline aria-label="{{ asset.display }}"></video>
+    <video src="{{ asset.url }}#t=0.1" preload="metadata" controls playsinline aria-label="{{ asset.display }}" onloadedmetadata="var d = document.getElementById('md-dims'); if (d && !d.hasAttribute('data-known')) d.textContent = this.videoWidth + ' × ' + this.videoHeight + ' px'"></video>
     {% else %}
     <div class="ml-wash" style="background-image: url('{{ asset.url }}')" aria-hidden="true"></div>
-    <img src="{{ asset.url }}" alt="{{ asset.display }}" class="ml-img" decoding="async">
+    <img src="{{ asset.url }}" alt="{{ asset.display }}" class="ml-img" decoding="async" onload="var d = document.getElementById('md-dims'); if (d && !d.hasAttribute('data-known')) d.textContent = this.naturalWidth + ' × ' + this.naturalHeight + ' px'">
     {% endif %}
   </div>
 
@@ -22,8 +22,9 @@ says what will happen to this file before it happens (media_library.remove_previ
 
     <dl class="md-facts">
       <dt>Type</dt><dd>{{ asset.badge|default:asset.kind }}</dd>
-      {% if asset.width %}<dt>Size</dt><dd>{{ asset.width }} × {{ asset.height }} px</dd>{% endif %}
-      {% if asset.size_bytes %}<dt>File</dt><dd>{{ asset.size_bytes|filesizeformat }}</dd>{% endif %}
+      {% comment %}Dimensions always: when the server doesn't know them yet, the preview fills them in once it loads.{% endcomment %}
+      <dt>Dimensions</dt><dd id="md-dims"{% if asset.width %} data-known{% endif %}>{% if asset.width %}{{ asset.width }} × {{ asset.height }} px{% else %}…{% endif %}</dd>
+      <dt>File size</dt><dd>{% if asset.size_bytes %}{{ asset.size_bytes|filesizeformat }}{% else %}Not known yet{% endif %}</dd>
       <dt>Added</dt><dd>{{ asset.created_at|date:"j M Y" }}{% if asset.uploaded_by %} by {{ asset.uploaded_by.get_full_name|default:asset.uploaded_by.username }}{% endif %}</dd>
       <dt>From</dt><dd>{{ asset.get_source_display }}{% if asset.parent %} of {{ asset.parent.name }}{% endif %}</dd>
       {% if asset.credit %}<dt>Credit</dt><dd><a href="{{ asset.credit_url }}" target="_blank" rel="noopener" class="ml-link">{{ asset.credit }}</a></dd>{% endif %}

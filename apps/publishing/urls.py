@@ -146,9 +146,11 @@ urlpatterns = [
     path("media/<int:pk>/", media_views.asset_update, name="media-detail"),
     path("media/bulk/", media_views.bulk, name="media-bulk"),
     path("media/<int:pk>/restore/", media_views.asset_restore, name="media-restore"),
+    path("media/restore/", media_views.restore_many, name="media-restore-many"),
     path("media/<int:pk>/edit/", media_views.asset_edit, name="media-edit"),
     path("media/<int:pk>/cover/", media_views.asset_cover, name="media-cover"),
     path("media/picker.json", media_views.picker, name="media-picker"),
+    path("media/similar.json", media_views.similar, name="media-similar"),
     path(
         "media/stock/search.json", media_views.stock_search, name="media-stock-search"
     ),

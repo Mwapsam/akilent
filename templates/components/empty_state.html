@@ -3,8 +3,10 @@ Usage:
   {% include "components/empty_state.html" with icon="send" title="No campaigns yet"
      message="Create your first campaign to reach your contacts."
      action_url="/email/campaigns/new/" action_label="New campaign" %}
+action_overlay="drawer|modal" opens the action over the page (static/js/app.js "Overlay").
+compact=True for an empty list inside a card or drawer (less padding).
 {% endcomment %}
-<div class="empty-state">
+<div class="empty-state{% if compact %} empty-state--compact{% endif %}">
   {% if icon %}
     <span class="empty-state-icon">
       {% include "components/icon.html" with name=icon class="w-6 h-6" %}
@@ -13,6 +15,6 @@ Usage:
   <p class="empty-state-title">{{ title }}</p>
   {% if message %}<p class="empty-state-message">{{ message }}</p>{% endif %}
   {% if action_url and action_label %}
-    <a href="{{ action_url }}" class="btn btn-primary btn-sm mt-4">{{ action_label }}</a>
+    <a href="{{ action_url }}" class="btn btn-primary btn-sm mt-4"{% if action_overlay %} data-overlay-open="{{ action_overlay }}"{% endif %}>{{ action_label }}</a>
   {% endif %}
 </div>

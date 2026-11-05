@@ -370,6 +370,8 @@ def _seed(account, n, start=0):
         "/publishing/calendar/?view=month",
         "/publishing/library/",
         "/publishing/media/",
+        "/publishing/media/?sort=used",
+        "/publishing/media/?show=unused&view=list",
         "/publishing/sales/",
     ],
 )

@@ -36,9 +36,15 @@ line: a clean name and how many posts use it. a: a decorated MediaAsset (media_v
             <input type="hidden" name="next" value="{% url 'publishing:media-library' %}">
             {% if archived %}
             <button type="submit" name="action" value="restore" class="pop-item">{% include "components/icon.html" with name="refresh" %}Put back</button>
+            {% elif a.remove_outcome == "blocked" %}
+            {% comment %}What Remove would do is known before it's pressed (media_views._decorate).{% endcomment %}
+            <p class="pop-item text-ink-subtle cursor-default text-xs">{% include "components/icon.html" with name="lock" %}A draft or scheduled post uses it, so it can't be removed yet.</p>
+            {% elif a.remove_outcome == "archived" %}
+            <button type="submit" name="action" value="remove" class="pop-item" data-confirm-label="Archive"
+              data-confirm="Archive {{ a.display }}? {{ a.used_in }} published post{{ a.used_in|pluralize }} use{{ a.used_in|pluralize:'s,' }} it, so it's hidden here and the file is kept for {{ a.used_in|pluralize:'it,them' }}. You can undo it.">{% include "components/icon.html" with name="minus-circle" %}Archive</button>
             {% else %}
-            <button type="submit" name="action" value="remove" class="pop-item pop-item--danger" data-confirm-danger data-confirm-label="Remove"
-              data-confirm="{% if a.used_in %}Remove {{ a.display }}? It's in {{ a.used_in }} post{{ a.used_in|pluralize }}. If one is a draft or scheduled, the file stays until that post no longer needs it; if they're all published, it's archived (hidden here, kept for those posts).{% else %}Delete {{ a.display }}? No post uses it, so the file is deleted for good.{% endif %}">{% include "components/icon.html" with name="trash" %}Remove</button>
+            <button type="submit" name="action" value="remove" class="pop-item pop-item--danger" data-confirm-danger data-confirm-label="Delete"
+              data-confirm="Delete {{ a.display }}? No post uses it, so the file is deleted for good.">{% include "components/icon.html" with name="trash" %}Delete</button>
             {% endif %}
           </form>
         </div>
