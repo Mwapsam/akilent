@@ -4,12 +4,13 @@ release gate: until it is released, ReleaseGateMiddleware 404s every URL under
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.paginator import Page, Paginator
 from django.db.models import Q
-from django.db.models.expressions import Combinable
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -18,11 +19,19 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from apps.accounts.utils import get_current_account
-from apps.core.htmx import overlay_done, overlay_or_page
+from apps.core.htmx import (
+    action_done,
+    is_background_post,
+    overlay_done,
+    overlay_or_page,
+)
 from apps.core.module_gate import module_required
 
 from . import direct_upload, media_library
 from .models import CaptionTemplate, HashtagSet, MediaAsset
+
+if TYPE_CHECKING:
+    from django.db.models.expressions import Combinable
 
 PAGE_SIZE = 48
 
@@ -150,6 +159,20 @@ def library(request):
     tags = sorted(
         {t for tags in live.values_list("tags", flat=True) for t in (tags or [])}
     )
+    from .live_filters import chips
+
+    active: list[tuple[tuple[str, ...], str]] = []
+    if q:
+        active.append(
+            (
+                ("q",),
+                f"\N{LEFT DOUBLE QUOTATION MARK}{q}\N{RIGHT DOUBLE QUOTATION MARK}",
+            )
+        )
+    if show != "all":
+        active.append((("show", "kind", "archived"), dict(SHOW_CHOICES)[show]))
+    if tag:
+        active.append((("tag",), f"#{tag}"))
     return render(
         request,
         "publishing/media_library.html",
@@ -165,6 +188,7 @@ def library(request):
             "view": view,
             "filtered": bool(q or tag or show != "all"),
             "clear_url": reverse("publishing:media-library"),
+            "chips": chips(request, active),
             "remove_rules": REMOVE_RULES,
             "totals": totals,
             "tag": tag,
@@ -226,7 +250,7 @@ def asset_update(request, pk):
         return _asset_detail(request, account, asset)
     action = request.POST.get("action")
     back = _back(request)
-    level, message = "success", "Saved."
+    level, message, undo = "success", "Saved.", None
     if action == "tags":
         media_library.set_tags(asset, request.POST.get("tags", ""))
         name = " ".join(request.POST.get("name", "").split())[:200]
@@ -234,12 +258,60 @@ def asset_update(request, pk):
             asset.name = name
             asset.save(update_fields=["name"])
     elif action == "remove":
-        level, message = _remove_message(*media_library.remove(asset))
+        outcome, posts = media_library.remove(asset)
+        level, message = _remove_message(outcome, posts)
+        # Archiving can be undone (the file is kept); a delete can't, so it only had the confirm.
+        if outcome == "archived":
+            undo = reverse("publishing:media-restore", args=[asset.pk])
+        if request.POST.get("card") and is_background_post(request):
+            return _card_response(
+                request, account, asset, outcome, level, message, undo
+            )
     elif action == "restore" and asset.archived_at:
         asset.archived_at = None
         asset.save(update_fields=["archived_at"])
         message = "Back in the library."
-    return overlay_done(request, message, back, level=level)
+        if request.POST.get("card") and is_background_post(request):
+            return _card_response(
+                request, account, asset, "restored", level, message, None
+            )
+    return overlay_done(request, message, back, level=level, undo=undo)
+
+
+def _card_response(request, account, asset, outcome, level, message, undo):
+    """A remove from the card's own menu, in place: the card goes (archived or deleted)
+    or stays as it was (blocked), with the toast saying which."""
+    from django.http import HttpResponse
+
+    from apps.accounts.utils import hx_toast
+
+    if outcome == "blocked":
+        _decorate(account, [asset])
+        response = render(
+            request,
+            "publishing/_media_card.html",
+            {"a": asset, "archived": False},
+        )
+    else:
+        response = HttpResponse("")
+    return hx_toast(response, "danger" if level == "error" else level, message, undo)
+
+
+@login_required
+@module_required("content_studio")
+@require_POST
+def asset_restore(request, pk):
+    """Put an archived file back (an archive's Undo, or Put back)."""
+    account = _account_or_none(request)
+    if account is None:
+        return redirect("dashboard")
+    asset = get_object_or_404(MediaAsset, pk=pk, account=account)
+    if asset.archived_at:
+        asset.archived_at = None
+        asset.save(update_fields=["archived_at"])
+    return action_done(
+        request, "Back in the library.", reverse("publishing:media-library")
+    )
 
 
 def _asset_detail(request, account, asset):

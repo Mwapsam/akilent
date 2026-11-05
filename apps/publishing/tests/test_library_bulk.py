@@ -100,5 +100,5 @@ def test_cancel_scheduled_reports_posts_that_were_not_cancelled(owner):
     scheduled.refresh_from_db()
     assert scheduled.status == ContentPost.Status.CANCELLED
     messages = _messages(response)
-    assert "Cancelled 1 scheduled post(s)." in messages
+    assert "Cancelled 1 scheduled post." in messages
     assert any("not cancelled" in m for m in messages)

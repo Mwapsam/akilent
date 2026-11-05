@@ -1,0 +1,11 @@
+{% comment %}The filters in use as removable chips (apps/publishing/live_filters.py). Each is a link to
+the page without that filter; app.js clears the field and applies it in place instead.
+Expects ``chips`` and ``clear_url``.{% endcomment %}
+{% if chips %}
+<ul class="cs-chips" aria-label="Filters in use">
+  {% for c in chips %}
+  <li><a href="{{ c.url }}" class="cs-chip" data-chip-clear="{{ c.clear }}"><span>{{ c.label }}</span>{% include "components/icon.html" with name="x" class="w-3.5 h-3.5" %}<span class="sr-only">Remove this filter</span></a></li>
+  {% endfor %}
+  {% if chips|length > 1 %}<li><a href="{{ clear_url }}" class="cs-link text-xs text-ink-subtle">Clear all</a></li>{% endif %}
+</ul>
+{% endif %}

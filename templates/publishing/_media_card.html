@@ -27,9 +27,13 @@ line: a clean name and how many posts use it. a: a decorated MediaAsset (media_v
         <div class="pop-panel pop-panel--sheet">
           <a href="{% url 'publishing:media-detail' a.pk %}" data-overlay-open="drawer" data-overlay-size="xl" class="pop-item">{% include "components/icon.html" with name="pencil" %}Rename and tags</a>
           <a href="{{ a.url }}" target="_blank" rel="noopener" download hx-boost="false" class="pop-item">{% include "components/icon.html" with name="download" %}Download</a>
-          <form method="post" action="{% url 'publishing:media-update' a.pk %}">
+          {% comment %}In place: the card goes (archived, with Undo; deleted; put back) or stays with
+          the reason (a draft needs it). Without JavaScript, a normal post and redirect.{% endcomment %}
+          <form method="post" action="{% url 'publishing:media-update' a.pk %}"
+                hx-post="{% url 'publishing:media-update' a.pk %}" hx-target="closest li" hx-swap="outerHTML">
             {% csrf_token %}
-            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <input type="hidden" name="card" value="1">
+            <input type="hidden" name="next" value="{% url 'publishing:media-library' %}">
             {% if archived %}
             <button type="submit" name="action" value="restore" class="pop-item">{% include "components/icon.html" with name="refresh" %}Put back</button>
             {% else %}

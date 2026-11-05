@@ -108,7 +108,7 @@
       <form method="post" action="{% url 'publishing:fb-disconnect' %}">
         {% csrf_token %}
         <button type="submit" class="btn btn-danger-ghost text-sm"
-                data-confirm="Disconnect this Facebook Page?" data-confirm-danger data-confirm-label="Disconnect">Disconnect</button>
+                data-confirm="Disconnect this Facebook Page? Posting to it stops, and so do new Messenger messages and comments in the inbox; conversations you have are kept. Facebook posts scheduled for it can't go out until you connect it again." data-confirm-danger data-confirm-label="Disconnect">Disconnect</button>
       </form>
       {% elif channel_on.facebook %}
       <a href="{% url 'publishing:fb-connect' %}" class="btn btn-primary text-sm">Connect Facebook Page</a>

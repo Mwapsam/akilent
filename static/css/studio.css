@@ -37,6 +37,18 @@
 .cs-row:hover, .cs-row:focus-within { background: var(--color-surface-muted); }
 @media (prefers-reduced-motion: reduce) { .cs-link, .cs-row { transition: none; } }
 
+/* Filters in use, as chips (templates/publishing/_filter_chips.html). */
+.cs-chips { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem; margin-bottom: .75rem; }
+.cs-chip { display: inline-flex; align-items: center; gap: .25rem; padding: .1875rem .5rem .1875rem .625rem;
+  border-radius: 999px; font-size: .75rem; font-weight: 500; color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
+  transition: background-color var(--duration-fast) var(--ease-emphasized); }
+.cs-chip:hover, .cs-chip:focus-visible { background: color-mix(in srgb, var(--color-accent) 22%, var(--color-surface)); }
+.cs-chip svg { opacity: .7; }
+[aria-busy="true"]#media-results, [aria-busy="true"]#library-results, [aria-busy="true"]#cal-results, [aria-busy="true"]#sales-results {
+  opacity: .6; transition: opacity var(--duration-fast) var(--ease-emphasized); }
+
 /* --- The month calendar (templates/publishing/_cal_month.html): a day's "+" plans an idea for
    it, shown on hover and focus (always on touch); a planned idea can be dragged. --------- */
 .cal-m-head { display: flex; align-items: center; justify-content: space-between; gap: .25rem; min-height: 1.5rem; }

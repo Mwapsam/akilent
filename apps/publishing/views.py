@@ -14,6 +14,7 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.defaultfilters import pluralize
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -657,11 +658,25 @@ def publishing_calendar(request):
         ).order_by("-created_at")[:10]
     )
 
+    from .live_filters import chips
+
+    active: list[tuple[tuple[str, ...], str]] = []
+    if channel_filter:
+        active.append((("channel",), channel_filter.capitalize()))
+    if status_filter:
+        active.append(
+            (
+                ("status",),
+                dict(ContentPost.Status.choices).get(status_filter, status_filter),
+            )
+        )
     return render(
         request,
         "publishing/calendar.html",
         {
             "account": account,
+            "chips": chips(request, active),
+            "clear_url": f"{reverse('publishing:calendar')}?view={view_mode}",
             "week_days": week_days,
             "week_start": week_start,
             "week_end": week_end,
@@ -790,19 +805,34 @@ def publishing_library(request):
     if q:
         qs = qs.filter(caption__icontains=q)
 
-    status_filter = request.GET.get("status", "")
-    if status_filter:
-        qs = qs.filter(status=status_filter)
-
-    # Where it stands (worklist buckets), e.g. "awaiting approval", which a draft or a
-    # scheduled post can both be. Same rule as the overview's counts.
+    # One "Show" control: where a post stands (worklist buckets, e.g. "awaiting approval",
+    # which a draft or a scheduled post can both be; same rule as the overview's counts),
+    # then the statuses no bucket covers (published, cancelled). ?bucket= links from the
+    # Overview, alerts and emails, and ?status=, still work.
     from .worklist import BUCKETS, post_ids_in
 
-    bucket_filter = request.GET.get("bucket", "")
-    if bucket_filter in dict(BUCKETS):
-        qs = qs.filter(pk__in=post_ids_in(account, bucket_filter))
+    statuses = [
+        c
+        for c in ContentPost.Status.choices
+        if c[0] != ContentPost.Status.IN_REVIEW and c[0] not in dict(BUCKETS)
+    ]
+    show_choices = list(BUCKETS) + statuses
+    show = request.GET.get("show", "")
+    bucket_filter = status_filter = ""
+    if show in dict(BUCKETS):
+        bucket_filter = show
+    elif show in dict(statuses):
+        status_filter = show
+    elif request.GET.get("bucket", "") in dict(BUCKETS):
+        bucket_filter = show = request.GET["bucket"]
+    elif request.GET.get("status", "") in ContentPost.Status.values:
+        status_filter = show = request.GET["status"]
     else:
-        bucket_filter = ""
+        show = ""
+    if bucket_filter:
+        qs = qs.filter(pk__in=post_ids_in(account, bucket_filter))
+    if status_filter:
+        qs = qs.filter(status=status_filter)
 
     media_type_filter = request.GET.get("media_type", "")
     if media_type_filter:
@@ -833,6 +863,31 @@ def publishing_library(request):
     page_number = request.GET.get("page", 1)
     page_obj = paginator.get_page(page_number)
 
+    from .live_filters import chips
+
+    active: list[tuple[tuple[str, ...], str]] = []
+    if q:
+        active.append((("q",), f"“{q}”"))
+    if show:
+        active.append((("show", "bucket", "status"), dict(show_choices)[show]))
+    if platform_filter:
+        active.append((("platform",), platform_filter.capitalize()))
+    if media_type_filter:
+        active.append(
+            (
+                ("media_type",),
+                dict(ContentPost.MediaType.choices).get(
+                    media_type_filter, media_type_filter
+                ),
+            )
+        )
+    if date_from or date_to:
+        active.append(
+            (
+                ("date_from", "date_to"),
+                f"{date_from or '…'} \N{EN DASH} {date_to or '…'}",
+            )
+        )
     return render(
         request,
         "publishing/library.html",
@@ -840,20 +895,17 @@ def publishing_library(request):
             "account": account,
             "page_obj": page_obj,
             "q": q,
+            "show": show,
+            "show_choices": show_choices,
             "status_filter": status_filter,
             "bucket_filter": bucket_filter,
-            "bucket_choices": BUCKETS,
             "media_type_filter": media_type_filter,
             "platform_filter": platform_filter,
             "date_from": date_from,
             "date_to": date_to,
-            # Review has its own filter; the lifecycle status never holds "in review".
-            "status_choices": [
-                c
-                for c in ContentPost.Status.choices
-                if c[0] != ContentPost.Status.IN_REVIEW
-            ],
             "media_type_choices": ContentPost.MediaType.choices,
+            "chips": chips(request, active),
+            "clear_url": reverse("publishing:library"),
         },
     )
 
@@ -916,7 +968,14 @@ def publishing_library_bulk(request):
                 cancel_post(scheduled_post)
         updated = len(to_cancel)
         if updated:
-            messages.success(request, f"Cancelled {updated} scheduled post(s).")
+            from apps.accounts.utils import flash
+
+            flash(
+                request,
+                "success",
+                f"Cancelled {updated} scheduled post{pluralize(updated)}.",
+                undo=_undo_cancel_url([p.pk for p in to_cancel]),
+            )
         skipped = len(pks) - updated
         if skipped:
             messages.warning(
@@ -2340,19 +2399,71 @@ def post_cancel(request, pk):
         messages.error(request, "Only scheduled posts can be cancelled.")
         return redirect("publishing:post-detail", pk=post.pk)
 
+    from apps.core.htmx import action_done
+
     from .services import cancel_post
 
     with transaction.atomic():
         cancel_post(post)
     post.refresh_from_db(fields=["status"])
+    back = reverse("publishing:post-detail", args=[post.pk])
     if post.status == ContentPost.Status.CANCELLED:
-        messages.success(request, "Post cancelled.")
-    else:
-        messages.success(
-            request,
-            "Channels still waiting were cancelled. Channels already live stay published.",
+        return action_done(
+            request, "Post cancelled.", back, undo=_undo_cancel_url([post.pk])
         )
-    return redirect("publishing:post-detail", pk=post.pk)
+    return action_done(
+        request,
+        "Channels still waiting were cancelled. Channels already live stay published.",
+        back,
+    )
+
+
+def _undo_cancel_url(pks) -> str:
+    return f"{reverse('publishing:post-undo-cancel')}?ids={','.join(map(str, pks))}"
+
+
+@login_required
+@module_required("content_studio")
+@require_POST
+def post_undo_cancel(request):
+    """A cancel's Undo (the toast's button): each post back as it was if its times are
+    still ahead, through readiness and approval, or as a draft (services.undo_cancel)."""
+    from apps.core.htmx import action_done
+
+    from .services import undo_cancel
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    pks = [int(x) for x in request.GET.get("ids", "").split(",") if x.isdigit()][:100]
+    outcomes: dict[str, list[str]] = {}
+    with transaction.atomic():
+        for post in ContentPost.objects.filter(account=account, pk__in=pks):
+            outcome, reason = undo_cancel(post, request.user)
+            outcomes.setdefault(outcome, []).append(reason)
+    parts = []
+    if outcomes.get("scheduled"):
+        n = len(outcomes["scheduled"])
+        parts.append(
+            f"{n} post{pluralize(n)} scheduled again at {'its' if n == 1 else 'their'} time"
+        )
+    if outcomes.get("review"):
+        n = len(outcomes["review"])
+        parts.append(f"{n} sent for review again")
+    if outcomes.get("draft"):
+        n = len(outcomes["draft"])
+        why = (
+            outcomes["draft"][0] if n == 1 else "a time has passed or a check stops it"
+        )
+        parts.append(f"{n} back as a draft ({why.rstrip('.')})")
+    level = "warning" if outcomes.get("draft") else "success"
+    message = "; ".join(parts).capitalize() + "." if parts else "Nothing to undo."
+    back = (
+        reverse("publishing:post-detail", args=[pks[0]])
+        if len(pks) == 1
+        else reverse("publishing:library")
+    )
+    return action_done(request, message, back, level=level if parts else "info")
 
 
 @login_required

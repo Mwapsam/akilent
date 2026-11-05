@@ -181,9 +181,7 @@ def _toast(response, tags: str, message: str, undo: str | None = None):
         "danger" if ("error" in words or "danger" in words) else "info",
     )
     if undo is None:
-        undo = next(
-            (w[len(UNDO_TAG) :] for w in words if w.startswith(UNDO_TAG)), None
-        )
+        undo = next((w[len(UNDO_TAG) :] for w in words if w.startswith(UNDO_TAG)), None)
     # One header: the latest message wins, which is the one that says what happened.
     hx_toast(response, level, message, undo)
 

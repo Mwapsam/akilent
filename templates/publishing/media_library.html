@@ -17,18 +17,16 @@
 {% comment %}
   mediaLibrary() (static/js/media_library.js): uploads (the button, or files dropped anywhere on
   the page), the selection and its bar, and stock photos. The filter row swaps #media-results
-  in place and keeps the URL in step (hx-replace-url); without JavaScript its hidden submit
+  in place and keeps the URL in step (app.js data-live-filter); without JavaScript its hidden submit
   sends it as a plain GET. Removing follows one rule, spelled out in the ⓘ and in each confirm.
 {% endcomment %}
 <div x-data="mediaLibrary()" :class="selected.length && 'ml-selecting'"
      @dragenter.window="dragEnter($event)" @dragover.window="dragOver($event)" @dragleave.window="dragLeave($event)" @drop.window="drop($event)"
-     @htmx:after-swap.window="if ($event.detail.target.id === 'media-results') selected = []">
+     @htmx:after-swap.window="if (($event.detail.target || {}).id === 'media-results') selected = []">
   <input id="ml-file" type="file" class="sr-only" multiple accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime"
          @change="onFiles($event.target.files); $event.target.value = ''" :disabled="busy" tabindex="-1">
 
-  <form method="get" action="{% url 'publishing:media-library' %}" class="ml-toolbar" role="search" aria-label="Filter media"
-        hx-get="{% url 'publishing:media-library' %}" hx-target="#media-results" hx-select="#media-results" hx-swap="outerHTML"
-        hx-replace-url="true" hx-trigger="submit, change, input changed delay:300ms from:find input[name=q]">
+  <form method="get" action="{% url 'publishing:media-library' %}" class="ml-toolbar" role="search" aria-label="Filter media" data-live-filter="#media-results">
     <label class="ml-search">
       {% include "components/icon.html" with name="search" class="w-4 h-4 shrink-0" %}
       <span class="sr-only">Search by name or tag</span>
@@ -37,7 +35,7 @@
     <fieldset class="seg">
       <legend class="sr-only">Show</legend>
       {% for value, label in show_choices %}
-      <label class="seg-item"><input type="radio" name="show" value="{{ value }}" class="sr-only" {% if value == show %}checked{% endif %}><span>{{ label }}</span></label>
+      <label class="seg-item"><input type="radio" name="show" value="{{ value }}" class="sr-only" {% if value == show %}checked{% endif %}{% if value == "all" %} data-default{% endif %}><span>{{ label }}</span></label>
       {% endfor %}
     </fieldset>
     {% if tags %}
@@ -80,13 +78,14 @@
   </ul>
 
   <div id="media-results">
+    {% include "publishing/_filter_chips.html" %}
     <div class="ml-summary">
       <span data-media-total>{{ totals.files }} file{{ totals.files|pluralize }}{% if totals.size %} · {{ totals.size|filesizeformat }}{% endif %}</span>
       <details class="pop">
         <summary class="ml-info-btn" title="How removing works" aria-label="How removing works">{% include "components/icon.html" with name="info" class="w-4 h-4" %}</summary>
         <div class="pop-panel pop-panel--start pop-panel--sheet w-80 p-3 text-sm text-ink-muted">{{ remove_rules }}</div>
       </details>
-      {% if filtered %}<span aria-hidden="true">·</span><span>{{ page.paginator.count }} shown</span><a href="{% url 'publishing:media-library' %}" class="ml-link">Clear filters</a>{% endif %}
+      {% if filtered %}<span aria-hidden="true">·</span><span>{{ page.paginator.count }} shown</span>{% endif %}
     </div>
 
     {% if assets %}

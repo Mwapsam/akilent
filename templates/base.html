@@ -392,8 +392,11 @@
         try {
           const messages = JSON.parse(el.textContent);
           messages.forEach(m => {
-            const type = m.tags === 'error' ? 'danger' : (m.tags || 'info');
-            window.toast(type, m.message);
+            {% comment %}tags: the level, plus undo:/path when the server can undo it (accounts.utils.flash).{% endcomment %}
+            const words = (m.tags || '').split(' ');
+            const level = words.find(w => ['success', 'info', 'warning', 'error', 'danger'].includes(w)) || 'info';
+            const undo = (words.find(w => w.indexOf('undo:') === 0) || '').slice(5);
+            window.toast(level === 'error' ? 'danger' : level, m.message, undo ? { undo: undo } : undefined);
           });
         } catch (e) { console.error('Flash message parse error:', e); }
       }

@@ -57,7 +57,7 @@ to show (channel, status). The selects apply as soon as they change.{% endcommen
       {% if scheduling_on %}<a href="{% querystring view='month' %}" class="seg-item" {% if view_mode == 'month' %}aria-current="page"{% endif %}>Month</a>{% endif %}
       <a href="{% querystring view='list' %}" class="seg-item" {% if view_mode == 'list' %}aria-current="page"{% endif %}>List</a>
     </nav>
-    <form method="get" class="flex basis-full sm:basis-auto items-center gap-2" x-data @change="$el.requestSubmit()">
+    <form method="get" class="flex basis-full sm:basis-auto items-center gap-2" data-live-filter="#cal-results" aria-label="Filter the calendar">
       <input type="hidden" name="week" value="{{ week_param }}">
       <input type="hidden" name="view" value="{{ view_mode }}">
       {% if month_param %}<input type="hidden" name="month" value="{{ month_param }}">{% endif %}
@@ -72,11 +72,14 @@ to show (channel, status). The selects apply as soon as they change.{% endcommen
         <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
-      <noscript><button type="submit" class="btn btn-secondary btn-sm">Apply</button></noscript>
+      <button type="submit" class="sr-only">Apply</button>
     </form>
   </div>
 </div>
 
+{% comment %}What the filters above change: replaced in place (app.js data-live-filter).{% endcomment %}
+<div id="cal-results">
+{% include "publishing/_filter_chips.html" %}
 {% if view_mode == 'month' %}
   {% include "publishing/_cal_month.html" %}
 
@@ -158,5 +161,7 @@ to show (channel, status). The selects apply as soon as they change.{% endcommen
   </ul>
 </section>
 {% endif %}
+
+</div>
 
 {% endblock %}

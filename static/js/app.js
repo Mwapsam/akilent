@@ -16,7 +16,14 @@
     const m = document.cookie.match("(^|;)\\s*" + name + "\\s*=\\s*([^;]+)");
     return m ? decodeURIComponent(m.pop()) : "";
   }
-  const CSRF = () => getCookie("csrftoken");
+  // The cookie is HttpOnly in production, so fall back to the token the page carries:
+  // <body hx-headers> (base.html), which refreshCsrf() below keeps current.
+  const CSRF = function () {
+    const cookie = getCookie("csrftoken");
+    if (cookie) return cookie;
+    try { return JSON.parse(document.body.getAttribute("hx-headers") || "{}")["X-CSRFToken"] || ""; }
+    catch (_) { return ""; }
+  };
 
   // --- Stale CSRF tokens -------------------------------------------------
   // A page can outlive its CSRF token: signing in issues a new one, and a page the
@@ -97,14 +104,16 @@
     });
   });
 
-  // Parse an X-Toast header: "type|url-encoded-message".
+  // Parse an X-Toast header: "type|url-encoded-message", optionally "|url-encoded-undo-path"
+  // (accounts.utils.hx_toast). The message and path are encoded, so neither holds a raw "|".
   function decodeToast(header) {
-    const i = header.indexOf("|");
-    const type = i === -1 ? "success" : header.slice(0, i);
-    let message = i === -1 ? "" : header.slice(i + 1);
-    try { message = decodeURIComponent(message); } catch (_) {}
-    return { type: type || "success", message };
+    const parts = header.split("|");
+    const type = parts.length === 1 ? "success" : parts[0];
+    const dec = function (s) { try { return decodeURIComponent(s || ""); } catch (_) { return s || ""; } };
+    const message = parts.length === 1 ? "" : dec(parts[1]);
+    return { type: type || "success", message: message, undo: dec(parts[2]) };
   }
+  function toastOpts(t) { return t.undo ? { undo: t.undo } : undefined; }
 
   // --- Toasts ------------------------------------------------------------
   // Backed by an Alpine store (see alpine:init); window.toast is the API:
@@ -125,13 +134,22 @@
     if (a.hx && path(a.hx.url)) {
       const method = String(a.hx.method || "get").toLowerCase();
       if (["get", "post"].indexOf(method) === -1) return null;
-      return { label: a.label, hx: { method: method, url: a.hx.url }, idempotent: a.idempotent !== false, expires_ms: a.expires_ms || 0 };
+      return { label: a.label, hx: { method: method, url: a.hx.url }, idempotent: a.idempotent !== false, expires_ms: a.expires_ms || 0, refresh: !!a.refresh };
     }
     return null;
   }
   let _toastQueue = [];
+  // opts.undo = a path: an Undo button that POSTs there once, for 30 seconds, and then
+  // refreshes the page (the server's undo, never a client-side timer pretending to be one).
+  const UNDO_MS = 30000;
   window.toast = function (type, message, opts) {
     type = type || "info";
+    if (opts && opts.undo && !opts.action) {
+      opts = Object.assign({}, opts, {
+        action: { label: "Undo", hx: { method: "post", url: opts.undo }, idempotent: false, expires_ms: UNDO_MS, refresh: true },
+        timeout: opts.timeout !== undefined ? opts.timeout : UNDO_MS,
+      });
+    }
     const timeout = opts && opts.timeout !== undefined ? opts.timeout
       : (TOAST_TIMEOUTS[type] !== undefined ? TOAST_TIMEOUTS[type] : 5000);
     const t = { type: type, message: message, timeout: timeout, action: safeAction(opts && opts.action) };
@@ -219,7 +237,9 @@
           if (!r.ok) throw new Error(String(r.status));
           this.remove(t.id);
           const header = r.headers.get("X-Toast");
-          if (header) { const d = decodeToast(header); window.toast(d.type, d.message); }
+          if (header) { const d = decodeToast(header); window.toast(d.type, d.message, toastOpts(d)); }
+          // An undo changed what the page shows: show it again, in place.
+          if (a.refresh && window.akilent && window.akilent.refreshPage) window.akilent.refreshPage();
         }).catch(() => {
           // A request that failed in transit may still have reached the server, so
           // this does not claim nothing changed.
@@ -730,7 +750,7 @@
     // Element-level silence only: an automatic refresh silences its *failures*, never
     // what the server chose to say (the follow-ups-due toast arrives on an SSE refresh).
     if (isSilent(e.detail.elt) && t.type !== "success") return;
-    window.toast(t.type, t.message);
+    window.toast(t.type, t.message, toastOpts(t));
   });
 
   // 3. Error-state contract. A 4xx/5xx or a dropped connection is silent in HTMX
@@ -1513,6 +1533,72 @@
     else if (e.key === "k" || e.key === "K" || (arrows && e.key === "ArrowLeft")) { e.preventDefault(); stepOverlay(-1); }
   });
 
+  // Live filters (Content Studio app feel, Phase 3): <form method="get" data-live-filter="#results">.
+  // Text and search fields apply 300ms after typing stops; selects, radios, checkboxes and
+  // dates on change. Only the results region is replaced (the form stays, so focus stays in
+  // the search box), and the URL follows with replaceState, so the address is always the
+  // real, shareable page. Empty fields are left out of it. A filter chip
+  // (a[data-chip-clear="name …"], publishing/_filter_chips.html) clears its fields and
+  // applies. Without JavaScript the form's hidden submit and the chips' links still work.
+  let liveSeq = 0;
+  function liveFilter(form) {
+    const sel = form.getAttribute("data-live-filter");
+    const results = sel && document.querySelector(sel);
+    if (!results || !window.htmx) { form.submit(); return; }
+    const params = new URLSearchParams();
+    new FormData(form).forEach(function (v, k) { if (typeof v === "string" && v !== "") params.append(k, v); });
+    const qs = params.toString();
+    const url = (form.getAttribute("action") || location.pathname) + (qs ? "?" + qs : "");
+    const seq = ++liveSeq;
+    results.setAttribute("aria-busy", "true");
+    htmx.ajax("GET", url, { source: results, target: sel, select: sel, swap: "outerHTML" }).then(function () {
+      if (seq !== liveSeq) return;
+      history.replaceState(history.state, "", url);
+      window.dispatchEvent(new CustomEvent("akilent:pageview", { detail: { path: url, filter: true } }));
+    }).finally(function () {
+      const now = document.querySelector(sel);
+      if (now) now.removeAttribute("aria-busy");
+    });
+  }
+  const liveText = 'input[type="search"], input[type="text"], input:not([type])';
+  document.addEventListener("input", function (e) {
+    const form = e.target.closest && e.target.closest("form[data-live-filter]");
+    if (!form || !e.target.matches(liveText)) return;
+    clearTimeout(form._liveTimer);
+    form._liveTimer = setTimeout(function () { liveFilter(form); }, 300);
+  });
+  document.addEventListener("change", function (e) {
+    const form = e.target.closest && e.target.closest("form[data-live-filter]");
+    if (!form || e.target.matches(liveText) || !e.target.name) return;
+    liveFilter(form);
+  });
+  document.addEventListener("submit", function (e) {
+    const form = e.target;
+    if (!form.matches || !form.matches("form[data-live-filter]")) return;
+    // Ahead of htmx's boost: the results region is replaced, not the page.
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    clearTimeout(form._liveTimer);
+    liveFilter(form);
+  }, true);
+  document.addEventListener("click", function (e) {
+    const chip = e.target.closest && e.target.closest("a[data-chip-clear]");
+    const form = chip && document.querySelector("#main form[data-live-filter]");
+    if (!form || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    e.preventDefault();
+    e.stopPropagation();
+    chip.getAttribute("data-chip-clear").split(" ").forEach(function (name) {
+      form.querySelectorAll('[name="' + CSS.escape(name) + '"]').forEach(function (f) {
+        if (f.type === "radio") f.checked = f.hasAttribute("data-default"); // e.g. Media's "All"
+        else if (f.type === "checkbox") f.checked = false;
+        else f.value = "";
+        // Alpine's x-model listens for these.
+        f.dispatchEvent(new Event(f.type === "radio" || f.type === "checkbox" || f.tagName === "SELECT" ? "change" : "input", { bubbles: false }));
+      });
+    });
+    liveFilter(form);
+  }, true);
+
   // Page shortcuts (Content Studio app feel, Phase 5), never while typing or with a dialog
   // open: N a new post (Content Studio pages), / the page's search ([data-search]), J/K the
   // next and previous row ([data-row]; Enter then opens it, as any link), ? lists them in the
@@ -1695,6 +1781,8 @@
       })
       .catch(function () {});
   }
+  // The same refresh after a toast's Undo (above), so the page shows what the undo changed.
+  akilent.refreshPage = refreshUnderOverlay;
   document.addEventListener("htmx:afterRequest", function (e) {
     const verb = ((e.detail.requestConfig && e.detail.requestConfig.verb) || "get").toLowerCase();
     if (verb === "get" || !e.detail.successful || !e.detail.elt || !e.detail.elt.closest) return;

@@ -39,7 +39,7 @@ Narrow: review and channels first (what needs doing), then the post, then detail
       <form method="post" action="{% url 'publishing:post-delete' post.pk %}">
         {% csrf_token %}
         <button type="submit" class="btn btn-danger-ghost"
-                data-confirm="Delete this post? This cannot be undone." data-confirm-danger data-confirm-label="Delete">
+                data-confirm="Delete this post? It's deleted for good, with its schedule. Nothing has been published from it, so nothing on Instagram or Facebook changes." data-confirm-danger data-confirm-label="Delete">
           {% include "components/icon.html" with name="trash" class="w-4 h-4" %}Delete
         </button>
       </form>
@@ -48,7 +48,7 @@ Narrow: review and channels first (what needs doing), then the post, then detail
       <form method="post" action="{% url 'publishing:post-cancel' post.pk %}">
         {% csrf_token %}
         <button type="submit" class="btn btn-secondary"
-                data-confirm="Cancel this scheduled post?" data-confirm-label="Cancel post" data-confirm-cancel="Keep scheduled">Cancel</button>
+                data-confirm="Cancel this scheduled post? Channels that haven't gone out won't publish. You can undo it from the message that follows, or reopen it as a draft later." data-confirm-label="Cancel post" data-confirm-cancel="Keep scheduled">Cancel</button>
       </form>
       {% endif %}
       {% if post.status == 'cancelled' %}

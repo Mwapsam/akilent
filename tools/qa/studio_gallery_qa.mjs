@@ -260,6 +260,42 @@ await shot("gallery-phone");
 check("phone.no-sideways-scroll", wide.length === 0, wide);
 await viewport(1280, 860, false);
 
+// ---- Phase 3: live filters, chips, remove in place with the server's Undo ----
+await go("/publishing/library/", 1500);
+const libGets = log.filter((l) => l.startsWith("GET /publishing/library/")).length;
+await evaluate(`(() => { const i = document.getElementById('library-q'); i.focus(); i.value = 'zzz-no-such-caption'; i.dispatchEvent(new Event('input', { bubbles: true })); return 0; })()`);
+await waitFor(`location.search.includes('q=zzz') && !!document.querySelector('#library-results [data-chip-clear="q"]')`);
+const lib = await evaluate(`({ q: location.search, focus: document.activeElement && document.activeElement.id, empty: /No posts match/.test(document.getElementById('library-results').innerText), button: [...document.querySelectorAll('form[data-live-filter] button')].some((b) => b.textContent.trim() === 'Filter') })`);
+check("library.live-search-keeps-focus", /q=zzz/.test(lib.q) && lib.focus === "library-q" && lib.empty && !lib.button, lib);
+await evaluate(`document.querySelector('#library-results [data-chip-clear="q"]').click(); 0`);
+await waitFor(`!location.search.includes('q=zzz')`);
+const cleared = await evaluate(`({ q: document.getElementById('library-q').value, search: location.search, rows: document.querySelectorAll('#library-results tbody tr').length })`);
+check("library.chip-clears-filter", cleared.q === "" && cleared.rows > 0, cleared);
+await evaluate(`(() => { const s = document.getElementById('library-show'); s.value = 'published'; s.dispatchEvent(new Event('change', { bubbles: true })); return 0; })()`);
+await waitFor(`location.search.includes('show=published')`);
+check("library.show-applies-on-change", (await evaluate(`!!document.querySelector('#library-results [data-chip-clear="show bucket status"]')`)), {});
+
+rules.unshift({ match: (r) => r.method === "POST" && /^\/publishing\/media\/\d+\/(restore\/)?$/.test(new URL(r.url).pathname), act: null });
+await go("/publishing/media/", 1500);
+await evaluate(`Alpine.store('toasts').items = []; 0`);
+const linen = await evaluate(`(() => { const img = document.querySelector('#media-results img[src*="linen-dress"]'); const li = img && img.closest('[data-asset]'); return li ? li.getAttribute('data-asset') : null; })()`);
+if (!linen) check("media.archive-in-place-with-undo", false, "no linen-dress card");
+else {
+  await evaluate(`(() => { const li = document.querySelector('[data-asset="${linen}"]'); li.querySelector('.ml-more').open = true; li.querySelector('button[value=remove]').click(); return 0; })()`);
+  // The confirm says what will happen (archived: published posts use it), then yes.
+  await waitFor(`/archived/.test(Alpine.store('confirm').message || '')`, 3000);
+  await evaluate(`Alpine.store('confirm').respond(true); 0`);
+  await waitFor(`!document.querySelector('[data-asset="${linen}"]')`);
+  const t1 = await evaluate(`Alpine.store('toasts').items.map((t) => ({ m: t.message, a: t.action && t.action.label }))`);
+  const gone = await evaluate(`!document.querySelector('[data-asset="${linen}"]') && location.pathname === '/publishing/media/'`);
+  await evaluate(`(() => { const s = Alpine.store('toasts'); const t = s.items.find((i) => i.action && i.action.label === 'Undo'); if (t) s.run(t); return 0; })()`);
+  await waitFor(`!!document.querySelector('[data-asset="${linen}"]')`);
+  const back = await evaluate(`!!document.querySelector('[data-asset="${linen}"]')`);
+  await shot("phase3-undo");
+  check("media.archive-in-place-with-undo", gone && t1.some((t) => /^Archived/.test(t.m) && t.a === "Undo") && back, { t1, gone, back });
+}
+rules.shift();
+
 check("console.no-errors", consoleErrors.filter((e) => !/favicon|ERR_BLOCKED_BY_CLIENT|status of 4\d\d|leather-sandals|CORS/.test(e)).length === 0, consoleErrors.slice(0, 5));
 const failed = results.filter((r) => !r.pass);
 writeFileSync(join(outDir, "studio_gallery_qa.json"), JSON.stringify({ results, log }, null, 2));

@@ -71,6 +71,7 @@ urlpatterns = [
         name="variant-reschedule",
     ),
     path("posts/<int:pk>/cancel/", views.post_cancel, name="post-cancel"),
+    path("posts/undo-cancel/", views.post_undo_cancel, name="post-undo-cancel"),
     path(
         "posts/<int:pk>/variants/<int:variant_pk>/first-comment/retry/",
         views.first_comment_retry,
@@ -144,6 +145,7 @@ urlpatterns = [
     path("media/<int:pk>/", media_views.asset_update, name="media-update"),
     path("media/<int:pk>/", media_views.asset_update, name="media-detail"),
     path("media/bulk/", media_views.bulk, name="media-bulk"),
+    path("media/<int:pk>/restore/", media_views.asset_restore, name="media-restore"),
     path("media/<int:pk>/edit/", media_views.asset_edit, name="media-edit"),
     path("media/<int:pk>/cover/", media_views.asset_cover, name="media-cover"),
     path("media/picker.json", media_views.picker, name="media-picker"),

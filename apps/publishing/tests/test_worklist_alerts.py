@@ -289,7 +289,8 @@ def test_an_unknown_bucket_is_ignored(team, owner_client):
 def test_the_status_filters_no_longer_offer_in_review(team, owner_client):
     res = owner_client.get(reverse("publishing:library"))
 
-    assert "in_review" not in dict(res.context["status_choices"])
+    # One "Show" control now holds where a post stands and its status.
+    assert "in_review" not in dict(res.context["show_choices"])
 
 
 def test_another_workspaces_posts_are_never_counted(team):

@@ -16,38 +16,33 @@
 {% include "publishing/_subnav.html" %}
 
 {# Filter form #}
-<form method="get" class="card card-pad mb-4"
-      x-data="{ more: {% if status_filter or bucket_filter or platform_filter or media_type_filter or date_from or date_to %}true{% else %}false{% endif %} }">
+{% comment %}A live filter (static/js/app.js data-live-filter): the search applies as you type, the
+rest on change, and only #library-results is replaced, so focus stays where it was. The hidden
+submit keeps it working without JavaScript. "Show" is one control for where a post stands and
+its status (?bucket= and ?status= links still work).{% endcomment %}
+<form method="get" action="{% url 'publishing:library' %}" class="card card-pad mb-4" data-live-filter="#library-results" role="search" aria-label="Filter posts"
+      x-data="{ more: {% if show or platform_filter or media_type_filter or date_from or date_to %}true{% else %}false{% endif %} }">
   <div class="flex flex-wrap gap-3 items-end">
     <div class="flex-1 min-w-[11rem]">
       <label class="block text-xs font-medium text-ink-subtle mb-1" for="library-q">Search</label>
-      <input type="text" id="library-q" name="q" data-search value="{{ q }}" placeholder="Search captions…" class="input w-full py-1">
+      <input type="search" id="library-q" name="q" data-search value="{{ q }}" placeholder="Search captions…" class="input w-full py-1" autocomplete="off">
     </div>
     <button type="button" class="btn btn-ghost text-sm py-1 sm:hidden" @click="more = !more" :aria-expanded="more" aria-controls="library-more-filters">
-      Filters{% if status_filter or bucket_filter or platform_filter or media_type_filter or date_from or date_to %} <span class="inline-block w-2 h-2 rounded-full bg-brand-500" aria-label="(active)"></span>{% endif %}
+      Filters{% if show or platform_filter or media_type_filter or date_from or date_to %} <span class="inline-block w-2 h-2 rounded-full bg-brand-500" aria-label="(active)"></span>{% endif %}
     </button>
     <div id="library-more-filters" class="w-full grid grid-cols-2 gap-3 sm:contents" :class="{ 'max-sm:hidden': !more }">
     <div>
-      <label class="block text-xs font-medium text-ink-subtle mb-1" for="library-status">Status</label>
-      <select name="status" id="library-status" onchange="this.form.submit()" class="input w-full sm:w-auto py-1">
-        <option value="">All</option>
-        {% for val, label in status_choices %}
-        <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div>
-      <label class="block text-xs font-medium text-ink-subtle mb-1" for="library-bucket">Where it stands</label>
-      <select name="bucket" id="library-bucket" onchange="this.form.submit()" class="input w-full sm:w-auto py-1">
-        <option value="">All</option>
-        {% for val, label in bucket_choices %}
-        <option value="{{ val }}" {% if bucket_filter == val %}selected{% endif %}>{{ label }}</option>
+      <label class="block text-xs font-medium text-ink-subtle mb-1" for="library-show">Show</label>
+      <select name="show" id="library-show" class="input w-full sm:w-auto py-1">
+        <option value="">All posts</option>
+        {% for val, label in show_choices %}
+        <option value="{{ val }}" {% if show == val %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
     </div>
     <div>
       <label class="block text-xs font-medium text-ink-subtle mb-1" for="library-platform">Platform</label>
-      <select name="platform" id="library-platform" onchange="this.form.submit()" class="input w-full sm:w-auto py-1">
+      <select name="platform" id="library-platform" class="input w-full sm:w-auto py-1">
         <option value="">All</option>
         <option value="instagram" {% if platform_filter == 'instagram' %}selected{% endif %}>Instagram</option>
         <option value="facebook" {% if platform_filter == 'facebook' %}selected{% endif %}>Facebook</option>
@@ -55,7 +50,7 @@
     </div>
     <div>
       <label class="block text-xs font-medium text-ink-subtle mb-1" for="library-media-type">Media type</label>
-      <select name="media_type" id="library-media-type" onchange="this.form.submit()" class="input w-full sm:w-auto py-1">
+      <select name="media_type" id="library-media-type" class="input w-full sm:w-auto py-1">
         <option value="">All</option>
         {% for val, label in media_type_choices %}
         <option value="{{ val }}" {% if media_type_filter == val %}selected{% endif %}>{{ label }}</option>
@@ -101,12 +96,12 @@
       </details>
     </div>
     </div>
-    <button type="submit" class="btn btn-ghost text-sm py-1">Filter</button>
-    {% if q or status_filter or bucket_filter or platform_filter or media_type_filter or date_from or date_to %}
-    <a href="{% url 'publishing:library' %}" class="btn btn-ghost text-sm py-1 text-ink-subtle">Clear</a>
-    {% endif %}
+    <button type="submit" class="sr-only">Show posts</button>
   </div>
 </form>
+
+<div id="library-results">
+{% include "publishing/_filter_chips.html" %}
 
 {# Bulk action form #}
 {% comment %}The bulk buttons appear once a post is ticked; nothing destructive sits on the
@@ -118,16 +113,16 @@ page before anything is selected.{% endcomment %}
   {% if page_obj.object_list %}
   <div class="flex flex-wrap items-center gap-x-3 gap-y-2 mb-3">
     <label class="text-sm text-ink-subtle flex items-center gap-1.5 min-h-9">
-      <input type="checkbox" id="select-all" class="rounded"> Select all
+      <input type="checkbox" id="select-all" class="rounded" @change="$el.closest('form').querySelectorAll('.post-checkbox').forEach((cb) => { cb.checked = $el.checked })"> Select all
     </label>
     <div class="flex flex-wrap items-center gap-2" x-show="selected" x-cloak>
       <span class="text-sm text-ink" x-text="selected + ' selected'" aria-live="polite"></span>
       <button type="submit" name="action" value="delete_drafts"
               class="btn btn-danger-ghost text-sm"
-              data-confirm="Delete the selected drafts? This cannot be undone." data-confirm-danger data-confirm-label="Delete">Delete drafts</button>
+              data-confirm="Delete the selected ideas and drafts? They're deleted for good. Any scheduled, published or failed post you ticked is left as it is." data-confirm-danger data-confirm-label="Delete">Delete drafts</button>
       <button type="submit" name="action" value="cancel_scheduled"
               class="btn btn-ghost text-sm tone-amber-fg hover:tone-amber-bg"
-              data-confirm="Cancel the selected scheduled posts?" data-confirm-label="Cancel posts" data-confirm-cancel="Keep scheduled">Cancel scheduled</button>
+              data-confirm="Cancel the selected scheduled posts? Channels that haven't gone out won't publish; anything already live stays. You can undo it from the message that follows." data-confirm-label="Cancel posts" data-confirm-cancel="Keep scheduled">Cancel scheduled</button>
     </div>
     <span class="text-xs text-ink-subtle ml-auto">{{ page_obj.paginator.count }} post{{ page_obj.paginator.count|pluralize }}</span>
   </div>
@@ -178,7 +173,7 @@ page before anything is selected.{% endcomment %}
   {% comment %}Two different empties: filters hiding posts, or no posts at all. "No posts
   match your filters" used to show with no filter set, pointing at a cause that wasn't there.{% endcomment %}
   <div class="card">
-  {% if q or status_filter or bucket_filter or platform_filter or media_type_filter or date_from or date_to %}
+  {% if q or show or platform_filter or media_type_filter or date_from or date_to %}
     {% url 'publishing:library' as library_url %}
     {% include "components/empty_state.html" with icon="search" title="No posts match these filters" message="Try a different search, or clear the filters to see every post." action_url=library_url action_label="Clear filters" %}
   {% else %}
@@ -205,9 +200,6 @@ page before anything is selected.{% endcomment %}
 </div>
 {% endif %}
 
-<script data-shell-safe>
-document.getElementById('select-all')?.addEventListener('change', function() {
-  document.querySelectorAll('.post-checkbox').forEach(cb => cb.checked = this.checked);
-});
-</script>
+</div>
+
 {% endblock %}

@@ -196,6 +196,72 @@ def cancel_post(post: ContentPost) -> None:
     post.save(update_fields=["status", "updated_at"])
 
 
+UNDO_CANCEL_MARGIN = timedelta(minutes=2)
+
+
+def undo_cancel(post: ContentPost, user=None) -> tuple[str, str]:
+    """Undo a cancel: the post as it was, if that's still possible.
+
+    - Every cancelled channel's time is still ahead: back to scheduled at those times,
+      through the same readiness check and approval as scheduling it again
+      (``"scheduled"``; ``"review"`` when it needs an approval it no longer has; ``"draft"``
+      with the reason when the check now stops it).
+    - A time has passed (or there was none): back as a draft with no schedule
+      (``"draft"``), since going out late wasn't what was asked for.
+
+    Returns (outcome, reason). ``"none"`` when the post isn't cancelled any more.
+    """
+    from . import readiness
+    from .composer import ComposerInput
+
+    if post.status != ContentPost.Status.CANCELLED:
+        return "none", ""
+    cancelled = list(
+        post.variants.filter(
+            status=ContentPostVariant.Status.CANCELLED, platform__in=post.platforms
+        )
+    )
+    times = {v.platform: v.scheduled_at for v in cancelled}
+    soon = timezone.now() + UNDO_CANCEL_MARGIN
+    if not cancelled or any(t is None or t <= soon for t in times.values()):
+        reopen_post(post)
+        return "draft", "Its time has passed."
+    first = min(t for t in times.values() if t)
+    inp = ComposerInput(
+        caption=post.caption,
+        hashtags=list(post.hashtags or []),
+        platforms=list(post.platforms or []),
+        media_type=post.media_type,
+        media_urls=list(post.media_urls or []),
+        platform_captions=dict(post.platform_captions or {}),
+        scheduled_at=first,
+        channel_times=dict(times),
+        per_channel=len(set(times.values())) > 1,
+        cta=dict(post.cta or {}),
+        channel_options={v.platform: dict(v.options or {}) for v in cancelled},
+    )
+    ContentPostVariant.objects.filter(pk__in=[v.pk for v in cancelled]).update(
+        status=ContentPostVariant.Status.DRAFT
+    )
+    post.status = ContentPost.Status.DRAFT
+    post.save(update_fields=["status", "updated_at"])
+    needs_review = post.requires_approval and not post.is_approval_valid()
+    gate = readiness.SUBMIT_REVIEW if needs_review else readiness.SCHEDULE
+    blockers = readiness.blocking(readiness.check(inp, post.account), gate)
+    if blockers:
+        return "draft", " ".join(i["message"] for i in blockers)
+    if needs_review:
+        from .views import _submit_for_review
+
+        _submit_for_review(post, user)
+        return "review", ""
+    post.status = ContentPost.Status.SCHEDULED
+    post.scheduled_at = first
+    post.save(update_fields=["status", "scheduled_at", "updated_at"])
+    apply_schedule(post, times)
+    return "scheduled", ""
+
+
 def reopen_post(post: ContentPost) -> None:
     """Return a cancelled post and its channels to draft, with no schedule."""
     post.variants.filter(

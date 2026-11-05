@@ -14,17 +14,19 @@
       <h2 class="text-lg font-semibold text-ink">Which posts sold</h2>
       <p class="text-sm text-ink-subtle">Chats, leads, orders and paid revenue credited to each post. Only chats that came through a post's chat link or a reply to its comments count, so these are the least each post brought in.</p>
     </div>
-    <form method="get" class="flex items-center gap-2" x-data="{ busy: false }" @submit="busy = true" @change="$el.requestSubmit()">
-      <fieldset class="seg" :disabled="busy">
+    <form method="get" class="flex items-center gap-2" data-live-filter="#sales-results" aria-label="Period">
+      <fieldset class="seg">
         <legend class="sr-only">Period</legend>
         {% for choice in periods %}
         <label class="seg-item"{% if choice == 90 and period_locked %} title="On higher plans"{% endif %}><input type="radio" name="period" value="{{ choice }}" class="sr-only" {% if choice == days %}checked{% endif %}><span>{{ choice }} days{% if choice == 90 and period_locked %} ·  upgrade{% endif %}</span></label>
         {% endfor %}
       </fieldset>
-      <noscript><button type="submit" class="btn btn-secondary btn-sm">Show</button></noscript>
+      <button type="submit" class="sr-only">Show</button>
     </form>
   </header>
 
+  {% comment %}Replaced in place when the period changes (app.js data-live-filter).{% endcomment %}
+  <div id="sales-results" class="space-y-4">
   {% if period_locked %}
   <div class="alert alert-info" role="status">
     <span>The 90-day view is available on higher plans. Showing the last 30 days. <a href="{% url 'billing:plans' %}" class="cs-link">Upgrade</a></span>
@@ -89,5 +91,6 @@
     <p class="text-xs text-ink-subtle"><a href="{% url 'help-article' 'post-results' %}" data-overlay-open="modal" data-overlay-size="lg" class="cs-link">How posts are credited</a></p>
   </section>
   {% endif %}
+  </div>
 </div>
 {% endblock %}
