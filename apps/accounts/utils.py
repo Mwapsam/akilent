@@ -178,7 +178,7 @@ def ajax_redirect(url: str):
     return response
 
 
-def hx_toast(response, type: str, message: str):
+def hx_toast(response, type: str, message: str, undo: str | None = None):
     """Attach a toast to any HTMX response, background or boosted.
 
     For an in-place mutation (an ``hx-post`` that swaps a fragment, an
@@ -188,8 +188,26 @@ def hx_toast(response, type: str, message: str):
     ``htmx:afterRequest`` (background polls included) and turns it into a
     toast — this is the same ``X-Toast`` wire format ``apps/email/views.py``
     used locally before this became the shared version, not a second one.
+
+    ``undo``: a same-site path the toast's Undo button POSTs to (the server's own undo
+    for what just happened; a toast never offers one the server can't do).
     """
     from urllib.parse import quote
 
-    response["X-Toast"] = f"{type}|{quote(message)}"
+    response["X-Toast"] = f"{type}|{quote(message)}" + (
+        f"|{quote(undo, safe='')}" if undo else ""
+    )
     return response
+
+
+UNDO_TAG = "undo:"
+
+
+def flash(request, level: str, message: str, undo: str | None = None) -> None:
+    """A flash message (shown as a toast on the next page), with an Undo button when
+    ``undo`` is the path that undoes it. ``level``: success, info, warning or error."""
+    from django.contrib import messages
+
+    getattr(messages, level)(
+        request, message, extra_tags=f"{UNDO_TAG}{undo}" if undo else ""
+    )

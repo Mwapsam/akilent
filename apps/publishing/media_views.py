@@ -7,8 +7,9 @@ from __future__ import annotations
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
-from django.core.paginator import Paginator
+from django.core.paginator import Page, Paginator
 from django.db.models import Q
+from django.db.models.expressions import Combinable
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -119,6 +120,7 @@ def library(request):
     )
     if show == "unused" and all_counts is not None:
         qs = qs.exclude(pk__in=[pk for pk, n in all_counts.items() if n])
+    page: Page
     if sort == "used" and all_counts is not None:
         rows = sorted(
             qs.values_list("pk", "created_at"),
@@ -130,10 +132,11 @@ def library(request):
         found = MediaAsset.objects.select_related("parent").in_bulk(list(page))
         assets = [found[pk] for pk in page if pk in found]
     else:
-        ordering = {
+        orderings: dict[str, list[str | Combinable]] = {
             "name": [Lower("name"), "-pk"],
             "size": [F("size_bytes").desc(nulls_last=True), "-pk"],
-        }.get(sort, ["-created_at", "-pk"])
+        }
+        ordering = orderings.get(sort, ["-created_at", "-pk"])
         page = Paginator(
             qs.select_related("parent").order_by(*ordering), PAGE_SIZE
         ).get_page(request.GET.get("page"))

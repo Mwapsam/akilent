@@ -113,36 +113,79 @@ def overlay_or_page(
     return partial_response(response)
 
 
-def overlay_done(request, message: str, redirect_to: str, *, level: str = "success"):
+def overlay_done(
+    request,
+    message: str,
+    redirect_to: str,
+    *,
+    level: str = "success",
+    undo: str | None = None,
+):
     """Finish a save made in the overlay: close it and refresh the page underneath.
 
-    Outside the overlay it is the usual flash message and redirect.
+    Outside the overlay it is ``action_done``. ``undo``: the path that undoes it, offered
+    on the toast.
     """
     import json
 
-    from django.contrib import messages
     from django.http import HttpResponse
-    from django.shortcuts import redirect
 
     if not is_overlay(request):
-        getattr(messages, level)(request, message)
-        return redirect(redirect_to)
+        return action_done(request, message, redirect_to, level=level, undo=undo)
     response = HttpResponse(status=204)
     response["HX-Trigger"] = json.dumps({"overlay-close": True})
     response[OVERLAY_HEADER] = "1"
-    _toast(response, level, message)
+    _toast(response, level, message, undo)
     return partial_response(response)
 
 
-def _toast(response, tags: str, message: str):
-    from apps.accounts.utils import hx_toast
-
-    level = next(
-        (t for t in ("success", "warning", "info") if t in tags),
-        "danger" if "error" in tags else "info",
+def is_background_post(request) -> bool:
+    """An htmx request that isn't a navigation or the overlay: a toast's Undo, a card
+    saved in place. It wants a toast, not a page."""
+    return (
+        request.headers.get("HX-Request") == "true"
+        and not is_boosted(request)
+        and not is_overlay(request)
     )
+
+
+def action_done(
+    request,
+    message: str,
+    redirect_to: str,
+    *,
+    level: str = "success",
+    undo: str | None = None,
+):
+    """Finish a POST: from the background (a toast's Undo), ``204`` with the toast; else a
+    flash message (with its Undo) and a redirect."""
+    from django.http import HttpResponse
+    from django.shortcuts import redirect
+
+    from apps.accounts.utils import flash
+
+    if is_background_post(request):
+        response = HttpResponse(status=204)
+        _toast(response, level, message, undo)
+        return partial_response(response)
+    flash(request, level, message, undo)
+    return redirect(redirect_to)
+
+
+def _toast(response, tags: str, message: str, undo: str | None = None):
+    from apps.accounts.utils import UNDO_TAG, hx_toast
+
+    words = tags.split()
+    level = next(
+        (t for t in ("success", "warning", "info") if t in words),
+        "danger" if ("error" in words or "danger" in words) else "info",
+    )
+    if undo is None:
+        undo = next(
+            (w[len(UNDO_TAG) :] for w in words if w.startswith(UNDO_TAG)), None
+        )
     # One header: the latest message wins, which is the one that says what happened.
-    hx_toast(response, level, message)
+    hx_toast(response, level, message, undo)
 
 
 def full_page_load(view):
