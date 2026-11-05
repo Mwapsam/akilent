@@ -28,12 +28,24 @@ from apps.core.audit import platform_record
 
 
 def _end_sessions(user_pk):
-    """Log the user out everywhere, so a recovered session cannot outlive the reset."""
+    """Log the user out everywhere, so a recovered session cannot outlive the reset.
+
+    The generation goes up first: that ends every session durably, even a cached copy Redis
+    keeps through an outage (apps/core/sessions.py). The rows are then deleted through the
+    session store (database and Redis) and counted."""
+    from importlib import import_module
+
+    from django.conf import settings
+
+    from apps.core.sessions import end_all_sessions
+
+    end_all_sessions(user_pk)
+    store = import_module(settings.SESSION_ENGINE).SessionStore
     ended = 0
     for session in Session.objects.all().iterator():
         data = session.get_decoded()
         if str(data.get("_auth_user_id")) == str(user_pk):
-            session.delete()
+            store(session.session_key).delete()
             ended += 1
     return ended
 

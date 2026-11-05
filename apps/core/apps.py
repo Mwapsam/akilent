@@ -16,3 +16,10 @@ class CoreConfig(AppConfig):
             on_conversation_message_processed,
             dispatch_uid="realtime-conversation-updates",
         )
+
+        # A session starts on the person's current session generation (apps/core/sessions.py).
+        from django.contrib.auth.signals import user_logged_in
+
+        from apps.core.sessions import stamp_signed_in
+
+        user_logged_in.connect(stamp_signed_in, dispatch_uid="session-generation-stamp")

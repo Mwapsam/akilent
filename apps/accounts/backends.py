@@ -31,3 +31,14 @@ class EmailBackend(ModelBackend):
         if user.check_password(password) and self.user_can_authenticate(user):
             return user
         raise PermissionDenied
+
+    def get_user(self, user_id):
+        """The signed-in person, with their session generation in the same query (a join), so
+        checking it on every request (apps.core.sessions) adds no query."""
+        try:
+            user = User._default_manager.select_related("session_security").get(
+                pk=user_id
+            )
+        except User.DoesNotExist:
+            return None
+        return user if self.user_can_authenticate(user) else None

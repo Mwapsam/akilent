@@ -86,6 +86,8 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # Extends a signed-in session at most every 5 minutes of activity (apps/core/sessions.py).
+    "apps.core.sessions.SessionRefreshMiddleware",
     "django_otp.middleware.OTPMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "apps.accounts.mfa.MfaEnforcementMiddleware",
@@ -173,10 +175,21 @@ AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
 ]
 
-# Sessions expire when the browser closes, with an absolute ceiling of 8 hours.
-# This prevents tokens left in unattended browsers from staying valid indefinitely.
+# Sessions expire when the browser closes, after 8 hours without activity, and at most
+# SESSION_ABSOLUTE_AGE after sign-in, so a session left in an unattended browser doesn't stay
+# valid indefinitely.
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+# 8 hours without activity, not 8 hours from sign-in: SessionRefreshMiddleware extends a
+# signed-in session at most every 5 minutes of activity. No write on every request.
 SESSION_COOKIE_AGE = 8 * 60 * 60  # 8 hours
+SESSION_SAVE_EVERY_REQUEST = False
+# However active, a session ends this long after sign-in (apps/core/sessions.py). 7 days.
+SESSION_ABSOLUTE_AGE = int(os.getenv("SESSION_ABSOLUTE_AGE", str(7 * 24 * 60 * 60)))
+# Read from Redis (the default cache), kept in PostgreSQL, the source of truth: with Redis
+# down, flushed or recreated, people stay signed in (apps/core/sessions.py). Existing database
+# sessions carry over (same table).
+SESSION_ENGINE = "apps.core.sessions"
+SESSION_CACHE_ALIAS = "sessions"
 
 # Per-device TOTP lockout: delays grow 5s, 10s, 20s... (default factor is 1).
 # Enforced for TOTP codes and recovery codes alike; see _check_second_factor.
@@ -690,7 +703,18 @@ CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.redis.RedisCache",
         "LOCATION": _redis_url(os.getenv("REDIS_CACHE_URL"), "redis://redis:6379/1"),
-    }
+    },
+    # Sessions' fast path (SESSION_CACHE_ALIAS). The same Redis as the cache for now; setting
+    # SESSION_REDIS_URL moves sessions to a dedicated Redis with no code change. Short timeouts:
+    # a Redis that hangs must not hang sign-in (PostgreSQL answers instead).
+    "sessions": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": _redis_url(
+            os.getenv("SESSION_REDIS_URL") or os.getenv("REDIS_CACHE_URL"),
+            "redis://redis:6379/1",
+        ),
+        "OPTIONS": {"socket_connect_timeout": 0.5, "socket_timeout": 0.5},
+    },
 }
 
 # --- Celery ---

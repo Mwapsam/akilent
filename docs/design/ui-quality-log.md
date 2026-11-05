@@ -1945,3 +1945,44 @@ Plan: "Content Studio: make it feel like an app" (2026-11-03). Approving it cove
 - **Analytics tab:** behind the `cs_analytics` release gate. Production's `RELEASED_FEATURES` doesn't include it, so it's hidden there by design; local runs had it on.
 - **Signed out mid-tour:** sessions are in the database (`SESSION_ENGINE` default) and the deploy doesn't clear them, so a redeploy doesn't sign anyone out. The limit is `SESSION_COOKIE_AGE` = 8 hours from sign-in, not from the last request (`SESSION_SAVE_EVERY_REQUEST` is off), plus `SESSION_EXPIRE_AT_BROWSER_CLOSE`. A long review session hits the 8 hours. Left as is: a policy decision.
 - **Verification:** ruff, format and mypy clean. `studio_gallery_qa` 29/29, `studio_overlay_qa` 36/36, `studio_feel_qa` 16/16, `publishing_qa` 21/21; `area_scan /publishing` 14 pages, 0 issues. Full suite: one failure, `test_the_next_app_code_works_after_an_old_sign_in` (time-based authenticator codes), which passes on its own (4/4 in its file).
+
+### Entry 24: sessions read from Redis, kept in PostgreSQL, extended while active (2026-11-05)
+- **Store:** `SESSION_ENGINE = "apps.core.sessions"`, Django's `cached_db` with every cache call guarded. Stock `cached_db` still raises with Redis down on the write after a database fallback, on `exists` (new keys at sign-in) and on `delete` (sign-out). PostgreSQL stays the source of truth; existing database sessions carry over (same table).
+- **Cache alias `sessions`:** the same Redis instance and database as the cache today, with 0.5 s connect/read timeouts so a hung Redis can't hang sign-in. `SESSION_REDIS_URL` moves sessions to a dedicated Redis later with no code change (Stage 2 of the user's session plan).
+- **Extended while active:** `SessionRefreshMiddleware` extends a signed-in session at most every 5 minutes, so the 8 hours count from the last activity. The effective limit is 7 h 55 m – 8 h after the last activity. `SESSION_SAVE_EVERY_REQUEST` stays off. Activity is a page, a page change, an overlay opening or any POST; htmx polling and the live-updates stream don't count, so an idle open tab still times out.
+- **Found and fixed:** `reset_user_mfa` ended sessions by deleting database rows, which would have left cached copies signed in. It now deletes through the session store (database and Redis).
+- **Known edge (as stock Django):** a sign-out while Redis is unreachable can't delete the cached copy. If Redis returns with that data, the old key works until the copy expires (≤ 8 h); the browser's cookie is already gone. **Closed in Entry 25.**
+- **Tests** (`apps/core/tests/test_sessions.py`): no writes within 5 minutes; one write and a longer expiry after 5; polling and the live-updates stream don't extend; active people stay signed in for 10 hours; 8 h 01 m idle signs out; a cleared cache keeps people signed in; with the cache failing on every call people stay signed in, a new sign-in works and sign-out works (stock `cached_db` fails this test); sign-out removes the session from both stores; database sessions from before the switch carry over; the settings hold.
+- **Against real Redis** (local Docker, `redis:7.4-alpine`): restart, `FLUSHDB`, stopped (sign-in and sign-out still work), hung (`docker pause`, answered in 1.1 s), and container recreation with an empty volume. Signed in throughout; sign-out removes the session from both stores.
+- **Verification:** full suite 0 failures; ruff, format, mypy and `makemigrations --check` clean.
+- **Before production:** run the same checks on staging (the scratch script's steps: restart, flush, stop, pause, recreate).
+
+### Entry 25: durable session revocation and an absolute lifetime (2026-11-05)
+- **The edge from Entry 24:** a cookie copied before a sign-out that Redis didn't see must stay dead when Redis comes back with its copy.
+- **Session generation** (`accounts.SessionSecurity`, migration `0026`): one number per person in PostgreSQL. Each session records the generation it signed in under (`user_logged_in`, read fresh from the database at sign-in). `SessionRefreshMiddleware` signs out a session whose number doesn't match.
+  - No extra query per request: `EmailBackend.get_user` joins the row into the user query Django already makes. `test_checking_the_generation_adds_no_query`, and the per-tab query budgets, guard it.
+  - Sessions signed in through `ModelBackend` (username sign-in, e.g. the admin) read it with one more query.
+- **It goes up** when a sign-out (`flush`) or key rotation (`cycle_key`) can't confirm the Redis delete, and on every MFA reset. Password changes were already covered: Django checks each session against the password hash.
+- **Trade-off:** a sign-out without Redis ends the person's other sessions too. That's the safe direction, and only then; an ordinary sign-out ends one session (tested).
+- **Existing sessions:** they have no recorded generation and no row, both 0, so nobody is signed out by the deploy.
+- **Absolute lifetime:** `SESSION_ABSOLUTE_AGE` (env, default 7 days) from sign-in, however active. Sessions from before the deploy start counting at their first request after it. The 8-hour inactivity limit is unchanged.
+- **Tests:**
+  - a copied cookie after a sign-out during an outage, with Redis back holding the old copy, is refused;
+  - an ordinary sign-out leaves other devices signed in;
+  - MFA reset and password change during an outage end old sessions;
+  - a new sign-in after the outage works;
+  - 7 days, active every 6 hours, then signed out;
+  - a pre-deploy session stays signed in and gets its week from then;
+  - no extra query.
+  - The copied-cookie and MFA tests fail with the generation check turned off.
+- **Real Redis, separate processes** (`tools/qa/session_redis_check.py`, for staging too):
+  - sign-out in one worker while Redis is hung (it keeps its copy), then the copied cookie in another once Redis is back: refused, with Redis still holding the old copy;
+  - plus restart, flush, hung (1.1 s), stopped and recreated. All pass.
+- **Remaining limits:**
+  - **Generation granularity:** the generation is per person, so revoking one session durably when Redis is down means revoking them all.
+  - **Absolute lifetime:** checked from a value inside the session, so it relies on the session data not being altered. It's signed, and only the server writes it.
+  - **Monitoring isn't built.** The log lines to alert on:
+    - "Session cache unavailable on …" (fallbacks);
+    - Django's "Error saving to cache";
+    - "Sign-out without Redis: ended every session" (forced revocations).
+- **Verification:** full suite 0 failures; ruff, format, mypy and `makemigrations --check` clean; `tools/qa/session_redis_check.py` all steps pass against local Docker Redis.

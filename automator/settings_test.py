@@ -48,6 +48,7 @@ CELERY_TASK_EAGER_PROPAGATES = True
 # process/run doesn't need throttling state shared across workers.
 CACHES = {
     "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
+    "sessions": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
 }
 
 # Force the SES rate limiter onto its in-process fallback (no Redis probe).

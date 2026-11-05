@@ -421,6 +421,25 @@ class RecoveryCode(models.Model):
         ]
 
 
+class SessionSecurity(models.Model):
+    """A person's session generation, the durable way to end their sessions.
+
+    Each session records the generation it was signed in under; a session whose number doesn't
+    match is signed out (apps.core.sessions). Raising it ends every session the person has,
+    wherever it's cached: Redis can come back with an old copy of a session, but not with an
+    old copy of this row. Loaded with the user in the same query (accounts.backends), so it
+    costs nothing per request. No row means generation 0."""
+
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name="session_security"
+    )
+    generation = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Sessions of {self.user_id}: generation {self.generation}"
+
+
 class TOTPSecretCiphertext(models.Model):
     """Encrypted copy of a TOTP device's secret. Read only through apps/accounts/totp_storage.py."""
 
