@@ -234,15 +234,9 @@ def test_done_flips_when_the_feature_is_set_up(account):
 
 
 def test_every_step_icon_exists():
-    import re
-    from pathlib import Path
+    from apps.core.icons import ICONS
 
-    from django.conf import settings as dj
-
-    src = (Path(dj.BASE_DIR) / "templates/components/icon.html").read_text(
-        encoding="utf-8"
-    )
-    names = set(re.findall(r"name\s*==\s*['\"]([\w-]+)['\"]", src))
+    names = set(ICONS)
     assert names, "icon names not found"
     for icon in {d.icon for d in ob.STEPS} | {"pause"}:
         assert icon in names, icon

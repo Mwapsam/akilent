@@ -94,7 +94,9 @@ def test_poll_url_keeps_every_filter(logged_in, conversation):
     html = client.get(
         "/inbox/?view=missed&channel=whatsapp&overdue=1&page=1"
     ).content.decode()
-    poll = re.search(r'hx-get="([^"]*/inbox/feed/[^"]*)"', html).group(1)
+    # The list's own poll (the search form above it also asks the feed, as you type).
+    body = html[html.index('id="inbox-body"') :]
+    poll = re.search(r'hx-get="([^"]*/inbox/feed/[^"]*)"', body).group(1)
     poll = poll.replace("&amp;", "&")
     for param in ("view=missed", "channel=whatsapp", "overdue=1", "page=1"):
         assert param in poll
@@ -185,17 +187,24 @@ def test_a_normal_post_still_redirects(logged_in, conversation):
 
 
 @pytest.mark.django_db
-def test_tag_add_from_the_pane_comes_back_as_the_pane(logged_in, conversation):
+def test_tag_add_from_the_panel_comes_back_as_the_panel(logged_in, conversation):
+    """The details panel's forms target the panel: the tag view's redirect back to the
+    conversation answers with the panel, the composer's Next steps out of band, and a list
+    refresh, so nothing on screen is left stale."""
     client, _, _ = logged_in
     resp = client.post(
         f"/contacts/{conversation.contact.public_id}/tags/add/",
         {"tag": "vip", "next": f"/inbox/{conversation.public_id}/"},
         follow=True,
-        **PANE,
+        HTTP_HX_REQUEST="true",
+        HTTP_HX_TARGET="cv-panel",
     )
     body = resp.content.decode()
-    assert 'class="cv-wrap"' in body and "<html" not in body
+    assert "data-panel-followup" in body and "<html" not in body
+    assert 'class="cv-wrap"' not in body  # the panel, not the whole pane
     assert "vip" in body
+    assert 'id="cv-next"' in body and 'hx-swap-oob="true"' in body
+    assert resp["HX-Trigger"] == "inbox-refresh"
 
 
 @pytest.mark.django_db

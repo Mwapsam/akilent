@@ -47,7 +47,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
 
-from django.db.models import F, Max, Min, Q
+from django.db.models import Count, F, Max, Min, Q
 from django.utils import timezone
 
 from apps.conversations.models import Conversation, Message
@@ -198,6 +198,34 @@ def get_conversation_state(
     )
 
 
+def state_of(
+    conversation: Conversation, now: datetime | None = None
+) -> ConversationSnapshot:
+    """:func:`get_conversation_state` in one query instead of three: the activity and
+    first-response facts annotated together (:func:`with_activity`, :func:`with_first_response`).
+    For pages opened all day (the inbox pane, its message poll)."""
+    facts = (
+        with_first_response(
+            with_activity(Conversation.objects.filter(pk=conversation.pk))
+        )
+        .values("last_in", "last_out", "last_any", "first_in", "first_reply")
+        .first()
+    ) or {}
+    first_in, first_reply = facts.get("first_in"), facts.get("first_reply")
+    return derive_state(
+        status=conversation.status,
+        last_in=facts.get("last_in"),
+        last_out=facts.get("last_out"),
+        last_any=facts.get("last_any"),
+        now=now or timezone.now(),
+        first_response_seconds=(
+            (first_reply - first_in).total_seconds()
+            if first_in is not None and first_reply is not None
+            else None
+        ),
+    )
+
+
 def with_activity(qs):
     """Annotate conversations with the facts ``derive_state`` needs (one query)."""
     return qs.annotate(
@@ -253,6 +281,20 @@ def needs_attention(account, now: datetime | None = None):
         )
         .filter(unanswered_q(), last_in__gt=now - INACTIVITY_WINDOW)
         .order_by("last_in")
+    )
+
+
+def waiting_counts(open_conversations, now: datetime | None = None) -> dict:
+    """How many of ``open_conversations`` are in :func:`needs_attention` and in :func:`missed`,
+    counted together in one query (each alone works out every conversation's message facts).
+    Returns ``{"needs_attention_count", "missed_count"}``; same rules as those two views."""
+    now = now or timezone.now()
+    cutoff = now - INACTIVITY_WINDOW
+    return with_activity(open_conversations).aggregate(
+        needs_attention_count=Count(
+            "pk", filter=unanswered_q() & Q(last_in__gt=cutoff)
+        ),
+        missed_count=Count("pk", filter=unanswered_q() & Q(last_in__lte=cutoff)),
     )
 
 

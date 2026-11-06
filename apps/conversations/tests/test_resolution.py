@@ -9,6 +9,7 @@ from apps.accounts.models import Account, Membership
 from apps.contacts.models import Contact
 from apps.conversations.models import Conversation, Event
 from apps.conversations.services import record_inbound_whatsapp_message
+from apps.conversations.tests.screen import on_screen
 from apps.whatsapp.models import Conversation as WhatsAppConversation
 from apps.whatsapp.models import MessageLog, WhatsAppContact
 
@@ -138,7 +139,7 @@ class TestPaneCustomerContext:
         self, logged_in, open_conversation
     ):
         client, _, _ = logged_in
-        body = client.get(f"/inbox/{open_conversation.public_id}/").content.decode()
+        body = on_screen(client, open_conversation.public_id)
         assert "Customer since" in body
         assert "Conversations" in body
 
@@ -154,7 +155,7 @@ class TestPaneCustomerContext:
             status=Order.Status.PENDING,
             total="49.99",
         )
-        body = client.get(f"/inbox/{open_conversation.public_id}/").content.decode()
+        body = on_screen(client, open_conversation.public_id)
         # Rendered only when "orders" is in usable_features (billing-gated) --
         # assert on the underlying data reaching the template rather than
         # assuming plan entitlement in this test's account.
@@ -173,5 +174,8 @@ class TestPaneCustomerContext:
             status=Order.Status.PAID,
             total="49.99",
         )
-        resp = client.get(f"/inbox/{open_conversation.public_id}/")
+        # The details panel, which loads beside the conversation.
+        resp = client.get(
+            f"/inbox/{open_conversation.public_id}/panel/", HTTP_HX_REQUEST="true"
+        )
         assert resp.context["open_order"] is None

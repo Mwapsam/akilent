@@ -63,6 +63,44 @@ def friendly_send_error(error_code: str | None) -> str:
     # A policy code, or a Graph error code possibly followed by "/<subcode>".
     return (
         _POLICY_ERRORS.get(code)
-        or _GRAPH_ERRORS.get(code.split("/")[0])
+        or _GRAPH_ERRORS.get(graph_code(code))
         or (f"{_DEFAULT} (error {code})")
     )
+
+
+def graph_code(error_code: str | None) -> str:
+    """The Graph error number in a stored code: "131042", "131042/2494010" and "#131042" all
+    give "131042" (codes have been stored in each shape)."""
+    import re
+
+    match = re.search(r"\d+", (error_code or "").split("/")[0])
+    return match.group(0) if match else ""
+
+
+# Failures that aren't about one message but about the WhatsApp account: until they're fixed,
+# every send fails the same way, templates included. Each says where to fix it. The Meta pages
+# are Meta's own; "akilent:" names a page of ours (a URL name).
+ACCOUNT_LEVEL = {
+    "131042": (
+        "Fix the payment method in Meta",
+        "https://business.facebook.com/billing_hub/payment_settings",
+    ),
+    "131037": (
+        "Open WhatsApp Manager",
+        "https://business.facebook.com/wa/manage/phone-numbers/",
+    ),
+    "190": ("Reconnect WhatsApp", "akilent:whatsapp-numbers"),
+}
+
+
+def account_level_fix(error_code: str | None) -> dict | None:
+    """``{"label", "url"}`` for a failure that stops every send until it's fixed, else None."""
+    fix = ACCOUNT_LEVEL.get(graph_code(error_code))
+    if fix is None:
+        return None
+    label, url = fix
+    if url.startswith("akilent:"):
+        from django.urls import reverse
+
+        url = reverse(url.removeprefix("akilent:"))
+    return {"label": label, "url": url}

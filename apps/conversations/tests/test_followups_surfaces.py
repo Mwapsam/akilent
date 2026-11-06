@@ -17,6 +17,7 @@ from apps.contacts.models import Contact
 from apps.conversations import followup_copy as copy
 from apps.conversations import followups
 from apps.conversations.models import Conversation, FollowUp
+from apps.conversations.tests.screen import on_screen
 
 
 @pytest.fixture
@@ -184,8 +185,9 @@ def test_once_set_the_composer_shows_the_pages_words_and_change(signed_in, team)
 
     composer = re.search(r"data-composer-followup>(.*?)</span>", html, re.S).group(1)
     assert f"Follow-up {row['main']['when']}" in composer  # same "tomorrow 09:00"
-    assert "data-composer-change" in html and "getElementById('cv-followup')" in html
-    assert 'id="cv-followup"' in html
+    # Change opens the details panel at its Follow-up section (which loads beside the chat).
+    assert "data-composer-change" in html and "focusPanelSection('cv-followup')" in html
+    assert 'id="cv-followup"' in on_screen(signed_in, chat.public_id)
     assert copy.FOLLOW_UP_TOMORROW not in html
     assert "Reminder" not in html
 
@@ -219,7 +221,7 @@ def test_the_panel_describes_the_follow_up_as_the_page_does(signed_in, team):
     f.save()
     _fu(account, thandi, minutes=600, conversation=_chat(account, thandi, "instagram"))
 
-    panel = _panel(signed_in.get(f"/inbox/{chat.public_id}/").content.decode())
+    panel = _panel(on_screen(signed_in, chat.public_id))
     assert copy.YOU_SET_THIS in panel and "3h late" in panel
     assert "Send the blue dress photos" in panel and "for you" in panel
     assert f"/inbox/followups/{f.pk}/complete/" in panel
@@ -241,7 +243,7 @@ def test_the_panel_hides_the_missed_chat_note(signed_in, team):
     f = _fu(account, thandi, minutes=-60 * 30, source="missed", conversation=chat)
     f.note = "No reply sent - customer has been waiting"
     f.save()
-    panel = _panel(signed_in.get(f"/inbox/{chat.public_id}/").content.decode())
+    panel = _panel(on_screen(signed_in, chat.public_id))
     assert copy.WAITING_LABEL in panel
     assert "No reply sent" not in panel
 
@@ -251,7 +253,7 @@ def test_the_panel_sets_a_follow_up_with_the_promise(signed_in, team):
     account, _, _ = team
     thandi = _contact(account)
     chat = _chat(account, thandi)
-    panel = _panel(signed_in.get(f"/inbox/{chat.public_id}/").content.decode())
+    panel = _panel(on_screen(signed_in, chat.public_id))
     assert copy.SET_FOLLOWUP in panel and copy.INTERNAL_ONLY in panel
     assert 'value="next_week"' in panel and 'value="custom"' in panel
 

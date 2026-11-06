@@ -1986,3 +1986,33 @@ Plan: "Content Studio: make it feel like an app" (2026-11-03). Approving it cove
     - Django's "Error saving to cache";
     - "Sign-out without Redis: ended every session" (forced revocations).
 - **Verification:** full suite 0 failures; ruff, format, mypy and `makemigrations --check` clean; `tools/qa/session_redis_check.py` all steps pass against local Docker Redis.
+
+### Entry 26: Inbox Phases 0 and 1: speed, then each conversation's state (2026-11-06)
+Plan: the Inbox plan of 2026-11-06 (the Content Studio plan now lives in `docs/plans/content-studio-app-feel.md`).
+
+- **Phase 0, speed.** Query counts with 30 conversations and a 60-message thread (`apps/conversations/tests/test_inbox_speed.py`, which also checks they don't grow with twice the conversations and five times the thread):
+
+  | Request | Before | After | Plan target |
+  |---|---|---|---|
+  | list `/inbox/` | 33 | 17 | ≤ 25 |
+  | pane | 38 | 18 | ≤ 20 |
+  | panel (new) | — | 21 | ≤ 20 |
+  | full page `/inbox/conv_…/` | 62 | 28 | ≤ 40 |
+  | feed | 29 | 13 | ≤ 15 |
+  | badge | 4 | 3 | ≤ 5 |
+
+  - **The panel is one over:** its last query is the recommended action; gating it would hide recommendations that exist without the Insights feature.
+  - **List:** the assignee came with a query per row (now joined); four tab counts are one query, and the two waiting counts one more (`state.waiting_counts`); the pager no longer runs the row previews for every conversation; All, Assigned to me and Closed page by the stored `last_message_at` (falling back to `created_at`) and work out message facts for the page's rows only.
+  - **Pane:** opens on the latest 50 messages, or from the first unread one, up to 200 (`_recent_thread`); older ones through `messages_feed?before=` ("Show earlier messages", keeping the reader's place). The details panel moved to `_conversation_panel.html`, loaded by `conversations:panel` once it shows (at once as a column, when opened as a drawer); its actions answer with the panel, the composer's Next steps out of band, and `inbox-refresh`. Saved replies load when their menu opens. The conversation state is one query (`state.state_of`) instead of three.
+  - **Site-wide:** `is_suspended_member` no longer queries when a workspace resolves; `workspace_context` is lazy (nothing read it); `components/icon.html` is a dictionary lookup (`apps/core/icons.py`) instead of a 67-branch chain (template work on the list −20%).
+  - **Badges:** poll every 300 s instead of 120 s, only while on screen in a visible tab (the nav is on the page twice).
+  - **Server time** (local SQLite, 200 conversations, a 500-message thread): list ~130–160 ms, pane ~65–105 ms, panel ~55–90 ms, full page ~190 ms. At 2,000 conversations and 200,000 messages the unfiltered list went from 3.0 s to 0.76 s.
+  - **Load, two workers:** a simulation (threads with a two-request limit, serve times stretched ×6 to match prod) puts the workers 86–91 % busy with three open Inbox tabs and one person opening conversations, so requests queue: prod's 1.1 s badge is waiting for a worker, not slow code. More workers (or threads) is the fix and an infrastructure step; the simulation is for comparison, not absolute numbers.
+- **Phase 1, state.**
+  - A row whose latest message is ours and didn't go says "Not sent:" with the reason on hover; the poll's hash covers it, so a send that fails later reaches the list.
+  - Failure text is worked out from the stored error code when shown (`views._failure`), so old messages lose "(error 131042)"; account-level codes (131042, 131037, 190) carry a fix link (`friendly_errors.account_level_fix`). Codes stored as "#131042" or "131042/…" read the same.
+  - Closed is the stored status everywhere (row, header); an open conversation gone quiet for a day with us speaking last is "Quiet". The ⋯ menu offers Reopen on a closed conversation.
+  - Open views show open conversations only (All, Assigned to me now too); every count shows, 0 included; the channel filter lists channels with conversations (plus one in force).
+  - Search above the list: name, phone, email or message text, within the view and channel, as you type; the poll sends it too; kept in the URL on the list's own address; `/` focuses it.
+- **Not done, reported:** search at 200,000 messages takes 0.8–1.2 s on local SQLite (over the 300 ms target); the fix would be a `pg_trgm` index, a migration, not added without approval.
+- **Verification:** full suite 0 failures; ruff, format, mypy and `makemigrations --check` clean; `tools/qa/inbox_qa.mjs` 79/79 (now loading the lazy panel, plus Show earlier and live search); `area_scan /inbox` 26 pages, 0 issues.

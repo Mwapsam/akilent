@@ -20,11 +20,12 @@ The links are icon buttons on a phone with their labels kept for screen readers
   </div>
   <div class="flex items-center gap-1 sm:gap-2 shrink-0">
     {% comment %}Its number is the nav badge's own (followups_badge, the Mine tab's count),
-    loaded and refreshed the same way, so the two can never disagree.{% endcomment %}
+    loaded and refreshed the same way (components/_nav_item.html), so the two can never
+    disagree.{% endcomment %}
     <a href="{% url 'conversations:followups_due' %}" class="btn btn-ghost btn-sm inbox-header-link" title="Follow-ups" data-inbox-followups-link>
       {% include "components/icon.html" with name="bell" class="w-4 h-4" %}
       <span class="sr-only sm:not-sr-only">Follow-ups</span>
-      <span hx-get="{% url 'conversations:followups_badge' %}" hx-swap="innerHTML" data-auto-refresh="followup-changed" hx-trigger="load, every 120s, sse:followup.due, sse:followup.updated, followup-changed from:body"></span>
+      <span hx-get="{% url 'conversations:followups_badge' %}" hx-swap="innerHTML" data-auto-refresh="followup-changed" hx-trigger="intersect once, every 300s [document.visibilityState === 'visible' && this.offsetParent !== null], sse:followup.due, sse:followup.updated, followup-changed from:body"></span>
     </a>
     {% comment %}The set-up pages, opened now and then rather than all day: one menu
     (cvMenu, static/js/chat.js) instead of four buttons beside the title.{% endcomment %}
@@ -91,13 +92,30 @@ and data-inbox-url / data-inbox-title are what closing it goes back to.{% endcom
     {% endcomment %}
     {% comment %}sr-only status region: announces a brief "Inbox updated" when the poll
     changes the list, without reading out the entire list to screen reader users.{% endcomment %}
+    {% comment %}Search, within the view and channel: name, phone, email or anything said
+    (views._inbox_context). It's outside #inbox-body, so the list can be replaced while someone
+    types, and the poll sends what's in it too, so a refresh never brings the unfiltered list
+    back. Results land in the list as you type; on the list's own address the search is kept in
+    the URL for a reload. Without scripts it's an ordinary GET form.{% endcomment %}
+    <form class="inbox-search" role="search" method="get" action="{% url 'conversations:inbox' %}"
+          hx-get="{% url 'conversations:inbox_feed' %}" hx-target="#inbox-body" hx-swap="innerHTML"
+          hx-trigger="submit, input changed delay:300ms from:#inbox-q, search from:#inbox-q"
+          hx-on::after-request="if (event.detail.xhr.status === 200) { document.getElementById('inbox-body').dataset.hash = event.detail.xhr.getResponseHeader('X-Inbox-Hash') || ''; if (location.pathname === this.getAttribute('action')) { const u = new URL(location.href); const v = document.getElementById('inbox-q').value.trim(); if (v) u.searchParams.set('q', v); else u.searchParams.delete('q'); u.searchParams.delete('page'); history.replaceState(history.state, '', u); } }">
+      <input type="hidden" name="view" value="{{ view }}" />
+      {% if channel %}<input type="hidden" name="channel" value="{{ channel }}" />{% endif %}
+      {% if overdue_only %}<input type="hidden" name="overdue" value="1" />{% endif %}
+      <span class="inbox-search-icon" aria-hidden="true">{% include "components/icon.html" with name="search" class="w-4 h-4" %}</span>
+      <label class="sr-only" for="inbox-q">Search conversations</label>
+      <input id="inbox-q" type="search" name="q" value="{{ q }}" class="input inbox-search-input" maxlength="100"
+             placeholder="Search names, numbers or messages" autocomplete="off" enterkeyhint="search" data-search />
+    </form>
     <div id="inbox-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
     <div id="inbox-body" data-auto-refresh="inbox-refresh"
          data-hash=""
-         hx-get="{% url 'conversations:inbox_feed' %}{% querystring h=None %}"
+         hx-get="{% url 'conversations:inbox_feed' %}{% querystring h=None q=None %}"
          hx-trigger="every 8s [document.visibilityState === 'visible' && !(document.activeElement && document.activeElement.closest('#inbox-body'))], inbox-refresh from:body{% if REALTIME_SSE_ENABLED %}, sse:conversation.updated[!(document.activeElement && document.activeElement.closest('#inbox-body'))]{% endif %}"
          hx-swap="innerHTML"
-         hx-vals='js:{h: document.getElementById("inbox-body").dataset.hash || ""}'
+         hx-vals='js:{h: document.getElementById("inbox-body").dataset.hash || "", q: (document.getElementById("inbox-q") || {}).value || ""}'
          hx-on::after-request="if (event.detail.xhr.status === 200) { this.dataset.hash = event.detail.xhr.getResponseHeader('X-Inbox-Hash') || ''; document.getElementById('inbox-status').textContent = 'Inbox updated.'; setTimeout(() => { document.getElementById('inbox-status').textContent = ''; }, 4000); }">
       {% include "conversations/_inbox_body.html" %}
     </div>

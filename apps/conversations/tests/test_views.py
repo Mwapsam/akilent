@@ -7,6 +7,7 @@ from apps.contacts.models import Contact
 from apps.conversations.inbox_keys import inbox_key, sender_metadata
 from apps.conversations.models import Conversation, ConversationNote, Message
 from apps.conversations.services import record_inbound_whatsapp_message
+from apps.conversations.tests.screen import on_screen
 from apps.whatsapp.models import Conversation as WhatsAppConversation
 from apps.whatsapp.models import MessageLog, OutboundMessage, WhatsAppContact
 from apps.whatsapp.tasks import project_outbound_to_inbox
@@ -250,8 +251,8 @@ def test_conversation_detail_offers_create_lead_when_crm_enabled(
     assert lead.source == "conversation"  # provenance, so this path is measurable later
 
     # The panel now reports where they stand instead of offering to track them twice.
-    resp = client.get(f"/inbox/{conversation_without_a_lead.public_id}/")
-    assert "Where they stand" in resp.content.decode()
+    body = on_screen(client, conversation_without_a_lead.public_id)
+    assert "Where they stand" in body
 
 
 @pytest.mark.django_db
@@ -662,7 +663,7 @@ def test_a_customer_given_a_value_shows_as_tracked_in_the_pipeline(
         contact=conversation_without_a_lead.contact, status="new"
     ).exists()
     deal = Deal.objects.get(contact=conversation_without_a_lead.contact)
-    body = client.get(page).content.decode()
+    body = on_screen(client, conversation_without_a_lead.public_id)
     assert "Not tracked yet" not in body
     assert "In your pipeline" in body and f"/sales/deals/{deal.public_id}/" in body
     assert "Tracked as interested" in body
@@ -683,7 +684,7 @@ def test_a_lead_without_a_value_still_shows_where_they_stand(
             "source": "conversation",
         },
     )
-    body = client.get(page).content.decode()
+    body = on_screen(client, conversation_without_a_lead.public_id)
     assert "Where they stand" in body and "Not tracked yet" not in body
 
 
@@ -708,7 +709,7 @@ def test_a_closed_deal_no_longer_counts_as_tracked(
     Deal.objects.filter(contact=conversation_without_a_lead.contact).update(
         status=Deal.Status.WON
     )
-    body = client.get(page).content.decode()
+    body = on_screen(client, conversation_without_a_lead.public_id)
     assert "Not tracked yet" in body and "Track as interested" in body
 
 

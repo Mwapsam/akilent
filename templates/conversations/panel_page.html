@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{{ conversation.contact.display_name }} — details{% endblock %}
+
+{% block content %}
+{% comment %}The details panel as a page of its own, for where scripts don't run: the pane
+links here in a <noscript> instead of loading it in place. Its forms post and come back to
+the conversation as they always have. infoOpen is the pane's state; here there's nothing to
+close, and declaring it keeps the panel's close button harmless.{% endcomment %}
+<div class="max-w-xl" x-data="{ infoOpen: false }">
+  <a href="{{ detail_url }}" class="btn btn-ghost btn-sm mb-3">
+    {% include "components/icon.html" with name="arrow-left" class="w-4 h-4" %}Back to the conversation
+  </a>
+  <div class="card p-0 cv-side-inner">
+    {% include "conversations/_conversation_panel.html" %}
+  </div>
+</div>
+{% endblock %}

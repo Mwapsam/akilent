@@ -1,16 +1,22 @@
 """Sessions against a real Redis: restart, flush, stop, hang, recreate, and a copied cookie after
 a sign-out Redis didn't see (apps/core/sessions.py, docs/design/ui-quality-log.md Entry 24-25).
 
-Run on the host that runs Docker, with the app's settings and environment (as the web container
-has them), for a test user:
+Run it where `docker` works (the host, not inside a container). Each sign-in, sign-out and
+check runs as its own process through APP_EXEC, like separate workers; on a compose server
+that's the web container. From the compose project folder on staging:
 
-    QA_SESSION_USER=someone@example.com REDIS_CONTAINER=akilent-redis-1 \\
-        python tools/qa/session_redis_check.py
+    QA_SESSION_USER=someone@example.com \\
+    APP_EXEC="docker compose exec -T web python" \\
+    REDIS_CONTAINER=$(docker compose ps -q redis) \\
+    REDIS_RECREATE="docker compose up -d --force-recreate redis" \\
+        python3 tools/qa/session_redis_check.py
 
-It signs that user in and out, stops, pauses and recreates REDIS_CONTAINER (recreating it with
-REDIS_IMAGE and REDIS_RUN_ARGS, so only use it where that's what you want), and flushes the
-sessions cache's Redis database. Each step prints PASS or FAIL. Separate worker processes are
-real processes: the copied-cookie check runs its sign-out and its reuse in two of them.
+It signs that user in and out, restarts, pauses, stops and recreates REDIS_CONTAINER, and clears
+the sessions cache (its whole Redis database: with SESSION_REDIS_URL unset that's the app's
+cache too). Use a test user and a server where that's acceptable. Each step prints PASS or FAIL.
+
+Locally (Docker Redis started with `docker run --name akilent-uiqa-redis ...`) the defaults
+work: APP_EXEC is this Python, and recreation is `docker rm -f` then `docker run`.
 """
 
 from __future__ import annotations
@@ -21,22 +27,66 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any, cast
 
+# Relative to the project folder, on the host and in the web container alike.
+SCRIPT = "tools/qa/session_redis_check.py"
+APP_EXEC = os.environ.get("APP_EXEC", shlex.quote(sys.executable))
 CONTAINER = os.environ.get("REDIS_CONTAINER", "akilent-uiqa-redis")
 IMAGE = os.environ.get("REDIS_IMAGE", "redis:7.4-alpine")
 RUN_ARGS = os.environ.get("REDIS_RUN_ARGS", "-p 127.0.0.1:6379:6379")
+RECREATE = os.environ.get("REDIS_RECREATE", "")
 
 
-def setup():
+# --- Inside the app: one step per process ---------------------------------------------------
+
+
+def phase(name: str, arg: str = "") -> None:
     sys.path.insert(0, str(Path.cwd()))
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "automator.settings")
     import django
 
     django.setup()
     from django.conf import settings
+    from django.contrib.auth.models import User
+    from django.contrib.sessions.models import Session
+    from django.core.cache import caches
+    from django.test import Client
+
+    from apps.core.sessions import SessionStore
 
     settings.ALLOWED_HOSTS = ["*"]
+    cache = caches[settings.SESSION_CACHE_ALIAS]
+
+    def client(key):
+        c = Client()
+        c.cookies[settings.SESSION_COOKIE_NAME] = key
+        return c
+
+    def cached(key):
+        try:
+            return cache.get(SessionStore.cache_key_prefix + key) is not None
+        except Exception as e:
+            return f"unreachable({type(e).__name__})"
+
+    if name == "login":  # arg: the user's email
+        c = Client()
+        c.force_login(User.objects.get(email__iexact=arg))
+        c.get("/auth/login/")
+        print(c.cookies[settings.SESSION_COOKIE_NAME].value)
+    elif name == "probe":  # arg: a session key
+        held = cached(arg)
+        t0 = time.monotonic()
+        ok = client(arg).get("/auth/login/").wsgi_request.user.is_authenticated
+        print(held, ok, round(time.monotonic() - t0, 2))
+    elif name == "logout":
+        r = client(arg).post("/auth/logout/")
+        print(r.status_code, Session.objects.filter(pk=arg).exists())
+    elif name == "flush":
+        cache.clear()
+        print("cleared")
+
+
+# --- On the host: Docker, and the steps in order --------------------------------------------
 
 
 def sh(cmd: str) -> str:
@@ -45,135 +95,101 @@ def sh(cmd: str) -> str:
     return (r.stdout + r.stderr).strip()
 
 
-def tools():
-    from django.conf import settings
-    from django.contrib.auth.models import User
-    from django.core.cache import caches
-    from django.test import Client
-
-    from apps.core.sessions import SessionStore
-
-    def user():
-        return User.objects.get(email__iexact=os.environ["QA_SESSION_USER"])
-
-    def client(key=None, login=False):
-        c = Client()
-        if login:
-            c.force_login(user())
-        elif key:
-            c.cookies[settings.SESSION_COOKIE_NAME] = key
-        return c
-
-    def key_of(c):
-        return c.cookies[settings.SESSION_COOKIE_NAME].value
-
-    def signed_in(c):
-        return c.get("/auth/login/").wsgi_request.user.is_authenticated
-
-    def cached(key):
-        try:
-            cache = caches[settings.SESSION_CACHE_ALIAS]
-            return cache.get(SessionStore.cache_key_prefix + key) is not None
-        except Exception as e:
-            return f"unreachable ({type(e).__name__})"
-
-    return client, key_of, signed_in, cached
-
-
-def phase(name: str, key: str = "") -> None:
-    """One step in its own process, like a separate worker."""
-    setup()
-    from django.contrib.sessions.models import Session
-
-    client, key_of, signed_in, cached = tools()
-    if name == "login":
-        c = client(login=True)
-        c.get("/auth/login/")
-        print(key_of(c))
-    elif name == "logout":
-        r = client(key).post("/auth/logout/")
-        print(r.status_code, Session.objects.filter(pk=key).exists())
-    elif name == "probe":
-        print(cached(key), signed_in(client(key)))
-
-
-def sub(*args: str) -> list[str]:
-    out = subprocess.run(  # noqa: S603 - this script, as a separate worker process
-        [sys.executable, __file__, "--phase", *args],
-        capture_output=True,
-        text=True,
-        check=False,
-    ).stdout
-    return out.strip().splitlines()[-1].split()
+def app(*args: str) -> list[str]:
+    """One step in the app, as its own process; its last line of output, split."""
+    cmd = [*shlex.split(APP_EXEC), SCRIPT, "--phase", *args]
+    r = subprocess.run(cmd, capture_output=True, text=True, check=False)  # noqa: S603 - this script, in the app
+    lines = r.stdout.strip().splitlines()
+    if r.returncode or not lines:
+        sys.exit(f"App step {args[0]} failed:\n{r.stderr.strip()[-2000:]}")
+    return lines[-1].split()
 
 
 def main() -> int:
-    setup()
-    from django.conf import settings
-    from django.contrib.sessions.models import Session
+    email = os.environ.get("QA_SESSION_USER", "")
+    if not email:
+        sys.exit(
+            "Set QA_SESSION_USER to a test user's email (see the top of this file)."
+        )
+    state = sh(f"docker inspect -f {{{{.State.Status}}}} {CONTAINER}")
+    if state != "running":
+        sys.exit(
+            f"Redis container {CONTAINER!r} isn't running here ({state}). Run this on the "
+            "Docker host with REDIS_CONTAINER set, not inside a container."
+        )
 
-    client, key_of, signed_in, cached = tools()
     results = []
 
     def step(name, ok, **info):
         results.append(bool(ok))
         print("PASS" if ok else "FAIL", name, info or "")
 
-    alias = cast("dict[str, Any]", settings.CACHES[settings.SESSION_CACHE_ALIAS])
-    db = str(alias["LOCATION"]).rsplit("/", 1)[
-        -1
-    ]  # the sessions cache's Redis database
-    c = client(login=True)
-    step("signed in, session in Redis", signed_in(c) and cached(key_of(c)) is True)
+    def probe(key):
+        held, signed_in, seconds = app("probe", key)
+        return held, signed_in == "True", float(seconds)
+
+    key = app("login", email)[0]
+    held, ok, _ = probe(key)
+    step("signed in, session in Redis", ok and held == "True", redis=held)
+
     sh(f"docker restart {CONTAINER}")
-    step("after Redis restart", signed_in(c))
-    sh(f"docker exec {CONTAINER} redis-cli -n {db} FLUSHDB")
+    step("after Redis restart", probe(key)[1])
+
+    app("flush")
+    _, ok, _ = probe(key)  # read from PostgreSQL, which puts it back in Redis
+    held = probe(key)[0]
     step(
         "after flush: from PostgreSQL, cache refilled",
-        signed_in(c) and cached(key_of(c)) is True,
+        ok and held == "True",
+        redis=held,
     )
+
     sh(f"docker pause {CONTAINER}")
-    t0 = time.monotonic()
-    ok = signed_in(c)
-    took = round(time.monotonic() - t0, 2)
-    step("Redis hung: still signed in, quickly", ok and took < 3, seconds=took)
+    _, ok, took = probe(key)
     sh(f"docker unpause {CONTAINER}")
+    step("Redis hung: still signed in, quickly", ok and took < 3, seconds=took)
+
     sh(f"docker stop {CONTAINER}")
-    fresh = client(login=True)
+    fresh = app("login", email)[0]
     step(
         "Redis stopped: still signed in, new sign-in works",
-        signed_in(c) and signed_in(fresh),
+        probe(key)[1] and probe(fresh)[1],
     )
     sh(f"docker start {CONTAINER}")
-    time.sleep(1)
+    time.sleep(2)
 
-    # A cookie copied before a sign-out Redis didn't see: sign-out in one worker while Redis is
-    # hung (it keeps its copy), reuse in another once it's back.
-    key = sub("login")[0]
+    # A cookie copied before a sign-out Redis didn't see: sign out while Redis is hung (it keeps
+    # its copy), then present the cookie once it's back.
+    copied = app("login", email)[0]
     sh(f"docker pause {CONTAINER}")
-    status, row_left = sub("logout", key)
+    status, row_left = app("logout", copied)
     sh(f"docker unpause {CONTAINER}")
-    stale, reused = sub("probe", key)
+    held, reused, _ = probe(copied)
     step(
         "copied cookie after a sign-out Redis missed is refused",
         status in ("200", "302")
         and row_left == "False"
-        and stale == "True"
-        and reused == "False",
-        redis_held_old_copy=stale,
+        and held == "True"
+        and not reused,
+        redis_held_old_copy=held,
         signed_in=reused,
     )
 
-    sh(f"docker rm -f {CONTAINER}")
-    sh(f"docker run -d --name {CONTAINER} {RUN_ARGS} {IMAGE}")
-    time.sleep(2)
-    c = client(login=True)
-    step("after container recreation (empty Redis)", signed_in(c))
-    k = key_of(c)
-    c.post("/auth/logout/")
+    if RECREATE:
+        sh(RECREATE)
+    else:
+        sh(f"docker rm -f {CONTAINER}")
+        sh(f"docker run -d --name {CONTAINER} {RUN_ARGS} {IMAGE}")
+    time.sleep(5)
+    key = app("login", email)[0]
+    step("after container recreation (empty Redis)", probe(key)[1])
+
+    status, row_left = app("logout", key)
+    held, ok, _ = probe(key)
     step(
         "sign-out: gone from PostgreSQL and Redis",
-        not Session.objects.filter(pk=k).exists() and cached(k) is False,
+        row_left == "False" and held == "False" and not ok,
+        redis=held,
     )
     print("ALL PASS" if all(results) else "SOME FAILED")
     return 0 if all(results) else 1

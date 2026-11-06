@@ -67,13 +67,19 @@ async function viewport(w, h, mobile) {
 }
 async function clickSel(sel) {
   const p = await evaluate(`(() => { const el=document.querySelector(${JSON.stringify(sel)}); if(!el) return null; el.scrollIntoView({block:'center'}); const r=el.getBoundingClientRect(); return {x:r.left+r.width/2,y:r.top+r.height/2}; })()`);
-  if (!p) throw new Error("no element " + sel);
+  if (!p) throw new Error("no element " + sel + " (rows: " + JSON.stringify(await evaluate("[...document.querySelectorAll('.inbox-row')].map(a => a.getAttribute('href'))")) + ", path: " + (await evaluate("location.pathname")) + ")");
   for (const type of ["mousePressed", "mouseReleased"]) await send("Input.dispatchMouseEvent", { type, x: p.x, y: p.y, button: "left", clickCount: 1 });
 }
 async function key(k, code, keyCode) {
   for (const type of ["keyDown", "keyUp"]) await send("Input.dispatchKeyEvent", { type, key: k, code, windowsVirtualKeyCode: keyCode });
 }
 const chat = (expr) => evaluate(`(() => { const c = Alpine.$data(document.querySelector('.cv')); return (${expr}); })()`);
+// The details panel loads once it shows (views.conversation_panel). Steps that use its forms
+// without opening the drawer load it the way the pane would, then wait for it.
+async function ensurePanel() {
+  await evaluate("(() => { const p = document.getElementById('cv-panel'); if (p && !p.querySelector('[data-panel-followup]')) htmx.ajax('GET', p.getAttribute('hx-get'), { target: '#cv-panel', swap: 'innerHTML', source: p }); })()");
+  for (let i = 0; i < 40 && !(await evaluate("!!document.getElementById('conversation-add-tag')")); i++) await sleep(150);
+}
 
 // ---- Network interception: no POST leaves the browser (nothing is sent to a customer). ----
 let rules = [];
@@ -389,16 +395,27 @@ check("pane.last-click-wins", st.path === c3 && st.current === c3 && !!st.paneTi
 st = await evaluate(`(() => ({ role: document.getElementById('chat-info').getAttribute('role'), inert: document.querySelectorAll('[data-dialog-inert]').length }))()`);
 check("pane.details-column-not-dialog", st.role === null && st.inert === 0, st);
 
-// 14. Forms inside the pane that post elsewhere (tags) still re-render it. A real POST to
-// the local contact: it only adds a tag to a QA contact.
+// 14. The details panel loads on its own beside the conversation (views.conversation_panel),
+// and its forms, even ones that post elsewhere (tags), answer with the panel only: the thread
+// isn't reloaded. A real POST to the local contact: it only adds a tag to a QA contact.
+// Where the details don't fit beside the chat they're a drawer, which loads them when opened.
+const panelBefore = await evaluate("!!document.querySelector('#cv-panel [data-panel-followup]')");
+const asDrawer = await evaluate("(() => { const b = document.querySelector('#conversation-pane-inner .cv-info-btn'); return !!b && getComputedStyle(b).display !== 'none'; })()");
+if (asDrawer) await evaluate("document.querySelector('#conversation-pane-inner .cv-info-btn').click()");
+for (let i = 0; i < 40 && !(await evaluate("!!document.getElementById('conversation-add-tag')")); i++) await sleep(150);
+check("pane.details-load-when-shown", (asDrawer ? !panelBefore : true) && await evaluate("!!document.querySelector('#cv-panel [data-panel-followup]')"), { asDrawer, panelBefore });
+await evaluate("document.querySelector('#conversation-pane-inner .cv-thread').dataset.qaKept = '1'");
 const tagName = "qa-tag-" + Date.now().toString(36);
 rules = [{ match: (r) => r.method === "POST" && /\/contacts\/[^/]+\/tags/.test(new URL(r.url).pathname), act: null }];
 await evaluate(`document.getElementById('conversation-add-tag').value = ${JSON.stringify(tagName)}`);
 await evaluate("document.getElementById('conversation-add-tag').form.requestSubmit()");
 await sleep(2000);
 rules = [];
-st = await evaluate(`(() => ({ shown: document.querySelector('#conversation-pane-inner')?.textContent.includes(${JSON.stringify(tagName)}), path: location.pathname, split: !!document.getElementById('inbox-split') }))()`);
-check("pane.in-pane-form-swaps", st.shown && st.split, st);
+st = await evaluate(`(() => ({ shown: document.querySelector('#cv-panel')?.textContent.includes(${JSON.stringify(tagName)}), threadKept: document.querySelector('#conversation-pane-inner .cv-thread')?.dataset.qaKept === '1', next: !!document.getElementById('cv-next'), path: location.pathname, split: !!document.getElementById('inbox-split') }))()`);
+check("pane.panel-form-swaps-panel-only", st.shown && st.threadKept && st.next && st.split, st);
+// Close the drawer again: open, it makes the rest of the page inert for the steps that follow.
+if (asDrawer) { await key("Escape", "Escape", 27); await sleep(400); }
+check("pane.details-drawer-closed", !(await evaluate("document.querySelector('#chat-info')?.classList.contains('is-open')")), {});
 
 // 15. A file whose outcome is unknown re-renders as Not confirmed, and reconciles with the
 // media message once it shows up.
@@ -506,6 +523,7 @@ rules = [
   { match: (r) => r.method === "GET" && new URL(r.url).pathname === rh[1], act: { delay: 1500 } },
   { match: (r) => r.method === "POST" && /\/tags\//.test(new URL(r.url).pathname), act: { status: 500, html: "x" } },
 ];
+await ensurePanel();
 await evaluate("document.getElementById('conversation-add-tag').value = 'qa-fail'");
 await clickSel(`.inbox-row[href="${rh[1]}"]`); await sleep(100);
 await evaluate("document.getElementById('conversation-add-tag')?.form.requestSubmit()");
@@ -593,6 +611,7 @@ const paneId = () => evaluate("(() => { const e = document.querySelector('#conve
 await clickSel(`.inbox-row[href="${sh[0]}"]`); await sleep(1800);
 const idA = await paneId();
 rules = [{ match: (r) => r.method === "POST" && /\/tags/.test(new URL(r.url).pathname), act: { slowHtml: 1800, html: "<div data-title=\"QA stale A\" id=\"qa-stale\">stale A</div>" } }];
+await ensurePanel();
 await evaluate("document.getElementById('conversation-add-tag').value = 'qa-stale'");
 await evaluate("document.getElementById('conversation-add-tag').form.requestSubmit()");
 await sleep(100);
@@ -662,6 +681,7 @@ await chat("(c.collision = '', c.collisionAck = false, c.draft = '', c.sendError
 // T5. A form posted inside the pane while the next conversation loads doesn't hide that
 // load's failure: the pane says so in place, and the list stays.
 await sleep(500);
+await ensurePanel();
 rules = [{ match: (r) => r.method === "GET" && new URL(r.url).pathname === sh[0], act: { delayFail: 1200 } }];
 await clickSel(`.inbox-row[href="${sh[0]}"]`); await sleep(100);
 await evaluate("document.getElementById('conversation-add-tag') && (document.getElementById('conversation-add-tag').value = 'qa-during-fail', document.getElementById('conversation-add-tag').form.requestSubmit())");
@@ -797,6 +817,43 @@ check("send.keyless-message-still-clears-bubble", st === 0, st);
 await chat("(c.messages = c.messages.filter(m => m.id !== 99999988), c._blobs['k-free-1'] = { blob: new Blob(['x']) }, c.messages.push({ id: 'pfree', direction: 'outbound', body: '[x.png]', ts: c.serverTime(), status: 'unknown', unknown: true, mediaUnknown: true, clientKey: 'k-free-1' }), c.dismissUnknown(c.messages.find(m => m.id === 'pfree')), 0)");
 st = await chat("'k-free-1' in c._blobs");
 check("media.dismiss-frees-the-file", st === false, st);
+
+// Inbox plan, Phases 0-1. A long thread opens on its latest messages, and "Show earlier
+// messages" puts older ones above without moving what's on screen. Needs a 120-message
+// conversation named "QA Long Thread" in this workspace (seeded locally).
+await viewport(1440, 900, false);
+await go("/inbox/?view=all");
+const longHref = await evaluate("(document.querySelector('.inbox-row[data-title=\"QA Long Thread\"]') || {}).getAttribute?.('href') || ''");
+if (longHref) {
+  await go(longHref, 1800);
+  st = await chat("({ n: c.messages.length, earlier: c.hasEarlier })");
+  const shown = await evaluate("[...document.querySelectorAll('.cv-earlier')].some(e => e.offsetParent)");
+  check("thread.opens-on-latest", st.n === 50 && st.earlier && shown, { ...st, shown });
+  const at = "(() => { const el = [...document.querySelectorAll('#conversation-pane-inner .cv-thread *')].find(e => e.children.length === 0 && e.textContent.trim() === 'Long thread message 75'); return el ? Math.round(el.getBoundingClientRect().top) : null; })()";
+  await evaluate("document.querySelector('#conversation-pane-inner .cv-thread').scrollTop = 0");
+  await sleep(200);
+  const before = await evaluate(at);
+  await chat("(c.loadEarlier(), 0)");
+  await sleep(1500);
+  const after = await evaluate(at);
+  st = await chat("({ n: c.messages.length, earlier: c.hasEarlier, first: c.messages[0].body })");
+  check("thread.show-earlier-keeps-place", st.n === 100 && before !== null && Math.abs(after - before) <= 4, { ...st, before, after });
+} else {
+  check("thread.opens-on-latest", false, { missing: "QA Long Thread" });
+}
+
+// Search: results land in the list as you type, focus stays in the box, and on the list's own
+// address the search is kept in the URL.
+await go("/inbox/?view=all");
+const rowsBefore = await evaluate("document.querySelectorAll('#inbox-body .inbox-row').length");
+await evaluate("(() => { const i = document.getElementById('inbox-q'); i.focus(); i.value = 'QA Long'; i.dispatchEvent(new Event('input', { bubbles: true })); })()");
+await sleep(1600);
+st = await evaluate("({ rows: [...document.querySelectorAll('#inbox-body .inbox-row')].map(a => a.dataset.title), focus: document.activeElement && document.activeElement.id, url: location.search })");
+check("search.live-keeps-focus", rowsBefore > 1 && st.rows.length === 1 && st.rows[0] === "QA Long Thread" && st.focus === "inbox-q" && st.url.includes("q=QA"), { rowsBefore, ...st });
+await evaluate("(() => { const i = document.getElementById('inbox-q'); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); })()");
+await sleep(1600);
+st = await evaluate("({ rows: document.querySelectorAll('#inbox-body .inbox-row').length, url: location.search })");
+check("search.cleared-shows-all", st.rows === rowsBefore && !st.url.includes("q="), st);
 
 writeFileSync(join(outDir, "inbox_qa_results.json"), JSON.stringify({ results, log: log.slice(-80) }, null, 1));
 console.log(JSON.stringify({ pass: results.filter((r) => r.pass).length, fail: results.filter((r) => !r.pass).map((r) => r.id) }));

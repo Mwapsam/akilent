@@ -71,6 +71,9 @@ function registerChat() {
   Alpine.data('chat', (cfg) => ({
     messages: cfg.messages || [],
     lastId: cfg.lastId || 0,
+    // The thread opens on its latest messages; older ones load on request (loadEarlier).
+    hasEarlier: !!cfg.hasEarlier,
+    loadingEarlier: false,
     open: cfg.open,
     windowOpen: cfg.windowOpen !== false,
     statusHtml: cfg.statusHtml || '',
@@ -335,6 +338,43 @@ function registerChat() {
       this.newBelow = false;
     },
     onScroll() { if (this.nearBottom()) this.newBelow = false; },
+    // "Show earlier messages": the page before the oldest one shown, put above it without
+    // moving what the reader is looking at (the thread grows upwards by exactly its height).
+    async loadEarlier() {
+      const first = this.messages.find((m) => typeof m.id === 'number');
+      if (!first || this.loadingEarlier) return;
+      this.loadingEarlier = true;
+      try {
+        const r = await fetch(cfg.feedUrl + '?before=' + first.id, {
+          credentials: 'same-origin',
+          headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' },
+        });
+        if (!r.ok || !(r.headers.get('Content-Type') || '').includes('json')) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        const t = this.thread;
+        const before = t.scrollHeight;
+        const known = new Set(this.messages.map((m) => m.id));
+        this.messages = data.messages.filter((m) => !known.has(m.id)).concat(this.messages);
+        this.sortMessages();
+        this.hasEarlier = !!data.hasEarlier;
+        this.$nextTick(() => { t.scrollTop += t.scrollHeight - before; });
+      } catch (e) {
+        if (window.toast) window.toast('error', "Couldn't load earlier messages. Try again.");
+      } finally {
+        this.loadingEarlier = false;
+      }
+    },
+    // The details panel loads once it shows (views.conversation_panel), so a section asked
+    // for right as the drawer opens may not be there yet: wait for it, briefly.
+    focusPanelSection(id) {
+      let tries = 0;
+      const go = () => {
+        const s = document.getElementById(id);
+        if (s) { s.scrollIntoView({ block: 'nearest' }); s.focus({ preventScroll: true }); return; }
+        if (++tries < 40) setTimeout(go, 100);
+      };
+      setTimeout(go, 120);
+    },
 
     // ── polling ──────────────────────────────────────────────────
     schedule(delay) {
@@ -423,7 +463,7 @@ function registerChat() {
         }
         this.messages.push({
           id: raw.id, direction: raw.direction, body: raw.body, ts: raw.timestamp,
-          status: raw.status, failureReason: raw.failureReason || null,
+          status: raw.status, failureReason: raw.failureReason || null, failureFix: raw.failureFix || null,
           byAi: !!raw.byAi, media: raw.media || null,
         });
         this.lastId = Math.max(this.lastId, raw.id);
@@ -436,6 +476,8 @@ function registerChat() {
         if (s !== undefined && s !== m.status) m.status = s;
         const reason = data.failureReasons && data.failureReasons[String(m.id)];
         if (reason) m.failureReason = reason;
+        const fix = data.failureFixes && data.failureFixes[String(m.id)];
+        if (fix) m.failureFix = fix;
       }
       this.sortMessages();
       if (data.status_html !== undefined) this.statusHtml = data.status_html;

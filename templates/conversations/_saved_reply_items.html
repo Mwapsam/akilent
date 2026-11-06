@@ -1,0 +1,16 @@
+{% comment %}The composer's Saved replies menu items (views.saved_replies with ?menu=1), loaded the
+first time the menu opens. Filtered by the menu's search box (q, in the composer's x-data).{% endcomment %}
+{% for r in replies %}
+<li x-show="!q || $el.dataset.search.includes(q.toLowerCase())" data-search="{{ r.title|lower }} {{ r.body|lower|truncatechars:300 }}">
+  <button type="button" class="cv-sr-item" data-body="{{ r.body }}"
+          @click="$dispatch('saved-reply-insert', $el.dataset.body); srOpen = false; q = ''">
+    <span class="font-medium text-ink">{{ r.title }}</span>
+    <span class="text-xs text-ink-subtle line-clamp-2">{{ r.body }}</span>
+  </button>
+</li>
+{% empty %}
+<li class="cv-sr-empty">
+  <p class="text-sm text-ink-subtle">No saved replies yet. Save the answers you give most, then add them here in one tap.</p>
+  <a href="{% url 'conversations:saved_replies' %}" class="btn btn-ghost btn-sm mt-2">Add saved replies</a>
+</li>
+{% endfor %}

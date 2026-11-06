@@ -7,6 +7,7 @@ from django.urls import reverse
 from apps.accounts.models import Membership
 from apps.conversations.models import Conversation, Event, Message
 from apps.conversations.tests import test_views
+from apps.conversations.tests.screen import on_screen
 from apps.crm.models import Lead
 
 # Same setup as the inbox view tests: an owner, and a WhatsApp conversation that already has a lead.
@@ -59,13 +60,13 @@ def test_delete_needs_a_post(logged_in, open_conversation):
 @pytest.mark.django_db
 def test_button_shown_to_owner_only(logged_in, open_conversation):
     client, account, _ = logged_in
-    url = reverse("conversations:detail", args=[open_conversation.public_id])
-    assert b"Delete conversation" in client.get(url).content
+    # In the details panel, which loads beside the conversation.
+    assert "Delete conversation" in on_screen(client, open_conversation.public_id)
 
     member = User.objects.create_user("m", "m@example.com", "pw")
     Membership.objects.create(user=member, account=account, role=Membership.Role.MEMBER)
     client.force_login(member)
-    assert b"Delete conversation" not in client.get(url).content
+    assert "Delete conversation" not in on_screen(client, open_conversation.public_id)
 
 
 @pytest.mark.django_db

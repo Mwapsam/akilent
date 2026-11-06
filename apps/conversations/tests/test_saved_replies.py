@@ -67,7 +67,19 @@ def test_composer_shows_saved_reply_picker(logged_in):
     )
     SavedReply.objects.create(account=account, title="Store hours", body="Open 9-6.")
 
-    resp = client.get(f"/inbox/{conversation.public_id}/")
-    body = resp.content.decode()
+    body = client.get(f"/inbox/{conversation.public_id}/").content.decode()
     assert "Saved replies" in body
-    assert "Store hours" in body
+    # The list loads the first time the menu opens, not with every conversation.
+    assert "?menu=1" in body and "Store hours" not in body
+    menu = client.get("/inbox/saved-replies/?menu=1", HTTP_HX_REQUEST="true")
+    assert "Store hours" in menu.content.decode()
+    assert menu["Cache-Control"] == "no-store"
+
+
+@pytest.mark.django_db
+def test_the_saved_replies_menu_says_where_to_add_them_when_there_are_none(logged_in):
+    client, _, _ = logged_in
+    menu = client.get("/inbox/saved-replies/?menu=1", HTTP_HX_REQUEST="true")
+    body = menu.content.decode()
+    assert "No saved replies yet" in body
+    assert 'href="/inbox/saved-replies/"' in body

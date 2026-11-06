@@ -15,6 +15,7 @@ from apps.automation.workflow_engine import enroll, validate_definition
 from apps.contacts import tags
 from apps.contacts.models import Contact, Tag
 from apps.contacts.segments import SegmentError, contacts_for
+from apps.conversations.tests.screen import on_screen
 from apps.core.actions import ActionError, run_action
 
 
@@ -330,7 +331,9 @@ def test_the_inbox_side_panel_shows_tags_and_lets_you_tag(owner, account, contac
     )
     tags.add_tag(contact, "VIP")
     page = f"/inbox/{conversation.public_id}/"
-    body = owner.get(page).content.decode()
+    body = on_screen(
+        owner, conversation.public_id
+    )  # the details panel, beside the chat
     assert "VIP" in body and f"/contacts/{contact.public_id}/tags/add/" in body
     resp = owner.post(
         f"/contacts/{contact.public_id}/tags/add/", {"tag": "asked-price", "next": page}

@@ -14,6 +14,7 @@ from apps.accounts.models import Account, Membership
 from apps.contacts.models import Contact
 from apps.conversations.models import FollowUp
 from apps.conversations.services import record_inbound_whatsapp_message
+from apps.conversations.tests.screen import on_screen
 from apps.whatsapp.models import Conversation as WhatsAppConversation
 from apps.whatsapp.models import MessageLog, WhatsAppContact
 
@@ -82,9 +83,7 @@ def conversation_without_a_lead(logged_in):
 @pytest.mark.django_db
 def test_panel_renders_the_engagement_actions(logged_in, conversation_without_a_lead):
     client, _, _ = logged_in
-    body = client.get(
-        f"/inbox/{conversation_without_a_lead.public_id}/"
-    ).content.decode()
+    body = on_screen(client, conversation_without_a_lead.public_id)
     assert "Track as interested" in body
     assert "Set follow-up" in body
 
@@ -95,9 +94,7 @@ def test_panel_does_not_offer_orders(logged_in, conversation_without_a_lead):
     and the conversation panel no longer offers it at all — the decisions here
     are about the customer, not about taking money."""
     client, _, _ = logged_in
-    body = client.get(
-        f"/inbox/{conversation_without_a_lead.public_id}/"
-    ).content.decode()
+    body = on_screen(client, conversation_without_a_lead.public_id)
     assert "Create order" not in body
     assert "chat-new-order" not in body
 
@@ -109,7 +106,7 @@ def test_panel_shows_the_open_lead_instead_of_offering_another(logged_in, conver
     track them again would invite a second lead for one customer, which the
     service explicitly refuses to create."""
     client, _, _ = logged_in
-    body = client.get(f"/inbox/{conversation.public_id}/").content.decode()
+    body = on_screen(client, conversation.public_id)
     assert "Where they stand" in body
     assert "Track as interested" not in body
 
@@ -134,10 +131,7 @@ def test_set_follow_up_from_the_panel(logged_in, conversation):
     FollowUp.objects.filter(pk=followup.pk).update(
         due_at=timezone.now() - timezone.timedelta(minutes=1)
     )
-    assert (
-        "Quote the dress"
-        in client.get(f"/inbox/{conversation.public_id}/").content.decode()
-    )
+    assert "Quote the dress" in on_screen(client, conversation.public_id)
     assert "Quote the dress" in client.get("/inbox/followups/").content.decode()
 
 

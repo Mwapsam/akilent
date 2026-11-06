@@ -11,6 +11,7 @@ from apps.accounts.models import Account, Membership
 from apps.automation.models import Workflow, WorkflowRun
 from apps.contacts.models import Contact
 from apps.conversations.models import Conversation
+from apps.conversations.tests.screen import on_screen
 
 
 @pytest.fixture
@@ -122,7 +123,7 @@ def test_pane_controls(owner, account, conversation):
             "steps": [{"id": "w", "type": "wait", "seconds": 3600, "next": ""}],
         },
     )
-    page = owner.get(url).content.decode()
+    page = on_screen(owner, conversation.public_id)
     assert "Win back" in page and "Pause here" in page
     owner.post(url, {"action": "run_automation", "workflow": "win-back"})
     run = WorkflowRun.objects.get(workflow=wf)

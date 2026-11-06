@@ -869,6 +869,8 @@
   .inbox-unread { @apply w-2 h-2 shrink-0 rounded-full; background-color: var(--color-accent); }
   .inbox-preview { grid-area: preview; @apply mt-0.5 min-w-0 truncate text-sm; color: var(--color-ink-subtle); }
   .inbox-row.is-unread .inbox-preview { @apply text-ink; }
+  /* "Not sent:" in front of a row whose latest message (ours) didn't go. */
+  .inbox-not-sent { display: inline-flex; align-items: center; gap: .25rem; font-weight: 500; color: var(--tone-coral-fg); }
   .inbox-meta { grid-area: meta; @apply mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 min-w-0; }
   .inbox-meta:empty { @apply hidden; }
   .inbox-assignee { @apply inline-flex items-center gap-1 text-xs; color: var(--color-ink-subtle); }
@@ -2065,6 +2067,7 @@
 .cv-popover { position: absolute; bottom: calc(100% + .625rem); left: 0; z-index: var(--z-dropdown); width: min(22rem, 80vw); padding: .5rem;
               background: var(--cv-surface); border: 1px solid var(--cv-line); border-radius: .75rem; box-shadow: var(--shadow-pop); }
 .cv-sr-list { max-height: 16rem; overflow-y: auto; margin-top: .375rem; }
+.cv-sr-empty { padding: .5rem .625rem; }
 .cv-sr-item { display: flex; flex-direction: column; gap: .125rem; width: 100%; padding: .5rem; text-align: left; border-radius: .5rem; font-size: .875rem; }
 .cv-sr-item:hover, .cv-sr-item:focus-visible { background: var(--cv-hover); outline: none; }
 
@@ -2092,6 +2095,14 @@
 .cv-side.is-open { display: block; }
 .cv-backdrop { position: fixed; inset: 0; background: rgb(17 24 39 / .5); z-index: var(--z-drawer); }
 .cv-side-inner { height: 100%; overflow-y: auto; background: var(--cv-surface); }
+/* The inbox's search, above the list (inbox.html): a pill with its icon inside. */
+.inbox-search { position: relative; margin-bottom: .75rem; }
+.inbox-search-icon { position: absolute; inset-block: 0; left: .75rem; display: flex; align-items: center; color: var(--color-ink-subtle); pointer-events: none; }
+.inbox-search-input { padding-left: 2.25rem; border-radius: 999px; }
+/* What the details panel shows until it has loaded (views.conversation_panel). */
+.cv-panel-skeleton { display: flex; flex-direction: column; gap: .75rem; padding: 1rem; }
+/* "Show earlier messages" at the top of a thread that opened on its latest messages. */
+.cv-earlier { display: flex; justify-content: center; padding: .25rem 0 .75rem; }
 @container cv (min-width: 57.25rem) {
   .cv { grid-template-columns: minmax(0, 1fr) 340px; }
   .cv-side { display: block; position: static; width: auto; box-shadow: none; min-height: 0; }

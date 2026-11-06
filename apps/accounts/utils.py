@@ -134,8 +134,11 @@ def is_suspended_member(request) -> bool:
     user = getattr(request, "user", None)
     if not user or not user.is_authenticated:
         return False
+    # The usual answer: a workspace resolves, so there is an active one (or support is viewing
+    # one). That lookup is memoised and every page needs it anyway, so this costs no query.
+    if get_current_account(request) is not None:
+        return False
     memberships = Membership.objects.filter(user=user)
-    # The usual answer (an active workspace) takes one query.
     return (
         not memberships.filter(account__is_active=True).exists()
         and memberships.exists()

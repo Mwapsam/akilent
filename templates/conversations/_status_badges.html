@@ -8,9 +8,14 @@ for you · / 2 hours, / 20 minutes") was what made the phone header look crushed
 On a phone each badge says the state in a word or two, with the wait as "2h";
 the full sentence comes back from sm up, and the exact time is in the title.
 "First reply in 92s" is a desktop-only detail.{% endcomment %}
+{% comment %}Closed is the stored status, as in the list (someone closed it, or STOP did). An
+open conversation the customer hasn't written in for a day, with us having spoken last, is
+Quiet: it was shown as Closed here while the list (rightly) didn't say so. One with no messages
+yet shows no state.{% endcomment %}
 {% include "components/channel_tag.html" with channel=conversation.channel compact=True %}
-{% if snapshot.missed %}<span class="badge badge-danger whitespace-nowrap" title="No reply for over 24 hours">Missed<span class="hidden sm:inline"> — no reply for over 24h</span></span>
+{% if conversation.status == "closed" %}<span class="badge badge-neutral whitespace-nowrap"{% if conversation.resolution %} title="Closed as {{ conversation.get_resolution_display }}"{% endif %}>Closed</span>
+{% elif snapshot.missed %}<span class="badge badge-danger whitespace-nowrap" title="No reply for over 24 hours">Missed<span class="hidden sm:inline"> — no reply for over 24h</span></span>
 {% elif snapshot.state == WAITING_FOR_AGENT %}<span class="badge badge-warning whitespace-nowrap" title="Waiting since {{ snapshot.last_customer_message_at|date:'j M Y, H:i' }}"><span class="sm:hidden">Waiting · {{ snapshot.last_customer_message_at|ago:now }}</span><span class="hidden sm:inline">Waiting for you · {{ snapshot.last_customer_message_at|timesince:now }}</span></span>
 {% elif snapshot.state == WAITING_FOR_CUSTOMER %}<span class="badge badge-success whitespace-nowrap">Replied<span class="hidden sm:inline"> · waiting for the customer</span></span>
-{% else %}<span class="badge badge-neutral whitespace-nowrap">Closed</span>{% endif %}
+{% elif snapshot.closed_reason == "inactive_24h" %}<span class="badge badge-neutral whitespace-nowrap" title="No message from the customer in over 24 hours">Quiet</span>{% endif %}
 {% if snapshot.first_response_seconds is not None %}<span class="hidden sm:inline text-xs text-ink-subtle whitespace-nowrap">First reply in {{ snapshot.first_response_seconds|floatformat:0 }}s</span>{% endif %}

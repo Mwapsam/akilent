@@ -12,6 +12,7 @@ from apps.automation.models import Workflow, WorkflowRun
 from apps.automation.workflow_engine import enroll_for_trigger, explain_enrollment
 from apps.contacts.models import Contact
 from apps.conversations.models import Conversation, Message
+from apps.conversations.tests.screen import on_screen
 
 NOW = timezone.now()
 
@@ -221,7 +222,8 @@ def test_the_conversation_shows_what_automations_did(owner, account):
     items = activity_for_contact(account, contact)
     assert items[0]["automation"] == "Answer pricing questions"
     assert items[0]["lines"][0] == {"ok": True, "text": "Replied “hi”"}
-    html = owner.get(f"/inbox/{message.conversation.public_id}/").content.decode()
+    # In the details panel, which loads beside the conversation.
+    html = on_screen(owner, message.conversation.public_id)
     assert "What automations did" in html and "Replied" in html
 
 

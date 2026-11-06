@@ -1,0 +1,66 @@
+{% comment %}The composer's Next steps menu: follow up, send a template, track as interested.
+Its own file because a details-panel action that sets or ends a follow-up answers with it too,
+swapped out of band (views._panel_response), so the dot and the label here stay true.{% endcomment %}
+<div class="cv-menu cv-next" id="cv-next" x-data="cvMenu"{% if oob %} hx-swap-oob="true"{% endif %}>
+  <button type="button" class="cv-iconbtn cv-next-trigger" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="menuOpen"
+          title="Next steps" aria-label="Next steps: follow up{% if 'sales' in usable_features %}, track as interested{% endif %}">
+    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+    <span class="cv-next-dot" {% if not followup %}x-show="followupLabel" x-cloak{% endif %} aria-hidden="true"></span>
+  </button>
+  <div class="cv-menu-panel cv-menu-panel--up" x-ref="menu" x-show="menuOpen" x-cloak x-transition.opacity role="menu" aria-label="Next steps">
+    <p class="cv-menu-label" aria-hidden="true">Next steps</p>
+    {% if followup %}
+    <span class="cv-next-done" title="{{ followup_copy.INTERNAL_ONLY }}" data-composer-followup>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      {{ followup.composer }}
+    </span>
+    <button type="button" class="cv-menu-item" role="menuitem" data-composer-change
+            @click="menuOpen = false; infoOpen = true; focusPanelSection('cv-followup')">
+      {% include "components/icon.html" with name="pencil" class="w-4 h-4" %}{{ followup_copy.CHANGE }}
+    </button>
+    {% else %}
+    {# A follow-up the AI suggested and someone applied: shown at once (chat.js aiApply). #}
+    <span class="cv-next-done" x-show="followupLabel" x-cloak title="{{ followup_copy.INTERNAL_ONLY }}" data-composer-followup-live>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span x-text="followupLabel"></span>
+    </span>
+    <form method="post" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %} data-followup-form x-show="!followupLabel">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create_followup" />
+      <input type="hidden" name="when" value="tomorrow" />
+      <button class="cv-menu-item" type="submit" role="menuitem" aria-describedby="cv-followup-promise">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <span class="flex flex-col">
+          {{ followup_copy.FOLLOW_UP_TOMORROW }}
+          <span id="cv-followup-promise" class="text-xs text-ink-subtle" data-followup-promise>{{ followup_copy.INTERNAL_ONLY_SHORT }}</span>
+        </span>
+      </button>
+    </form>
+    {% endif %}
+    {% if approved_templates %}
+    <button type="button" class="cv-menu-item" role="menuitem" @click="menuOpen = false; $dispatch('modal-open', 'chat-template')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3.5" width="16" height="17" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+      Send a template
+    </button>
+    {% endif %}
+    {% if "sales" in usable_features %}
+    <div class="cv-menu-sep" role="separator"></div>
+      {% if open_lead %}
+      <a class="cv-menu-item" role="menuitem" href="{% url 'crm:lead-detail' open_lead.public_id %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+        Tracked as interested
+      </a>
+      {% elif open_deal %}
+      <a class="cv-menu-item" role="menuitem" href="{% url 'crm:deal-detail' open_deal.public_id %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+        Tracked as interested
+      </a>
+      {% else %}
+      <button type="button" class="cv-menu-item" role="menuitem" @click="menuOpen = false; $dispatch('modal-open', 'chat-new-lead')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        Track as interested
+      </button>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>

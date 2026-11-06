@@ -20,6 +20,7 @@ from django.db.models import (
     Q,
     Subquery,
 )
+from django.db.models.functions import Coalesce
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render, resolve_url
 from django.template.loader import render_to_string
@@ -49,11 +50,12 @@ from apps.conversations.services import delete_conversation
 from apps.conversations.state import (
     OVERDUE_WAITING,
     ConversationState,
-    get_conversation_state,
     missed,
     needs_attention,
     snapshot_of,
+    state_of,
     unanswered_q,
+    waiting_counts,
     with_activity,
 )
 from apps.core.channels import hide_disabled_channels, visible_choices
@@ -68,21 +70,27 @@ logger = logging.getLogger(__name__)
 _PAGE_SIZE = 30
 
 
-def _last_handled_by(conversation) -> str:
-    """Who took the customer's latest message, in words (see services.HANDLED_LABELS)."""
-    from apps.conversations.services import HANDLED_LABELS
-
-    last = (
+def _last_inbound(conversation) -> dict | None:
+    """The customer's latest message: when, and its metadata (who took it)."""
+    row = (
         Message.objects.filter(
             conversation=conversation, direction=Message.Direction.INBOUND
         )
         .order_by("-timestamp", "-id")
-        .values_list("metadata", flat=True)
+        .values("timestamp", "metadata")
         .first()
     )
-    if not last or "handled_by" not in last:
+    return dict(row) if row else None
+
+
+def _last_handled_by(last_inbound: dict | None) -> str:
+    """Who took the customer's latest message, in words (see services.HANDLED_LABELS)."""
+    from apps.conversations.services import HANDLED_LABELS
+
+    meta = (last_inbound or {}).get("metadata") or {}
+    if "handled_by" not in meta:
         return ""
-    return HANDLED_LABELS.get(last["handled_by"], "")
+    return HANDLED_LABELS.get(meta["handled_by"], "")
 
 
 def followup_card(f, viewer, *, now, zone, reply=False) -> dict:
@@ -91,10 +99,23 @@ def followup_card(f, viewer, *, now, zone, reply=False) -> dict:
     return followups.card(f, viewer, now=now, zone=zone, reply=reply)
 
 
+def _as_dict(value) -> dict:
+    """A JSON field read through a subquery: a dict on PostgreSQL, a string on SQLite."""
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except ValueError:
+            return {}
+    return value if isinstance(value, dict) else {}
+
+
 def get_visible_conversation(account, public_id):
     """A conversation the inbox may show: 404 for one on a channel the admin switched off."""
     return get_object_or_404(
-        hide_disabled_channels(Conversation.objects.all()),
+        # The pane and panel show the customer and the assignee, and read the account.
+        hide_disabled_channels(
+            Conversation.objects.select_related("contact", "account", "assigned_to")
+        ),
         account=account,
         public_id=public_id,
     )
@@ -114,12 +135,22 @@ def _inbox_context(request, account) -> dict:
         view = "needs_attention"
 
     # Every list is derived from Message rows via conversations.state - never MessageLog.
+    # Views go by the conversation's stored status: every view but Closed shows open
+    # conversations only, so the counts add up (All = the open ones, All + Closed = every one).
+    open_ = Conversation.objects.filter(
+        account=account, status=Conversation.Status.OPEN
+    )
+    # All, Assigned to me and Closed are newest first: by the stored last_message_at, so a
+    # page is found without first working out every conversation's message facts (on 200,000
+    # messages that alone took seconds). The page's own rows get those facts below. The waiting
+    # views are defined by those facts, so they work them out for every conversation. A
+    # conversation made without recording a message (no last_message_at) sorts by when it began.
+    newest_first = (Coalesce("last_message_at", "created_at").desc(), "-id")
+    stored_order = view in ("all", "assigned", "closed")
     if view == "missed":
         qs = missed(account, now)
     elif view == "assigned":
-        qs = with_activity(
-            Conversation.objects.filter(account=account, assigned_to=request.user)
-        ).order_by("-last_any", "-id")
+        qs = open_.filter(assigned_to=request.user).order_by(*newest_first)
     elif view == "unassigned":
         # Nobody is responsible for this conversation yet — an open queue
         # waiting to be routed, longest-waiting first like needs_attention.
@@ -131,20 +162,18 @@ def _inbox_context(request, account) -> dict:
             )
         ).order_by("last_in")
     elif view == "closed":
-        qs = with_activity(
-            Conversation.objects.filter(
-                account=account, status=Conversation.Status.CLOSED
-            )
-        ).order_by("-last_any", "-id")
+        qs = Conversation.objects.filter(
+            account=account, status=Conversation.Status.CLOSED
+        ).order_by(*newest_first)
     elif view == "needs_attention":
         qs = needs_attention(account, now)
     else:
         view = "all"
-        qs = with_activity(Conversation.objects.filter(account=account)).order_by(
-            "-last_any", "-id"
-        )
-    # Conversations on a channel the admin switched off are hidden from every list.
-    qs = hide_disabled_channels(qs.select_related("contact"))
+        stored_order = True
+        qs = open_.order_by(*newest_first)
+    # Conversations on a channel the admin switched off are hidden from every list. The
+    # assignee comes with the row: the row shows their name (a query per row before).
+    qs = hide_disabled_channels(qs.select_related("contact", "assigned_to"))
 
     channel = (request.GET.get("channel") or "").strip()
     if channel:
@@ -155,23 +184,62 @@ def _inbox_context(request, account) -> dict:
     # stricter OVERDUE_WAITING cutoff instead of the 24h one.
     overdue_only = bool(request.GET.get("overdue"))
     if overdue_only:
+        if stored_order:  # overdue is a message fact: this view now needs them all
+            qs, stored_order = with_activity(qs), False
         qs = qs.filter(unanswered_q(), last_in__lte=now - OVERDUE_WAITING)
 
-    # The row preview is the latest message, annotated here rather than fetched per row:
-    # the list is re-rendered by the 8-second poll for every open inbox.
-    latest = Message.objects.filter(conversation=OuterRef("pk")).order_by(
-        "-timestamp", "-id"
-    )
-    qs = qs.annotate(
-        preview_body=Subquery(latest.values("body")[:1]),
-        preview_direction=Subquery(latest.values("direction")[:1]),
-        next_followup=Subquery(_open_followups.values("due_at")[:1]),
-    )
+    # Search, within the view and channel: the customer's name, phone or email, or anything
+    # said in the conversation.
+    q = (request.GET.get("q") or "").strip()[:100]
+    if q:
+        from django.db.models import Exists
+
+        qs = qs.filter(
+            Q(contact__first_name__icontains=q)
+            | Q(contact__last_name__icontains=q)
+            | Q(contact__phone__icontains=q)
+            | Q(contact__email__icontains=q)
+            | Exists(
+                Message.objects.filter(conversation=OuterRef("pk"), body__icontains=q)
+            )
+        )
+
     from apps.conversations import followup_copy, followups
 
     zone = followups.business_zone(account)
 
+    # The row preview is the latest message, annotated here rather than fetched per row:
+    # the list is re-rendered by the 8-second poll for every open inbox. Only the page's own
+    # rows get it: the pager counts the plain list, so the count doesn't run these subqueries
+    # for every conversation the account has.
+    latest = Message.objects.filter(conversation=OuterRef("pk")).order_by(
+        "-timestamp", "-id"
+    )
     page = Paginator(qs, _PAGE_SIZE).get_page(request.GET.get("page"))
+    if page.paginator.count:
+        rows = qs
+        if stored_order:
+            # The page by stored order, then its rows with their message facts (one query: the
+            # page's ids are a subquery).
+            ids = qs[page.start_index() - 1 : page.end_index()].values("pk")
+            rows = with_activity(
+                Conversation.objects.filter(pk__in=ids).select_related(
+                    "contact", "assigned_to"
+                )
+            ).order_by(*newest_first)
+        page.object_list = list(
+            rows.annotate(
+                preview_body=Subquery(latest.values("body")[:1]),
+                preview_direction=Subquery(latest.values("direction")[:1]),
+                preview_status=Subquery(latest.values("status")[:1]),
+                preview_metadata=Subquery(latest.values("metadata")[:1]),
+                next_followup=Subquery(_open_followups.values("due_at")[:1]),
+            )[
+                slice(None)
+                if stored_order
+                else slice(page.start_index() - 1, page.end_index())
+            ]
+        )
     for c in page:
         c.snapshot = snapshot_of(c, now)
         # Missed is a kind of waiting that has gone on too long, so both show
@@ -184,6 +252,22 @@ def _inbox_context(request, account) -> dict:
             and c.snapshot.last_customer_message_at is not None
         )
         c.has_messages = c.preview_direction is not None
+        # The latest message is ours and didn't go: the row says so, with why on hover,
+        # instead of reading like any other "You: …".
+        c.not_sent = c.preview_direction == Message.Direction.OUTBOUND and (
+            c.preview_status in ("failed", "held")
+        )
+        c.not_sent_reason = (
+            _failure(_as_dict(c.preview_metadata))[0] if c.not_sent else ""
+        )
+        # Closed is the stored status. An open conversation the customer has gone quiet on
+        # (24h, and we spoke last) is "Quiet": it isn't closed, and stays in the open views.
+        c.is_closed = c.status == Conversation.Status.CLOSED
+        c.is_quiet = (
+            not c.is_closed
+            and c.snapshot.closed_reason == "inactive_24h"
+            and not c.snapshot.missed
+        )
         c.followup_tag = (
             followup_copy.inbox_tag(c.next_followup, now=now, zone=zone)
             if c.next_followup
@@ -203,36 +287,41 @@ def _inbox_context(request, account) -> dict:
         for c in rows:
             c.presence = others.get(c.pk)
 
+    # The tabs' plain counts in one query.
+    # Also one count per channel, so the channel filter only offers channels this business
+    # has conversations on (SMS and Website Chat are choices whether used or not).
+    choices = visible_choices(Conversation.Channel.choices)
+    is_open = Q(status=Conversation.Status.OPEN)
+    counts = hide_disabled_channels(
+        Conversation.objects.filter(account=account)
+    ).aggregate(
+        assigned_count=Count("pk", filter=is_open & Q(assigned_to=request.user)),
+        unassigned_count=Count("pk", filter=is_open & Q(assigned_to__isnull=True)),
+        closed_count=Count("pk", filter=Q(status=Conversation.Status.CLOSED)),
+        all_count=Count("pk", filter=is_open),
+        **{
+            f"channel__{value}": Count("pk", filter=Q(channel=value))
+            for value, _ in choices
+        },
+    )
+    channel_choices = [
+        (value, label)
+        for value, label in choices
+        if counts.pop(f"channel__{value}") or value == channel
+    ]
     return {
         "account": account,
         "now": now,
         "page": page,
         "view": view,
         "channel": channel,
-        "channel_choices": visible_choices(Conversation.Channel.choices),
+        "channel_choices": channel_choices,
         "overdue_only": overdue_only,
-        "needs_attention_count": hide_disabled_channels(
-            needs_attention(account, now)
-        ).count(),
-        "missed_count": hide_disabled_channels(missed(account, now)).count(),
-        "assigned_count": hide_disabled_channels(
-            Conversation.objects.filter(account=account, assigned_to=request.user)
-        ).count(),
-        "unassigned_count": hide_disabled_channels(
-            Conversation.objects.filter(
-                account=account,
-                status=Conversation.Status.OPEN,
-                assigned_to__isnull=True,
-            )
-        ).count(),
-        "closed_count": hide_disabled_channels(
-            Conversation.objects.filter(
-                account=account, status=Conversation.Status.CLOSED
-            )
-        ).count(),
-        "all_count": hide_disabled_channels(
-            Conversation.objects.filter(account=account)
-        ).count(),
+        "q": q,
+        # The two waiting counts need every open conversation's message facts: worked out
+        # once for both (state.waiting_counts), by the same rules as their views.
+        **waiting_counts(hide_disabled_channels(open_), now),
+        **counts,
         "WAITING_FOR_AGENT": ConversationState.WAITING_FOR_AGENT,
         "WAITING_FOR_CUSTOMER": ConversationState.WAITING_FOR_CUSTOMER,
     }
@@ -509,6 +598,9 @@ def conversation_detail(request, public_id: str):
     # Loaded into the two-pane inbox (static/js/inbox_pane.js) rather than as its own page.
     # Its forms then post with hx-post into the pane, so an action keeps the list beside it.
     in_pane = _in_pane(request)
+    # A pane or details-panel action answers in place, so its confirmation rides along as a
+    # toast; a plain form post shows it on the page it redirects to.
+    answers_in_place = in_pane or _panel_target(request)
     mutated = False
 
     if request.method == "POST":
@@ -567,7 +659,7 @@ def conversation_detail(request, public_id: str):
                 )
                 conversation.mark_read()
                 _record_ai_use(account, request, "")
-                if in_pane:
+                if answers_in_place:
                     messages.success(request, f"Sent “{template.name}”.")
             elif action == "create_followup":
                 from apps.conversations.followups import resolve_due_at
@@ -611,7 +703,7 @@ def conversation_detail(request, public_id: str):
                     user=assignee,
                     assigned_by=request.user,
                 )
-                if in_pane:
+                if answers_in_place:
                     messages.success(
                         request,
                         "Unassigned."
@@ -628,7 +720,7 @@ def conversation_detail(request, public_id: str):
                     body=request.POST.get("body", "").strip(),
                     author=request.user,
                 )
-                if in_pane:
+                if answers_in_place:
                     messages.success(request, "Note added.")
             elif action == "mark_read":
                 conversation.mark_read()
@@ -639,13 +731,13 @@ def conversation_detail(request, public_id: str):
                 conversation.close(
                     resolution=resolution, actor=f"user:{request.user.pk}"
                 )
-                if in_pane:
+                if answers_in_place:
                     messages.success(
                         request, "Closed. It reopens if the customer writes again."
                     )
             elif action == "reopen":
                 conversation.reopen(actor=f"user:{request.user.pk}")
-                if in_pane:
+                if answers_in_place:
                     messages.success(request, "Conversation reopened.")
             elif action == "start_form":
                 form = ConversationForm.objects.filter(
@@ -658,7 +750,7 @@ def conversation_detail(request, public_id: str):
                 run_action(
                     "start_conversation_form", ctx, conversation=conversation, form=form
                 )
-                if in_pane:
+                if answers_in_place:
                     messages.success(request, f"Started “{form.name}”.")
             elif action == "pause_automation":
                 choice = request.POST.get("hours", "")
@@ -743,23 +835,30 @@ def conversation_detail(request, public_id: str):
                     return JsonResponse({"ok": True, "unconfirmed": True})
                 return JsonResponse({"ok": True})
             mutated = True
+        if _panel_target(request):
+            return _panel_response(
+                request,
+                account,
+                _panel_conversation(account, public_id),
+                after_action=True,
+            )
         if not in_pane:
             return redirect("conversations:detail", public_id=public_id)
         # In the pane: re-render it below, from fresh state, instead of redirecting away.
         conversation = get_visible_conversation(account, public_id)
 
+    if _panel_target(request):
+        # A panel action's answer (directly, or through the redirect a tag or follow-up view
+        # sends back to here): the panel again, not the whole pane.
+        return _panel_response(request, account, conversation, after_action=True)
+
+    was_unread = conversation.is_unread
     if (
         viewing_as(request) is None
     ):  # support looking "as" the business mustn't clear its unread
         conversation.mark_read()
-    thread = list(
-        conversation.messages.select_related(
-            "whatsapp_message", "instagram_message", "facebook_message"
-        )
-        .all()
-        .order_by("timestamp", "id")
-    )
-    snapshot = get_conversation_state(conversation)
+    thread, has_earlier = _recent_thread(conversation, unread=was_unread)
+    snapshot = state_of(conversation)
     now = timezone.now()
     offers = _automate_offers(account, thread)
     chat_config = {
@@ -772,6 +871,8 @@ def conversation_detail(request, public_id: str):
         ),
         "typingUrl": reverse("conversations:typing", args=[conversation.public_id]),
         "lastId": thread[-1].id if thread else 0,
+        # Older messages than the thread shows ("Show earlier messages", ?before=).
+        "hasEarlier": has_earlier,
         # The browser's clock can be off; a first estimate of how far, refined by every
         # feed poll (which measures the round trip).
         "serverNow": now.isoformat(),
@@ -783,20 +884,7 @@ def conversation_detail(request, public_id: str):
         "windowOpen": _window_is_open(conversation),
         "ai": _ai_config(account, conversation, request.user),
         "messages": [
-            {
-                "id": m.id,
-                "direction": m.direction,
-                "body": m.body,
-                "ts": m.timestamp.isoformat(),
-                "status": m.status,
-                "failureReason": (m.metadata or {}).get("failure_reason") or None,
-                "byAi": (m.metadata or {}).get("sent_by") == "ai",
-                # The browser's key for a reply sent from the inbox (inbox_keys), so its
-                # "Sending…" or "Not confirmed" bubble is matched to exactly this message.
-                "clientKey": (m.metadata or {}).get("client_key") or None,
-                "automate": offers.get(m.id),
-                "media": media_json(m, conversation.public_id),
-            }
+            {**_message_json(m, conversation), "automate": offers.get(m.id)}
             for m in thread
         ],
         "statusHtml": render_to_string(
@@ -810,151 +898,27 @@ def conversation_detail(request, public_id: str):
             },
         ),
     }
-    approved_templates = []
-    if conversation.channel == Conversation.Channel.WHATSAPP:
-        from apps.whatsapp.models import MessageTemplate
-
-        approved_templates = list(
-            MessageTemplate.objects.filter(
-                account=account,
-                approval_status=MessageTemplate.ApprovalStatus.APPROVED,
-            ).order_by("name")
-        )
-
-    saved_replies = list(SavedReply.objects.filter(account=account).order_by("title"))
+    approved_templates = _approved_templates(account, conversation)
     from apps.conversations import followup_copy
-    from apps.conversations import followups as followup_service
 
-    # The customer's follow-ups, this chat's own first; the composer and the side panel
-    # describe the first exactly as the Follow-ups page does.
-    now = timezone.now()
-    zone = followup_service.business_zone(account)
-    customer_followups = followup_service.for_chat(conversation, now=now)
-    open_followup = customer_followups[0] if customer_followups else None
-    followup = (
-        followup_card(open_followup, request.user, now=now, zone=zone)
-        if open_followup
-        else None
-    )
-    if followup:
-        followup["composer"] = followup_copy.composer_label(
-            open_followup, now=now, zone=zone
-        )
-        others = len(customer_followups) - 1
-        name = conversation.contact.display_name
-        followup["others"] = others
-        followup["all_label"] = (
-            f"{followup_copy.others_label(others)} · " if others else ""
-        ) + followup_copy.all_for(name)
-        followup["wrote_since"] = followup_copy.wrote_since(name)
-    followup_still_needed = (
-        open_followup is not None
-        and open_followup in followup_service.open_after_customer_replied(conversation)
-    )
-
-    open_lead = open_deal = None
-    try:
-        from apps.crm.models import Deal, Lead
-
-        open_lead = Lead.objects.filter(
-            account=account,
-            contact=conversation.contact,
-            status__in=[Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED],
-        ).first()
-        # Giving a lead a value turns it straight into a deal, which leaves no open lead.
-        # A customer in the pipeline is still being tracked, so the panel must say so.
-        open_deal = (
-            Deal.objects.filter(
-                account=account,
-                contact=conversation.contact,
-                status=Deal.Status.OPEN,
-            )
-            .select_related("stage")
-            .order_by("-created_at")
-            .first()
-        )
-    except Exception:
-        pass  # crm app not installed/migrated — panel just won't show it
-
-    open_order = None
-    try:
-        from apps.commerce.models import Order
-
-        open_order = (
-            Order.objects.filter(
-                account=account,
-                contact=conversation.contact,
-                status__in=[Order.Status.PENDING, Order.Status.AWAITING_PAYMENT],
-            )
-            .order_by("-created_at")
-            .first()
-        )
-    except Exception:
-        pass  # commerce app not installed/migrated — panel just won't show it
-
-    # Cheap facts a support agent wants without leaving the conversation:
-    # how long this has been a customer, and whether this is a first
-    # contact or one of a longer history. Computed here, not stored.
-    conversation_count = Conversation.objects.filter(
-        account=account, contact=conversation.contact
-    ).count()
-
-    try:
-        from apps.automation.api import activity_for_contact, contact_automations
-
-        automation_activity = activity_for_contact(account, conversation.contact)
-        automation_now = contact_automations(account, conversation.contact)
-    except Exception:
-        # never let a side panel cost the owner their conversation
-        automation_activity, automation_now = [], {"running": [], "manual": []}
-
-    from apps.conversations import forms as conversation_forms
-
-    active_form_response = conversation_forms.active_response_for(conversation)
-    # Only forms that would actually launch here: a Flow that isn't published (or needs
-    # republishing) can't be sent on WhatsApp, and offering it would just end in an error.
-    published_forms = (
-        [
-            f
-            for f in ConversationForm.objects.filter(
-                account=account, status=ConversationForm.Status.PUBLISHED
-            ).order_by("name")
-            if conversation_forms.can_start(f, conversation)
-        ]
-        if active_form_response is None
-        else []
-    )
-
-    active_recommendation = _active_recommendation_for(conversation)
-
+    # The details panel (_conversation_panel.html) is not built here: it loads on its own
+    # (conversations:panel) once the conversation shows, so opening one costs the thread and
+    # the composer only. The composer's Next steps still says whether a follow-up is set and
+    # whether the customer is tracked, so those two come with the pane.
     pane_context = {
         "account": account,
         "now": now,
-        "automation_activity": automation_activity,
-        "automation_now": automation_now,
-        "last_handled_by": _last_handled_by(conversation),
         "conversation": conversation,
-        "active_recommendation": active_recommendation,
         "chat_config": chat_config,
         "snapshot": snapshot,
-        "notes": conversation.notes.select_related("author"),
-        "open_lead": open_lead,
-        "open_deal": open_deal,
-        "open_order": open_order,
-        "conversation_count": conversation_count,
         "approved_templates": approved_templates,
-        "saved_replies": saved_replies,
-        "open_followup": open_followup,
-        "followup": followup,
+        **_followup_context(request, account, conversation, now=now),
+        **_crm_context(account, conversation),
         "followup_copy": followup_copy,
-        "followup_still_needed": followup_still_needed,
-        "later_choices": followup_service.LATER_CHOICES,
         "team_members": _team_members(account),
-        "active_form_response": active_form_response,
-        "published_forms": published_forms,
-        "can_delete": _can_delete(request, account),
         "in_pane": in_pane,
         "detail_url": reverse("conversations:detail", args=[conversation.public_id]),
+        "panel_url": reverse("conversations:panel", args=[conversation.public_id]),
     }
     # The inbox list (templates/conversations/inbox.html, ≥lg) loads a conversation into its
     # own pane via a plain background GET — see static/js/inbox_pane.js — rather than a full
@@ -992,6 +956,322 @@ def _in_pane(request) -> bool:
     )
 
 
+def _panel_target(request) -> bool:
+    """A request from inside the details panel, whose answer replaces the panel only."""
+    return is_background(request) and request.headers.get("HX-Target") == "cv-panel"
+
+
+# How much of a thread a conversation opens with: the latest THREAD_WINDOW messages, or from
+# the first unread one when that is further back, up to THREAD_MAX. Older ones load on demand
+# (messages_feed ?before=), so a long chat costs no more to open than a short one.
+THREAD_WINDOW = 50
+THREAD_MAX = 200
+
+
+def _recent_thread(conversation, *, unread: bool) -> tuple[list, bool]:
+    """The messages a conversation opens with, oldest first, and whether older ones exist.
+
+    One query for up to THREAD_MAX rows. Unread here means what the customer wrote since the
+    business last spoke (``is_unread`` is a flag on the conversation, not a per-message mark),
+    so the window reaches back to the first of those messages when there are more than fit."""
+    latest = list(
+        conversation.messages.select_related(
+            "whatsapp_message", "instagram_message", "facebook_message"
+        ).order_by("-timestamp", "-id")[:THREAD_MAX]
+    )
+    keep = THREAD_WINDOW
+    if unread:
+        for i, m in enumerate(latest):
+            if m.direction != Message.Direction.INBOUND:
+                break
+            keep = max(keep, i + 1)
+    shown = latest[:keep]
+    has_earlier = len(latest) > keep or len(latest) == THREAD_MAX
+    return shown[::-1], has_earlier
+
+
+def _failure(meta: dict | None) -> tuple[str | None, dict | None]:
+    """Why a message didn't go, in plain words, and where to fix it when the cause is the
+    WhatsApp account itself (billing, display name, connection) rather than this message.
+
+    Worked out from the stored error code each time it's shown, not from the sentence stored
+    when it failed: wording added since (or a code stored in another shape) reaches old
+    messages too, so a raw "(error 131042)" doesn't linger."""
+    from apps.whatsapp.friendly_errors import account_level_fix, friendly_send_error
+
+    meta = meta or {}
+    code = meta.get("error_code")
+    if code:
+        return friendly_send_error(code), account_level_fix(code)
+    return meta.get("failure_reason") or None, None
+
+
+def _message_json(m, conversation) -> dict:
+    """A message as the thread (static/js/chat.js) shows it."""
+    meta = m.metadata or {}
+    reason, fix = _failure(meta)
+    return {
+        "id": m.id,
+        "direction": m.direction,
+        "body": m.body,
+        "ts": m.timestamp.isoformat(),
+        "status": m.status,
+        "failureReason": reason,
+        "failureFix": fix,
+        "byAi": meta.get("sent_by") == "ai",
+        # The browser's key for a reply sent from the inbox (inbox_keys), so its
+        # "Sending…" or "Not confirmed" bubble is matched to exactly this message.
+        "clientKey": meta.get("client_key") or None,
+        "media": media_json(m, conversation.public_id),
+    }
+
+
+def _followup_context(
+    request, account, conversation, *, now, panel=False, last_inbound=None
+) -> dict:
+    """The customer's follow-ups, this chat's own first; the composer and the side panel
+    describe the first exactly as the Follow-ups page does."""
+    from apps.conversations import followup_copy
+    from apps.conversations import followups as followup_service
+
+    customer_followups = followup_service.for_chat(conversation, now=now)
+    open_followup = customer_followups[0] if customer_followups else None
+    followup = None
+    if open_followup:
+        # The business's timezone only matters for describing one (a query when read).
+        zone = followup_service.business_zone(account)
+        followup = followup_card(open_followup, request.user, now=now, zone=zone)
+        followup["composer"] = followup_copy.composer_label(
+            open_followup, now=now, zone=zone
+        )
+        others = len(customer_followups) - 1
+        name = conversation.contact.display_name
+        followup["others"] = others
+        followup["all_label"] = (
+            f"{followup_copy.others_label(others)} · " if others else ""
+        ) + followup_copy.all_for(name)
+        followup["wrote_since"] = followup_copy.wrote_since(name)
+    out = {"open_followup": open_followup, "followup": followup}
+    if panel:
+        # followups.open_after_customer_replied for the one follow-up shown, from the
+        # customer's latest message the panel has already read: set by a person on this
+        # chat, still open, and the customer has written since.
+        last_at = (last_inbound or {}).get("timestamp")
+        out["followup_still_needed"] = bool(
+            open_followup is not None
+            and last_at is not None
+            and open_followup.conversation_id == conversation.pk
+            and open_followup.source not in followup_service.WAITING_SOURCES
+            and open_followup.created_at < last_at
+        )
+        out["later_choices"] = followup_service.LATER_CHOICES
+    return out
+
+
+def _usable(account) -> frozenset:
+    """The features this business can use now (memoised per request by billing)."""
+    from apps.billing import api as billing_api
+
+    return billing_api.nav_state(account)["usable"]
+
+
+def _crm_context(account, conversation) -> dict:
+    """Whether the customer is tracked: an open lead, else an open deal. Only asked when Sales
+    is usable, the only time the pane and panel show it."""
+    open_lead = open_deal = None
+    if "sales" not in _usable(account):
+        return {"open_lead": None, "open_deal": None}
+    try:
+        from apps.crm.models import Deal, Lead
+
+        open_lead = Lead.objects.filter(
+            account=account,
+            contact=conversation.contact,
+            status__in=[Lead.Status.NEW, Lead.Status.CONTACTED, Lead.Status.QUALIFIED],
+        ).first()
+        # Giving a lead a value turns it straight into a deal, which leaves no open lead.
+        # A customer in the pipeline is still being tracked, so the panel must say so.
+        if open_lead is None:
+            open_deal = (
+                Deal.objects.filter(
+                    account=account,
+                    contact=conversation.contact,
+                    status=Deal.Status.OPEN,
+                )
+                .select_related("stage")
+                .order_by("-created_at")
+                .first()
+            )
+    except Exception:
+        pass  # crm app not installed/migrated — panel just won't show it
+    return {"open_lead": open_lead, "open_deal": open_deal}
+
+
+def _panel_context(request, account, conversation) -> dict:
+    """Everything the details panel shows beyond the conversation itself."""
+    from apps.conversations import followup_copy
+
+    now = timezone.now()
+    usable = _usable(account)
+    open_order = None
+    if "orders" in usable:  # the panel shows an open order only then
+        try:
+            from apps.commerce.models import Order
+
+            open_order = (
+                Order.objects.filter(
+                    account=account,
+                    contact=conversation.contact,
+                    status__in=[Order.Status.PENDING, Order.Status.AWAITING_PAYMENT],
+                )
+                .order_by("-created_at")
+                .first()
+            )
+        except Exception:
+            pass  # commerce app not installed/migrated — panel just won't show it
+
+    try:
+        from apps.automation.api import activity_for_contact, contact_automations
+
+        automation_activity = activity_for_contact(account, conversation.contact)
+        automation_now = contact_automations(account, conversation.contact)
+    except Exception:
+        # never let a side panel cost the owner their conversation
+        automation_activity, automation_now = [], {"running": [], "manual": []}
+
+    from apps.conversations import forms as conversation_forms
+
+    active_form_response = conversation_forms.active_response_for(conversation)
+    # Only forms that would actually launch here: a Flow that isn't published (or needs
+    # republishing) can't be sent on WhatsApp, and offering it would just end in an error.
+    published_forms = (
+        [
+            f
+            for f in ConversationForm.objects.filter(
+                account=account, status=ConversationForm.Status.PUBLISHED
+            ).order_by("name")
+            if conversation_forms.can_start(f, conversation)
+        ]
+        if active_form_response is None and "automations" in usable
+        else []
+    )
+    last_inbound = _last_inbound(conversation)
+    # The customer's conversations, counted with the conversation row where the panel
+    # view fetched it that way (_panel_conversation).
+    conversation_count = getattr(conversation, "contact_conversations", None)
+    if conversation_count is None:
+        conversation_count = Conversation.objects.filter(
+            account=account, contact=conversation.contact
+        ).count()
+
+    return {
+        "account": account,
+        "now": now,
+        "conversation": conversation,
+        "automation_activity": automation_activity,
+        "automation_now": automation_now,
+        "last_handled_by": _last_handled_by(last_inbound),
+        "active_recommendation": _active_recommendation_for(conversation),
+        "notes": conversation.notes.select_related("author"),
+        **_crm_context(account, conversation),
+        "open_order": open_order,
+        # Cheap facts a support agent wants without leaving the conversation:
+        # how long this has been a customer, and whether this is a first
+        # contact or one of a longer history. Computed here, not stored.
+        "conversation_count": conversation_count,
+        **_followup_context(
+            request,
+            account,
+            conversation,
+            now=now,
+            panel=True,
+            last_inbound=last_inbound,
+        ),
+        "followup_copy": followup_copy,
+        "active_form_response": active_form_response,
+        "published_forms": published_forms,
+        "can_delete": _can_delete(request, account),
+        "detail_url": reverse("conversations:detail", args=[conversation.public_id]),
+    }
+
+
+def _panel_response(request, account, conversation, *, after_action=False):
+    """The details panel, for loading into the pane (#cv-panel) after the conversation shows.
+
+    After an action taken in it, the answer also carries what else on screen that action can
+    change, so nothing is left stale: the composer's Next steps (a follow-up shows there),
+    swapped out of band, and ``inbox-refresh`` for the row in the list."""
+    context = {**_panel_context(request, account, conversation), "in_pane": True}
+    html = render_to_string(
+        "conversations/_conversation_panel.html", context, request=request
+    )
+    if after_action:
+        context["oob"] = True
+        context["approved_templates"] = _approved_templates(account, conversation)
+        html += render_to_string(
+            "conversations/_composer_next.html", context, request=request
+        )
+    response = HttpResponse(html)
+    response["Vary"] = "HX-Request, HX-Target"
+    response["Cache-Control"] = "no-store"
+    if after_action:
+        _messages_to_toast(request, response)
+        response["HX-Trigger"] = "inbox-refresh"
+    return response
+
+
+def _approved_templates(account, conversation) -> list:
+    """The WhatsApp templates the composer can send here (none on other channels)."""
+    if conversation.channel != Conversation.Channel.WHATSAPP:
+        return []
+    from apps.whatsapp.models import MessageTemplate
+
+    return list(
+        MessageTemplate.objects.filter(
+            account=account,
+            approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+        ).order_by("name")
+    )
+
+
+def _panel_conversation(account, public_id):
+    """The conversation as the details panel needs it: with how many conversations its
+    customer has had, counted in the same query."""
+    from django.db.models.functions import Coalesce
+
+    count = (
+        Conversation.objects.filter(account=account, contact=OuterRef("contact"))
+        .order_by()
+        .values("contact")
+        .annotate(n=Count("pk"))
+        .values("n")
+    )
+    return get_object_or_404(
+        hide_disabled_channels(
+            Conversation.objects.select_related("contact", "account", "assigned_to")
+        ).annotate(contact_conversations=Coalesce(Subquery(count), 0)),
+        account=account,
+        public_id=public_id,
+    )
+
+
+@login_required
+def conversation_panel(request, public_id: str):
+    """The details panel on its own: loaded into the pane once the conversation shows, or
+    as a page of its own where scripts don't run (the pane links here in a <noscript>)."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    conversation = _panel_conversation(account, public_id)
+    if is_background(request):
+        return _panel_response(request, account, conversation)
+    return render(
+        request,
+        "conversations/panel_page.html",
+        {**_panel_context(request, account, conversation), "in_pane": False},
+    )
+
+
 _TOAST_TYPES = {"error": "danger", "warning": "warning", "info": "info"}
 
 
@@ -1008,11 +1288,17 @@ def _messages_to_toast(request, response) -> None:
 
 
 def _can_delete(request, account) -> bool:
-    """Owners and admins only, and never while an operator is viewing as the business."""
-    from apps.accounts import api as accounts_api
+    """Owners and admins only, and never while an operator is viewing as the business. The
+    membership was already read while resolving the account (current_membership)."""
+    from apps.accounts.models import Membership
+    from apps.accounts.utils import current_membership
 
-    return viewing_as(request) is None and accounts_api.is_account_admin(
-        request.user, account
+    membership = current_membership(request)
+    return (
+        viewing_as(request) is None
+        and membership is not None
+        and membership.account_id == account.pk
+        and membership.role in (Membership.Role.OWNER, Membership.Role.ADMIN)
     )
 
 
@@ -1332,6 +1618,15 @@ def saved_replies(request):
             messages.success(request, "Saved reply added.")
         return redirect("conversations:saved_replies")
     replies = SavedReply.objects.filter(account=account).order_by("title")
+    if is_background(request) and request.GET.get("menu"):
+        # The composer's Saved replies menu, filled the first time it opens rather than
+        # with every conversation (_conversation_pane.html).
+        response = render(
+            request, "conversations/_saved_reply_items.html", {"replies": replies}
+        )
+        response["Vary"] = "HX-Request"
+        response["Cache-Control"] = "no-store"
+        return response
     return render(
         request,
         "conversations/saved_replies.html",
@@ -2063,6 +2358,9 @@ def messages_feed(request, public_id: str):
         return JsonResponse({"error": "no account"}, status=403)
     conversation = get_visible_conversation(account, public_id)
 
+    if "before" in request.GET:
+        return _earlier_messages(conversation, request.GET.get("before"))
+
     try:
         after = max(int(request.GET.get("after") or 0), 0)
     except ValueError:
@@ -2106,7 +2404,8 @@ def messages_feed(request, public_id: str):
                     "body": m.body,
                     "timestamp": m.timestamp.isoformat(),
                     "status": m.status,
-                    "failureReason": (m.metadata or {}).get("failure_reason") or None,
+                    "failureReason": _failure(m.metadata)[0],
+                    "failureFix": _failure(m.metadata)[1],
                     "byAi": (m.metadata or {}).get("sent_by") == "ai",
                     "clientKey": (m.metadata or {}).get("client_key") or None,
                     "media": media_json(m, conversation.public_id),
@@ -2118,9 +2417,14 @@ def messages_feed(request, public_id: str):
             # so a photo or voice note appears without reloading the page.
             "media": _recent_media(conversation),
             "failureReasons": {
-                str(m.id): (m.metadata or {}).get("failure_reason")
+                str(m.id): reason
                 for m in recent_outbound
-                if (m.metadata or {}).get("failure_reason")
+                if (reason := _failure(m.metadata)[0])
+            },
+            "failureFixes": {
+                str(m.id): fix
+                for m in recent_outbound
+                if (fix := _failure(m.metadata)[1])
             },
             "windowOpen": _window_is_open(conversation),
             "aiProposal": _ai_proposal_json(account, conversation),
@@ -2128,7 +2432,7 @@ def messages_feed(request, public_id: str):
                 "conversations/_status_badges.html",
                 {
                     "conversation": conversation,
-                    "snapshot": get_conversation_state(conversation),
+                    "snapshot": state_of(conversation),
                     "now": timezone.now(),
                     "WAITING_FOR_AGENT": ConversationState.WAITING_FOR_AGENT,
                     "WAITING_FOR_CUSTOMER": ConversationState.WAITING_FOR_CUSTOMER,
@@ -2139,6 +2443,36 @@ def messages_feed(request, public_id: str):
             # Read last, so it is as close as it can be to when the answer leaves: the
             # browser times its own clock against it (chat.js _skew).
             "serverNow": timezone.now().isoformat(),
+        }
+    )
+
+
+def _earlier_messages(conversation, before) -> JsonResponse:
+    """``?before=<id>``: the THREAD_WINDOW messages just older than that one, oldest first
+    ("Show earlier messages"). Reading history never marks anything read."""
+    anchor = (
+        conversation.messages.filter(pk=before).values("timestamp", "id").first()
+        if str(before or "").isdigit()
+        else None
+    )
+    if anchor is None:
+        return JsonResponse({"messages": [], "hasEarlier": False})
+    older = list(
+        conversation.messages.select_related(
+            "whatsapp_message", "instagram_message", "facebook_message"
+        )
+        .filter(
+            Q(timestamp__lt=anchor["timestamp"])
+            | Q(timestamp=anchor["timestamp"], id__lt=anchor["id"])
+        )
+        .order_by("-timestamp", "-id")[: THREAD_WINDOW + 1]
+    )
+    return JsonResponse(
+        {
+            "messages": [
+                _message_json(m, conversation) for m in older[:THREAD_WINDOW][::-1]
+            ],
+            "hasEarlier": len(older) > THREAD_WINDOW,
         }
     )
 

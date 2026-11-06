@@ -177,6 +177,15 @@ def dropdown(content, label="", align="right", button_class="btn btn-secondary b
     )
 
 
+@register.simple_tag
+def icon_paths(name):
+    """The SVG paths of a named icon (apps/core/icons.py), for components/icon.html; nothing
+    for a name it doesn't know, as the template's if/elif chain did."""
+    from apps.core.icons import ICONS
+
+    return mark_safe(ICONS.get(name, ""))  # nosec B703 B308 - our own constant SVG paths
+
+
 @register.filter
 def ago(value, now=None):
     """A relative time short enough for a list row: "now", "7m", "5h", "2d".

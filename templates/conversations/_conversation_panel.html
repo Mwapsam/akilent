@@ -1,0 +1,355 @@
+{% load ui %}
+{% comment %}The details panel: the customer, automations, tags, sales, forms, follow-up, notes.
+Loaded into the pane's #cv-panel once the conversation shows (views.conversation_panel), so
+opening a conversation costs the thread and the composer only; on its own page where scripts
+don't run (panel_page.html). In the pane its forms answer with this panel again
+(hx-target="#cv-panel"), plus whatever else on screen the action changed.{% endcomment %}
+{% with display_name=conversation.contact.display_name %}
+{# Customer #}
+<div class="p-4 pb-3">
+  <div class="flex items-start gap-3">
+    <span class="cv-avatar w-12 h-12 text-base" aria-hidden="true">{{ display_name|default:"?"|slice:":1"|upper }}</span>
+    <div class="min-w-0 flex-1">
+      <p class="font-semibold text-ink truncate">{{ display_name }}</p>
+      {% if conversation.assigned_to %}<p class="text-xs text-ink-subtle mt-0.5">Assigned to {% if conversation.assigned_to_id == request.user.id %}you{% else %}{{ conversation.assigned_to }}{% endif %}</p>{% endif %}
+    </div>
+    <button type="button" class="cv-iconbtn cv-info-btn -mr-1" @click="infoOpen = false" aria-label="Close details">
+      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+
+  <div class="mt-3">
+    {% with phone=conversation.contact.phone email=conversation.contact.email %}
+    <div class="cv-field">
+      <span class="cv-field-label">Name</span>
+      <span class="flex-1 truncate">{{ conversation.contact.full_name|default:"—" }}</span>
+    </div>
+    <div class="cv-field" x-data="{ copied: false }">
+      <span class="cv-field-label">Phone</span>
+      {% if phone %}
+      <a href="tel:{{ phone }}" class="flex-1 truncate hover:underline">{{ phone }}</a>
+      <button type="button" class="cv-iconbtn w-7 h-7" data-copy="{{ phone }}" :aria-label="copied ? 'Copied' : 'Copy phone number'"
+              @click="navigator.clipboard.writeText($el.dataset.copy); copied = true; setTimeout(() => copied = false, 1500)">
+        <svg x-show="!copied" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+        <svg x-show="copied" x-cloak class="w-4 h-4 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L19 7"/></svg>
+      </button>
+      {% else %}<span class="flex-1 text-ink-subtle">—</span>{% endif %}
+    </div>
+    <div class="cv-field" x-data="{ copied: false }">
+      <span class="cv-field-label">Email</span>
+      {% if email %}
+      <a href="mailto:{{ email }}" class="flex-1 truncate hover:underline">{{ email }}</a>
+      <button type="button" class="cv-iconbtn w-7 h-7" data-copy="{{ email }}" :aria-label="copied ? 'Copied' : 'Copy email address'"
+              @click="navigator.clipboard.writeText($el.dataset.copy); copied = true; setTimeout(() => copied = false, 1500)">
+        <svg x-show="!copied" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+        <svg x-show="copied" x-cloak class="w-4 h-4 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L19 7"/></svg>
+      </button>
+      {% else %}<span class="flex-1 text-ink-subtle">—</span>{% endif %}
+    </div>
+    <div class="cv-field">
+      <span class="cv-field-label">Customer since</span>
+      <span class="flex-1 truncate">{{ conversation.contact.first_seen|date:"j M Y" }}</span>
+    </div>
+    <div class="cv-field">
+      <span class="cv-field-label">Conversations</span>
+      <span class="flex-1 truncate">{{ conversation_count }}</span>
+    </div>
+    {% endwith %}
+  </div>
+  <a href="{% url 'contacts:detail' conversation.contact.public_id %}" class="btn btn-ghost btn-sm w-full mt-2">View full profile</a>
+</div>
+
+{# Automations: what's running here now, pause/stop, run one by hand, what happened #}
+<div class="cv-section">
+  <h2 class="cv-h">Automations</h2>
+  {% url 'automation:why-not' as why_not_url %}
+  {% if last_handled_by %}<p class="text-xs text-ink-subtle mb-2">Their last message: {{ last_handled_by }}.</p>{% endif %}
+  {% if conversation.automation_paused %}
+  <div class="alert alert-warning text-xs mb-2" role="status">
+    <span>Paused here{% if conversation.automation_paused_until.year < 2100 %} until {{ conversation.automation_paused_until|date:"j M, H:i" }}{% endif %}. Automations won't answer this customer.</span>
+  </div>
+  <form method="post" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#cv-panel" hx-swap="innerHTML"{% endif %}>
+    {% csrf_token %}<input type="hidden" name="action" value="resume_automation" />
+    <button class="btn btn-secondary btn-sm w-full">Let automations answer again</button>
+  </form>
+  {% endif %}
+
+  {% for r in automation_now.running %}
+  <div class="flex items-start justify-between gap-2 py-1.5 text-sm">
+    <div class="min-w-0">
+      <a href="{% url 'automation:run' r.run_id %}" class="font-medium text-ink hover:underline break-words">{{ r.workflow }}</a>
+      <p class="text-xs text-ink-subtle">{{ r.state }}{% if r.next_due_at %} · until {{ r.next_due_at|date:"j M, H:i" }}{% endif %}</p>
+    </div>
+    <form method="post" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#cv-panel" hx-swap="innerHTML"{% endif %}>
+      {% csrf_token %}<input type="hidden" name="action" value="stop_run" /><input type="hidden" name="run" value="{{ r.run_id }}" />
+      <button class="btn btn-ghost btn-xs">Stop</button>
+    </form>
+  </div>
+  {% endfor %}
+
+  {% if not conversation.automation_paused %}
+  <form method="post" class="cv-inline-form mt-1" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#cv-panel" hx-swap="innerHTML"{% endif %}>
+    {% csrf_token %}<input type="hidden" name="action" value="pause_automation" />
+    <label class="sr-only" for="pause-hours">Pause automations here</label>
+    <select id="pause-hours" name="hours" class="select select-sm">
+      <option value="1">Pause here for 1 hour</option>
+      <option value="4" selected>Pause here for 4 hours</option>
+      <option value="24">Pause here for a day</option>
+      <option value="forever">Pause here until I turn it back on</option>
+    </select>
+    <button class="btn btn-ghost btn-sm">Pause</button>
+  </form>
+  {% endif %}
+
+  {% if automation_now.manual %}
+  <form method="post" class="cv-inline-form mt-1" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#cv-panel" hx-swap="innerHTML"{% endif %}>
+    {% csrf_token %}<input type="hidden" name="action" value="run_automation" />
+    <label class="sr-only" for="run-workflow">Automation to run</label>
+    <select id="run-workflow" name="workflow" class="select select-sm">
+      {% for w in automation_now.manual %}<option value="{{ w.slug }}">{{ w.name }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-secondary btn-sm">Run</button>
+  </form>
+  {% endif %}
+
+  <details class="mt-2" {% if not automation_now.running %}open{% endif %}>
+    <summary class="text-xs text-ink-subtle cursor-pointer">What automations did</summary>
+    {% if automation_activity %}
+    <ul class="cv-activity mt-1">
+      {% for item in automation_activity %}
+      <li class="text-sm">
+        <p class="font-medium text-ink break-words">{{ item.automation }}</p>
+        <p class="text-xs text-ink-subtle">{{ item.when|date:"j M, H:i" }}</p>
+        <ul class="mt-1.5 space-y-1">
+          {% for line in item.lines %}
+          <li class="flex items-start gap-1.5 {% if line.ok %}text-ink-subtle{% else %}text-red-700{% endif %}">
+            {% if line.ok %}{% include "components/icon.html" with name="check" class="w-3.5 h-3.5 mt-0.5 shrink-0 text-teal-600" %}<span class="sr-only">Done:</span>
+            {% else %}{% include "components/icon.html" with name="x" class="w-3.5 h-3.5 mt-0.5 shrink-0" %}<span class="sr-only">Failed:</span>{% endif %}
+            <span class="min-w-0 break-words">{{ line.text }}</span>
+          </li>
+          {% empty %}<li class="text-ink-subtle">Started.</li>{% endfor %}
+        </ul>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-sm text-ink-subtle mt-1">Nothing yet.</p>
+    {% endif %}
+    <a href="{{ why_not_url }}?conversation={{ conversation.public_id }}" class="inline-block mt-2 text-xs underline text-ink-subtle">Why didn't it reply?</a>
+  </details>
+</div>
+
+{# Recommended action — shown when there is an actionable recommendation for this conversation #}
+{% if active_recommendation %}
+  {% include "conversations/_recommendation_context.html" with rec=active_recommendation conversation=conversation %}
+{% endif %}
+
+{# Tags #}
+<div class="cv-section">
+  <h2 class="cv-h">Tags</h2>
+  <div class="flex flex-wrap gap-1 mb-2">
+    {% for t in conversation.contact.tags.all %}
+    {% url 'contacts:tag_remove' conversation.contact.public_id as tag_url %}
+    <form method="post" action="{{ tag_url }}" class="inline-flex" {% if in_pane %}hx-post="{{ tag_url }}" hx-target="#cv-panel" hx-swap="innerHTML"{% endif %}>
+      {% csrf_token %}
+      <input type="hidden" name="tag" value="{{ t.name }}" />
+      <input type="hidden" name="next" value="{{ detail_url }}" />
+      <span class="badge badge-neutral inline-flex items-center gap-0.5 pr-0.5">{{ t.name }}
+        <button class="inline-flex items-center justify-center w-6 h-6 -my-1 rounded-full opacity-60 hover:opacity-100 hover:bg-hover"
+                aria-label="Remove tag {{ t.name }}" title="Remove tag">
+          {% include "components/icon.html" with name="x" class="w-3.5 h-3.5" %}
+        </button>
+      </span>
+    </form>
+    {% empty %}<span class="text-sm text-ink-subtle">No tags yet.</span>{% endfor %}
+  </div>
+  {% url 'contacts:tag_add' conversation.contact.public_id as tag_url %}
+  <form method="post" action="{{ tag_url }}" class="cv-inline-form" {% if in_pane %}hx-post="{{ tag_url }}" hx-target="#cv-panel" hx-swap="innerHTML"{% endif %}>
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ detail_url }}" />
+    <label class="sr-only" for="conversation-add-tag">Add a tag</label>
+    <input id="conversation-add-tag" name="tag" class="input" maxlength="40" placeholder="Add a tag…" />
+    <button class="btn btn-secondary btn-sm">Add</button>
+  </form>
+</div>
+
+{# Sales #}
+{% comment %}
+  Record, not decision: the action to start tracking someone lives under
+  the composer, where the business is already looking. This card only
+  answers "are we tracking this customer?".
+{% endcomment %}
+{% if "sales" in usable_features %}
+<div class="cv-section">
+  <h2 class="cv-h">Interested customer</h2>
+  {% if open_lead %}
+  <a href="{% url 'crm:lead-detail' open_lead.public_id %}" class="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:tone-neutral-bg">
+    <span class="text-ink-subtle">Where they stand</span>
+    <span class="font-medium text-accent">{{ open_lead.get_status_display }}</span>
+  </a>
+  {% elif open_deal %}
+  <a href="{% url 'crm:deal-detail' open_deal.public_id %}" class="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:tone-neutral-bg">
+    <span class="text-ink-subtle">In your pipeline</span>
+    <span class="font-medium text-accent">{{ open_deal.stage.name }}</span>
+  </a>
+  {% else %}
+  <p class="text-sm text-ink-subtle">Not tracked yet.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+{# Order #}
+{% if "orders" in usable_features and open_order %}
+<div class="cv-section">
+  <h2 class="cv-h">Open order</h2>
+  <a href="{% url 'commerce:detail' open_order.public_id %}" class="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:tone-neutral-bg">
+    <span class="text-ink-subtle">{{ open_order.get_status_display }}</span>
+    <span class="font-medium text-accent">{{ open_order.currency }} {{ open_order.total }}</span>
+  </a>
+</div>
+{% endif %}
+
+{# Form #}
+{% if active_form_response %}
+<div class="cv-section">
+  <h2 class="cv-h">Form in progress</h2>
+  <p class="text-sm text-ink">{{ active_form_response.form.name }}</p>
+  <p class="text-xs text-ink-subtle mt-0.5">{% if active_form_response.flow_token %}Sent as a WhatsApp form · waiting for them to submit it{% else %}Question {{ active_form_response.current_index|add:1 }} of {{ active_form_response.form.questions|length }}{% endif %}</p>
+  <form method="post" class="mt-2" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#cv-panel" hx-swap="innerHTML"{% endif %}>
+    {% csrf_token %}
+    <input type="hidden" name="action" value="cancel_form" />
+    <button class="btn btn-ghost btn-sm w-full">Stop waiting for it</button>
+  </form>
+</div>
+{% elif published_forms and "automations" in usable_features %}
+<div class="cv-section">
+  <h2 class="cv-h">Start a form</h2>
+  <form method="post" class="cv-inline-form" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#cv-panel" hx-swap="innerHTML"{% endif %}>
+    {% csrf_token %}
+    <input type="hidden" name="action" value="start_form" />
+    <label class="sr-only" for="start-form-id">Form</label>
+    <select id="start-form-id" name="form_id" class="select select-sm">
+      {% for f in published_forms %}
+      <option value="{{ f.pk }}">{{ f.name }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn btn-secondary btn-sm">Start</button>
+  </form>
+</div>
+{% endif %}
+
+{# Follow-up #}
+{% comment %}
+  The customer's follow-up, described exactly as the Follow-ups page row describes it
+  (followup_card): why, when, note, for whom, which chat. Done, Later and Not needed
+  post to the page's own actions and say what happened in the page's words. The
+  composer's Change brings focus here. Other follow-ups for this customer are counted
+  and one tap away on the page, filtered to them.
+{% endcomment %}
+<div class="cv-section" id="cv-followup" tabindex="-1" data-panel-followup>
+  <h2 class="cv-h">Follow-up <span class="cv-h-sub">{{ followup_copy.INTERNAL_ONLY_SHORT }}</span></h2>
+  {% if followup %}
+  {% with f=followup.followup %}
+  <div class="text-sm">
+    <p class="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span class="badge {{ followup.badge }}">{{ followup.why }}</span>
+      <span class="{% if followup.late %}text-ink font-medium{% else %}text-ink-muted{% endif %}">{{ followup.when }}</span>
+    </p>
+    {% if followup.note %}<p class="mt-1 text-ink-muted break-words whitespace-pre-line">“{{ followup.note }}”</p>{% endif %}
+    <p class="mt-1 text-xs text-ink-subtle">{{ followup.owner }}{% if f.conversation_id != conversation.pk %} · <a href="{{ followup.url }}" class="underline">{{ followup.channel }}</a>{% endif %}</p>
+  </div>
+  {% if followup_still_needed %}
+  <div class="alert alert-info mt-2 text-xs" role="status">
+    <span>{{ followup.wrote_since }}</span>
+  </div>
+  {% endif %}
+  {% url 'conversations:followup_complete' f.pk as done_url %}
+  {% url 'conversations:followup_action' f.pk 'snooze' as later_url %}
+  {% url 'conversations:followup_action' f.pk 'cancel' as cancel_url %}
+  <div class="mt-2 grid grid-cols-2 gap-2">
+    <form method="post" action="{{ done_url }}" data-followup-form {% if in_pane %}hx-post="{{ done_url }}" hx-target="#cv-panel" hx-swap="innerHTML"{% endif %}>
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ detail_url }}" />
+      <button class="btn btn-secondary btn-sm w-full">{{ followup_copy.DONE }}</button>
+    </form>
+    <form method="post" action="{{ later_url }}" data-followup-form {% if in_pane %}hx-post="{{ later_url }}" hx-target="#cv-panel" hx-swap="innerHTML"{% endif %}
+          x-data="{ later: '' }" class="contents">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ detail_url }}" />
+      <label class="sr-only" for="pane-later">{{ followup_copy.LATER }}</label>
+      <select id="pane-later" name="when" class="select select-sm w-full" x-model="later"
+              @change="if (later && later !== 'custom') $el.form.requestSubmit()">
+        <option value="">{{ followup_copy.LATER }}…</option>
+        {% for value, label in later_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+        <option value="custom">{{ followup_copy.PICK_A_DATE }}</option>
+      </select>
+      <div class="col-span-2 flex gap-2" x-show="later === 'custom'" x-cloak data-panel="date">
+        <label class="sr-only" for="pane-later-at">New time</label>
+        <input id="pane-later-at" type="datetime-local" name="custom_due_at" class="input flex-1 min-w-0" :required="later === 'custom'" />
+        <button class="btn btn-primary btn-sm">Save</button>
+      </div>
+    </form>
+    <form method="post" action="{{ cancel_url }}" class="col-span-2" data-followup-form
+          {% if in_pane %}hx-post="{{ cancel_url }}" hx-target="#cv-panel" hx-swap="innerHTML" hx-confirm="{{ followup_copy.NOT_NEEDED_CONFIRM }}" hx-confirm-label="{{ followup_copy.NOT_NEEDED }}"{% else %}data-confirm="{{ followup_copy.NOT_NEEDED_CONFIRM }}" data-confirm-label="{{ followup_copy.NOT_NEEDED }}"{% endif %}>
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ detail_url }}" />
+      <button class="btn btn-ghost btn-sm w-full">{{ followup_copy.NOT_NEEDED }}</button>
+    </form>
+  </div>
+  <a href="{% url 'conversations:followups_due' %}?list=team&amp;contact={{ conversation.contact.public_id }}" class="mt-2 block text-xs text-ink-subtle hover:underline" data-followup-all>
+    {{ followup.all_label }}
+  </a>
+  {% endwith %}
+  {% else %}
+  {% comment %}
+    The composer's "Follow up tomorrow" covers the common case in one tap; this sets one
+    for another time or with a note for the team. Same choices as Later on the page.
+  {% endcomment %}
+  <form method="post" class="space-y-2" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#cv-panel" hx-swap="innerHTML"{% endif %} x-data="{ when: 'tomorrow' }" data-panel-set data-followup-form>
+    {% csrf_token %}
+    <input type="hidden" name="action" value="create_followup" />
+    <div class="cv-pills" role="radiogroup" aria-label="When">
+      {% for value, label in later_choices %}<label><input type="radio" name="when" value="{{ value }}" x-model="when" />{{ label }}</label>{% endfor %}
+      <label><input type="radio" name="when" value="custom" x-model="when" />{{ followup_copy.PICK_A_DATE }}</label>
+    </div>
+    <input type="datetime-local" name="custom_due_at" class="input" aria-label="Follow-up time"
+           x-show="when === 'custom'" x-cloak :required="when === 'custom'" />
+    <input type="text" name="note" maxlength="255" placeholder="Note for your team (optional)" class="input" aria-label="Note for your team" />
+    <button class="btn btn-secondary btn-sm w-full">{{ followup_copy.SET_FOLLOWUP }}</button>
+    <p class="text-xs text-ink-subtle" data-followup-promise>{{ followup_copy.INTERNAL_ONLY }}</p>
+  </form>
+  {% endif %}
+</div>
+
+{# Internal notes #}
+<div class="cv-section">
+  <h2 class="cv-h">Internal notes <span class="cv-h-sub">Only your team sees these</span></h2>
+  <ul class="space-y-2">
+    {% for n in notes %}
+    <li class="cv-note">
+      <p class="whitespace-pre-wrap break-words">{{ n.body }}</p>
+      <p class="text-xs text-ink-subtle mt-1.5" title="{{ n.created_at|date:'Y-m-d H:i' }}">{{ n.author|default:"—" }} · {{ n.created_at|timesince }} ago</p>
+    </li>
+    {% empty %}
+    <li class="text-sm text-ink-subtle">No notes yet. Add context for whoever picks this up next.</li>
+    {% endfor %}
+  </ul>
+  <form method="post" class="cv-inline-form mt-3" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#cv-panel" hx-swap="innerHTML"{% endif %}>
+    {% csrf_token %}
+    <input type="hidden" name="action" value="add_note" />
+    <input type="text" name="body" placeholder="Add a note…" class="input" aria-label="New internal note" required />
+    <button class="btn btn-secondary btn-sm">Add</button>
+  </form>
+</div>
+
+{% if can_delete %}
+<div class="p-4" style="border-top: 1px solid var(--cv-line)">
+  <form method="post" action="{% url 'conversations:delete' conversation.public_id %}"
+        data-confirm="Delete this conversation with {{ display_name }}? Its messages and notes are removed for good. Leads and orders from it are kept." data-confirm-danger data-confirm-label="Delete">
+    {% csrf_token %}
+    <button class="btn btn-ghost btn-sm text-red-600 w-full justify-center">Delete conversation</button>
+  </form>
+  <p class="text-xs text-ink-subtle mt-1.5 text-center">If the customer writes again, a new conversation starts.</p>
+</div>
+{% endif %}
+{% endwith %}

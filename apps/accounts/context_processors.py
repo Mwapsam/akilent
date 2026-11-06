@@ -46,18 +46,33 @@ def workspace_context(request):
     user = getattr(request, "user", None)
     if not user or not user.is_authenticated:
         return {}
+    from django.utils.functional import SimpleLazyObject
+
+    # Read only by a template that uses them: every other page (and every htmx fragment)
+    # used to pay for the BusinessContext query regardless.
+    facts = SimpleLazyObject(lambda: _workspace_facts(request))
+    return {
+        "dashboard_section_order": SimpleLazyObject(
+            lambda: facts["dashboard_section_order"]
+        ),
+        "workspace_objectives": SimpleLazyObject(lambda: facts["workspace_objectives"]),
+    }
+
+
+def _workspace_facts(request) -> dict:
+    default = {
+        "dashboard_section_order": list(_DEFAULT_SECTION_ORDER),
+        "workspace_objectives": [],
+    }
     try:
         from apps.accounts.utils import get_current_account
 
         account = get_current_account(request)
         if account is None:
-            return {}
+            return default
         ctx = getattr(account, "business_context", None)
         if ctx is None:
-            return {
-                "dashboard_section_order": list(_DEFAULT_SECTION_ORDER),
-                "workspace_objectives": [],
-            }
+            return default
         if ctx.business_model == "b2b":
             order = _B2B_SECTION_ORDER
         elif ctx.business_model in ("b2c", "both"):
@@ -69,7 +84,7 @@ def workspace_context(request):
             "workspace_objectives": list(ctx.objectives or []),
         }
     except Exception:
-        return {}
+        return default
 
 
 def onboarding_status(request):
