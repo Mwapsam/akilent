@@ -87,8 +87,43 @@ don't run (panel_page.html). In the pane its forms answer with this panel again
   </div>
   {% endfor %}
 
+  {% comment %}Pause and Run are menus whose items post (cvMenu, static/js/chat.js): one tap on what
+  to do, instead of a select and then a button. Without scripts (panel_page.html) the menus
+  can't open, so the plain forms are there instead.{% endcomment %}
+  <div class="cv-panel-actions">
   {% if not conversation.automation_paused %}
-  <form method="post" class="cv-inline-form mt-1" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#cv-panel" hx-swap="innerHTML"{% endif %}>
+  <form method="post" class="cv-menu" x-data="cvMenu" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#cv-panel" hx-swap="innerHTML"{% endif %}>
+    {% csrf_token %}<input type="hidden" name="action" value="pause_automation" />
+    <button type="button" class="cv-panel-btn" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="menuOpen">
+      {% include "components/icon.html" with name="pause" class="w-4 h-4" %}Pause here
+      {% include "components/icon.html" with name="chevron-down" class="w-3.5 h-3.5 ml-auto text-ink-subtle" %}
+    </button>
+    <div class="cv-menu-panel cv-menu-panel--start" x-ref="menu" x-show="menuOpen" x-cloak x-transition.opacity role="menu" aria-label="Pause automations here">
+      <p class="cv-menu-label" aria-hidden="true">Pause automations for</p>
+      <button type="submit" name="hours" value="1" class="cv-menu-item" role="menuitem">1 hour</button>
+      <button type="submit" name="hours" value="4" class="cv-menu-item" role="menuitem">4 hours</button>
+      <button type="submit" name="hours" value="24" class="cv-menu-item" role="menuitem">A day</button>
+      <button type="submit" name="hours" value="forever" class="cv-menu-item" role="menuitem">Until I turn it back on</button>
+    </div>
+  </form>
+  {% endif %}
+  {% if automation_now.manual %}
+  <form method="post" class="cv-menu" x-data="cvMenu" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#cv-panel" hx-swap="innerHTML"{% endif %}>
+    {% csrf_token %}<input type="hidden" name="action" value="run_automation" />
+    <button type="button" class="cv-panel-btn" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="menuOpen">
+      {% include "components/icon.html" with name="workflow" class="w-4 h-4" %}Run one
+      {% include "components/icon.html" with name="chevron-down" class="w-3.5 h-3.5 ml-auto text-ink-subtle" %}
+    </button>
+    <div class="cv-menu-panel" x-ref="menu" x-show="menuOpen" x-cloak x-transition.opacity role="menu" aria-label="Run an automation">
+      <p class="cv-menu-label" aria-hidden="true">Run for this customer</p>
+      {% for w in automation_now.manual %}<button type="submit" name="workflow" value="{{ w.slug }}" class="cv-menu-item" role="menuitem"><span class="truncate">{{ w.name }}</span></button>{% endfor %}
+    </div>
+  </form>
+  {% endif %}
+  </div>
+  <noscript>
+  {% if not conversation.automation_paused %}
+  <form method="post" class="cv-inline-form mt-1" action="{{ detail_url }}">
     {% csrf_token %}<input type="hidden" name="action" value="pause_automation" />
     <label class="sr-only" for="pause-hours">Pause automations here</label>
     <select id="pause-hours" name="hours" class="select select-sm">
@@ -100,9 +135,8 @@ don't run (panel_page.html). In the pane its forms answer with this panel again
     <button class="btn btn-ghost btn-sm">Pause</button>
   </form>
   {% endif %}
-
   {% if automation_now.manual %}
-  <form method="post" class="cv-inline-form mt-1" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#cv-panel" hx-swap="innerHTML"{% endif %}>
+  <form method="post" class="cv-inline-form mt-1" action="{{ detail_url }}">
     {% csrf_token %}<input type="hidden" name="action" value="run_automation" />
     <label class="sr-only" for="run-workflow">Automation to run</label>
     <select id="run-workflow" name="workflow" class="select select-sm">
@@ -111,9 +145,13 @@ don't run (panel_page.html). In the pane its forms answer with this panel again
     <button class="btn btn-secondary btn-sm">Run</button>
   </form>
   {% endif %}
+  </noscript>
 
-  <details class="mt-2" {% if not automation_now.running %}open{% endif %}>
-    <summary class="text-xs text-ink-subtle cursor-pointer">What automations did</summary>
+  <details class="cv-disclosure" {% if not automation_now.running %}open{% endif %}>
+    <summary>
+      {% include "components/icon.html" with name="chevron-down" class="cv-disclosure-chev w-4 h-4" %}
+      What automations did<span class="inbox-tab-count">{{ automation_activity|length }}</span>
+    </summary>
     {% if automation_activity %}
     <ul class="cv-activity mt-1">
       {% for item in automation_activity %}
@@ -135,7 +173,7 @@ don't run (panel_page.html). In the pane its forms answer with this panel again
     {% else %}
     <p class="text-sm text-ink-subtle mt-1">Nothing yet.</p>
     {% endif %}
-    <a href="{{ why_not_url }}?conversation={{ conversation.public_id }}" class="inline-block mt-2 text-xs underline text-ink-subtle">Why didn't it reply?</a>
+    <a href="{{ why_not_url }}?conversation={{ conversation.public_id }}" class="cv-arrow-link">Why didn't it reply?{% include "components/icon.html" with name="chevron-right" class="w-3.5 h-3.5" %}</a>
   </details>
 </div>
 
@@ -224,17 +262,28 @@ don't run (panel_page.html). In the pane its forms answer with this panel again
 {% elif published_forms and "automations" in usable_features %}
 <div class="cv-section">
   <h2 class="cv-h">Start a form</h2>
-  <form method="post" class="cv-inline-form" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#cv-panel" hx-swap="innerHTML"{% endif %}>
+  <form method="post" class="cv-menu" x-data="cvMenu" action="{{ detail_url }}" {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#cv-panel" hx-swap="innerHTML"{% endif %}>
+    {% csrf_token %}
+    <input type="hidden" name="action" value="start_form" />
+    <button type="button" class="cv-panel-btn" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="menuOpen">
+      {% include "components/icon.html" with name="list" class="w-4 h-4" %}Choose a form
+      {% include "components/icon.html" with name="chevron-down" class="w-3.5 h-3.5 ml-auto text-ink-subtle" %}
+    </button>
+    <div class="cv-menu-panel cv-menu-panel--start" x-ref="menu" x-show="menuOpen" x-cloak x-transition.opacity role="menu" aria-label="Start a form">
+      {% for f in published_forms %}<button type="submit" name="form_id" value="{{ f.pk }}" class="cv-menu-item" role="menuitem"><span class="truncate">{{ f.name }}</span></button>{% endfor %}
+    </div>
+  </form>
+  <noscript>
+  <form method="post" class="cv-inline-form" action="{{ detail_url }}">
     {% csrf_token %}
     <input type="hidden" name="action" value="start_form" />
     <label class="sr-only" for="start-form-id">Form</label>
     <select id="start-form-id" name="form_id" class="select select-sm">
-      {% for f in published_forms %}
-      <option value="{{ f.pk }}">{{ f.name }}</option>
-      {% endfor %}
+      {% for f in published_forms %}<option value="{{ f.pk }}">{{ f.name }}</option>{% endfor %}
     </select>
     <button class="btn btn-secondary btn-sm">Start</button>
   </form>
+  </noscript>
 </div>
 {% endif %}
 
@@ -272,21 +321,37 @@ don't run (panel_page.html). In the pane its forms answer with this panel again
       <input type="hidden" name="next" value="{{ detail_url }}" />
       <button class="btn btn-secondary btn-sm w-full">{{ followup_copy.DONE }}</button>
     </form>
+    {% comment %}Later is a menu whose items post; "Pick a date" opens a small form in place
+    instead. Without scripts, the select and a Save button.{% endcomment %}
     <form method="post" action="{{ later_url }}" data-followup-form {% if in_pane %}hx-post="{{ later_url }}" hx-target="#cv-panel" hx-swap="innerHTML"{% endif %}
           x-data="{ later: '' }" class="contents">
       {% csrf_token %}
       <input type="hidden" name="next" value="{{ detail_url }}" />
-      <label class="sr-only" for="pane-later">{{ followup_copy.LATER }}</label>
-      <select id="pane-later" name="when" class="select select-sm w-full" x-model="later"
-              @change="if (later && later !== 'custom') $el.form.requestSubmit()">
-        <option value="">{{ followup_copy.LATER }}…</option>
-        {% for value, label in later_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
-        <option value="custom">{{ followup_copy.PICK_A_DATE }}</option>
-      </select>
+      <div class="cv-menu" x-data="cvMenu">
+        <button type="button" class="btn btn-secondary btn-sm w-full" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="menuOpen">
+          {{ followup_copy.LATER }}{% include "components/icon.html" with name="chevron-down" class="w-3.5 h-3.5 text-ink-subtle" %}
+        </button>
+        <div class="cv-menu-panel" x-ref="menu" x-show="menuOpen" x-cloak x-transition.opacity role="menu" aria-label="{{ followup_copy.LATER }}">
+          {% for value, label in later_choices %}<button type="submit" name="when" value="{{ value }}" class="cv-menu-item" role="menuitem">{{ label }}</button>{% endfor %}
+          <div class="cv-menu-sep" role="separator"></div>
+          <button type="button" class="cv-menu-item" role="menuitem" data-pick-date
+                  @click="later = 'custom'; close(false); $nextTick(() => $root.closest('form').querySelector('[name=custom_due_at]').focus())">
+            {% include "components/icon.html" with name="clock" class="w-4 h-4" %}<span>{{ followup_copy.PICK_A_DATE }}</span>
+          </button>
+        </div>
+      </div>
+      <noscript>
+        <label class="sr-only" for="pane-later">{{ followup_copy.LATER }}</label>
+        <select id="pane-later" name="when" class="select select-sm w-full">
+          {% for value, label in later_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+        </select>
+        <button class="btn btn-tonal btn-sm">{{ followup_copy.LATER }}</button>
+      </noscript>
       <div class="col-span-2 flex gap-2" x-show="later === 'custom'" x-cloak data-panel="date">
+        <input type="hidden" name="when" value="custom" :disabled="later !== 'custom'" />
         <label class="sr-only" for="pane-later-at">New time</label>
         <input id="pane-later-at" type="datetime-local" name="custom_due_at" class="input flex-1 min-w-0" :required="later === 'custom'" />
-        <button class="btn btn-primary btn-sm">Save</button>
+        <button class="btn btn-tonal btn-sm">Save</button>
       </div>
     </form>
     <form method="post" action="{{ cancel_url }}" class="col-span-2" data-followup-form

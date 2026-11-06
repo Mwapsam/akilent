@@ -79,7 +79,9 @@ def test_one_bar_heads_the_list_and_the_suggestion_waits_in_the_empty_pane(shop)
 
     bar = page[page.index('id="inbox-bar"') :]
     bar = bar[: bar.index("</header>")]
-    assert ">Inbox</h1>" in bar and 'id="inbox-views"' in bar
+    # The title, as Content Studio's: an "Inbox" crumb over the view's name, which is the menu.
+    assert 'class="cs-crumb">Inbox</span>' in bar and 'class="inbox-h1"' in bar
+    assert 'id="inbox-views"' in bar
     assert "inbox-chrome" not in page and "inbox-toolbar" not in page
     # The suggestion card (when there is one) sits in the empty pane, never above the list.
     empty = page[page.index('class="inbox-pane-empty"') :]
@@ -119,9 +121,7 @@ def test_whatsapp_closed_window_puts_the_template_picker_in_the_composer(shop):
     html = _pane(client, _chat(account))
 
     closed = html[html.index('class="cv-closedwin-body"') :]
-    assert (
-        'id="template-inline-select"' in closed[: closed.index('class="cv-composer"')]
-    )
+    assert 'id="template-inline-list"' in closed[: closed.index('class="cv-composer"')]
     assert 'name="action" value="send_template"' in closed
     # The reply box gives way while the window is closed; the old extra line is gone.
     assert (
@@ -130,7 +130,7 @@ def test_whatsapp_closed_window_puts_the_template_picker_in_the_composer(shop):
     )
     assert "cv-tpl-cta" not in html and "Required</span>" not in html
     # The dialog (window open) uses the same form, under its own ids.
-    assert 'id="template-select"' in html
+    assert 'id="template-list"' in html
 
 
 def test_an_account_problem_comes_before_the_templates(shop):
@@ -154,7 +154,7 @@ def test_no_approved_templates_says_how_to_get_one(shop):
     empty = empty[: empty.index("</div>")]
     assert "No approved templates yet" in empty
     assert 'href="/email/templates/?channel=whatsapp"' in empty
-    assert 'id="template-inline-select"' not in html
+    assert 'id="template-inline-list"' not in html
 
 
 def test_instagram_closed_window_switches_the_reply_box_off(shop):

@@ -16,15 +16,21 @@ the form, and only the chosen one's are read (views.conversation_detail send_tem
   <input type="hidden" name="action" value="send_template" />
   <input type="hidden" name="ai_proposal" :value="proposal" />
   {% if not inline %}<p class="text-sm text-ink-subtle">Once 24 hours have passed since {{ display_name }}'s last message, WhatsApp only delivers an approved template. A reply they send opens the window again.</p>{% endif %}
-  <div>
-    <label class="{% if inline %}sr-only{% else %}label{% endif %}" for="{{ prefix }}-select">Template</label>
-    <select id="{{ prefix }}-select" name="template_id" class="select{% if inline %} select-sm{% endif %}" required x-model="tpl">
-      <option value="" disabled selected>Choose an approved template…</option>
+  {% comment %}The templates as a list to read, not a closed select: the name, its kind and language,
+  and the start of its text, so the right one is picked without opening each. Radios, so the
+  keyboard (arrows) and a page without scripts both work.{% endcomment %}
+  <fieldset>
+    <legend class="{% if inline %}sr-only{% else %}label{% endif %}">Template</legend>
+    <div class="cv-tpl-list" id="{{ prefix }}-list">
       {% for t in approved_templates %}
-      <option value="{{ t.pk }}">{{ t.name }} ({{ t.language_code }})</option>
+      <label class="cv-tpl-option">
+        <input type="radio" name="template_id" value="{{ t.pk }}" x-model="tpl" required class="sr-only" />
+        <span class="cv-tpl-name">{{ t.name }}<span class="cv-tpl-meta">{{ t.get_category_display }} · {{ t.language_code }}</span></span>
+        <span class="cv-tpl-body">{{ t.content|truncatechars:140 }}</span>
+      </label>
       {% endfor %}
-    </select>
-  </div>
+    </div>
+  </fieldset>
   {% for t in approved_templates %}
   {% if t.variables %}
   <div x-show="tpl === '{{ t.pk }}'" x-cloak class="grid sm:grid-cols-2 gap-3">
@@ -38,6 +44,8 @@ the form, and only the chosen one's are read (views.conversation_detail send_tem
   {% endfor %}
   <div class="flex justify-end gap-2{% if not inline %} pt-1{% endif %}">
     {% if not inline %}<button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close', 'chat-template')">Cancel</button>{% endif %}
-    <button class="btn btn-primary btn-sm" :disabled="!tpl">Send template</button>
+    {% comment %}Yellow only where it's the composer's one action (the window closed, so it stands in
+    for Send); in the dialog it's the tonal secondary.{% endcomment %}
+    <button class="btn {% if inline %}btn-primary{% else %}btn-tonal{% endif %} btn-sm" :disabled="!tpl">Send template</button>
   </div>
 </form>

@@ -289,7 +289,7 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
       </div>
 
       <div class="absolute inset-x-0 bottom-3 flex justify-center pointer-events-none" x-show="newBelow" x-cloak x-transition.opacity>
-        <button type="button" @click="scrollBottom()" class="btn btn-primary btn-sm shadow-pop pointer-events-auto rounded-full">
+        <button type="button" @click="scrollBottom()" class="cv-pill shadow-pop pointer-events-auto">
           New messages
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
         </button>
@@ -344,7 +344,7 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
               <p class="mt-1 text-ink whitespace-pre-line" x-text="ai.proposal.text"></p>
               <p class="mt-1 text-xs text-ink-subtle"><span x-text="ai.proposal.reason"></span> · Generated just now</p>
               <div class="mt-2 flex flex-wrap gap-2">
-                <button type="button" class="btn btn-primary btn-sm" @click="aiUseReply()">Use reply</button>
+                <button type="button" class="btn btn-tonal btn-sm" @click="aiUseReply()">Use reply</button>
                 <button type="button" class="btn btn-ghost btn-sm" @click="aiDismiss()">Dismiss</button>
                 <button type="button" class="btn btn-ghost btn-sm" @click="aiSuggest()">Regenerate</button>
               </div>
@@ -357,7 +357,7 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
               <p class="text-xs text-ink-subtle">Uses your approved WhatsApp template. The customer's name is filled in automatically.</p>
               <p class="mt-1 text-xs text-ink-subtle" x-text="ai.proposal.reason"></p>
               <div class="mt-2 flex flex-wrap gap-2">
-                <button type="button" class="btn btn-primary btn-sm" @click="aiReviewTemplate()">Review template</button>
+                <button type="button" class="btn btn-tonal btn-sm" @click="aiReviewTemplate()">Review template</button>
                 <button type="button" class="btn btn-ghost btn-sm" @click="aiDismiss()">Dismiss</button>
               </div>
             </div>
@@ -393,7 +393,7 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
                   <p class="text-xs text-ink-subtle mt-1">AI will give this answer to every customer who asks. Take out anything about this one customer, like their name, order number or address. Phone numbers and email addresses are removed for you.</p>
                 </div>
                 <div class="flex gap-2">
-                  <button class="btn btn-primary btn-sm">Save answer</button>
+                  <button class="btn btn-tonal btn-sm">Save answer</button>
                   <button type="button" class="btn btn-ghost btn-sm" @click="editing = false">Cancel</button>
                 </div>
               </form>
@@ -628,7 +628,7 @@ closes as it submits: in the pane the conversation re-renders behind it.{% endco
     </div>
     <div class="flex justify-end gap-2 pt-1">
       <button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close')">Cancel</button>
-      <button class="btn btn-primary btn-sm">Create lead</button>
+      <button class="btn btn-tonal btn-sm">Create lead</button>
     </div>
   </form>
 {% endmodal %}

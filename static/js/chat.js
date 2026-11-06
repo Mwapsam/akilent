@@ -651,7 +651,7 @@ function registerChat() {
       if (!this.windowOpen) {
         this.tplAnyway = true;
         apply();
-        this.$nextTick(() => { const sel = this.$root.querySelector('#template-inline-select'); if (sel) sel.focus(); });
+        this.$nextTick(() => { const r = this.$root.querySelector('#template-inline-list input:checked') || this.$root.querySelector('#template-inline-list input'); if (r) r.focus(); });
         return;
       }
       window.dispatchEvent(new CustomEvent('modal-open', { detail: 'chat-template' }));

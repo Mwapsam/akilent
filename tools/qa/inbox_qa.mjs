@@ -2,7 +2,8 @@
 // protocol and checks send outcomes, connection notices, the details drawer, pane loading
 // and phone layout. Every POST is intercepted, so nothing is sent to a customer.
 // Usage: node tools/qa/inbox_qa.mjs <repoRoot> <outDir>   (QA_SCAN=1 contrast scan, QA_HDR=1 header sizes,
-// QA_LAYOUT=1 Phase 2 layout targets, QA_COMPOSER=1 closed-window composer and details, QA_OB=1 setup over composer;
+// QA_LAYOUT=1 Phase 2 layout targets, QA_COMPOSER=1 closed-window composer and details, QA_OB=1 setup over composer,
+// QA_LOOK=1 Phase 3 menus and template list in both themes;
 // QA_BASE=http://127.0.0.1:8001 for a server started with WHATSAPP_ENABLED=True)
 // Needs the dev server on :8000 and QA_UI_EMAIL / QA_UI_PASSWORD in .env.
 import { spawn } from "node:child_process";
@@ -255,6 +256,32 @@ if (process.env.QA_OB) {
     await shot0(`setup-open-${w}`);
     console.log(w, JSON.stringify({ closed, opened }));
   }
+  process.exit(0);
+}
+// Phase 3 look: the title and channel menu, the details' menus, the template list, in both themes.
+if (process.env.QA_LOOK) {
+  const out = {};
+  await viewport(1600, 900, false);
+  for (const theme of ["dark", "light"]) {
+    await go("/inbox/?view=all&channel=whatsapp", 1500);
+    await evaluate(`document.documentElement.dataset.theme = ${JSON.stringify(theme)}`);
+    const hrefs = await evaluate("[...document.querySelectorAll('.inbox-row')].map(a => a.getAttribute('href'))");
+    for (const href of hrefs.slice(0, 15)) {
+      await clickSel(`.inbox-row[href="${href}"]`); await sleep(1600);
+      if (await chat("c.open && !c.windowOpen")) break;
+    }
+    for (let i = 0; i < 30 && !(await evaluate("!!document.querySelector('#cv-panel .cv-panel-btn')")); i++) await sleep(150);
+    await clickSel("#cv-panel .cv-panel-btn"); await sleep(400);
+    out[theme] = { pauseMenu: await evaluate("[...document.querySelectorAll('#cv-panel .cv-menu-panel')].filter(e => e.offsetParent).map(e => e.innerText.replace(/\\s+/g, ' ').trim())") };
+    await clickSel(".cv-tpl-option"); await sleep(300);
+    out[theme].picked = await evaluate("!!document.querySelector('#template-inline-list input:checked')");
+    await shot0(`look-pane-${theme}`);
+    await key("Escape", "Escape", 27);
+    await clickSel(".inbox-filter-btn"); await sleep(400);
+    out[theme].channelMenu = await evaluate("(() => { const m = document.querySelector('.inbox-filter .cv-menu-panel'); return m && m.offsetParent ? m.innerText.replace(/\s+/g, ' ').trim() : null; })()");
+    await shot0(`look-channel-${theme}`);
+  }
+  console.log(JSON.stringify(out, null, 1));
   process.exit(0);
 }
 if (process.env.QA_SCAN) {

@@ -2053,3 +2053,30 @@ Plan: the Inbox plan of 2026-11-06, Phase 2.
   - `inbox_qa.mjs` 79/79, `QA_LAYOUT` 5/5 sizes, `QA_COMPOSER` with WhatsApp on (a second local server, every POST intercepted);
   - the contrast scan in light and dark: 0 failures; `area_scan /inbox` 26 pages, 0 issues.
 - **Open:** S4 ("a stale form answer never replaces the next conversation") failed in 2 of 4 full runs. The tag form posted as a full page, then passed in the 2 later runs, and the cause wasn't found. The harness's "no element" failure now prints the recent requests.
+
+### Entry 28: Inbox Phase 3: Content Studio's look, and controls that act at once (2026-11-06)
+Plan: the Inbox plan of 2026-11-06, Phase 3.
+
+- **Title:** the bar's title reads as Content Studio's does. A small "Inbox" crumb sits over the view's name in large type, and the name is the view menu, with its count and the missed count beside it (`_inbox_views.html`). The crumb is plain text: as a link it only led back to the same page, and at 16 px tall it was a poor tap target.
+- **Buttons:** yellow is only for Send (and, once the window has closed, the inline "Send template" that stands in for it). The dialog's Send template, AI "Use reply", "Review template" and "Save answer", "Create lead", and the follow-up Save are tonal. "New messages" is a solid navy pill. The mic stays navy.
+- **Channel filter:** a `cvMenu` on the same GET form. Its items are submit buttons, the button shows the channel in force, and there's a `<noscript>` select.
+- **Template picker:** a list to read (name, kind, language, the first two lines of text), built from radios, so the keyboard and a page without scripts both work. It replaces the select in both the composer and the dialog (`_template_form.html`).
+- **Details menus that post:**
+  - Pause here (1 hour, 4 hours, a day, until turned back on), Run one, Choose a form;
+  - Later: its items post, and "Pick a date" opens a small time form in place;
+  - each keeps its plain form in `<noscript>` for `panel_page.html`.
+- **Disclosures and links:** "What automations did" is a styled disclosure with a count (still `<details>`, so it works without scripts). "Why didn't it reply?" is an arrow link. The plan's switch item didn't apply: the inbox has no on/off checkboxes.
+- **Surfaces and type:** the list, conversation, details and skeleton use the surface radius with no shadow. The details' section headings use Content Studio's card-heading size.
+- **Motion (150 ms):**
+  - the details and a newly opened conversation fade in;
+  - rows fade up when a search replaces the list (`.is-fresh`), never on the 8-second refresh;
+  - menus already fade;
+  - rows, menu items and saved replies share one hover;
+  - none of it runs under reduced motion.
+- **Speed** (queries / median server time, local data): list 22 / 57 ms, feed 13 / 36 ms, pane 17 / 40 ms, panel 21 / 36 ms, full page 32 / 102 ms. Unchanged from Phase 2.
+- **Verification:**
+  - `test_inbox_look.py` (new, 8 tests);
+  - full suite 5,946 passed. 2 failed in a run slowed to 2 h 46 min by the browser checks running alongside (the 5,000-contact import load test, and a time-based automation test); both pass on their own, and neither touches the inbox;
+  - ruff, format, mypy and `makemigrations --check` clean;
+  - `inbox_qa.mjs` 79/79; `QA_LAYOUT` 5/5; `QA_LOOK` (new) with WhatsApp on, in dark and light: menus open, a template can be picked;
+  - the contrast scan in both themes: 0 failures; `area_scan /inbox` 26 pages, 0 issues.

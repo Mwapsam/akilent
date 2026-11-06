@@ -3,9 +3,11 @@
 (views.inbox_feed) sends this again out of band with every changed list, so the counts move
 with the rows. The poll skips while focus is in the bar, so an open menu is never replaced.
 
-The views are one menu (cvMenu, static/js/chat.js): the current view and its count on the
-button, every view and its count one tap away, and a missed count on the button so it never
-hides. Every view shows its count, 0 included: a missing number read as "not counted" rather
+The title says where you are, as Content Studio's does (publishing/_cs_title.html): a small
+"Inbox" crumb over the view's name in large type (plain text: as a link it would only lead
+back here, and its 16px height made a poor tap target). The name is the view menu (cvMenu,
+static/js/chat.js): its count beside it, every view and its count one tap away, and a missed
+count beside it so it never hides. Every view shows its count, 0 included: a missing number read as "not counted" rather
 than "none". Missed is red only when there are some.
 
 Links are absolute (the inbox URL plus the current query, re-rendered by querystring): with a
@@ -13,8 +15,9 @@ conversation open the address bar shows that conversation, and a bare "?view=" w
 against it. channel and overdue carry across views; the page and the poll's digest (h) never do.{% endcomment %}
 {% url 'conversations:inbox' as inbox_url %}
 <div class="inbox-bar-views" id="inbox-views"{% if oob %} hx-swap-oob="true"{% endif %}>
-  <div class="cv-menu inbox-views" x-data="cvMenu">
-    <button type="button" class="inbox-views-btn" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="menuOpen" aria-label="Inbox view: {% if view == 'needs_attention' %}Needs attention{% elif view == 'unassigned' %}Unassigned{% elif view == 'missed' %}Missed{% elif view == 'assigned' %}Assigned to me{% elif view == 'closed' %}Closed{% else %}All{% endif %}. Change">
+  <div class="cv-menu inbox-views inbox-title" x-data="cvMenu">
+    <span class="cs-crumb">Inbox</span>
+    <h1 class="inbox-h1"><button type="button" class="inbox-views-btn" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="menuOpen" aria-label="Inbox view: {% if view == 'needs_attention' %}Needs attention{% elif view == 'unassigned' %}Unassigned{% elif view == 'missed' %}Missed{% elif view == 'assigned' %}Assigned to me{% elif view == 'closed' %}Closed{% else %}All{% endif %}. Change">
       <span class="truncate">{% if view == 'needs_attention' %}Needs attention{% elif view == 'unassigned' %}Unassigned{% elif view == 'missed' %}Missed{% elif view == 'assigned' %}Assigned to me{% elif view == 'closed' %}Closed{% else %}All{% endif %}</span>
       {% if view == 'needs_attention' %}<span class="inbox-tab-count">{{ needs_attention_count }}</span>
       {% elif view == 'unassigned' %}<span class="inbox-tab-count">{{ unassigned_count }}</span>
@@ -23,8 +26,8 @@ against it. channel and overdue carry across views; the page and the poll's dige
       {% elif view == 'all' %}<span class="inbox-tab-count">{{ all_count }}</span>
       {% elif view == 'closed' %}<span class="inbox-tab-count">{{ closed_count }}</span>{% endif %}
       {% if view != 'missed' and missed_count %}<span class="inbox-tab-count inbox-tab-count--danger" title="{{ missed_count }} missed">{{ missed_count }} missed</span>{% endif %}
-      {% include "components/icon.html" with name="chevron-down" class="w-4 h-4 ml-auto shrink-0 text-ink-subtle" %}
-    </button>
+      {% include "components/icon.html" with name="chevron-down" class="w-4 h-4 shrink-0 text-ink-subtle" %}
+    </button></h1>
     <div class="cv-menu-panel cv-menu-panel--start" x-ref="menu" x-show="menuOpen" x-cloak x-transition.opacity role="menu" aria-label="Inbox views">
       <a href="{{ inbox_url }}{% querystring view='needs_attention' page=None h=None %}" class="cv-menu-item" role="menuitemradio" aria-checked="{% if view == 'needs_attention' %}true{% else %}false{% endif %}">
         Needs attention<span class="inbox-tab-count ml-auto">{{ needs_attention_count }}</span>
@@ -48,21 +51,33 @@ against it. channel and overdue carry across views; the page and the poll's dige
     </div>
   </div>
 
-  {% comment %}The channel filter is a round icon with the real <select> laid transparently over
-  it: the tap still opens the native picker, and assistive tech still gets a labelled select.
-  The dot marks a filter in force, since the icon alone would not show which channel.{% endcomment %}
-  <form method="get" action="{% url 'conversations:inbox' %}" class="inbox-filter{% if channel %} is-active{% endif %}"
-        x-data="{ busy: false }" @submit="busy = true">
+  {% comment %}The channel filter: a menu whose items are the form's submit buttons, so it is still a
+  GET form underneath. The button shows the channel in force (just the icon when it's all of
+  them). Without scripts the menu can't open, so the plain select is there instead.{% endcomment %}
+  <form method="get" action="{% url 'conversations:inbox' %}" class="cv-menu inbox-filter{% if channel %} is-active{% endif %}" x-data="cvMenu">
     <input type="hidden" name="view" value="{{ view }}" />
-    <span class="inbox-filter-icon" aria-hidden="true">
-      {% include "components/icon.html" with name="sliders" class="w-4 h-4" %}
-    </span>
-    <select name="channel" class="select select-sm" onchange="this.form.requestSubmit()" aria-label="Filter by channel"
-            :disabled="busy">
-      <option value="">All channels</option>
+    {% if q %}<input type="hidden" name="q" value="{{ q }}" />{% endif %}
+    <button type="button" class="inbox-filter-btn" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="menuOpen"
+            aria-label="Channel: {% if channel %}{% for value, label in channel_choices %}{% if value == channel %}{{ label }}{% endif %}{% endfor %}{% else %}all channels{% endif %}. Change">
+      {% include "components/icon.html" with name="sliders" class="w-4 h-4 shrink-0" %}
+      {% if channel %}<span class="truncate">{% for value, label in channel_choices %}{% if value == channel %}{{ label }}{% endif %}{% endfor %}</span>{% endif %}
+    </button>
+    <div class="cv-menu-panel" x-ref="menu" x-show="menuOpen" x-cloak x-transition.opacity role="menu" aria-label="Channel">
+      <button type="submit" name="channel" value="" class="cv-menu-item" role="menuitemradio" aria-checked="{% if channel %}false{% else %}true{% endif %}">
+        All channels{% if not channel %}{% include "components/icon.html" with name="check" class="w-4 h-4 ml-auto" %}{% endif %}
+      </button>
       {% for value, label in channel_choices %}
-        <option value="{{ value }}" {% if value == channel %}selected{% endif %}>{{ label }}</option>
+      <button type="submit" name="channel" value="{{ value }}" class="cv-menu-item" role="menuitemradio" aria-checked="{% if value == channel %}true{% else %}false{% endif %}">
+        {{ label }}{% if value == channel %}{% include "components/icon.html" with name="check" class="w-4 h-4 ml-auto" %}{% endif %}
+      </button>
       {% endfor %}
-    </select>
+    </div>
+    <noscript>
+      <select name="channel" class="select select-sm" aria-label="Filter by channel">
+        <option value="">All channels</option>
+        {% for value, label in channel_choices %}<option value="{{ value }}" {% if value == channel %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+      <button class="btn btn-secondary btn-sm">Show</button>
+    </noscript>
   </form>
 </div>

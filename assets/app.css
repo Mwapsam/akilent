@@ -686,7 +686,6 @@
      One bar (title, view and channel choices, links out), the search, then the list. The
      bar keeps one height whether or not a conversation is open, so nothing under it moves. */
   .inbox-bar { @apply flex items-center gap-1.5 mb-2 min-w-0; height: 2.75rem; }
-  .inbox-bar-title { @apply shrink-0 mr-1 text-base font-semibold tracking-tight text-ink; }
   .inbox-bar-views { @apply flex flex-1 items-center gap-1.5 min-w-0; }
   /* Round 36px icon buttons (44px on touch, below): Follow-ups and Set-up. */
   .inbox-bar-btn {
@@ -845,20 +844,8 @@
   .inbox-presence { @apply inline-flex items-center gap-1 text-xs max-w-40 truncate; color: var(--color-ink-subtle); }
   .inbox-presence.is-typing { @apply font-medium; color: var(--color-accent); }
 
-  /* The channel filter: a round icon with the real select laid transparently over it (see
-     _inbox_views.html). The dot marks a filter in force. */
-  .inbox-filter { @apply relative shrink-0 flex items-center; }
-  .inbox-filter-icon {
-    @apply relative inline-flex items-center justify-center rounded-full border border-border bg-surface;
-    color: var(--color-ink-muted); width: 2.25rem; height: 2.25rem;
-  }
-  .inbox-filter .select-sm { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; opacity: 0; cursor: pointer; }
-  .inbox-filter.is-active .inbox-filter-icon { color: var(--color-accent); border-color: var(--color-accent); }
-  .inbox-filter.is-active .inbox-filter-icon::after {
-    content: ""; @apply absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full;
-    background-color: var(--color-accent); box-shadow: 0 0 0 2px var(--color-surface);
-  }
-  .inbox-filter:focus-within .inbox-filter-icon { @apply ring-2 ring-brand-500; }
+  /* The channel filter: a menu (cvMenu) on a GET form; see the inbox look section for its button. */
+  .inbox-filter { @apply relative shrink-0 flex items-center gap-2; }
   .inbox-filter-note { @apply -mt-1 mb-3 text-sm; color: var(--color-ink-subtle); }
   .inbox-filter-note a { @apply underline text-accent; }
 
@@ -1027,7 +1014,7 @@
     .nav-link { min-height: 2.75rem; }
     .tab { min-height: 2.75rem; }
     .select-sm, .inbox-views-btn { min-height: 2.75rem; }
-    .inbox-filter-icon, .inbox-bar-btn { width: 2.75rem; height: 2.75rem; }
+    .inbox-bar-btn { width: 2.75rem; height: 2.75rem; }
   }
 
   /* Skeleton ------------------------------------------------------------ */
@@ -2398,3 +2385,106 @@
   .wa-time { font-size: .6875rem; }
 
   @media (prefers-reduced-motion: reduce) { .wa-step, .wa-editor { transition: none; } }
+
+/* ── Inbox look and feel (Phase 3) ─────────────────────────────────────────────────────────
+   Content Studio's system on the inbox: its title, type sizes and surfaces, yellow for the one
+   main action, and 150ms motion. Unlayered, after the rules it refines. */
+
+/* The title: a small "Inbox" crumb over the view's name in large type, the name being the
+   view menu (_inbox_views.html). The crumb and type are Content Studio's (static/css/studio.css). */
+.inbox-title { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+.inbox-h1 { min-width: 0; }
+.inbox-views-btn { display: inline-flex; align-items: center; gap: .375rem; max-width: 100%; min-height: 0; width: auto;
+                   padding: 0 .25rem 0 0; border: 0; border-radius: .5rem; background: transparent;
+                   font-size: 1.25rem; line-height: 1.75rem; font-weight: 600; letter-spacing: -.018em; color: var(--color-ink); }
+.inbox-views-btn:hover { background: transparent; color: var(--color-ink); }
+.inbox-views-btn:hover .truncate { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px;
+                                   text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); }
+.inbox-views-btn .inbox-tab-count { font-size: .75rem; letter-spacing: 0; }
+@media (pointer: coarse) { .inbox-views-btn { min-height: 2.75rem; } }
+
+/* The channel menu's button: the icon, and the channel's name while one is chosen. */
+.inbox-filter-btn { display: inline-flex; align-items: center; gap: .375rem; max-width: 9rem; height: 2.25rem; padding: 0 .625rem;
+                    border-radius: 999px; border: 1px solid var(--color-border); background: var(--color-surface);
+                    font-size: .8125rem; font-weight: 500; color: var(--color-ink-muted);
+                    transition: border-color var(--duration-fast) var(--ease-emphasized), color var(--duration-fast); }
+.inbox-filter-btn:hover { border-color: var(--color-border-strong); color: var(--color-ink); }
+.inbox-filter-btn:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
+.inbox-filter.is-active .inbox-filter-btn { color: var(--color-accent); border-color: var(--color-accent);
+                                            background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface)); }
+@media (pointer: coarse) { .inbox-filter-btn { height: 2.75rem; min-width: 2.75rem; justify-content: center; } }
+
+/* Surfaces: the list card, the conversation and the details as Content Studio's cards (the
+   surface radius, a hairline, no shadow). */
+@media (min-width: 640px) { .inbox-list { border-radius: var(--radius-surface); box-shadow: none; } }
+.cv-pane, .cv-side-inner, .inbox-pane-skeleton { border-radius: var(--radius-surface); }
+/* Type: a section of the details is a card heading, as in Content Studio. */
+.cv-h { font-size: .9375rem; line-height: 1.375rem; letter-spacing: -.008em; }
+.cv-h-name { letter-spacing: -.012em; }
+
+/* Yellow for the one main action: Send. The mic in its place (an empty reply box) stays navy. */
+.cv-send:not(.cv-send--rec)[aria-label="Send"] { background: var(--color-amber-400); color: var(--color-on-amber); }
+.cv-send:not(.cv-send--rec)[aria-label="Send"]:hover:not(:disabled) { background: var(--color-amber-500); }
+/* "New messages", floating over the thread: solid navy, so it reads over any bubble. */
+.cv-pill { display: inline-flex; align-items: center; gap: .375rem; height: 2rem; padding: 0 .875rem; border-radius: 999px;
+           font-size: .8125rem; font-weight: 600; color: #fff; background: var(--color-brand-600); }
+.cv-pill:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
+
+/* The template list (_template_form.html): each template a row to read and pick. */
+.cv-tpl-list { display: flex; flex-direction: column; gap: .375rem; max-height: 14rem; overflow-y: auto; }
+.cv-tpl-option { display: flex; flex-direction: column; gap: .125rem; padding: .5rem .625rem; border-radius: .625rem; cursor: pointer;
+                 border: 1px solid var(--cv-line, var(--color-border)); background: var(--cv-surface, var(--color-surface));
+                 transition: border-color var(--duration-fast) var(--ease-emphasized), background-color var(--duration-fast); }
+.cv-tpl-option:hover { background: var(--cv-hover, var(--color-hover)); }
+.cv-tpl-option:has(input:checked) { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface)); }
+.cv-tpl-option:has(input:focus-visible) { outline: 2px solid var(--color-focus-ring); outline-offset: 1px; }
+.cv-tpl-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .5rem; font-size: .875rem; font-weight: 600; color: var(--color-ink); }
+.cv-tpl-meta { font-size: .75rem; font-weight: 400; color: var(--color-ink-subtle); }
+.cv-tpl-body { font-size: .8125rem; color: var(--color-ink-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* The details' menus (Pause here, Run one, Choose a form): a quiet button that opens a menu. */
+.cv-panel-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: .5rem; margin-top: .25rem; }
+.cv-panel-btn { display: flex; align-items: center; gap: .5rem; width: 100%; height: 2.25rem; padding: 0 .625rem; border-radius: var(--radius-control);
+                border: 1px solid var(--cv-line); background: var(--cv-surface); font-size: .8125rem; font-weight: 500; color: var(--cv-ink);
+                transition: background-color var(--duration-fast) var(--ease-emphasized), border-color var(--duration-fast); }
+.cv-panel-btn:hover { background: var(--cv-hover); border-color: var(--color-border-strong); }
+.cv-panel-btn:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
+.cv-panel-btn svg { color: var(--cv-ink-subtle); flex: none; }
+.cv-panel-btn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (pointer: coarse) { .cv-panel-btn { height: 2.75rem; } }
+
+/* "What automations did": a disclosure that looks like one, with how many. */
+.cv-disclosure { margin-top: .75rem; }
+.cv-disclosure > summary { display: flex; align-items: center; gap: .375rem; min-height: 2rem; margin-inline: -.375rem; padding: 0 .375rem;
+                           border-radius: .5rem; list-style: none; cursor: pointer; font-size: .8125rem; font-weight: 500; color: var(--cv-ink-muted); }
+.cv-disclosure > summary::-webkit-details-marker { display: none; }
+.cv-disclosure > summary:hover { background: var(--cv-hover); color: var(--cv-ink); }
+.cv-disclosure > summary:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 1px; }
+.cv-disclosure-chev { transform: rotate(-90deg); transition: transform var(--duration-fast) var(--ease-emphasized); color: var(--cv-ink-subtle); }
+.cv-disclosure[open] .cv-disclosure-chev { transform: none; }
+/* A link that goes somewhere: words and an arrow, not an underline. */
+.cv-arrow-link { display: inline-flex; align-items: center; gap: .125rem; margin-top: .5rem; font-size: .8125rem; font-weight: 500; color: var(--color-accent); }
+.cv-arrow-link svg { transition: transform var(--duration-fast) var(--ease-emphasized); }
+.cv-arrow-link:hover svg { transform: translateX(2px); }
+.cv-arrow-link:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; border-radius: .25rem; }
+
+/* Saved replies: the same items as the menus. */
+.cv-sr-item { padding: .5rem .625rem; }
+
+/* One hover for rows and menu items: the hover tone, eased in over 150ms. */
+.inbox-row, .cv-menu-item, .cv-sr-item { transition: background-color var(--duration-fast) var(--ease-emphasized); }
+
+/* Motion, 150ms: the details and a conversation fade in as they arrive (htmx marks new content
+   .htmx-added for a moment), and rows fade up when a search replaces the list (inbox.html
+   marks the list .is-fresh for that swap only: the 8-second refresh never animates). Menus
+   already fade (x-transition). None of it with reduced motion. */
+#cv-panel > *, #conversation-pane-inner > * { transition: opacity var(--duration-fast) var(--ease-emphasized); }
+#cv-panel > .htmx-added, #conversation-pane-inner > .htmx-added { opacity: 0; }
+@keyframes inbox-row-in { from { opacity: 0; transform: translateY(4px); } }
+#inbox-body.is-fresh .inbox-row { animation: inbox-row-in var(--duration-fast) var(--ease-emphasized) both; }
+@media (prefers-reduced-motion: reduce) {
+  #cv-panel > *, #conversation-pane-inner > *, .inbox-row, .cv-menu-item, .cv-sr-item, .cv-tpl-option,
+  .cv-panel-btn, .cv-disclosure-chev, .cv-arrow-link svg, .inbox-filter-btn { transition: none; }
+  #inbox-body.is-fresh .inbox-row { animation: none; }
+  .cv-arrow-link:hover svg { transform: none; }
+}

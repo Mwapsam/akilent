@@ -194,7 +194,9 @@ class TestTabs:
         button = body[body.index('class="inbox-views-btn"') :]
         button = button[: button.index("</button>")]
         assert "Assigned to me" in button
-        assert body.count('role="menuitemradio" aria-checked="true"') == 1
+        views = body[body.index('aria-label="Inbox views"') :]
+        views = views[: views.index("</a>", views.index("Closed<span"))]
+        assert views.count('role="menuitemradio" aria-checked="true"') == 1
 
     def test_the_polled_fragment_renders_the_same_rows(self, logged_in):
         """The 8s poll re-renders _inbox_body.html on its own; the row changes
