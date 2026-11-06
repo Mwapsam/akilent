@@ -1,0 +1,43 @@
+{% comment %}Send an approved WhatsApp template. Two places use it: the composer itself while the
+24-hour window is closed (inline, the only thing that can still go), and the chat-template
+dialog while it's open (Next steps, an AI suggestion). ``prefix`` keeps their ids apart.
+
+An AI suggestion's template and values arrive on the ai-template-apply event (chat.js
+aiReviewTemplate), with the proposal it answers, since the dialog sits outside the chat
+component. Field names are per template (var__<id>__<name>): every template's fields are in
+the form, and only the chosen one's are read (views.conversation_detail send_template).{% endcomment %}
+<form method="post" action="{{ detail_url }}" class="{% if inline %}cv-tpl-form{% else %}space-y-4{% endif %}" data-template-form
+      {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}
+      x-data="{ tpl: '', proposal: '' }"
+      {% if not inline %}@submit="$dispatch('modal-close', 'chat-template')"
+      @modal-open.window="if ($event.detail === 'chat-template') proposal = ''"{% endif %}
+      x-on:ai-template-apply.window="tpl = String($event.detail.templateId); proposal = String($event.detail.proposal || ''); $nextTick(() => { for (const [k, v] of Object.entries($event.detail.values || {})) { const el = $el.querySelector('[name=&quot;var__' + $event.detail.templateId + '__' + k + '&quot;]'); if (el) el.value = v; } })">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="send_template" />
+  <input type="hidden" name="ai_proposal" :value="proposal" />
+  {% if not inline %}<p class="text-sm text-ink-subtle">Once 24 hours have passed since {{ display_name }}'s last message, WhatsApp only delivers an approved template. A reply they send opens the window again.</p>{% endif %}
+  <div>
+    <label class="{% if inline %}sr-only{% else %}label{% endif %}" for="{{ prefix }}-select">Template</label>
+    <select id="{{ prefix }}-select" name="template_id" class="select{% if inline %} select-sm{% endif %}" required x-model="tpl">
+      <option value="" disabled selected>Choose an approved template…</option>
+      {% for t in approved_templates %}
+      <option value="{{ t.pk }}">{{ t.name }} ({{ t.language_code }})</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% for t in approved_templates %}
+  {% if t.variables %}
+  <div x-show="tpl === '{{ t.pk }}'" x-cloak class="grid sm:grid-cols-2 gap-3">
+    {% for v in t.variables %}
+    <label class="block text-xs text-ink-subtle">{{ v }}
+      <input class="input mt-1" name="var__{{ t.pk }}__{{ v }}" :required="tpl === '{{ t.pk }}'" />
+    </label>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endfor %}
+  <div class="flex justify-end gap-2{% if not inline %} pt-1{% endif %}">
+    {% if not inline %}<button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close', 'chat-template')">Cancel</button>{% endif %}
+    <button class="btn btn-primary btn-sm" :disabled="!tpl">Send template</button>
+  </div>
+</form>

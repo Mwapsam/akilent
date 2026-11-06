@@ -78,7 +78,7 @@ class TestSendOutcomes:
         assert "Check now" in body
         assert "Put back in reply box" in body
         # "Edit & resend" is only for a send known to have failed.
-        assert 'x-show="open && item.m.body && !item.m.unknown"' in body
+        assert 'x-show="open && windowOpen && item.m.body && !item.m.unknown"' in body
         # No delivery ticks on a send that was never confirmed.
         assert "!item.m.unknown\" :class=\"{ 'is-read'" in body
 
@@ -119,7 +119,13 @@ class TestInboxList:
         assert 'data-error-retry-event="inbox-pane-retry"' in body
 
 
-def test_the_window_closed_placeholder_matches_the_banner(logged_in):
+def test_a_closed_window_is_one_state_in_the_composer(logged_in):
+    """No banner, picker button and placeholder each saying it: the composer itself changes."""
     client, account = logged_in
     body = _pane(client, _conversation(account))
-    assert "Window closed: a reply may not be delivered" in body
+    assert body.count('class="cv-closedwin"') == 1
+    assert "Window closed: a reply may not be delivered" not in body
+    assert (
+        "cv-tpl-cta" not in body
+        and 'class="cv-window" x-show="!windowOpen"' not in body
+    )

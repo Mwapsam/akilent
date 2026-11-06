@@ -683,29 +683,33 @@
   }
 
   /* Inbox ----------------------------------------------------------------
-     Page header (title + links out), then a toolbar that holds everything
-     that acts on the list (view tabs + channel filter), then the list. */
-  .inbox-header { @apply flex items-start justify-between gap-3 mb-4 sm:mb-6; }
-  /* Square 44px icon buttons on a phone; icon + label from sm up. */
-  .inbox-header-link { @apply w-11 h-11 !p-0 justify-center gap-1.5 sm:w-auto sm:h-auto sm:!px-3 sm:!py-1.5; }
-  /* The header's Set-up menu reuses the conversation menus (.cv-menu), outside .cv. */
+     One bar (title, view and channel choices, links out), the search, then the list. The
+     bar keeps one height whether or not a conversation is open, so nothing under it moves. */
+  .inbox-bar { @apply flex items-center gap-1.5 mb-2 min-w-0; height: 2.75rem; }
+  .inbox-bar-title { @apply shrink-0 mr-1 text-base font-semibold tracking-tight text-ink; }
+  .inbox-bar-views { @apply flex flex-1 items-center gap-1.5 min-w-0; }
+  /* Round 36px icon buttons (44px on touch, below): Follow-ups and Set-up. */
+  .inbox-bar-btn {
+    @apply relative inline-flex items-center justify-center shrink-0 w-9 h-9 rounded-full
+      transition-colors hover:bg-hover hover:text-ink;
+    color: var(--color-ink-muted);
+  }
+  .inbox-bar-btn:focus-visible { @apply outline-none ring-2 ring-brand-500; }
+  /* The follow-ups count rides on the bell's corner. */
+  .inbox-bar-badge { @apply absolute -top-0.5 -right-1 pointer-events-none; }
+  .inbox-bar-badge .inbox-tab-count { @apply min-w-4 h-4 px-1; font-size: 0.625rem; box-shadow: 0 0 0 2px var(--color-canvas, var(--color-surface-muted)); }
+  /* The bar's menus reuse the conversation menus (.cv-menu), outside .cv. */
   .inbox-tools { --cv-line: var(--color-border); --cv-surface: var(--color-surface); --cv-ink: var(--color-ink);
                  --cv-ink-subtle: var(--color-ink-subtle); --cv-hover: var(--color-hover); --cv-accent: var(--color-accent); }
-  /* With a conversation open (any width) the title row shrinks to one line and the
-     suggestion card steps aside, so the conversation gets the height. */
-  .inbox-chrome:has(~ .inbox-split.has-conversation) .inbox-header { @apply mb-3 items-center; }
 
   /* Two-pane at lg: list + the conversation opened from it, side by side, so switching
      conversations never re-loads the shell or loses the list. Below lg there's only room
      for one at a time — .has-conversation (set server-side, when a conversation is loaded)
-     is what decides which one shows; a bare /inbox/ visit has neither, so the list wins. */
+     is what decides which one shows; a bare /inbox/ visit has neither, so the list wins.
+     An open conversation then has the screen to itself, without the bar above it. */
   .inbox-list-col { display: block; }
   .inbox-pane-col { display: none; }
-  /* Below lg, an open conversation has the screen to itself: the inbox's title and
-     suggestion card above it would push the thread into the bottom half. */
-  @media (max-width: 1023.98px) {
-    .inbox-chrome:has(~ .inbox-split.has-conversation) { display: none; }
-  }
+  .inbox-split.has-conversation .inbox-bar,
   .inbox-split.has-conversation .inbox-list-col { display: none; }
   .inbox-split.has-conversation .inbox-pane-col { display: block; }
   .inbox-pane-empty {
@@ -743,19 +747,21 @@
   .inbox-list-col { container: inboxlist / inline-size; }
 
   @media (min-width: 1024px) {
-    /* Both columns fill the viewport below the header and scroll on their own, so the
-       conversation never moves when the list scrolls. --inbox-top is measured by
-       static/js/inbox_pane.js; 12rem is a fallback until it is. */
+    /* Both columns fill the viewport below the shell's top bar and scroll on their own, so
+       the conversation never moves when the list scrolls. The bar heads the list column
+       only: the conversation starts at the top, level with it, and gets the full height.
+       --inbox-top is measured by static/js/inbox_pane.js; 6rem is a fallback until it is. */
     .inbox-split {
-      @apply grid gap-4; grid-template-columns: 380px minmax(0, 1fr);
-      /* The minimum only applies on genuinely short screens; at 32rem it overrode the
-         fitted height whenever a suggestion card sat above, and the page scrolled. */
-      height: calc(100dvh - var(--inbox-top, 12rem) - var(--kb-inset, 0px)); min-height: 22rem;
+      @apply grid gap-x-4; grid-template-columns: 380px minmax(0, 1fr);
+      grid-template-rows: auto minmax(0, 1fr);
+      height: calc(100dvh - var(--inbox-top, 6rem) - var(--kb-inset, 0px)); min-height: 22rem;
     }
+    .inbox-split .inbox-bar,
+    .inbox-split.has-conversation .inbox-bar { display: flex; grid-column: 1; grid-row: 1; }
     .inbox-split .inbox-list-col,
     .inbox-split.has-conversation .inbox-list-col {
-      display: flex; flex-direction: column; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
-      scrollbar-gutter: stable;
+      display: flex; flex-direction: column; grid-column: 1; grid-row: 2;
+      min-height: 0; overflow-y: auto; overscroll-behavior: contain;
       /* The containing block for anything absolutely placed in a row (.sr-only labels): without
          it they escaped the scroll box, and a long list stretched the whole page. */
       position: relative;
@@ -764,19 +770,13 @@
        it, however few rows there are; more rows than fit scroll inside the column. */
     .inbox-split #inbox-body { flex: 1 0 auto; display: flex; flex-direction: column; }
     .inbox-split #inbox-body > .inbox-list { flex: 1 0 auto; }
-    .inbox-split .inbox-list-col .inbox-toolbar {
-      position: sticky; top: 0; z-index: 1; padding-block: 0.25rem; margin-block-start: -0.25rem;
-      background-color: var(--color-canvas, var(--color-surface-muted));
-    }
     .inbox-split .inbox-pane-col,
-    .inbox-split.has-conversation .inbox-pane-col { display: block; min-height: 0; }
+    .inbox-split.has-conversation .inbox-pane-col { display: block; grid-column: 2; grid-row: 1 / span 2; min-height: 0; }
     .inbox-split:not(.has-conversation) .inbox-pane-empty { display: flex; }
   }
 
-  .inbox-toolbar { @apply flex items-center gap-2 mb-3 sm:mb-4; container: inboxbar / inline-size; }
-  /* The view menu that stands in for the tabs on a narrow toolbar (see the container
-     query after the filter rules). Hidden while the tabs fit. */
-  .inbox-views { display: none; flex: 1 1 auto; min-width: 0; }
+  /* The view menu: the current view and its count on the button, every view in the menu. */
+  .inbox-views { flex: 1 1 auto; min-width: 0; }
   .inbox-views-btn {
     @apply flex items-center gap-1.5 w-full rounded-full border border-border bg-surface px-3.5
       text-sm font-medium text-ink transition-colors hover:border-border-strong;
@@ -784,44 +784,12 @@
   }
   .inbox-views-btn:focus-visible { @apply outline-none ring-2 ring-brand-500; }
   .inbox-views .cv-menu-item .inbox-tab-count { margin-left: auto; }
-  /* The tabs scroll sideways with a fade on the trailing edge, because four
-     labelled tabs do not fit on a phone and the old row simply cut the last
-     two off with nothing to say there was more. Full-bleed on the left only:
-     the channel filter holds the right edge. */
-  .inbox-tabs {
-    @apply flex flex-1 min-w-0 gap-1.5 overflow-x-auto -ml-4 pl-4 sm:ml-0 sm:pl-0 py-0.5;
-    scrollbar-width: none;
-    scroll-snap-type: x proximity;
-    /* Without this, snapping aligns the first tab to the container's edge and
-       ignores its padding, so the first pill sat flush against the screen. */
-    scroll-padding-inline: 1rem;
-    mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent);
-  }
-  .inbox-tabs::-webkit-scrollbar { display: none; }
-  /* A trailing spacer as wide as the fade, so the last tab can scroll clear
-     of it. A pseudo-element rather than padding-right, which scroll
-     containers do not reliably honour at the end of the scroll. */
-  .inbox-tabs::after { content: ""; flex: 0 0 1.5rem; }
-  @media (min-width: 640px) { .inbox-tabs { mask-image: none; } .inbox-tabs::after { content: none; } }
-  .inbox-tab {
-    @apply inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap rounded-full
-      border border-border bg-surface px-3.5 text-sm font-medium
-      transition-colors hover:text-ink hover:border-border-strong;
-    color: var(--color-ink-muted);
-    min-height: 2.75rem;
-    scroll-snap-align: start;
-  }
-  .inbox-tab[aria-current="page"] {
-    @apply border-transparent text-white;
-    background-color: var(--color-brand-600);
-  }
   .inbox-tab-count {
     @apply inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full
       text-xs font-semibold tabular-nums;
     background-color: var(--color-surface-muted);
     color: var(--color-ink);
   }
-  .inbox-tab[aria-current="page"] .inbox-tab-count { background-color: rgb(255 255 255 / 0.2); color: #fff; }
   .inbox-tab-count--danger { background-color: var(--tone-coral-bg); color: var(--tone-coral-fg); }
 
   /* Edge to edge on a phone: the card's side margins and border cost 34px of
@@ -877,29 +845,20 @@
   .inbox-presence { @apply inline-flex items-center gap-1 text-xs max-w-40 truncate; color: var(--color-ink-subtle); }
   .inbox-presence.is-typing { @apply font-medium; color: var(--color-accent); }
 
-  .inbox-filter { @apply relative shrink-0 flex items-center gap-2; }
+  /* The channel filter: a round icon with the real select laid transparently over it (see
+     _inbox_views.html). The dot marks a filter in force. */
+  .inbox-filter { @apply relative shrink-0 flex items-center; }
   .inbox-filter-icon {
-    @apply relative inline-flex items-center justify-center rounded-full border border-border
-      bg-surface text-gray-600 sm:hidden;
-    width: 2.25rem; height: 2.25rem;
+    @apply relative inline-flex items-center justify-center rounded-full border border-border bg-surface;
+    color: var(--color-ink-muted); width: 2.25rem; height: 2.25rem;
   }
+  .inbox-filter .select-sm { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; opacity: 0; cursor: pointer; }
   .inbox-filter.is-active .inbox-filter-icon { color: var(--color-accent); border-color: var(--color-accent); }
   .inbox-filter.is-active .inbox-filter-icon::after {
     content: ""; @apply absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full;
     background-color: var(--color-accent); box-shadow: 0 0 0 2px var(--color-surface);
   }
   .inbox-filter:focus-within .inbox-filter-icon { @apply ring-2 ring-brand-500; }
-  /* Narrow toolbar - the list column beside an open conversation, a phone, a narrow
-     tablet: the six tabs (~690px) and the channel select (~200px) don't fit, so the
-     tabs become one view menu and the filter shrinks to its icon, with the real
-     select laid transparently over it. Measured on the toolbar, not the viewport:
-     at lg the list column is narrow on the widest screen. */
-  @container inboxbar (max-width: 47.99rem) {
-    .inbox-toolbar .inbox-tabs { display: none; }
-    .inbox-toolbar .inbox-views { display: block; }
-    .inbox-toolbar .inbox-filter-icon { display: inline-flex; }
-    .inbox-toolbar .inbox-filter .select-sm { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; opacity: 0; }
-  }
   .inbox-filter-note { @apply -mt-1 mb-3 text-sm; color: var(--color-ink-subtle); }
   .inbox-filter-note a { @apply underline text-accent; }
 
@@ -1067,8 +1026,8 @@
     .btn-icon, .btn-icon.btn-sm { min-height: 2.75rem; min-width: 2.75rem; }
     .nav-link { min-height: 2.75rem; }
     .tab { min-height: 2.75rem; }
-    .select-sm, .inbox-tab, .inbox-views-btn { min-height: 2.75rem; }
-    .inbox-filter-icon { width: 2.75rem; height: 2.75rem; }
+    .select-sm, .inbox-views-btn { min-height: 2.75rem; }
+    .inbox-filter-icon, .inbox-bar-btn { width: 2.75rem; height: 2.75rem; }
   }
 
   /* Skeleton ------------------------------------------------------------ */
@@ -1801,7 +1760,7 @@
 /* Chrome reads the app's semantic tokens, so dark mode needs no extra work
    here. The chat surface keeps its own WhatsApp-like palette - a brand-navy
    message thread would not read as a chat - and gets explicit dark values. */
-.cv { --cv-top: 7rem; --cv-accent: var(--wa-accent, #0866ff);
+.cv { --cv-top: 7rem; --cv-accent: var(--color-accent);
       --cv-line: var(--color-border);
       --cv-surface: var(--color-surface);
       --cv-surface-muted: var(--color-surface-muted);
@@ -1839,19 +1798,25 @@
 /* Chat pane */
 .cv-pane { position: relative; display: flex; flex-direction: column; min-height: 0; background: var(--cv-surface);
            border: 1px solid var(--cv-line); border-radius: 1rem; overflow: hidden; }
-/* Header: a grid rather than a flex row. Narrow, the name column was left with ~75px
-   between the avatar and three action buttons, and the status pill wrapped into three
-   lines inside itself. Narrow, the status gets its own row, running under the actions
-   too, which roughly triples its width; wide, it sits under the name as before. */
-.cv-header { display: grid; align-items: center; column-gap: .5rem; row-gap: .125rem;
+/* Header: one row, so the thread keeps the height. The name and its status share the middle
+   column (see .cv-h-status for which gives way first); on a phone the status sits under the
+   name, inside the same row (the container query at the end of this section). */
+.cv-header { display: grid; align-items: center; column-gap: .5rem;
              grid-template-columns: auto auto minmax(0, 1fr) auto;
-             grid-template-areas: "back avatar name actions" "back avatar status status";
-             padding: .625rem .75rem; border-bottom: 1px solid var(--cv-line); background: var(--cv-surface); }
+             grid-template-areas: "back avatar title actions";
+             padding: .5rem .75rem; border-bottom: 1px solid var(--cv-line); background: var(--cv-surface); }
 .cv-h-back { grid-area: back; }
 .cv-h-avatar { grid-area: avatar; width: 2.25rem; height: 2.25rem; }
-.cv-h-name { grid-area: name; min-width: 0; align-self: end; }
-.cv-h-status { grid-area: status; min-width: 0; align-self: start; display: flex; flex-wrap: wrap;
-               align-items: center; column-gap: .5rem; row-gap: .25rem; font-size: .75rem; color: var(--cv-ink-muted); }
+.cv-h-title { grid-area: title; display: flex; align-items: center; gap: .5rem; min-width: 0; }
+.cv-h-name { flex: 0 1 auto; min-width: 0; }
+/* The status gives way first (it shrinks 100x faster), but never below its widest badge: what
+   doesn't fit wraps onto a second line that its fixed height hides, so badges drop out whole
+   from the end (the channel, then the state), never cut mid-word. */
+.cv-h-status { flex: 0 100 auto; min-width: min-content; height: 1.375rem; overflow: hidden; display: flex; flex-wrap: wrap;
+               align-items: center; column-gap: .5rem; row-gap: 1rem; font-size: .75rem; color: var(--cv-ink-muted); }
+.cv-h-status > * { flex-shrink: 0; }
+.cv-h-extra { display: none; }
+@container cvpane (min-width: 52rem) { .cv-h-extra { display: inline; } }
 .cv-h-actions { grid-area: actions; }
 /* Compact by default: square 36px icon buttons (as padded text buttons with labels
    hidden they were ~44px each, and three of them set the name's width) and the
@@ -1862,9 +1827,7 @@
 .cv-h-actions { gap: 0; }
 .cv-h-actions .btn { width: 2.25rem; padding-inline: 0; justify-content: center; }
 @container cvpane (min-width: 44rem) {
-  .cv-header { column-gap: .75rem; padding: .75rem 1rem;
-               grid-template-areas: "back avatar name actions" "back avatar status actions"; }
-  .cv-h-avatar { width: 2.5rem; height: 2.5rem; }
+  .cv-header { column-gap: .75rem; padding: .5rem 1rem; }
   .cv-h-label { display: inline; }
   .cv-h-icon { display: block; }
   .cv-h-actions { gap: .25rem; }
@@ -2014,13 +1977,8 @@
 }
 .cv-fail { display: flex; align-items: center; gap: .25rem; margin-top: .25rem; font-size: .75rem; color: var(--tone-coral-fg); }
 
-/* The inbox's subtitle and suggestion card step aside while a conversation is open (see
-   .inbox-chrome in the components layer). Unlayered, so it beats their own flex / sm:block. */
-.inbox-chrome:has(~ .inbox-split.has-conversation) .inbox-header p,
-.inbox-chrome:has(~ .inbox-split.has-conversation) [data-next-action] { display: none; }
-
 /* Composer */
-.cv-footer { border-top: 1px solid var(--cv-line); background: var(--cv-surface-muted); padding: .625rem .75rem .75rem; }
+.cv-footer { border-top: 1px solid var(--cv-line); background: var(--cv-surface-muted); padding: .5rem .75rem .625rem; }
 .cv-window { margin-bottom: .5rem; border-radius: .625rem; background: var(--cv-warn-bg); border: 1px solid var(--cv-warn-border);
              color: var(--cv-warn-fg); font-size: .8125rem; }
 /* One line (the state) until opened; the explanation is behind the tap. */
@@ -2046,11 +2004,11 @@
 .cv-iconbtn:hover { background: var(--cv-hover); color: var(--cv-ink); }
 .cv-iconbtn:focus-visible, .cv-send:focus-visible { outline: 2px solid var(--cv-accent); outline-offset: 2px; }
 .cv-send { display: inline-flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; flex-shrink: 0;
-           border-radius: 999px; color: #fff; background: var(--cv-accent); transition: opacity .15s; }
+           border-radius: 999px; color: #fff; background: var(--color-brand-600); transition: opacity .15s; }
 .cv-send:disabled { opacity: .35; cursor: not-allowed; }
-.cv-send--rec { background: #dc2626; }
+.cv-send--rec { background: var(--color-coral-600); }
 .cv-rec { flex: 1; display: flex; align-items: center; gap: .5rem; min-height: 2.25rem; padding: 0 .25rem; font-size: .875rem; color: var(--cv-ink); }
-.cv-rec-dot { width: .625rem; height: .625rem; border-radius: 999px; background: #dc2626; animation: cv-pulse 1s ease-in-out infinite; }
+.cv-rec-dot { width: .625rem; height: .625rem; border-radius: 999px; background: var(--color-coral-600); animation: cv-pulse 1s ease-in-out infinite; }
 .cv-rec-cancel { margin-left: auto; font-size: .8125rem; color: var(--cv-ink-subtle); text-decoration: underline; }
 @keyframes cv-pulse { 50% { opacity: .3; } }
 @media (prefers-reduced-motion: reduce) { .cv-rec-dot { animation: none; } }
@@ -2071,43 +2029,80 @@
 .cv-sr-item { display: flex; flex-direction: column; gap: .125rem; width: 100%; padding: .5rem; text-align: left; border-radius: .5rem; font-size: .875rem; }
 .cv-sr-item:hover, .cv-sr-item:focus-visible { background: var(--cv-hover); outline: none; }
 
-/* Window closed with approved templates: one line that opens the picker dialog (chat-template). */
-.cv-tpl-cta { display: flex; align-items: center; gap: .5rem; width: 100%; min-height: 2.5rem; margin-top: .5rem; padding: .375rem .75rem;
-              background: var(--cv-surface); border: 1px solid var(--cv-accent); border-radius: .75rem;
-              font-size: .875rem; font-weight: 500; color: var(--cv-ink); }
-.cv-tpl-cta:hover { background: var(--cv-hover); }
-.cv-tpl-cta:focus-visible { outline: 2px solid var(--cv-accent); outline-offset: 2px; }
-.cv-badge { padding: .125rem .5rem; border-radius: 999px; font-size: .6875rem; font-weight: 600; color: var(--cv-warn-fg); background: var(--cv-warn-bg); }
+/* The reply window closed (_conversation_pane.html): one line saying so, then, in the reply
+   box's place, what can still go. */
+.cv-closedwin-note { display: flex; align-items: center; gap: .375rem; margin: 0 0 .5rem .25rem; font-size: .8125rem;
+                     font-weight: 500; color: var(--cv-warn-fg); }
+.help-tip-label { font-weight: 500; text-decoration: underline; text-underline-offset: 2px; color: var(--cv-ink-muted, var(--color-ink-muted)); }
+.help-tip-label:hover { color: var(--cv-ink, var(--color-ink)); }
+.help-tip-label:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; border-radius: .25rem; }
+.cv-closedwin-body { flex: 1; min-width: 0; }
+.cv-closedwin-problem, .cv-closedwin-empty { display: flex; flex-direction: column; align-items: flex-start; gap: .5rem;
+                                             padding: .625rem .75rem; border-radius: .75rem; font-size: .875rem; }
+.cv-closedwin-problem { background: var(--tone-coral-bg); color: var(--tone-coral-fg); }
+.cv-closedwin-empty { background: var(--cv-surface); border: 1px solid var(--cv-line); color: var(--cv-ink-muted); }
+/* The template picker inline: the template, its fields, Send, each on its own line. */
+.cv-tpl-form { display: flex; flex-direction: column; gap: .5rem; padding: .625rem .75rem; border-radius: .75rem;
+               background: var(--cv-surface); border: 1px solid var(--cv-line); }
+.cv-tpl-form .select { width: 100%; }
+/* A reply box that can't send (the window closed on Instagram or Messenger) looks it. */
+.cv-composer .cv-input:disabled { cursor: not-allowed; background: transparent; }
+.cv-inputwrap:has(.cv-input:disabled) { background: var(--cv-surface-muted); }
 .cv-closed { display: flex; align-items: center; justify-content: center; gap: .5rem; padding: .875rem 1rem; font-size: .875rem; color: var(--cv-ink-muted);
              border-top: 1px solid var(--cv-line); background: var(--cv-surface-muted); }
 
-/* Side panel: a drawer over the pane by default, a column only once the *pane's own*
-   width (not the window's) leaves the chat itself at least ~560px once the column (340px)
-   and its gap (16px) are taken out — matching the pane width that motivated this fix in the
-   first place, not wherever the old viewport breakpoint happened to land (that breakpoint
-   was itself the cramped layout: at a 1024px window .cv is only ~694px, which would leave
-   just ~338px for the chat — worse than what we're fixing). 57.25rem = (560 + 16 + 340) / 16.
-   A container is the positioning root for its `position: fixed` descendants, so the drawer
-   and backdrop cover the conversation area rather than the whole window — correct inside
-   the two-pane inbox, where the list should stay visible behind them. */
+/* Side panel: a drawer over the pane by default, a docked column once the *pane's own*
+   width (not the window's) keeps the chat at least 420px beside a column of at least 280px
+   and its gap: 44.75rem = (420 + 16 + 280) / 16. In the two-pane inbox that's a window of
+   about 1440px with the sidebar open, 1280px with it collapsed; below, a column would leave
+   the chat narrower than a phone. The drawer is a full-height sheet on the window's right
+   edge over a backdrop, like the shared drawer (components/_drawer.html). chat.js reads
+   `position` to know which it is. */
 .cv-side { display: none; position: fixed; inset-block: 0; right: 0; width: min(22rem, 90%);
            z-index: var(--z-drawer); box-shadow: var(--shadow-pop); }
-.cv-side.is-open { display: block; }
+.cv-side.is-open { display: block; animation: cv-side-in .2s var(--ease-emphasized, ease-out); }
+@keyframes cv-side-in { from { transform: translateX(100%); } }
+/* While the docked column's edge is dragged (chat.js startResize). */
+.is-resizing, .is-resizing * { cursor: col-resize !important; user-select: none; }
+@media (prefers-reduced-motion: reduce) { .cv-side.is-open { animation: none; } }
+.cv-side-resize { display: none; }
 .cv-backdrop { position: fixed; inset: 0; background: rgb(17 24 39 / .5); z-index: var(--z-drawer); }
 .cv-side-inner { height: 100%; overflow-y: auto; background: var(--cv-surface); }
 /* The inbox's search, above the list (inbox.html): a pill with its icon inside. */
 .inbox-search { position: relative; margin-bottom: .75rem; }
+/* At lg the list column scrolls under the search, which stays put at its top. */
+@media (min-width: 1024px) {
+  .inbox-split .inbox-search { position: sticky; top: 0; z-index: 1; margin-bottom: 0; padding-bottom: .5rem;
+                               background-color: var(--color-canvas, var(--color-surface-muted)); }
+}
+/* The suggested next step, in the empty pane (inbox.html): a card at reading width under the
+   prompt. Unlayered, so it beats the card's own bottom margin. */
+.inbox-suggest { width: min(36rem, calc(100% - 2rem)); margin-top: 1.5rem; text-align: left; }
+.inbox-suggest:empty { display: none; }
+.inbox-suggest > section { margin-bottom: 0; }
 .inbox-search-icon { position: absolute; inset-block: 0; left: .75rem; display: flex; align-items: center; color: var(--color-ink-subtle); pointer-events: none; }
 .inbox-search-input { padding-left: 2.25rem; border-radius: 999px; }
 /* What the details panel shows until it has loaded (views.conversation_panel). */
 .cv-panel-skeleton { display: flex; flex-direction: column; gap: .75rem; padding: 1rem; }
 /* "Show earlier messages" at the top of a thread that opened on its latest messages. */
 .cv-earlier { display: flex; justify-content: center; padding: .25rem 0 .75rem; }
-@container cv (min-width: 57.25rem) {
-  .cv { grid-template-columns: minmax(0, 1fr) 340px; }
-  .cv-side { display: block; position: static; width: auto; box-shadow: none; min-height: 0; }
+@container cv (min-width: 44.75rem) {
+  /* The chosen width (--cv-side-w, dragged and remembered by chat.js), but never so wide that
+     the chat drops under 420px. */
+  .cv { grid-template-columns: minmax(0, 1fr) min(var(--cv-side-w, 320px), calc(100% - 420px - 1rem)); }
+  .cv.is-side-collapsed { grid-template-columns: minmax(0, 1fr); }
+  .cv-side, .cv-side.is-open { position: relative; display: block; inset: auto; width: auto; box-shadow: none; min-height: 0; animation: none; }
+  .cv.is-side-collapsed .cv-side { display: none; }
   .cv-side-inner { border: 1px solid var(--cv-line); border-radius: 1rem; }
-  .cv-info-btn, .cv-backdrop { display: none; }
+  .cv-side-close, .cv-backdrop { display: none; }
+  .cv-info-btn.is-on { color: var(--cv-accent); background: var(--cv-hover); }
+  /* The column's left edge: drag it, or focus it and use the arrow keys. */
+  .cv-side-resize { display: block; position: absolute; inset-block: 0; left: -.625rem; width: .625rem; z-index: 1;
+                    cursor: col-resize; touch-action: none; }
+  .cv-side-resize::after { content: ""; position: absolute; inset-block: 1rem; left: .1875rem; width: 3px; border-radius: 999px;
+                           background: var(--cv-accent); opacity: 0; transition: opacity .15s; }
+  .cv-side-resize:hover::after, .cv-side-resize:focus-visible::after, .is-resizing .cv-side-resize::after { opacity: .6; }
+  .cv-side-resize:focus-visible { outline: none; }
 }
 .cv-section { padding: 1rem 1.125rem; border-top: 1px solid var(--cv-line); }
 .cv-h { margin-bottom: .625rem; font-size: .8125rem; font-weight: 600; color: var(--cv-ink); }
@@ -2209,7 +2204,11 @@
 }
 @container cvpane (max-width: 26rem) {
   .cv-h-avatar { display: none; }
-  .cv-header { column-gap: .375rem; }
+  .cv-header { column-gap: .375rem; padding-block: .375rem; }
+  /* A phone: the name over its status, so the name keeps the row's width. */
+  .cv-h-title { flex-direction: column; align-items: flex-start; gap: 0; }
+  .cv-h-name { max-width: 100%; }
+  .cv-h-status { max-width: 100%; }
 }
 
 /* Sends whose outcome is not known, and the thread's connection notice. */

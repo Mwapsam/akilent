@@ -68,6 +68,14 @@ function registerChat() {
 
   const dayKey = (d) => d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
 
+  // The docked details column: its width (dragged, remembered per browser) and whether it's hidden.
+  const SIDE_MIN = 280;
+  const SIDE_MAX = 440;
+  const SIDE_DEFAULT = 320;
+  const SIDE_WIDTH_KEY = 'inbox-side-w';
+  const SIDE_COLLAPSED_KEY = 'inbox-side-collapsed';
+  const clampSide = (w) => Math.min(SIDE_MAX, Math.max(SIDE_MIN, Math.round(w)));
+
   Alpine.data('chat', (cfg) => ({
     messages: cfg.messages || [],
     lastId: cfg.lastId || 0,
@@ -77,10 +85,20 @@ function registerChat() {
     open: cfg.open,
     windowOpen: cfg.windowOpen !== false,
     statusHtml: cfg.statusHtml || '',
+    // "Show the details": opens the drawer where the details don't fit beside the chat, and
+    // brings the column back where they do (docked, collapsed).
     infoOpen: false,
     followupLabel: '',  // set when an AI-suggested follow-up is applied (aiApply)
     // True while the details are open as a drawer (narrow pane), not as a column.
     infoDrawer: false,
+    // Docked: the details are a column beside the chat (wide enough for both; see .cv-side in
+    // assets/app.css). The column can be hidden and resized, and both are remembered.
+    docked: false,
+    sideCollapsed: false,
+    sideW: SIDE_DEFAULT,
+    // The window closed after a send failed for a reason that's about the WhatsApp account:
+    // the composer shows that first, and this is "Try a template anyway".
+    tplAnyway: false,
     draft: '',
     sending: false,
     newBelow: false,
@@ -128,7 +146,7 @@ function registerChat() {
     _draftKey: '',
     _unknownKey: '',
     _fit: null,
-    _onResizeInfo: null,
+    _sideObserver: null,
     _onVisible: null,
     _onSseMessage: null,
     _onOnline: null,
@@ -189,23 +207,40 @@ function registerChat() {
       };
       requestAnimationFrame(this._fit);
       window.addEventListener('resize', this._fit, { passive: true });
-      // The details panel: a drawer only while the info button shows (narrow pane).
-      const isDrawer = () => !!this.$refs.infoBtn && getComputedStyle(this.$refs.infoBtn).display !== 'none';
+      // The details panel: a column beside the chat where both fit, a drawer where they don't.
+      // The CSS decides (a container query on the pane's width); this follows it.
+      try {
+        this.sideCollapsed = localStorage.getItem(SIDE_COLLAPSED_KEY) === '1';
+        const w = parseInt(localStorage.getItem(SIDE_WIDTH_KEY), 10);
+        if (w) this.sideW = clampSide(w);
+      } catch (e) { /* storage blocked: the defaults */ }
+      this.$el.style.setProperty('--cv-side-w', this.sideW + 'px');
+      this.$watch('sideW', (w) => this.$el.style.setProperty('--cv-side-w', w + 'px'));
       this.$watch('infoOpen', (open) => {
-        if (open && isDrawer()) {
+        if (open && this.docked) {
+          this.infoOpen = false; // the details are a column here: show it if it was hidden
+          this.setSideCollapsed(false);
+        } else if (open) {
           this.infoDrawer = true;
           if (window.akDialog) window.akDialog.open(this.$refs.side, { close: () => { this.infoOpen = false; } });
-        } else if (!open && this.infoDrawer) {
+        } else if (this.infoDrawer) {
           this.infoDrawer = false;
           if (window.akDialog) window.akDialog.close(this.$refs.side);
-        } else if (open) {
-          this.infoOpen = false; // wide: the details are already on screen as a column
         }
       });
-      // Widened past the drawer breakpoint while it was open: it is a column now, so the
-      // dialog has to end, or the page would stay inert behind nothing.
-      this._onResizeInfo = () => { if (this.infoDrawer && !isDrawer()) this.infoOpen = false; };
-      window.addEventListener('resize', this._onResizeInfo, { passive: true });
+      // Widened until the details fit beside the chat while the drawer was open: they're a
+      // column now, so the dialog has to end, or the page would stay inert behind nothing.
+      const measureSide = () => {
+        const docked = getComputedStyle(this.$refs.side).position !== 'fixed';
+        if (docked === this.docked) return;
+        this.docked = docked;
+        if (docked && this.infoDrawer) this.infoOpen = false;
+      };
+      measureSide();
+      if (window.ResizeObserver) {
+        this._sideObserver = new ResizeObserver(measureSide);
+        this._sideObserver.observe(this.$el);
+      }
       this._onVisible = () => {
         if (!document.hidden) { this.interval = BASE_INTERVAL; this.schedule(0); }
       };
@@ -238,7 +273,7 @@ function registerChat() {
       this.stopRecording(false);
       clearTimeout(this.timer);
       window.removeEventListener('resize', this._fit);
-      window.removeEventListener('resize', this._onResizeInfo);
+      if (this._sideObserver) this._sideObserver.disconnect();
       if (this.infoDrawer && window.akDialog) window.akDialog.close(this.$refs.side);
       document.removeEventListener('visibilitychange', this._onVisible);
       document.removeEventListener('sse:message.created', this._onSseMessage);
@@ -363,6 +398,51 @@ function registerChat() {
       } finally {
         this.loadingEarlier = false;
       }
+    },
+    // The header's details button: hides or shows the column where it's docked, opens or
+    // closes the drawer where it isn't.
+    toggleInfo() {
+      if (this.docked) this.setSideCollapsed(!this.sideCollapsed);
+      else this.infoOpen = !this.infoOpen;
+    },
+    setSideCollapsed(collapsed) {
+      this.sideCollapsed = collapsed;
+      try { localStorage.setItem(SIDE_COLLAPSED_KEY, collapsed ? '1' : '0'); } catch (e) { /* not kept */ }
+    },
+    // Dragging the docked column's edge (or arrow keys on it) sets its width, remembered for
+    // every conversation. The CSS keeps the chat at least 420px wide whatever is chosen.
+    startResize(e) {
+      if (!this.docked || e.button !== 0) return;
+      e.preventDefault();
+      const startX = e.clientX;
+      const startW = this.sideW;
+      const move = (ev) => { this.sideW = clampSide(startW + startX - ev.clientX); };
+      const up = () => {
+        window.removeEventListener('pointermove', move);
+        document.documentElement.classList.remove('is-resizing');
+        this.saveSideW();
+      };
+      document.documentElement.classList.add('is-resizing');
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up, { once: true });
+    },
+    resizeSide(by) {
+      this.sideW = clampSide(this.sideW + by);
+      this.saveSideW();
+    },
+    saveSideW() {
+      try { localStorage.setItem(SIDE_WIDTH_KEY, String(this.sideW)); } catch (e) { /* not kept */ }
+    },
+    // The last thing sent, when it failed because of the WhatsApp account rather than this
+    // message (views._failure gives those, and only those, a failureFix): with the window
+    // closed, a template would fail the same way, so the composer says this first.
+    get accountProblem() {
+      for (let i = this.messages.length - 1; i >= 0; i--) {
+        const m = this.messages[i];
+        if (m.direction !== 'outbound' || m.pending || m.unknown) continue;
+        return m.status === 'failed' && m.failureFix ? m : null;
+      }
+      return null;
     },
     // The details panel loads once it shows (views.conversation_panel), so a section asked
     // for right as the drawer opens may not be there yet: wait for it, briefly.
@@ -565,9 +645,17 @@ function registerChat() {
       const p = this.ai.proposal;
       if (!p || !p.templateId) return;
       this.aiUsedId = p.id;
-      // The picker is a dialog outside this component: it takes the proposal from the event.
+      // The pickers (the composer's own once the window has closed, the dialog while it's
+      // open) take the proposal from the event.
+      const apply = () => window.dispatchEvent(new CustomEvent('ai-template-apply', { detail: { templateId: p.templateId, values: p.values, proposal: p.id } }));
+      if (!this.windowOpen) {
+        this.tplAnyway = true;
+        apply();
+        this.$nextTick(() => { const sel = this.$root.querySelector('#template-inline-select'); if (sel) sel.focus(); });
+        return;
+      }
       window.dispatchEvent(new CustomEvent('modal-open', { detail: 'chat-template' }));
-      window.dispatchEvent(new CustomEvent('ai-template-apply', { detail: { templateId: p.templateId, values: p.values, proposal: p.id } }));
+      apply();
     },
 
     // ── media: files and voice notes ─────────────────────────────

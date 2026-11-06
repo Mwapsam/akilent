@@ -184,24 +184,17 @@ class TestRows:
 
 @pytest.mark.django_db
 class TestTabs:
-    def test_the_assigned_tab_has_a_short_label_for_phones(self, logged_in):
-        """ "Assigned to me" was the tab that got cut off at 360px."""
+    def test_the_views_are_one_menu_with_the_current_view_on_its_button(
+        self, logged_in
+    ):
+        """Six tabs never fit beside a conversation; one menu does, at every width."""
         client, _, _ = logged_in
-        body = _inbox(client)
-        assert '<span class="sm:hidden">Mine</span>' in body
-        assert '<span class="hidden sm:inline">Assigned to me</span>' in body
-
-    def test_the_current_tab_is_scrolled_into_view(self, logged_in):
-        """The selected tab can sit past the right edge on a phone."""
-        client, _, _ = logged_in
-        body = _inbox(client)
-        start = body.index('<nav class="inbox-tabs')
-        # From the tabs' own opening tag: the sidebar's </nav> comes earlier in
-        # the page and would otherwise end the slice before it began.
-        nav = body[start : body.index("</nav>", start)]
-        assert "$el.scrollLeft" in nav, (
-            "the scroll-into-view script is missing or mangled"
-        )
+        body = client.get("/inbox/?view=assigned").content.decode()
+        assert "inbox-tabs" not in body
+        button = body[body.index('class="inbox-views-btn"') :]
+        button = button[: button.index("</button>")]
+        assert "Assigned to me" in button
+        assert body.count('role="menuitemradio" aria-checked="true"') == 1
 
     def test_the_polled_fragment_renders_the_same_rows(self, logged_in):
         """The 8s poll re-renders _inbox_body.html on its own; the row changes
@@ -271,7 +264,7 @@ class TestTabs:
 
 @pytest.mark.django_db
 class TestConversationHeaderStatus:
-    """The status line under the contact's name in the conversation header.
+    """The status beside the contact's name in the conversation header.
 
     On a phone it used to render "Waiting for you · 2 hours, 20 minutes" as one
     pill that wrapped onto three lines inside itself, in a ~75px column.
@@ -305,24 +298,30 @@ class TestConversationHeaderStatus:
             for b in badges
         )
 
-    def test_phones_get_the_short_form_and_desktop_the_sentence(self, logged_in):
+    def test_the_badge_is_short_and_the_sentence_is_its_title(self, logged_in):
+        """The status sits beside the name on one row now, at every width."""
         client, account, _ = logged_in
         conv = _conversation(
             account, first="Sam", waited=timedelta(hours=2, minutes=20)
         )
         status = self._status(client, conv)
-        assert '<span class="sm:hidden">Waiting · 2h</span>' in status
-        assert "Waiting for you · 2" in status and "hidden sm:inline" in status
+        assert ">Waiting · 2h</span>" in status
+        assert 'title="Waiting for you since' in status and "sm:inline" not in status
+        # The state comes before the channel, so the channel is what gives way.
+        assert status.index("Waiting · 2h") < status.index("channel-tag")
 
-    def test_the_header_gives_the_status_its_own_row_on_a_phone(self, logged_in):
-        """The layout fix itself: below sm the status spans under the actions."""
+    def test_the_header_is_one_row_with_the_status_beside_the_name(self, logged_in):
+        """A second header row for the status cost the thread its height."""
         client, account, _ = logged_in
         conv = _conversation(account, first="Sam")
         body = client.get(f"/inbox/{conv.public_id}/").content.decode()
         # The pane's styles live in assets/app.css (no longer inline in the pane).
         css = (settings.BASE_DIR / "assets" / "app.css").read_text(encoding="utf-8")
-        assert '"back avatar name actions" "back avatar status status"' in css
-        assert 'class="cv-h-status"' in body and 'class="cv-h-name' in body
+        assert 'grid-template-areas: "back avatar title actions";' in css
+        assert '"back avatar status status"' not in css
+        title = body[body.index('class="cv-h-title"') :]
+        title = title[: title.index('class="cv-h-actions')]
+        assert 'class="cv-h-name' in title and 'class="cv-h-status"' in title
 
 
 @pytest.mark.django_db
@@ -330,28 +329,27 @@ class TestInboxLayout:
     def _list(self, body):
         return body[body.index('class="inbox-list"') :]
 
-    def test_the_channel_filter_lives_with_the_tabs_not_the_page_header(
+    def test_the_channel_filter_and_views_sit_in_the_bar_and_ride_the_poll(
         self, logged_in
     ):
-        """Controls that act on the list sit with the list. It also has to be
-        inside the polled fragment, or the 8s refresh would not carry it."""
+        """Controls that act on the list sit in the one bar above it. The poll's answer
+        carries them out of band, or the 8s refresh would leave their counts behind."""
         client, account, _ = logged_in
         _conversation(account, first="Chanda")
         body = _inbox(client)
-        toolbar = body[
-            body.index('class="inbox-toolbar"') : body.index('class="inbox-list"')
-        ]
-        assert 'name="channel"' in toolbar and "inbox-tabs" in toolbar
-        header = body[
-            body.index('class="inbox-header"') : body.index(
-                "</header>", body.index('class="inbox-header"')
+        bar = body[
+            body.index('id="inbox-bar"') : body.index(
+                "</header>", body.index('id="inbox-bar"')
             )
         ]
-        assert 'name="channel"' not in header
+        assert 'name="channel"' in bar and 'class="inbox-views-btn"' in bar
+        assert "Follow-ups" in bar and "Set-up" in bar
+        assert "hx-swap-oob" not in bar  # only the poll's copy swaps out of band
         frag = client.get(
             "/inbox/feed/?view=all", HTTP_HX_REQUEST="true"
         ).content.decode()
-        assert 'name="channel"' in frag
+        oob = frag[frag.index('id="inbox-views" hx-swap-oob="true"') :]
+        assert 'name="channel"' in oob and 'class="inbox-views-btn"' in oob
 
     def test_a_waiting_row_has_no_waiting_badge_but_still_says_so_to_screen_readers(
         self, logged_in

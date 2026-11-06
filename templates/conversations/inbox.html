@@ -2,38 +2,47 @@
 {% load onboarding_tags %}
 {% block title %}{% if open_in_pane %}{{ conversation.contact.display_name }} — Inbox{% else %}Inbox — {{ site.app_name|default:"Akilent" }}{% endif %}{% endblock %}
 
-{% block content %}
-{% comment %}Page header: the title, and links to the neighbouring pages.
-Controls that act on the list itself — the view tabs and the channel filter —
-live with the list in _inbox_body.html, not up here: the filter used to float
-beside the title as a tall select next to two plain text links, visually
-unrelated to the list it filters.
+{% block main_class %}px-4 sm:px-6 py-4 sm:py-5 lg:py-2.5 max-w-[110rem] mx-auto{% endblock %}
 
-The links are icon buttons on a phone with their labels kept for screen readers
-(sr-only), and icon + label from sm up.{% endcomment %}
-{% comment %}The inbox's title and suggestion: hidden below lg while a conversation is open
-(.inbox-chrome, assets/app.css), which then has the screen to itself.{% endcomment %}
-<div class="inbox-chrome">
-<header class="inbox-header">
-  <div class="min-w-0">
-    <h1 class="text-xl sm:text-2xl font-semibold tracking-tight text-ink">Inbox</h1>
-  </div>
-  <div class="flex items-center gap-1 sm:gap-2 shrink-0">
+{% block content %}
+{% comment %}One bar of about 44px above the list: the title, the view and channel choices, and
+links to the neighbouring pages. It belongs to the list, so at lg it sits over the list column
+only and the conversation beside it starts at the top, with all the height. It doesn't change
+with a conversation open, so nothing below it moves. The view and channel choices come from
+_inbox_views.html, which the list's poll refreshes with it (views.inbox_feed).
+
+The links are icon buttons with their labels kept for screen readers (sr-only).{% endcomment %}
+{% comment %}
+  Two-pane at lg (see .inbox-split, assets/app.css): the list on the left, and whichever
+  conversation was opened from it on the right, so opening another one never re-loads the
+  shell or the list itself. static/js/inbox_pane.js intercepts a row click at that width and
+  loads the conversation into #conversation-pane-inner instead of following the link; below
+  lg there's no room for both, so a row click falls through to its plain href — the existing
+  boosted, full-page navigation to conversations:detail, unchanged from before this feature.
+{% endcomment %}
+{% comment %}A conversation's own address loaded as a full page (a reload, a link, a new tab)
+renders here with that conversation already in the pane (open_in_pane): data-open says which,
+and data-inbox-url / data-inbox-title are what closing it goes back to.{% endcomment %}
+<div class="inbox-split{% if open_in_pane %} has-conversation{% endif %}" id="inbox-split"
+     data-inbox-url="{% url 'conversations:inbox' %}" data-inbox-title="Inbox — {{ site.app_name|default:"Akilent" }}"
+     {% if open_in_pane %}data-open="{{ detail_url }}"{% endif %}>
+  <header class="inbox-bar inbox-tools" id="inbox-bar">
+    <h1 class="inbox-bar-title">Inbox</h1>
+    {% include "conversations/_inbox_views.html" %}
     {% comment %}Its number is the nav badge's own (followups_badge, the Mine tab's count),
     loaded and refreshed the same way (components/_nav_item.html), so the two can never
     disagree.{% endcomment %}
-    <a href="{% url 'conversations:followups_due' %}" class="btn btn-ghost btn-sm inbox-header-link" title="Follow-ups" data-inbox-followups-link>
+    <a href="{% url 'conversations:followups_due' %}" class="inbox-bar-btn" title="Follow-ups" data-inbox-followups-link>
       {% include "components/icon.html" with name="bell" class="w-4 h-4" %}
-      <span class="sr-only sm:not-sr-only">Follow-ups</span>
-      <span hx-get="{% url 'conversations:followups_badge' %}" hx-swap="innerHTML" data-auto-refresh="followup-changed" hx-trigger="intersect once, every 300s [document.visibilityState === 'visible' && this.offsetParent !== null], sse:followup.due, sse:followup.updated, followup-changed from:body"></span>
+      <span class="sr-only">Follow-ups</span>
+      <span class="inbox-bar-badge" hx-get="{% url 'conversations:followups_badge' %}" hx-swap="innerHTML" data-auto-refresh="followup-changed" hx-trigger="intersect once, every 300s [document.visibilityState === 'visible' && this.offsetParent !== null], sse:followup.due, sse:followup.updated, followup-changed from:body"></span>
     </a>
     {% comment %}The set-up pages, opened now and then rather than all day: one menu
-    (cvMenu, static/js/chat.js) instead of four buttons beside the title.{% endcomment %}
-    <div class="cv-menu inbox-tools" x-data="cvMenu">
-      <button type="button" class="btn btn-ghost btn-sm inbox-header-link" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="menuOpen" title="Inbox settings">
+    (cvMenu, static/js/chat.js) instead of four buttons.{% endcomment %}
+    <div class="cv-menu" x-data="cvMenu">
+      <button type="button" class="inbox-bar-btn" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="menuOpen" title="Inbox set-up">
         {% include "components/icon.html" with name="settings" class="w-4 h-4" %}
-        <span class="sr-only sm:not-sr-only">Set-up</span>
-        {% include "components/icon.html" with name="chevron-down" class="hidden sm:block w-3.5 h-3.5 text-ink-subtle" %}
+        <span class="sr-only">Set-up</span>
       </button>
       <div class="cv-menu-panel" x-ref="menu" x-show="menuOpen" x-cloak x-transition.opacity role="menu" aria-label="Inbox set-up">
         <a href="{% url 'conversations:saved_replies' %}" class="cv-menu-item" role="menuitem">
@@ -50,25 +59,7 @@ The links are icon buttons on a phone with their labels kept for screen readers
         </a>
       </div>
     </div>
-  </div>
-</header>
-{% next_action_card %}
-</div>
-
-{% comment %}
-  Two-pane at lg (see .inbox-split, assets/app.css): the list on the left, and whichever
-  conversation was opened from it on the right, so opening another one never re-loads the
-  shell or the list itself. static/js/inbox_pane.js intercepts a row click at that width and
-  loads the conversation into #conversation-pane-inner instead of following the link; below
-  lg there's no room for both, so a row click falls through to its plain href — the existing
-  boosted, full-page navigation to conversations:detail, unchanged from before this feature.
-{% endcomment %}
-{% comment %}A conversation's own address loaded as a full page (a reload, a link, a new tab)
-renders here with that conversation already in the pane (open_in_pane): data-open says which,
-and data-inbox-url / data-inbox-title are what closing it goes back to.{% endcomment %}
-<div class="inbox-split{% if open_in_pane %} has-conversation{% endif %}" id="inbox-split"
-     data-inbox-url="{% url 'conversations:inbox' %}" data-inbox-title="Inbox — {{ site.app_name|default:"Akilent" }}"
-     {% if open_in_pane %}data-open="{{ detail_url }}"{% endif %}>
+  </header>
   <div class="inbox-list-col" x-data="{ stale: false }"
        @ak-refresh-failed="if ($event.target.id === 'inbox-body') stale = true"
        @ak-refresh-ok="if ($event.target.id === 'inbox-body') stale = false"
@@ -83,7 +74,7 @@ and data-inbox-url / data-inbox-title are what closing it goes back to.{% endcom
       Live refresh, driven by HTMX rather than a bespoke fetch loop.
 
       The trigger filter skips a poll when the tab is hidden (no work in a
-      background tab) and when focus is inside the list - re-writing the DOM under a
+      background tab) and when focus is inside the list or the bar's menus - re-writing the DOM under a
       keyboard user would throw their focus away every 8 seconds.
 
       The server answers 204 when the rendered list is byte-identical to the digest
@@ -113,7 +104,7 @@ and data-inbox-url / data-inbox-title are what closing it goes back to.{% endcom
     <div id="inbox-body" data-auto-refresh="inbox-refresh"
          data-hash=""
          hx-get="{% url 'conversations:inbox_feed' %}{% querystring h=None q=None %}"
-         hx-trigger="every 8s [document.visibilityState === 'visible' && !(document.activeElement && document.activeElement.closest('#inbox-body'))], inbox-refresh from:body{% if REALTIME_SSE_ENABLED %}, sse:conversation.updated[!(document.activeElement && document.activeElement.closest('#inbox-body'))]{% endif %}"
+         hx-trigger="every 8s [document.visibilityState === 'visible' && !(document.activeElement && document.activeElement.closest('#inbox-body, #inbox-bar'))], inbox-refresh from:body{% if REALTIME_SSE_ENABLED %}, sse:conversation.updated[!(document.activeElement && document.activeElement.closest('#inbox-body, #inbox-bar'))]{% endif %}"
          hx-swap="innerHTML"
          hx-vals='js:{h: document.getElementById("inbox-body").dataset.hash || "", q: (document.getElementById("inbox-q") || {}).value || ""}'
          hx-on::after-request="if (event.detail.xhr.status === 200) { this.dataset.hash = event.detail.xhr.getResponseHeader('X-Inbox-Hash') || ''; document.getElementById('inbox-status').textContent = 'Inbox updated.'; setTimeout(() => { document.getElementById('inbox-status').textContent = ''; }, 4000); }">
@@ -127,6 +118,10 @@ and data-inbox-url / data-inbox-title are what closing it goes back to.{% endcom
       </span>
       <p class="font-medium text-ink">Select a conversation</p>
       <p class="text-sm text-ink-subtle">It opens here, with the list still beside it.</p>
+      {% comment %}The one suggested next step (onboarding.next_action), here where nothing else
+      is shown rather than above the list. Below lg the list has the screen and this state
+      isn't shown, so the suggestion is on the dashboard there.{% endcomment %}
+      <div class="inbox-suggest">{% next_action_card %}</div>
     </div>
     {% comment %}Shown while a conversation loads (inbox_pane.js sets .is-loading).{% endcomment %}
     <div class="inbox-pane-skeleton" aria-hidden="true">

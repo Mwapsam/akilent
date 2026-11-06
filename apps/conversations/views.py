@@ -340,7 +340,7 @@ def inbox(request):
 
 @login_required
 def inbox_feed(request):
-    """Rendered inbox body (tabs + list), polled so new conversations appear live.
+    """Rendered inbox list (with its view choices), polled so new conversations appear live.
 
     HTMX gets the fragment itself, plus a digest of it in ``X-Inbox-Hash``. The
     poller sends the digest it is currently showing back as ``?h=``; when they
@@ -355,13 +355,16 @@ def inbox_feed(request):
     if account is None:
         return JsonResponse({"error": "no account"}, status=403)
 
-    html = render_to_string(
-        "conversations/_inbox_body.html",
-        _inbox_context(request, account),
-        request=request,
-    )
+    context = _inbox_context(request, account)
+    html = render_to_string("conversations/_inbox_body.html", context, request=request)
 
     if is_background(request):
+        # The view and channel choices sit in the bar above the list (inbox.html) and carry
+        # the counts, so they come along out of band; inside the digest, so a count that
+        # changes on its own is still a change.
+        html += render_to_string(
+            "conversations/_inbox_views.html", {**context, "oob": True}, request=request
+        )
         digest = hashlib.sha1(html.encode("utf-8"), usedforsecurity=False).hexdigest()[
             :12
         ]

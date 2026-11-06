@@ -2016,3 +2016,40 @@ Plan: the Inbox plan of 2026-11-06 (the Content Studio plan now lives in `docs/p
   - Search above the list: name, phone, email or message text, within the view and channel, as you type; the poll sends it too; kept in the URL on the list's own address; `/` focuses it.
 - **Not done, reported:** search at 200,000 messages takes 0.8–1.2 s on local SQLite (over the 300 ms target); the fix would be a `pg_trgm` index, a migration, not added without approval.
 - **Verification:** full suite 0 failures; ruff, format, mypy and `makemigrations --check` clean; `tools/qa/inbox_qa.mjs` 79/79 (now loading the lazy panel, plus Show earlier and live search); `area_scan /inbox` 26 pages, 0 issues.
+
+### Entry 27: Inbox Phase 2: room for messages, one window-closed state, the details beside the chat (2026-11-06)
+Plan: the Inbox plan of 2026-11-06, Phase 2.
+
+- **Room for messages.** Measured by `tools/qa/inbox_qa.mjs` (`QA_LAYOUT=1`, which now passes or fails each size):
+
+  | At | Thread before | Thread after |
+  |---|---|---|
+  | 1280×631 | 267 px | 427 px (target ≥ 420) |
+  | 1024×631 | 223 px | 421 px |
+  | 1280×800 | 436 px | 596 px |
+
+  - One 44 px bar heads the list: "Inbox", the view menu, the channel filter, Follow-ups, Set-up (`inbox.html`, `_inbox_views.html`). It replaces the title row and the toolbar. At lg it sits over the list column only, so the conversation starts at the top. The feed sends `_inbox_views.html` out of band inside its digest, so counts stay live; the poll skips while focus is in the bar.
+  - The six view tabs are gone: one menu at every width (it already replaced them beside an open conversation).
+  - The suggested next step moved into the empty pane. Below lg the list has the screen, so it's on the dashboard there.
+  - The inbox's main area: less padding at lg (`lg:py-2.5`) and up to 110rem wide.
+  - The conversation header is one row: the name with its status beside it. The status gives way first, and its badges drop out whole (wrapped onto a hidden line), never cut mid-word. On a phone-narrow pane the name sits over the status inside the same row. Badges are short ("Missed", "Waiting · 2h"), with the sentence in their title.
+- **Layout fixes.** No sideways scroll under the list (was 20 px; the old toolbar's negative margin). Nothing moves when a conversation opens: the bar is the same either way (the list used to move 140 px as the suggestion card hid). Both checked at five sizes.
+- **One window-closed state** (`_conversation_pane.html`, `_template_form.html`):
+  - a one-line note with a "Why?" tip (`help_tip.html` takes `tip_label`), in place of the `<details>` notice and the "Send a template · Required" line;
+  - WhatsApp: the template picker in the reply box's place; the dialog (window open) uses the same form;
+  - the last send failed for an account reason (`failureFix`): that problem and its fix link first, with "Try a template anyway" (chat.js `accountProblem`);
+  - no approved templates: says a template must be approved by Meta, with a link to create one;
+  - Instagram and Messenger: the reply box switched off ("Reply once they write again"); attach, mic, saved replies and "Edit & resend" hidden until the window opens; Messenger after a private comment reply keeps its own explanation.
+- **The stray blue goes.** The chat's accent is the theme's; Send and the mic are navy (`--color-brand-600`), recording is the theme's coral.
+- **The details beside the chat.** A docked column where the pane keeps the chat ≥ 420 px beside a column ≥ 280 px (`@container cv (min-width: 44.75rem)`). That is a 1440 px window with the sidebar open, or 1280 with it collapsed. The header's ⓘ hides and shows it, and its edge drags (or arrow keys) between 280 and 440 px; both are remembered. CSS `min()` keeps the chat ≥ 420 px whatever width is chosen. Narrower, it's a drawer that slides in, under akDialog (focus in and back, Esc, inert page), with a `ResizeObserver` in place of the window resize listener.
+  - **Differs from the plan:** the plan said docked at ≥ 1280 px. At 1280 with the sidebar open, the pane is 580 px, and docking would leave the chat at 268 px.
+  - **Differs from the plan:** the plan said to use the shared `{% drawer %}`. It teleports its content to `<body>`, which can't also be a column, so the panel keeps one element with the same dialog contract.
+- **Setup over the composer:** the checklist opens from the header and ends above the reply box at 1280 and 390 (`QA_OB=1`, composer covered at 0 of 3 points, closed or open). The tour is a one-time dialog.
+- **Tailwind:** the committed CSS was built with 4.3.3; building with 4.3.3 reproduces it exactly, so there is no drift.
+- **Speed** (local data, queries / median server time): list 22 / 59 ms, feed 13 / 41 ms, pane 17 / 42 ms, panel 21 / 47 ms, full page 32 / 108 ms; `test_inbox_speed.py` budgets unchanged and green.
+- **Verification:**
+  - full suite 5,940 passed, 0 failed; ruff, format, mypy and `makemigrations --check` clean;
+  - `test_inbox_layout.py` (new, 10 tests); seven layout tests updated to the bar and the one-row header;
+  - `inbox_qa.mjs` 79/79, `QA_LAYOUT` 5/5 sizes, `QA_COMPOSER` with WhatsApp on (a second local server, every POST intercepted);
+  - the contrast scan in light and dark: 0 failures; `area_scan /inbox` 26 pages, 0 issues.
+- **Open:** S4 ("a stale form answer never replaces the next conversation") failed in 2 of 4 full runs. The tag form posted as a full page, then passed in the 2 later runs, and the cause wasn't found. The harness's "no element" failure now prints the recent requests.

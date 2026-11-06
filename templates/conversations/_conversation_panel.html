@@ -13,7 +13,7 @@ don't run (panel_page.html). In the pane its forms answer with this panel again
       <p class="font-semibold text-ink truncate">{{ display_name }}</p>
       {% if conversation.assigned_to %}<p class="text-xs text-ink-subtle mt-0.5">Assigned to {% if conversation.assigned_to_id == request.user.id %}you{% else %}{{ conversation.assigned_to }}{% endif %}</p>{% endif %}
     </div>
-    <button type="button" class="cv-iconbtn cv-info-btn -mr-1" @click="infoOpen = false" aria-label="Close details">
+    <button type="button" class="cv-iconbtn cv-side-close -mr-1" @click="infoOpen = false" aria-label="Close details">
       <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
     </button>
   </div>

@@ -114,10 +114,10 @@ def test_inbox_links_are_absolute_and_never_carry_the_digest(logged_in, conversa
     for href in inbox_links:
         assert href.startswith("/inbox/?"), href
         assert "h=" not in href
-    tabs = [h for h in inbox_links if "channel=whatsapp" in h]
-    # Every view keeps the channel filter (Reminders tab removed): each one twice, as a
-    # tab and as an item in the view menu that replaces the tabs on a narrow toolbar.
-    assert len(tabs) == 12 and len(set(tabs)) == 6
+    views = [h for h in inbox_links if "channel=whatsapp" in h]
+    # Every view keeps the channel filter: each one once, in the view menu (sent with the
+    # poll's answer, out of band, for the bar above the list).
+    assert len(views) == 6 and len(set(views)) == 6
     clear = [h for h in inbox_links if "channel=" not in h]
     assert len(clear) == 1, "expected one absolute Clear filter link"
     assert (

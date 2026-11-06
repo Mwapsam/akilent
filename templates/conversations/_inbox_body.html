@@ -1,119 +1,17 @@
 {% load ui %}
-{% comment %}Inbox toolbar and list. Rendered inside #inbox-body by inbox.html and
-re-rendered on its own by the 8-second poll (views.inbox_feed), so everything
-here must work from the same context in both places. The poll skips while
-focus is inside #inbox-body, so an open channel select is never swapped out
-from under the user.
+{% comment %}The inbox list. Rendered inside #inbox-body by inbox.html and re-rendered on its own
+by the 8-second poll (views.inbox_feed), so everything here must work from the same context in
+both places. The view and channel choices above it are _inbox_views.html.
 
 One fact in one place per row: who (name), how long (the time — amber, with a
 clock, while they are waiting on us), what they said (preview), and anything
 else worth knowing (a badge only when it adds something). "Waiting" used to be
 said three times per row: the amber time, a badge, and the tab itself.{% endcomment %}
-<div class="inbox-toolbar">
-  {% url 'conversations:inbox' as inbox_url %}
-  {% comment %}Narrow toolbar (the list column beside an open conversation, a phone): six
-  tabs need ~690px and the column has ~370, so only one or two showed and the rest sat
-  off-screen with nothing to say so. There the tabs give way to this menu (container
-  query on .inbox-toolbar, assets/app.css): the current view on the button, every view
-  and its count one tap away, and a missed count on the button so it never hides.{% endcomment %}
-  <div class="cv-menu inbox-tools inbox-views" x-data="cvMenu">
-    <button type="button" class="inbox-views-btn" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="menuOpen" aria-label="Inbox view: {% if view == 'needs_attention' %}Needs attention{% elif view == 'unassigned' %}Unassigned{% elif view == 'missed' %}Missed{% elif view == 'assigned' %}Assigned to me{% elif view == 'closed' %}Closed{% else %}All{% endif %}. Change">
-      <span class="truncate">{% if view == 'needs_attention' %}Needs attention{% elif view == 'unassigned' %}Unassigned{% elif view == 'missed' %}Missed{% elif view == 'assigned' %}Assigned to me{% elif view == 'closed' %}Closed{% else %}All{% endif %}</span>
-      {% if view == 'needs_attention' %}<span class="inbox-tab-count">{{ needs_attention_count }}</span>
-      {% elif view == 'unassigned' %}<span class="inbox-tab-count">{{ unassigned_count }}</span>
-      {% elif view == 'missed' %}<span class="inbox-tab-count{% if missed_count %} inbox-tab-count--danger{% endif %}">{{ missed_count }}</span>
-      {% elif view == 'assigned' %}<span class="inbox-tab-count">{{ assigned_count }}</span>
-      {% elif view == 'all' %}<span class="inbox-tab-count">{{ all_count }}</span>
-      {% elif view == 'closed' %}<span class="inbox-tab-count">{{ closed_count }}</span>{% endif %}
-      {% if view != 'missed' and missed_count %}<span class="inbox-tab-count inbox-tab-count--danger" title="{{ missed_count }} missed">{{ missed_count }} missed</span>{% endif %}
-      {% include "components/icon.html" with name="chevron-down" class="w-4 h-4 ml-auto shrink-0 text-ink-subtle" %}
-    </button>
-    <div class="cv-menu-panel cv-menu-panel--start" x-ref="menu" x-show="menuOpen" x-cloak x-transition.opacity role="menu" aria-label="Inbox views">
-      <a href="{{ inbox_url }}{% querystring view='needs_attention' page=None h=None %}" class="cv-menu-item" role="menuitemradio" aria-checked="{% if view == 'needs_attention' %}true{% else %}false{% endif %}">
-        Needs attention<span class="inbox-tab-count ml-auto">{{ needs_attention_count }}</span>
-      </a>
-      <a href="{{ inbox_url }}{% querystring view='unassigned' page=None h=None %}" class="cv-menu-item" role="menuitemradio" aria-checked="{% if view == 'unassigned' %}true{% else %}false{% endif %}">
-        Unassigned<span class="inbox-tab-count ml-auto">{{ unassigned_count }}</span>
-      </a>
-      <a href="{{ inbox_url }}{% querystring view='missed' page=None h=None %}" class="cv-menu-item" role="menuitemradio" aria-checked="{% if view == 'missed' %}true{% else %}false{% endif %}">
-        Missed<span class="inbox-tab-count ml-auto{% if missed_count %} inbox-tab-count--danger{% endif %}">{{ missed_count }}</span>
-      </a>
-      <a href="{{ inbox_url }}{% querystring view='assigned' page=None h=None %}" class="cv-menu-item" role="menuitemradio" aria-checked="{% if view == 'assigned' %}true{% else %}false{% endif %}">
-        Assigned to me<span class="inbox-tab-count ml-auto">{{ assigned_count }}</span>
-      </a>
-      <a href="{{ inbox_url }}{% querystring view='all' page=None h=None %}" class="cv-menu-item" role="menuitemradio" aria-checked="{% if view == 'all' %}true{% else %}false{% endif %}">
-        All<span class="inbox-tab-count ml-auto">{{ all_count }}</span>
-      </a>
-      <div class="cv-menu-sep" role="separator"></div>
-      <a href="{{ inbox_url }}{% querystring view='closed' page=None h=None %}" class="cv-menu-item" role="menuitemradio" aria-checked="{% if view == 'closed' %}true{% else %}false{% endif %}">
-        Closed<span class="inbox-tab-count ml-auto">{{ closed_count }}</span>
-      </a>
-    </div>
-  </div>
-
-  {% comment %}Every view shows its count, 0 included: a missing number read as "not counted"
-  rather than "none". Missed is red only when there are some.{% endcomment %}
-  {% comment %}x-init scrolls the current tab into view. On a phone the tabs
-  overflow, and landing on "All" showed a row in which nothing looked selected
-  because the selected tab was off-screen. scrollLeft rather than scrollIntoView,
-  which would also scroll the page vertically.{% endcomment %}
-  <nav class="inbox-tabs relative" aria-label="Inbox views"
-       x-data x-init="const a = $el.querySelector('[aria-current]'); if (a && a.offsetLeft + a.offsetWidth > $el.clientWidth) $el.scrollLeft = a.offsetLeft - 16">
-    {% comment %}Absolute links (the inbox URL plus the current query, re-rendered by
-    querystring): once a conversation is open in the two-pane view the address bar shows
-    that conversation, and a bare "?view=" would resolve against it. channel and overdue
-    carry across tabs; the page and the poll's digest (h) never do.{% endcomment %}
-    <a href="{{ inbox_url }}{% querystring view='needs_attention' page=None h=None %}" class="inbox-tab" {% if view == 'needs_attention' %}aria-current="page"{% endif %}>
-      Needs attention<span class="inbox-tab-count">{{ needs_attention_count }}</span>
-    </a>
-    <a href="{{ inbox_url }}{% querystring view='unassigned' page=None h=None %}" class="inbox-tab" {% if view == 'unassigned' %}aria-current="page"{% endif %}
-       title="Open conversations nobody has been assigned to yet">
-      Unassigned<span class="inbox-tab-count">{{ unassigned_count }}</span>
-    </a>
-    <a href="{{ inbox_url }}{% querystring view='missed' page=None h=None %}" class="inbox-tab" {% if view == 'missed' %}aria-current="page"{% endif %}
-       title="Customers who wrote and got no reply for over 24 hours">
-      Missed<span class="inbox-tab-count{% if missed_count %} inbox-tab-count--danger{% endif %}">{{ missed_count }}</span>
-    </a>
-    <a href="{{ inbox_url }}{% querystring view='assigned' page=None h=None %}" class="inbox-tab" {% if view == 'assigned' %}aria-current="page"{% endif %}>
-      {% comment %}"Mine" on a phone: "Assigned to me" alone is wider than a
-      third of the screen, and it was the tab that got cut off.{% endcomment %}
-      <span class="sm:hidden">Mine</span><span class="hidden sm:inline">Assigned to me</span><span class="inbox-tab-count">{{ assigned_count }}</span>
-    </a>
-    <a href="{{ inbox_url }}{% querystring view='all' page=None h=None %}" class="inbox-tab" {% if view == 'all' %}aria-current="page"{% endif %}
-       title="Every open conversation">
-      All<span class="inbox-tab-count">{{ all_count }}</span>
-    </a>
-    <a href="{{ inbox_url }}{% querystring view='closed' page=None h=None %}" class="inbox-tab" {% if view == 'closed' %}aria-current="page"{% endif %}>
-      Closed<span class="inbox-tab-count">{{ closed_count }}</span>
-    </a>
-  </nav>
-
-  {% comment %}On a phone the filter is a round icon the size of a tab, with
-  the real <select> laid transparently over it: the tap still opens the native
-  picker, and assistive tech still gets a labelled select. A full-width select
-  beside the tabs left room for only two of the four. From sm up it is the
-  ordinary select. The dot marks a filter in force, since the icon alone would
-  not show which channel is selected.{% endcomment %}
-  <form method="get" action="{% url 'conversations:inbox' %}" class="inbox-filter{% if channel %} is-active{% endif %}"
-        x-data="{ busy: false }" @submit="busy = true">
-    <input type="hidden" name="view" value="{{ view }}" />
-    <span class="inbox-filter-icon" aria-hidden="true">
-      {% include "components/icon.html" with name="sliders" class="w-4 h-4" %}
-    </span>
-    <select name="channel" class="select select-sm" onchange="this.form.requestSubmit()" aria-label="Filter by channel"
-            :disabled="busy">
-      <option value="">All channels</option>
-      {% for value, label in channel_choices %}
-        <option value="{{ value }}" {% if value == channel %}selected{% endif %}>{{ label }}</option>
-      {% endfor %}
-    </select>
-  </form>
-</div>
-
+{% url 'conversations:inbox' as inbox_url %}
 {% if channel %}
-{% comment %}A channel filter carries across tabs (the ch fragment above), so switching tabs
-can silently keep narrowing the list to one channel with only the small dot on the filter icon
-as a hint. Spell it out, with a one-click way back to every channel.{% endcomment %}
+{% comment %}A channel filter carries across views, so switching views can silently keep
+narrowing the list to one channel with only the small dot on the filter icon as a hint. Spell
+it out, with a one-click way back to every channel.{% endcomment %}
 <p class="inbox-filter-note">
   Showing {% for value, label in channel_choices %}{% if value == channel %}{{ label }}{% endif %}{% endfor %} only ·
   <a href="{% url 'conversations:inbox' %}{% querystring channel=None page=None h=None %}">Clear filter</a>

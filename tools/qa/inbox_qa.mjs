@@ -1,14 +1,16 @@
 // Phase 1 (inbox) browser QA: drives locally installed Chrome (headless) over the DevTools
 // protocol and checks send outcomes, connection notices, the details drawer, pane loading
 // and phone layout. Every POST is intercepted, so nothing is sent to a customer.
-// Usage: node tools/qa/inbox_qa.mjs <repoRoot> <outDir>   (QA_SCAN=1 contrast scan, QA_HDR=1 header sizes)
+// Usage: node tools/qa/inbox_qa.mjs <repoRoot> <outDir>   (QA_SCAN=1 contrast scan, QA_HDR=1 header sizes,
+// QA_LAYOUT=1 Phase 2 layout targets, QA_COMPOSER=1 closed-window composer and details, QA_OB=1 setup over composer;
+// QA_BASE=http://127.0.0.1:8001 for a server started with WHATSAPP_ENABLED=True)
 // Needs the dev server on :8000 and QA_UI_EMAIL / QA_UI_PASSWORD in .env.
 import { spawn } from "node:child_process";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 const [repo, outDir] = process.argv.slice(2);
-const BASE = "http://127.0.0.1:8000";
+const BASE = process.env.QA_BASE || "http://127.0.0.1:8000";
 const CHROME = "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const PORT = 9334;
 const profile = join(outDir, "chrome-profile-p1");
@@ -67,7 +69,7 @@ async function viewport(w, h, mobile) {
 }
 async function clickSel(sel) {
   const p = await evaluate(`(() => { const el=document.querySelector(${JSON.stringify(sel)}); if(!el) return null; el.scrollIntoView({block:'center'}); const r=el.getBoundingClientRect(); return {x:r.left+r.width/2,y:r.top+r.height/2}; })()`);
-  if (!p) throw new Error("no element " + sel + " (rows: " + JSON.stringify(await evaluate("[...document.querySelectorAll('.inbox-row')].map(a => a.getAttribute('href'))")) + ", path: " + (await evaluate("location.pathname")) + ")");
+  if (!p) throw new Error("no element " + sel + " (rows: " + JSON.stringify(await evaluate("[...document.querySelectorAll('.inbox-row')].map(a => a.getAttribute('href'))")) + ", path: " + (await evaluate("location.pathname")) + ", requests: " + JSON.stringify(log.slice(-8)) + ")");
   for (const type of ["mousePressed", "mouseReleased"]) await send("Input.dispatchMouseEvent", { type, x: p.x, y: p.y, button: "left", clickCount: 1 });
 }
 async function key(k, code, keyCode) {
@@ -120,6 +122,7 @@ await go("/dashboard/");
 if ((await evaluate("location.pathname")).startsWith("/auth/login")) throw new Error("login failed");
 await evaluate("localStorage.setItem('welcomeTourSeen','1')");
 await send("Fetch.enable", { patterns: [{ urlPattern: "*", requestStage: "Request" }] });
+const shot0 = async (name) => writeFileSync(join(shots, name + ".jpg"), Buffer.from((await send("Page.captureScreenshot", { format: "jpeg", quality: 60 })).data, "base64"));
 if (process.env.QA_HDR) {
   const m = `(() => { const q=(s)=>{const e=document.querySelector(s); if(!e) return null; const r=e.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)];};
     const ctrls=[...document.querySelectorAll('.cv-header a, .cv-header button')].filter(e=>e.offsetParent).map(e=>{const r=e.getBoundingClientRect(); return [e.getAttribute('aria-label')||e.textContent.trim().slice(0,12), Math.round(r.width), Math.round(r.height)];});
@@ -133,6 +136,125 @@ if (process.env.QA_HDR) {
     await send("Page.captureScreenshot", { format: "jpeg", quality: 60 }).then((x) => writeFileSync(join(shots, `header-${w}.jpg`), Buffer.from(x.data, "base64")));
   }
   await viewport(1280, 800, false); await go("/inbox/?view=all"); console.log(1280, JSON.stringify((await evaluate(m)).label));
+  process.exit(0);
+}
+// Phase 2 layout: column widths, room for the thread, sideways scroll under the list, and
+// whether the bar above the list moves when a conversation opens. Prints one line per size.
+if (process.env.QA_LAYOUT) {
+  const m = `(() => { const r = (s) => { const e = document.querySelector(s); if (!e || !e.offsetParent) return null; const b = e.getBoundingClientRect(); return { x: Math.round(b.left), y: Math.round(b.top), w: Math.round(b.width), h: Math.round(b.height) }; };
+    const list = document.querySelector('.inbox-list-col');
+    const foot = document.querySelector('.cv-footer');
+    const footer = foot ? [...foot.children].filter(e => e.offsetParent).map(e => (e.className || e.tagName).toString().slice(0, 30) + ':' + Math.round(e.getBoundingClientRect().height)) : null;
+    return { footer, header: r('.cv-header'), main: r('#main'), bar: r('.inbox-bar'), list: r('.inbox-list-col'), pane: r('.cv-pane'), thread: r('.cv-thread'), side: r('#chat-info'),
+      listHscroll: list ? list.scrollWidth - list.clientWidth : null, pageHscroll: document.documentElement.scrollWidth - document.documentElement.clientWidth }; })()`;
+  for (const [w, h] of [[1024, 631], [1280, 631], [1280, 800], [1440, 800], [1920, 1000]]) {
+    await viewport(w, h, false);
+    await go("/inbox/?view=all", 1500);
+    const before = await evaluate(m);
+    // A conversation whose reply window is open: the everyday composer.
+    const hrefs = await evaluate("[...document.querySelectorAll('.inbox-row')].map(a => a.getAttribute('href'))");
+    for (const href of hrefs.slice(0, 10)) {
+      await clickSel(`.inbox-row[href="${href}"]`); await sleep(1800);
+      if (await chat("c.windowOpen && c.open")) break;
+    }
+    const after = await evaluate(m);
+    console.log(w + "x" + h, JSON.stringify({ before, after }));
+    await shot0(`layout-${w}x${h}`);
+    // The targets: no sideways scroll, nothing moves on open, and 420px of thread at 631px.
+    const fails = [];
+    if (before.listHscroll > 0 || after.listHscroll > 0 || after.pageHscroll > 0) fails.push("sideways scroll");
+    if (before.bar.y !== after.bar.y || before.list.y !== after.list.y) fails.push("bar or list moved on open");
+    if (h === 631 && w >= 1024 && after.thread.h < 420) fails.push(`thread ${after.thread.h}px < 420`);
+    if (w >= 1440 && !after.side) fails.push("details not docked");
+    console.log(fails.length ? "FAIL layout " + w + "x" + h + " " + fails.join("; ") : "PASS layout " + w + "x" + h);
+  }
+  process.exit(0);
+}
+// Phase 2 composer and details: the closed-window states (QA_BASE pointing at a server with
+// WhatsApp on shows WhatsApp's), the details drawer, and the docked column's hide and resize.
+if (process.env.QA_COMPOSER) {
+  const out = {};
+  const footer = () => evaluate(`(() => { const f = document.querySelector('.cv-footer'); if (!f) return null; const vis = (s) => { const e = f.querySelector(s); return !!e && !!e.offsetParent; };
+    return { note: (f.querySelector('.cv-closedwin-note') || {}).innerText, closed: vis('.cv-closedwin'), picker: vis('[data-closed-templates]'), problem: vis('.cv-closedwin-problem'), empty: vis('[data-no-templates]'),
+      reply: vis('.cv-composer'), replyDisabled: !!(f.querySelector('.cv-input') || {}).disabled, attach: vis('[aria-label="Attach a file"]'), mic: vis('[aria-label="Record a voice note"]'), cta: !!f.querySelector('.cv-tpl-cta') }; })()`);
+  await viewport(1280, 800, false);
+  for (const ch of ["whatsapp", "instagram"]) {
+    await go(`/inbox/?view=all&channel=${ch}`, 1500);
+    const hrefs = await evaluate("[...document.querySelectorAll('.inbox-row')].map(a => a.getAttribute('href'))");
+    let found = false;
+    for (const href of hrefs.slice(0, 15)) {
+      await clickSel(`.inbox-row[href="${href}"]`); await sleep(1600);
+      if (await chat("c.open && !c.windowOpen")) { found = true; break; }
+    }
+    if (!found) { out[ch] = "no closed-window chat"; continue; }
+    out[ch] = await footer();
+    await shot0(`composer-closed-${ch}`);
+    if (ch === "whatsapp") {
+      // The last send failed for an account reason: that comes first, templates one step away.
+      await chat("c.messages.push({ id: 'qa-acct', direction: 'outbound', body: 'download_app', ts: new Date().toISOString(), status: 'failed', failureReason: 'WhatsApp could not take payment for this message.', failureFix: { label: 'Fix the payment method in Meta', url: 'https://business.facebook.com/billing_hub' } })");
+      await sleep(300);
+      out.whatsappAccountProblem = await footer();
+      await shot0("composer-closed-whatsapp-account");
+      await clickSel(".cv-closedwin-problem .btn-ghost"); await sleep(300);
+      out.whatsappTryAnyway = await footer();
+    }
+  }
+  // The drawer, where the details don't fit beside the chat.
+  await go("/inbox/?view=all", 1500); await clickSel(".inbox-row"); await sleep(1800);
+  out.drawer = { docked: await chat("c.docked") };
+  await evaluate("document.querySelector('.cv-info-btn').focus()"); await clickSel(".cv-info-btn"); await sleep(900);
+  out.drawer.open = await evaluate("(() => { const s = document.getElementById('chat-info'); const r = s.getBoundingClientRect(); return { shown: getComputedStyle(s).display !== 'none', x: Math.round(r.left), w: Math.round(r.width), inert: document.querySelectorAll('[data-dialog-inert]').length, loaded: !!s.querySelector('[data-panel-followup]') }; })()");
+  await shot0("details-drawer-1280");
+  await key("Escape", "Escape", 27); await sleep(500);
+  out.drawer.closed = await evaluate("({ shown: getComputedStyle(document.getElementById('chat-info')).display !== 'none', focusBack: document.activeElement === document.querySelector('.cv-info-btn'), inert: document.querySelectorAll('[data-dialog-inert]').length })");
+  // Docked, wide: hide and show it, drag its edge; both remembered.
+  await viewport(1600, 900, false); await go("/inbox/?view=all", 1500); await clickSel(".inbox-row"); await sleep(1800);
+  await evaluate("localStorage.removeItem('inbox-side-w'); localStorage.removeItem('inbox-side-collapsed')");
+  await go(await evaluate("location.pathname"), 1800);
+  const side = () => evaluate("(() => { const s = document.getElementById('chat-info'); return { shown: !!s.offsetParent, w: Math.round(s.getBoundingClientRect().width), thread: Math.round(document.querySelector('.cv-thread').getBoundingClientRect().width) }; })()");
+  out.docked = { start: { docked: await chat("c.docked"), ...(await side()) } };
+  await clickSel(".cv-info-btn"); await sleep(400);
+  out.docked.hidden = await side();
+  await go(await evaluate("location.pathname"), 1800);
+  out.docked.hiddenAfterReload = await side();
+  await clickSel(".cv-info-btn"); await sleep(400);
+  const h = await evaluate("(() => { const r = document.querySelector('.cv-side-resize').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()");
+  await send("Input.dispatchMouseEvent", { type: "mousePressed", x: h.x, y: h.y, button: "left", clickCount: 1 });
+  for (let i = 1; i <= 6; i++) await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: h.x - i * 12, y: h.y, button: "left", buttons: 1 });
+  await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: h.x - 72, y: h.y, button: "left", clickCount: 1 });
+  await sleep(300);
+  out.docked.dragged = await side();
+  await go(await evaluate("location.pathname"), 1800);
+  out.docked.draggedAfterReload = { ...(await side()), stored: await evaluate("localStorage.getItem('inbox-side-w')") };
+  await shot0("details-docked-1600");
+  await evaluate("localStorage.removeItem('inbox-side-w'); localStorage.removeItem('inbox-side-collapsed')");
+  // A phone: the header's name over its status.
+  await viewport(390, 844, true); await go("/inbox/?view=all", 1500);
+  await go(await evaluate("document.querySelector('.inbox-row').getAttribute('href')"), 1800);
+  out.phone = await evaluate("(() => { const r = (s) => { const b = document.querySelector(s).getBoundingClientRect(); return [Math.round(b.width), Math.round(b.height)]; }; return { header: r('.cv-header'), name: r('.cv-h-name'), status: r('.cv-h-status'), hscroll: document.documentElement.scrollWidth - document.documentElement.clientWidth }; })()");
+  await shot0("header-phone-390");
+  console.log(JSON.stringify(out, null, 1));
+  process.exit(0);
+}
+// Phase 2: nothing that stays on screen covers the composer (the setup launcher and its
+// checklist), at 1280 and 390.
+if (process.env.QA_OB) {
+  const probe = `(() => { const f = document.querySelector('.cv-footer'); const r = f.getBoundingClientRect();
+    const pts = [[r.left + 20, r.top + r.height / 2], [r.left + r.width / 2, r.top + r.height / 2], [r.right - 24, r.top + r.height / 2]];
+    const covered = pts.filter(([x, y]) => { const e = document.elementFromPoint(x, y); return !e || !f.contains(e); }).length;
+    const panel = [...document.querySelectorAll('[data-ob-panel], .ob-panel, [x-show*="obOpen"]')].find(e => e.offsetParent);
+    const pr = panel && panel.getBoundingClientRect();
+    return { covered, footerTop: Math.round(r.top), panel: pr ? [Math.round(pr.left), Math.round(pr.top), Math.round(pr.right), Math.round(pr.bottom)] : null }; })()`;
+  for (const [w, h, mob] of [[1280, 800, false], [390, 844, true]]) {
+    await viewport(w, h, mob);
+    await go("/inbox/?view=all", 1500);
+    await go(await evaluate("document.querySelector('.inbox-row').getAttribute('href')"), 1800);
+    const closed = await evaluate(probe);
+    await evaluate("window.dispatchEvent(new CustomEvent('ob-toggle'))"); await sleep(700);
+    const opened = await evaluate(probe);
+    await shot0(`setup-open-${w}`);
+    console.log(w, JSON.stringify({ closed, opened }));
+  }
   process.exit(0);
 }
 if (process.env.QA_SCAN) {
@@ -400,7 +522,7 @@ check("pane.details-column-not-dialog", st.role === null && st.inert === 0, st);
 // isn't reloaded. A real POST to the local contact: it only adds a tag to a QA contact.
 // Where the details don't fit beside the chat they're a drawer, which loads them when opened.
 const panelBefore = await evaluate("!!document.querySelector('#cv-panel [data-panel-followup]')");
-const asDrawer = await evaluate("(() => { const b = document.querySelector('#conversation-pane-inner .cv-info-btn'); return !!b && getComputedStyle(b).display !== 'none'; })()");
+const asDrawer = await evaluate("!Alpine.$data(document.querySelector('#conversation-pane-inner .cv')).docked");
 if (asDrawer) await evaluate("document.querySelector('#conversation-pane-inner .cv-info-btn').click()");
 for (let i = 0; i < 40 && !(await evaluate("!!document.getElementById('conversation-add-tag')")); i++) await sleep(150);
 check("pane.details-load-when-shown", (asDrawer ? !panelBefore : true) && await evaluate("!!document.querySelector('#cv-panel [data-panel-followup]')"), { asDrawer, panelBefore });
@@ -764,8 +886,10 @@ const reloadState = `(() => ({ path: location.pathname, split: !!document.getEle
   pane: !!document.querySelector('#conversation-pane-inner .cv'), current: document.querySelector('.inbox-row[aria-current="true"]')?.getAttribute('href'), title: document.title }))()`;
 st = await evaluate(reloadState);
 st.balance = await evaluate(`(() => { const l = document.querySelector('.inbox-list-col').getBoundingClientRect(), c = document.querySelector('#conversation-pane-inner .cv').getBoundingClientRect();
-  return { listBottom: Math.round(l.bottom), cvBottom: Math.round(c.bottom), cvTop: Math.round(c.top), listTop: Math.round(l.top), pageScroll: document.documentElement.scrollHeight - innerHeight }; })()`);
-check("pane.columns-balanced-no-page-scroll", st.balance.listBottom === st.balance.cvBottom && st.balance.listTop === st.balance.cvTop && st.balance.pageScroll <= 0, st.balance);
+  const b = document.querySelector('.inbox-bar').getBoundingClientRect();
+  return { listBottom: Math.round(l.bottom), cvBottom: Math.round(c.bottom), cvTop: Math.round(c.top), barTop: Math.round(b.top), pageScroll: document.documentElement.scrollHeight - innerHeight }; })()`);
+// The conversation starts level with the bar over the list (Phase 2: the bar heads the list only).
+check("pane.columns-balanced-no-page-scroll", st.balance.listBottom === st.balance.cvBottom && st.balance.barTop === st.balance.cvTop && st.balance.pageScroll <= 0, st.balance);
 check("reload.keeps-inbox-and-pane-1280", st.path === wr[0] && st.split && st.list && st.pane && st.current === wr[0] && /— Inbox$/.test(st.title), st);
 await clickSel(`.inbox-row[href="${wr[1]}"]`); await sleep(1800);
 const second = await evaluate("location.pathname");

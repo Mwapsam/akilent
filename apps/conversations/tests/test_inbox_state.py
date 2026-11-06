@@ -240,12 +240,12 @@ def test_a_closed_chat_with_a_follow_up_due_stays_in_closed(shop):
 def test_every_view_shows_its_count_even_when_it_is_zero(shop):
     client, _, _ = shop
     html = client.get("/inbox/").content.decode()
-    tabs = html[html.index('class="inbox-tabs') :]
-    tabs = tabs[: tabs.index("</nav>")]
+    menu = html[html.index('aria-label="Inbox views"') :]
+    menu = menu[: menu.index("</a>", menu.index("Closed<span"))]
 
-    assert tabs.count('class="inbox-tab-count') == 6
+    assert menu.count('class="inbox-tab-count') == 6
     assert (
-        "inbox-tab-count--danger" not in tabs
+        "inbox-tab-count--danger" not in menu
     )  # Missed is red only when there are some
 
 
