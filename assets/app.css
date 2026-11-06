@@ -2638,3 +2638,50 @@
   .help-tip-label { min-height: 2.75rem; }
   .cv-composer .cv-input { min-height: 2.75rem; }
 }
+
+/* ── The details panel answers who, where, what next (Inbox plan, Phase 6) ──────────────
+   Sections in one order on every chat: who, Status, Next step, Customer value, Activity,
+   and deleting, set apart. Each row is label · value · action on one line; a form shows only
+   once its action is asked for (details.pop, which Esc folds: app.js). */
+.cv-who { padding: 1rem 1.125rem .875rem; }
+.cv-who-line { display: flex; align-items: center; gap: .25rem; min-width: 0; font-size: .8125rem; color: var(--cv-ink-muted); }
+.cv-who-line > a { min-width: 0; }
+.cv-who-facts { margin-top: .625rem; font-size: .75rem; color: var(--cv-ink-subtle); }
+.cv-link { color: var(--color-accent); font-weight: 500; }
+.cv-link:hover { text-decoration: underline; }
+/* The label sits above its value, the action to the right of both: the docked column is
+   about 290px wide, too narrow for a label column beside the value. */
+.cv-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: .5rem; align-items: center;
+          min-height: 2.75rem; padding-block: .25rem; font-size: .875rem; }
+.cv-row > .cv-row-label { grid-column: 1; grid-row: 1; }
+.cv-row > .cv-row-value { grid-column: 1; grid-row: 2; }
+.cv-row > form, .cv-row > .cv-menu, .cv-row > .cv-row-action { grid-column: 2; grid-row: 1 / span 2; }
+.cv-row--sub { padding-left: .75rem; border-left: 2px solid var(--cv-line); margin-block: .25rem; min-height: 0; }
+.cv-row--sub > .cv-row-value { grid-row: 1; }
+.cv-row-label { font-size: .75rem; color: var(--cv-ink-subtle); line-height: 1.3; }
+.cv-row-value { min-width: 0; overflow-wrap: anywhere; color: var(--cv-ink); line-height: 1.35; }
+.cv-row-action { display: inline-flex; align-items: center; gap: .25rem; flex-shrink: 0; min-height: 1.75rem; padding: 0 .5rem; margin-right: -.5rem;
+                 border-radius: var(--radius-control); font-size: .8125rem; font-weight: 500; color: var(--color-accent); white-space: nowrap; cursor: pointer; }
+.cv-row-action:hover { background: var(--cv-hover); }
+.cv-row-action:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 1px; }
+.cv-row-note { margin-top: .125rem; font-size: .75rem; color: var(--cv-ink-subtle); }
+.cv-row-problem { display: flex; align-items: center; gap: .5rem; margin-top: .5rem; padding: .5rem .75rem; border-radius: var(--radius-control);
+                  font-size: .8125rem; color: var(--tone-coral-fg); background: var(--tone-coral-bg); }
+.cv-sub + .cv-sub { margin-top: .875rem; }
+.cv-sub-h { margin-bottom: .375rem; font-size: .75rem; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--cv-ink-subtle); }
+.cv-sub:focus { outline: none; }
+.cv-fold > summary.cv-fold-summary { display: flex; align-items: center; justify-content: space-between; gap: .5rem; min-height: 2.25rem; font-size: .875rem; }
+.cv-fold[open] > summary .cv-row-action { color: var(--cv-ink-muted); }
+.cv-fold-body { margin-top: .375rem; }
+.cv-more > summary { list-style: none; margin-top: .25rem; }
+.cv-more > summary::-webkit-details-marker { display: none; }
+.cv-disclosure--first { margin-top: 0; }
+.cv-history > li + li { border-top: 1px solid var(--cv-line); }
+.cv-history-row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; min-height: 2.25rem; font-size: .875rem; color: var(--cv-ink); }
+.cv-history-row:hover { color: var(--color-accent); }
+.cv-danger { margin-top: .5rem; padding: 1rem 1.125rem; border-top: 1px solid var(--cv-line); background: var(--color-surface-muted); }
+@media (pointer: coarse) {
+  .cv-row-action, .cv-fold > summary.cv-fold-summary, .cv-history-row, .cv-who-line > a { min-height: 2.75rem; }
+  .cv-who-line > a { display: inline-flex; align-items: center; }
+  .cv-who .cv-iconbtn { width: 2.75rem; height: 2.75rem; }
+}

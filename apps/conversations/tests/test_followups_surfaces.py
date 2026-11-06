@@ -208,7 +208,7 @@ def test_a_waiting_customer_reads_as_waiting_not_as_a_reminder(signed_in, team):
 
 def _panel(html):
     start = html.index("data-panel-followup")
-    return html[start : html.index("Internal notes", start)]
+    return html[start : html.index("data-panel-notes", start)]
 
 
 @pytest.mark.django_db
@@ -254,7 +254,7 @@ def test_the_panel_sets_a_follow_up_with_the_promise(signed_in, team):
     thandi = _contact(account)
     chat = _chat(account, thandi)
     panel = _panel(on_screen(signed_in, chat.public_id))
-    assert copy.SET_FOLLOWUP in panel and copy.INTERNAL_ONLY in panel
+    assert copy.SET_FOLLOWUP in panel and copy.INTERNAL_ONLY not in panel
     assert 'value="next_week"' in panel and 'value="custom"' in panel
 
     resp = signed_in.post(

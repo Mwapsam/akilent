@@ -98,7 +98,9 @@ def test_a_panel_action_answers_with_the_panel_and_what_else_it_changed(
     assert 'class="cv-wrap"' not in body  # the panel only: the thread doesn't reload
     # The composer's Next steps, swapped out of band (a follow-up shows its dot there).
     assert 'id="cv-next"' in body and 'hx-swap-oob="true"' in body
-    assert resp["HX-Trigger"] == "inbox-refresh"  # the row in the list
+    assert (
+        resp["HX-Trigger"] == "inbox-refresh, cv-changed"
+    )  # the row in the list, the header
     # What happened, said in place (X-Toast is "type|message", the message URL-encoded).
     assert toast.lower() in unquote(resp["X-Toast"]).lower()
 
@@ -134,7 +136,7 @@ def test_a_follow_up_done_from_the_panel_comes_back_as_the_panel(chat):
 
     body = resp.content.decode()
     assert "data-panel-followup" in body and 'id="cv-next"' in body
-    assert resp["HX-Trigger"] == "inbox-refresh"
+    assert resp["HX-Trigger"] == "inbox-refresh, cv-changed"
     f.refresh_from_db()
     assert f.done_at is not None
 

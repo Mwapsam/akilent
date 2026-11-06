@@ -2234,3 +2234,27 @@ Plan: the Inbox plan of 2026-11-06, revised Phase 5, items 5–8 and the respons
     - `inbox_qa.mjs` 80/80; `QA_LAYOUT` 5/5; `QA_KEYS`, `QA_COMPOSER`, `QA_LOOK`, `QA_PICKER`, `QA_FAST`, `QA_BLINK`, `QA_ROWS`, `QA_LIVE` and `QA_RESP` as above.
     - The contrast scan in both themes: 0 failures, and the inbox's phone screens 0 targets under 44 px. `area_scan /inbox`: 26 pages, 0 issues.
 
+
+### Entry 32: Inbox Phase 6, the details panel answers who, where, what next (2026-11-06)
+Plan: the Inbox plan of 2026-11-06, Phase 6 (from the user's panel proposal). Docking stays at about 1440, the Phase 2 decision.
+
+- **The order, on every chat:** who, Status, Next step, Customer value, Activity (folded), and Delete, set apart. An empty section shrinks to one line with its action ("No follow-up · Set one", "No notes · Add note", "No tags").
+- **Who:** avatar with the channel mark, name once, phone with copy, email only when there is one, and "Customer since Nov 2026 · 2 conversations · View profile". The Name, Phone, Email, Customer since and Conversations rows are gone.
+- **Status:** label over value, action on the right (the docked column is about 290 px, too narrow for a label column).
+  - **Status:** Open (· waiting for you / · missed), Waiting on them, or Closed, with Close (keeps its Undo) or Reopen.
+  - **Assigned:** You / a name / Unassigned, with Assign to me or Unassign.
+  - **Reply window:** "Open · closes in 6h" or "Closed 4 days ago" from the customer's latest message; Messenger counts its 7 days. In the pane, open or closed is the composer's own `windowOpen`, so the two can't disagree (a seeded Instagram chat showed they can). On WhatsApp, "Send a template" opens the composer's picker.
+  - **Automations:** On (Pause for… menu), "Paused until 14:00" or "Paused" (Resume). Run one stays a menu. The old "no end" check (year ≥ 2100) never matched: "until I turn it back on" pauses 10 years. Now: more than a year away.
+  - **Account problem:** the composer banner's own check (`accountProblem`), with Fix it.
+  - A panel action's answer now triggers `cv-changed` as well, and the pane polls at once, so the header follows a Close, Reopen or Assign made in the panel.
+- **Next step:** "Only your team sees these" said once. The follow-up keeps its Done, Later and Not needed (the follow-up copy rules); none set folds the form behind "Set one". Notes show the latest, "N more", and Add note.
+- **Customer value:** where they stand (or "Not tracked yet · Track as interested"), orders (the open one and what they've paid; a count instead of a total across currencies), tags as chips with Add a tag folded.
+- **Activity:** what automations did, forms, earlier conversations (loaded when it opens, `?part=history`), and "Why didn't it reply?" only when the customer's last message was left for the team.
+- **Folded forms** are `<details class="pop">`: they work without scripts and the site's Esc handler folds them (the conversation stays open).
+- **Speed:** the panel stays at its 21-query budget. Status comes from `with_activity` and the paid total from subqueries on the conversation's own query; earlier conversations cost nothing until Activity opens.
+- **Also fixed:** "paused … for 1 hours" now says "1 hour".
+- **Verification:**
+  - `test_inbox_details.py` (20): order on a full and an empty chat, name and team line once, email, each Status state and action, the window open/closed/Messenger/none, automations three ways, account problem, follow-up folded and set, notes, orders and paid, tags, history lazy and on the no-JS page, every action a form there.
+  - Updated: the panel answer's `HX-Trigger`, "Pause for…", the follow-up form's promise said once, "Why didn't it reply?" only when left for the team.
+  - Harness `QA_PANEL`: at 1440×900 docked, the follow-up line ends at 625 px (Status and Next step above the fold); a folded form opens, Esc folds it with focus back on its summary and the conversation still open; Pause for 1 hour then Resume, for real; Send a template opens the picker; 390 full-screen sheet and 1440 docked in both themes: no sideways scroll, 0 contrast failures, 0 touch targets under 44 px at 390.
+  - `inbox_qa.mjs` 80/80; `QA_RESP` unchanged from Entry 31.

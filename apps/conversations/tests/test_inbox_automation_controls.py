@@ -124,7 +124,7 @@ def test_pane_controls(owner, account, conversation):
         },
     )
     page = on_screen(owner, conversation.public_id)
-    assert "Win back" in page and "Pause here" in page
+    assert "Win back" in page and "Pause for…" in page
     owner.post(url, {"action": "run_automation", "workflow": "win-back"})
     run = WorkflowRun.objects.get(workflow=wf)
     assert run.status == WorkflowRun.Status.WAITING

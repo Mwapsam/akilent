@@ -175,10 +175,14 @@ def test_what_automations_did_is_a_disclosure_with_a_count_and_why_is_an_arrow_l
     chat = _chat(account)
     panel = client.get(f"/inbox/{chat.public_id}/panel/", **BG).content.decode()
 
-    summary = panel[panel.index('<details class="cv-disclosure"') :]
+    summary = panel[panel.index('<details class="cv-disclosure') :]
     summary = summary[: summary.index("</summary>")]
     assert 'What automations did<span class="inbox-tab-count">0</span>' in summary
-    assert 'class="cv-arrow-link">Why didn\'t it reply?' in panel
+    assert "Why didn't it reply?" not in panel  # nothing was left for the team
+
+    Message.objects.filter(conversation=chat).update(metadata={"handled_by": ""})
+    panel = client.get(f"/inbox/{chat.public_id}/panel/", **BG).content.decode()
+    assert 'class="cv-arrow-link" data-panel-why-not>Why didn\'t it reply?' in panel
 
 
 # --- Templates to read -----------------------------------------------------------------

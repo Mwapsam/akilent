@@ -778,7 +778,7 @@ def conversation_detail(request, public_id: str):
                     + (
                         " until you turn them back on."
                         if hours is None
-                        else f" for {hours:g} hours."
+                        else f" for {hours:g} hour{'' if hours == 1 else 's'}."
                     ),
                 )
             elif action == "resume_automation":
@@ -1163,10 +1163,16 @@ def _crm_context(account, conversation) -> dict:
     return {"open_lead": open_lead, "open_deal": open_deal}
 
 
-def _panel_context(request, account, conversation) -> dict:
-    """Everything the details panel shows beyond the conversation itself."""
+def _panel_context(request, account, conversation, *, page=False) -> dict:
+    """Everything the details panel shows beyond the conversation itself. ``page``: the panel
+    as a page of its own (no scripts), which lists earlier conversations in place instead of
+    loading them when Activity opens."""
     from apps.conversations import followup_copy
 
+    if not hasattr(conversation, "last_any"):
+        # Reached through a redirect back from a tag or follow-up view: the conversation
+        # without the panel's facts.
+        conversation = _panel_conversation(account, conversation.public_id)
     now = timezone.now()
     usable = _usable(account)
     open_order = None
@@ -1212,13 +1218,10 @@ def _panel_context(request, account, conversation) -> dict:
         else []
     )
     last_inbound = _last_inbound(conversation)
-    # The customer's conversations, counted with the conversation row where the panel
-    # view fetched it that way (_panel_conversation).
-    conversation_count = getattr(conversation, "contact_conversations", None)
-    if conversation_count is None:
-        conversation_count = Conversation.objects.filter(
-            account=account, contact=conversation.contact
-        ).count()
+    snapshot = snapshot_of(conversation, now)
+    notes = list(conversation.notes.select_related("author"))
+    paid_n = getattr(conversation, "paid_n", 0)
+    meta = (last_inbound or {}).get("metadata") or {}
 
     return {
         "account": account,
@@ -1228,13 +1231,33 @@ def _panel_context(request, account, conversation) -> dict:
         "automation_now": automation_now,
         "last_handled_by": _last_handled_by(last_inbound),
         "active_recommendation": _active_recommendation_for(conversation),
-        "notes": conversation.notes.select_related("author"),
+        # Newest first: the panel shows the latest, with the rest one tap away.
+        "notes": notes[::-1],
         **_crm_context(account, conversation),
         "open_order": open_order,
+        "paid": {
+            "n": paid_n,
+            "total": conversation.paid_total
+            if paid_n and conversation.paid_cur_lo == conversation.paid_cur_hi
+            else None,
+            "currency": conversation.paid_cur_lo if paid_n else "",
+        },
         # Cheap facts a support agent wants without leaving the conversation:
         # how long this has been a customer, and whether this is a first
         # contact or one of a longer history. Computed here, not stored.
-        "conversation_count": conversation_count,
+        "conversation_count": conversation.contact_conversations,
+        "earlier_count": max(conversation.contact_conversations - 1, 0),
+        "earlier_conversations": _earlier_conversations(account, conversation)
+        if page
+        else None,
+        "status_row": _status_row(conversation, snapshot),
+        "reply_window": _reply_window(
+            conversation, snapshot.last_customer_message_at, now
+        ),
+        "automation_state": _automation_state(conversation, now),
+        # "Why didn't it reply?" only when the customer's latest message was left for the
+        # team: no automation, form or waiting run took it.
+        "left_for_team": last_inbound is not None and meta.get("handled_by") == "",
         **_followup_context(
             request,
             account,
@@ -1272,7 +1295,9 @@ def _panel_response(request, account, conversation, *, after_action=False):
     response["Cache-Control"] = "no-store"
     if after_action:
         _messages_to_toast(request, response)
-        response["HX-Trigger"] = "inbox-refresh"
+        # The list row, and the pane's header (chat.js polls at once on cv-changed): a
+        # Status row's Close, Reopen or Assign changes both.
+        response["HX-Trigger"] = "inbox-refresh, cv-changed"
     return response
 
 
@@ -1291,10 +1316,9 @@ def _approved_templates(account, conversation) -> list:
 
 
 def _panel_conversation(account, public_id):
-    """The conversation as the details panel needs it: with how many conversations its
-    customer has had, counted in the same query."""
-    from django.db.models.functions import Coalesce
-
+    """The conversation as the details panel needs it, in one query: how many conversations
+    its customer has had, the message facts its Status rows are worked out from
+    (state.with_activity), and, where Orders is usable, what the customer has paid."""
     count = (
         Conversation.objects.filter(account=account, contact=OuterRef("contact"))
         .order_by()
@@ -1302,12 +1326,111 @@ def _panel_conversation(account, public_id):
         .annotate(n=Count("pk"))
         .values("n")
     )
-    return get_object_or_404(
+    qs = with_activity(
         hide_disabled_channels(
             Conversation.objects.select_related("contact", "account", "assigned_to")
-        ).annotate(contact_conversations=Coalesce(Subquery(count), 0)),
-        account=account,
-        public_id=public_id,
+        ).annotate(contact_conversations=Coalesce(Subquery(count), 0))
+    )
+    if "orders" in _usable(account):
+        qs = qs.annotate(**_paid_facts(account))
+    return get_object_or_404(qs, account=account, public_id=public_id)
+
+
+def _paid_facts(account) -> dict:
+    """The customer's paid orders, as subqueries on their conversation: how many, the total,
+    and the lowest and highest currency (a total is only shown when those are the same)."""
+    from django.db.models import Max, Min, Sum
+
+    from apps.commerce.models import Order
+
+    paid = Order.objects.filter(
+        account=account, contact=OuterRef("contact"), status=Order.Status.PAID
+    ).order_by()
+
+    def one(aggregate):
+        return Subquery(paid.values("contact").annotate(v=aggregate).values("v")[:1])
+
+    return {
+        "paid_n": Coalesce(one(Count("pk")), 0),
+        "paid_total": one(Sum("total")),
+        "paid_cur_lo": one(Min("currency")),
+        "paid_cur_hi": one(Max("currency")),
+    }
+
+
+def _span(delta) -> str:
+    """A length of time as the panel's Status rows say it: "40 min", "6h", "4 days"."""
+    minutes = max(round(delta.total_seconds() / 60), 1)
+    if minutes < 60:
+        return f"{minutes} min"
+    if minutes < 48 * 60:
+        return f"{round(minutes / 60)}h"
+    return f"{round(minutes / (24 * 60))} days"
+
+
+def _reply_window(conversation, last_in, now) -> dict | None:
+    """The Reply window row: open until when, or closed since when. The 24 hours run from the
+    customer's latest message, as each channel's own record counts them; on Messenger a person
+    may still reply for 7 days (HUMAN_AGENT). None on a channel without a window."""
+    import datetime
+
+    windows = {
+        Conversation.Channel.WHATSAPP: [24],
+        Conversation.Channel.INSTAGRAM: [24],
+        Conversation.Channel.FACEBOOK: [24, 24 * 7],
+    }
+    hours = windows.get(conversation.channel)
+    if hours is None:
+        return None
+    if last_in is None:
+        return {"open": False, "label": "Waiting for their first message"}
+    for h in hours:
+        closes = last_in + datetime.timedelta(hours=h)
+        if closes > now:
+            return {"open": True, "label": f"Open · closes in {_span(closes - now)}"}
+    closed = last_in + datetime.timedelta(hours=hours[-1])
+    return {"open": False, "label": f"Closed {_span(now - closed)} ago"}
+
+
+def _automation_state(conversation, now) -> dict:
+    """The Automations row: on, paused until a time, or paused until turned back on."""
+    until = conversation.automation_paused_until
+    if not until or until <= now:
+        return {"paused": False, "label": "On"}
+    if (until - now).days > 365:  # pause_automation(None): ten years, i.e. no end
+        return {"paused": True, "label": "Paused"}
+    local = timezone.localtime(until)
+    same_day = local.date() == timezone.localtime(now).date()
+    return {
+        "paused": True,
+        "label": f"Paused until {local:%H:%M}"
+        if same_day
+        else f"Paused until {local.day} {local:%b, %H:%M}",
+    }
+
+
+def _status_row(conversation, snapshot) -> dict:
+    """The Status row in the stored-status sense the list uses: Closed only when someone
+    closed it; an open chat we spoke last in, quiet for a day, is Waiting on them."""
+    if conversation.status == Conversation.Status.CLOSED:
+        return {"label": "Closed", "open": False}
+    if snapshot.missed:
+        return {"label": "Open · missed", "open": True}
+    if snapshot.state == ConversationState.WAITING_FOR_AGENT:
+        return {"label": "Open · waiting for you", "open": True}
+    if snapshot.closed_reason == "inactive_24h":
+        return {"label": "Waiting on them", "open": True}
+    return {"label": "Open", "open": True}
+
+
+def _earlier_conversations(account, conversation) -> list:
+    """The customer's other conversations, latest first, five at most."""
+    return list(
+        hide_disabled_channels(
+            Conversation.objects.filter(account=account, contact=conversation.contact)
+        )
+        .exclude(pk=conversation.pk)
+        .order_by("-last_message_at", "-created_at")[:5]
     )
 
 
@@ -1425,12 +1548,25 @@ def conversation_panel(request, public_id: str):
     if account is None:
         return redirect("dashboard")
     conversation = _panel_conversation(account, public_id)
+    if request.GET.get("part") == "history":
+        # Activity's earlier conversations, loaded the first time it opens.
+        response = render(
+            request,
+            "conversations/_panel_history.html",
+            {"earlier_conversations": _earlier_conversations(account, conversation)},
+        )
+        response["Vary"] = "HX-Request, HX-Target"
+        response["Cache-Control"] = "no-store"
+        return response
     if is_background(request):
         return _panel_response(request, account, conversation)
     return render(
         request,
         "conversations/panel_page.html",
-        {**_panel_context(request, account, conversation), "in_pane": False},
+        {
+            **_panel_context(request, account, conversation, page=True),
+            "in_pane": False,
+        },
     )
 
 

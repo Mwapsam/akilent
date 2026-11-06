@@ -19,7 +19,9 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
 {% comment %}data-me: who "A" (assign to me, static/js/inbox_pane.js) assigns.{% endcomment %}
 <div class="cv-wrap" data-title="{{ display_name }}" data-me="{{ request.user.id }}">
 <div class="cv" data-channel="{{ conversation.channel }}" x-data="chat(JSON.parse(document.getElementById('chat-config').textContent))"
-     :class="{ 'is-side-collapsed': sideCollapsed }">
+     :class="{ 'is-side-collapsed': sideCollapsed }" @cv-changed.window="schedule(0)">
+  {% comment %}cv-changed: an action in the details panel (Close, Reopen, Assign) changed what
+  the header shows, so the thread's poll runs at once instead of in a few seconds.{% endcomment %}
   {% comment %}Where the chat and the details both fit side by side, the details are a column
   (docked): the header's details button hides and shows it, and its edge drags to resize. Where
   they don't, the details open as a drawer under the shared dialog contract (window.akDialog):

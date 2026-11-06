@@ -204,7 +204,7 @@ def test_tag_add_from_the_panel_comes_back_as_the_panel(logged_in, conversation)
     assert 'class="cv-wrap"' not in body  # the panel, not the whole pane
     assert "vip" in body
     assert 'id="cv-next"' in body and 'hx-swap-oob="true"' in body
-    assert resp["HX-Trigger"] == "inbox-refresh"
+    assert resp["HX-Trigger"] == "inbox-refresh, cv-changed"
 
 
 @pytest.mark.django_db

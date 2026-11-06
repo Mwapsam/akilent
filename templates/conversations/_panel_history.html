@@ -1,0 +1,14 @@
+{% comment %}The customer's earlier conversations, five at most, latest first: inside the details
+panel's Activity (views.conversation_panel, ?part=history).{% endcomment %}
+<ul class="cv-history mt-1" data-panel-history>
+  {% for c in earlier_conversations %}
+  <li>
+    <a href="{% url 'conversations:detail' c.public_id %}" class="cv-history-row">
+      <span class="truncate">{{ c.get_channel_display }}</span>
+      <span class="text-xs text-ink-subtle whitespace-nowrap">{% if c.status == "closed" %}Closed · {% endif %}{{ c.last_message_at|default:c.created_at|date:"j M Y" }}</span>
+    </a>
+  </li>
+  {% empty %}
+  <li class="text-sm text-ink-subtle">None.</li>
+  {% endfor %}
+</ul>

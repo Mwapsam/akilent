@@ -10,6 +10,7 @@
 // QA_ROWS=1 Phase 5D two-line rows, channel on the avatar, hover actions (Close + Undo for real), tooltips, the empty pane,
 // QA_LIVE=1 Phase 5E "New messages", a changed row highlighted, a message sliding in,
 // QA_RESP=1 Phase 5F every width (360-1440) in both themes: panes, sideways scroll, thread height, tap targets;
+// QA_PANEL=1 Phase 6 details panel: above the fold docked, folded forms and Esc, Pause/Resume, Send a template, both themes;
 // QA_BASE=http://127.0.0.1:8001 for a server started with WHATSAPP_ENABLED=True)
 // Needs the dev server on :8000 and QA_UI_EMAIL / QA_UI_PASSWORD in .env.
 import { spawn } from "node:child_process";
@@ -592,6 +593,75 @@ if (process.env.QA_RESP) {
     }
   }
   console.log(JSON.stringify(out));
+  process.exit(0);
+}
+// Phase 6: the details panel. Docked at 1440x900, Status and Next step show without scrolling;
+// a folded form opens in place and Esc folds it (leaving the conversation open); Pause then
+// Resume for real (local QA data); "Send a template" opens the picker where a WhatsApp window
+// is closed (QA_BASE :8001); light and dark at 390 (full-screen sheet) and 1440 (docked).
+if (process.env.QA_PANEL) {
+  const out = {};
+  const NO_MOTION = `(() => { const s=document.createElement('style'); s.textContent='*,*::before,*::after{transition:none!important;animation:none!important}'; document.head.appendChild(s); })()`;
+  const loaded = async () => { for (let i = 0; i < 60 && !(await evaluate("!!document.querySelector('#cv-panel [data-panel-section=\"status\"]')")); i++) await sleep(150); };
+  rules = [{ match: (r) => r.method === "POST" && /action=(pause|resume)_automation/.test(r.postData || ""), act: null }];
+  await viewport(1440, 900, false);
+  await go("/inbox/?view=all", 1500);
+  await evaluate("document.activeElement && document.activeElement.blur()");
+  await clickSel(".inbox-row"); await sleep(1500); await loaded();
+  out.fold1440 = await evaluate(`(() => { const side = document.querySelector('.cv-side'); const h = innerHeight;
+    const b = (s) => { const e = document.querySelector(s); return e ? Math.round(e.getBoundingClientRect().bottom) : null; };
+    return { docked: getComputedStyle(side).position !== 'fixed' && !!side.offsetParent, viewport: h,
+      statusBottom: b('[data-panel-section="status"]'), followupBottom: b('#cv-followup'), nextBottom: b('[data-panel-section="next"]'),
+      order: [...document.querySelectorAll('#cv-panel [data-panel-section]')].map(s => s.dataset.panelSection) }; })()`);
+  out.fold1440.aboveTheFold = out.fold1440.followupBottom !== null && out.fold1440.followupBottom <= out.fold1440.viewport;
+  await shot0("panel-1440-light");
+  // A folded form opens in place; Esc folds it and the conversation stays open.
+  await clickSel('[data-panel-fold="note"] > summary'); await sleep(250);
+  const opened = await evaluate(`(() => { const d = document.querySelector('[data-panel-fold="note"]'); const i = d.querySelector('input[name="body"]'); return { open: d.open, inputShown: !!(i && i.offsetParent) }; })()`);
+  await evaluate(`document.querySelector('[data-panel-fold="note"] input[name="body"]').focus()`);
+  await key("Escape", "Escape", 27); await sleep(250);
+  out.fold = { opened, ...(await evaluate(`(() => { const d = document.querySelector('[data-panel-fold="note"]'); return { foldedByEsc: !d.open, focusOnSummary: document.activeElement === d.querySelector('summary'),
+    paneStillOpen: !!document.querySelector('#conversation-pane-inner .cv') }; })()`)) };
+  // Pause for an hour, then Resume.
+  const autoRow = () => evaluate(`(document.querySelector('[data-panel-row="automations"] .cv-row-value') || {}).innerText`);
+  out.automations = { before: await autoRow() };
+  if (out.automations.before === "On") {
+    await clickSel('[data-panel-row="automations"] .cv-row-action'); await sleep(250);
+    await evaluate(`document.querySelector('[data-panel-row="automations"] button[name="hours"][value="1"]').click()`); await sleep(1800);
+    out.automations.paused = await autoRow();
+    out.automations.toast = await evaluate("Alpine.store('toasts').items.map(t => t.message)");
+    await clickSel('[data-panel-row="automations"] .cv-row-action'); await sleep(1800);
+    out.automations.resumed = await autoRow();
+  }
+  // "Send a template" where a WhatsApp window is closed.
+  const rowsHref = await evaluate("[...document.querySelectorAll('.inbox-row')].map(a => a.getAttribute('href'))");
+  out.sendTemplate = "no WhatsApp chat with a closed window in the first 15 rows";
+  for (const href of rowsHref.slice(0, 15)) {
+    await clickSel(`.inbox-row[href="${href}"]`); await sleep(1300); await loaded();
+    if (!(await evaluate("!!document.querySelector('[data-panel-send-template]')"))) continue;
+    await clickSel("[data-panel-send-template]"); await sleep(500);
+    out.sendTemplate = await evaluate(`(() => { const p = document.querySelector('.cv-tplpop'); return { picker: !!(p && p.offsetParent), href: ${JSON.stringify(href)} }; })()`);
+    await key("Escape", "Escape", 27); await sleep(200);
+    break;
+  }
+  // Light and dark: docked at 1440, the full-screen sheet at 390.
+  out.themes = [];
+  for (const [w, h, touch] of [[1440, 900, false], [390, 844, true]]) {
+    await viewport(w, h, touch);
+    await go("/inbox/?view=all", 1500);
+    const href = await evaluate("document.querySelector('.inbox-row').getAttribute('href')");
+    if (w < 768) { await go(href, 1600); await chat("c.infoOpen = true"); } else { await clickSel(".inbox-row"); await sleep(1500); }
+    await loaded(); await evaluate(scanner); await evaluate(NO_MOTION); await sleep(300);
+    for (const theme of ["light", "dark"]) {
+      const r = await evaluate(`(async () => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const s = await window.__uiScan({ max: 6 }); const side = document.querySelector('.cv-side'); const sr = side.getBoundingClientRect();
+        return { sideWidth: Math.round(sr.width), fullScreen: Math.round(sr.width) >= innerWidth - 1, sideways: document.documentElement.scrollWidth > innerWidth + 1,
+          under44: s.targets.under44, ex: s.targets.examples, contrastFail: s.contrast.failing, cex: s.contrast.examples }; })()`);
+      out.themes.push({ size: `${w}x${h}`, theme, ...r });
+      await shot0(`panel-${w}-${theme}`);
+    }
+  }
+  console.log(JSON.stringify(out, null, 1));
   process.exit(0);
 }
 if (process.env.QA_SCAN) {
