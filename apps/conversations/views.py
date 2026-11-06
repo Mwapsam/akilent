@@ -40,6 +40,7 @@ from apps.conversations.media import media_json
 from apps.conversations.models import (
     Conversation,
     ConversationForm,
+    Event,
     FollowUp,
     FormResponse,
     Message,
@@ -731,12 +732,18 @@ def conversation_detail(request, public_id: str):
                 resolution = request.POST.get("resolution", "")
                 if resolution and resolution not in Conversation.Resolution.values:
                     raise ActionError("That's not a valid close reason.")
+                before = _close_state(conversation)
                 conversation.close(
                     resolution=resolution, actor=f"user:{request.user.pk}"
                 )
                 if answers_in_place:
-                    messages.success(
-                        request, "Closed. It reopens if the customer writes again."
+                    from apps.accounts.utils import flash
+
+                    flash(
+                        request,
+                        "success",
+                        "Closed. It reopens if the customer writes again.",
+                        undo=_undo_close_url(conversation, before, request.user),
                     )
             elif action == "reopen":
                 conversation.reopen(actor=f"user:{request.user.pk}")
@@ -856,9 +863,10 @@ def conversation_detail(request, public_id: str):
         return _panel_response(request, account, conversation, after_action=True)
 
     was_unread = conversation.is_unread
-    if (
-        viewing_as(request) is None
-    ):  # support looking "as" the business mustn't clear its unread
+    # Support looking "as" the business mustn't clear its unread, and neither does a peek:
+    # stepping through the list with J/K (static/js/inbox_pane.js) marks a conversation read
+    # only once it has stayed open a moment, with action=mark_read.
+    if viewing_as(request) is None and request.GET.get("peek") != "1":
         conversation.mark_read()
     thread, has_earlier = _recent_thread(conversation, unread=was_unread)
     snapshot = state_of(conversation)
@@ -1258,6 +1266,112 @@ def _panel_conversation(account, public_id):
     )
 
 
+# Closing answers with an Undo (E in the inbox, or Close as in the pane) that restores what was
+# there before: open, the assignee and the close reason, recorded at close time and signed into
+# the Undo's address, so nothing is kept on the server and nothing can be forged.
+UNDO_CLOSE_SALT = "conversations.undo-close"
+UNDO_CLOSE_SECONDS = 120
+
+
+def _close_state(conversation) -> dict:
+    return {
+        "status": conversation.status,
+        "assignee": conversation.assigned_to_id,
+        "resolution": conversation.resolution or "",
+        "closed_at": conversation.closed_at.isoformat()
+        if conversation.closed_at
+        else None,
+    }
+
+
+def _undo_close_url(conversation, before: dict, user) -> str:
+    from django.core import signing
+
+    token = signing.dumps(
+        {
+            "c": conversation.public_id,
+            "u": user.pk,
+            "before": before,
+            # What the close left, so a later change (the customer wrote, a teammate
+            # reopened or closed it again) isn't overwritten by an old Undo.
+            "closed_at": conversation.closed_at.isoformat(),
+        },
+        salt=UNDO_CLOSE_SALT,
+        compress=True,
+    )
+    return (
+        reverse("conversations:undo_close", args=[conversation.public_id])
+        + "?t="
+        + token
+    )
+
+
+@login_required
+@require_POST
+def undo_close(request, public_id: str):
+    """Put a conversation back as it was before it was closed (the close toast's Undo)."""
+    import datetime
+
+    from django.core import signing
+
+    from apps.accounts.utils import hx_toast
+
+    account = get_current_account(request)
+    if account is None:
+        raise Http404
+    conversation = get_visible_conversation(account, public_id)
+    try:
+        data = signing.loads(
+            request.GET.get("t", ""),
+            salt=UNDO_CLOSE_SALT,
+            max_age=UNDO_CLOSE_SECONDS,
+        )
+    except signing.BadSignature:
+        data = None
+    response = HttpResponse()
+    if (
+        not data
+        or data.get("c") != conversation.public_id
+        or data.get("u") != request.user.pk
+    ):
+        return hx_toast(response, "warning", "That Undo has expired.")
+    unchanged = (
+        conversation.status == Conversation.Status.CLOSED
+        and conversation.closed_at is not None
+        and conversation.closed_at.isoformat() == data.get("closed_at")
+    )
+    if not unchanged:
+        return hx_toast(
+            response, "info", "It changed since it was closed, so it was left as it is."
+        )
+    before = data["before"]
+    conversation.status = before["status"]
+    conversation.resolution = before["resolution"]
+    conversation.closed_at = (
+        datetime.datetime.fromisoformat(before["closed_at"])
+        if before["closed_at"]
+        else None
+    )
+    fields = ["status", "resolution", "closed_at", "updated_at"]
+    if conversation.assigned_to_id != before["assignee"]:
+        conversation.assigned_to_id = before["assignee"]
+        fields.append("assigned_to")
+    conversation.save(update_fields=fields)
+    if conversation.status == Conversation.Status.OPEN:
+        Event.objects.create(
+            account_id=conversation.account_id,
+            type="conversation.reopened",
+            occurred_at=timezone.now(),
+            source="conversations",
+            actor=f"user:{request.user.pk}",
+            subject_type="conversation",
+            subject_id=str(conversation.pk),
+            payload={"undo": True},
+        )
+    response["HX-Trigger"] = "inbox-refresh"
+    return hx_toast(response, "success", "Put back as it was.")
+
+
 @login_required
 def conversation_panel(request, public_id: str):
     """The details panel on its own: loaded into the pane once the conversation shows, or
@@ -1281,13 +1395,17 @@ _TOAST_TYPES = {"error": "danger", "warning": "warning", "info": "info"}
 def _messages_to_toast(request, response) -> None:
     """A pane swap renders no page shell, so queued flash messages would surface on some
     later page. Carry the latest one as an X-Toast instead (static/js/app.js shows it)."""
-    from apps.accounts.utils import hx_toast
+    from apps.accounts.utils import UNDO_TAG, hx_toast
 
     last = None
     for message in messages.get_messages(request):
         last = message
     if last is not None:
-        hx_toast(response, _TOAST_TYPES.get(last.level_tag, "success"), str(last))
+        tags = (last.extra_tags or "").split()
+        undo = next((t[len(UNDO_TAG) :] for t in tags if t.startswith(UNDO_TAG)), None)
+        hx_toast(
+            response, _TOAST_TYPES.get(last.level_tag, "success"), str(last), undo=undo
+        )
 
 
 def _can_delete(request, account) -> bool:

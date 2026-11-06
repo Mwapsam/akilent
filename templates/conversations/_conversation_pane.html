@@ -16,7 +16,8 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
 
 
 
-<div class="cv-wrap" data-title="{{ display_name }}">
+{% comment %}data-me: who "A" (assign to me, static/js/inbox_pane.js) assigns.{% endcomment %}
+<div class="cv-wrap" data-title="{{ display_name }}" data-me="{{ request.user.id }}">
 <div class="cv" data-channel="{{ conversation.channel }}" x-data="chat(JSON.parse(document.getElementById('chat-config').textContent))"
      :class="{ 'is-side-collapsed': sideCollapsed }">
   {% comment %}Where the chat and the details both fit side by side, the details are a column

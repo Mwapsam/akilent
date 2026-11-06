@@ -104,10 +104,15 @@ Open programmatically with: window.dispatchEvent(new CustomEvent('palette-open')
         { group: "Action", label: "Invite teammate", href: "{% url 'settings-team' %}" },
         // The page shortcuts (static/js/app.js); "?" opens the palette on these. No href: choosing
         // one just closes the palette.
-        { group: "Shortcut", label: "N  New post (in Content Studio)", href: "" },
+        { group: "Shortcut", label: "N  New post (on Content Studio's tabs)", href: "" },
         { group: "Shortcut", label: "/  Search on this page", href: "" },
         { group: "Shortcut", label: "J / K  Next or previous row", href: "" },
         { group: "Shortcut", label: "Enter  Open the row", href: "" },
+        { group: "Shortcut", label: "J / K  Next or previous conversation, in the Inbox (read once it stays open)", href: "" },
+        { group: "Shortcut", label: "R  Reply, in a conversation", href: "" },
+        { group: "Shortcut", label: "E  Close the conversation (with Undo)", href: "" },
+        { group: "Shortcut", label: "A  Assign the conversation to me", href: "" },
+        { group: "Shortcut", label: "Esc  Back to the list, in the Inbox", href: "" },
         { group: "Shortcut", label: "← →  Previous or next file, in a file's details", href: "" },
         { group: "Shortcut", label: "Esc  Close a drawer or dialog", href: "" },
         { group: "Shortcut", label: "Ctrl K or ⌘K  This list of pages and actions", href: "" },

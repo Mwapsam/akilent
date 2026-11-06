@@ -23,7 +23,7 @@ it out, with a one-click way back to every channel.{% endcomment %}
   {% for c in page %}
   {% with name=c.contact.display_name %}
   <li>
-    <a href="{% url 'conversations:detail' c.public_id %}" class="inbox-row{% if c.is_unread %} is-unread{% endif %}" data-title="{{ name }}">
+    <a href="{% url 'conversations:detail' c.public_id %}" class="inbox-row{% if c.is_unread %} is-unread{% endif %}" data-title="{{ name }}" data-row>
       {% comment %}A phone number's first character is "+", which is not an
       initial; contacts with no name get a person glyph instead.{% endcomment %}
       <span class="chat-avatar inbox-avatar" aria-hidden="true">

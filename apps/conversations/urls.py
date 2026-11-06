@@ -73,6 +73,7 @@ urlpatterns = [
     ),
     path("<str:public_id>/", views.conversation_detail, name="detail"),
     path("<str:public_id>/panel/", views.conversation_panel, name="panel"),
+    path("<str:public_id>/undo-close/", views.undo_close, name="undo_close"),
     path("<str:public_id>/messages/", views.messages_feed, name="messages_feed"),
     path("<str:public_id>/typing/", views.conversation_typing, name="typing"),
     path("<str:public_id>/delete/", views.conversation_delete, name="delete"),

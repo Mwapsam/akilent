@@ -1628,7 +1628,8 @@
   }, true);
 
   // Page shortcuts (Content Studio app feel, Phase 5), never while typing or with a dialog
-  // open: N a new post (Content Studio pages), / the page's search ([data-search]), J/K the
+  // open: N the page's "new" ([data-shortcut-new], e.g. a post on Content Studio's tabs; a page
+  // without one, like the inbox, leaves N alone), / the page's search ([data-search]), J/K the
   // next and previous row ([data-row]; Enter then opens it, as any link), ? lists them in the
   // command palette.
   function modalOpen() {
@@ -1649,10 +1650,12 @@
       e.preventDefault();
       search.focus();
       if (search.select) search.select();
-    } else if ((e.key === "n" || e.key === "N") && location.pathname.indexOf("/publishing/") === 0
-               && location.pathname !== "/publishing/new/") {
+    } else if (e.key === "n" || e.key === "N") {
+      const holder = document.querySelector("#main [data-shortcut-new]");
+      const url = holder && holder.getAttribute("data-shortcut-new");
+      if (!url || location.pathname === url) return;
       e.preventDefault();
-      akilent.navigate("/publishing/new/");
+      akilent.navigate(url);
     } else if (e.key === "j" || e.key === "k") {
       const rows = Array.prototype.filter.call(document.querySelectorAll("#main [data-row]"), shown);
       if (!rows.length) return;

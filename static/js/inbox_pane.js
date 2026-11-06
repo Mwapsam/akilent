@@ -11,6 +11,9 @@
  *   - the open row stays highlighted across the list's 8-second poll, which re-renders it.
  *   - the tab title names the open conversation.
  *   - at ≥1024px the two columns fill the viewport and scroll on their own.
+ *   - the inbox's keys (onKey): J/K open the next or previous conversation as a peek, which is
+ *     marked read only once it has stayed open PEEK_READ_MS; R reply, E close (with Undo), A
+ *     assign to me, Esc back to the list. Never while typing or with a dialog open.
  */
 (function () {
   "use strict";
@@ -63,6 +66,7 @@
 
     function closePane() {
       // A load still in flight must not land in a closed pane or push a history entry.
+      cancelRead();
       loadSeq++;
       paneEpoch++;
       window.htmx.trigger(pane, "htmx:abort");
@@ -95,7 +99,32 @@
       var cfg = detail && detail.requestConfig;
       return !!(cfg && cfg.headers && cfg.headers[PANE_HEADER]);
     }
-    function openInPane(url, push) {
+    // A peek (J/K) is marked read only after it has stayed open this long, so stepping past
+    // conversations doesn't clear their unread; a click marks read at once, as before.
+    var PEEK_READ_MS = 1500;
+    var readTimer = null;
+    function cancelRead() { clearTimeout(readTimer); readTimer = null; }
+    function markReadLater(url, mine) {
+      readTimer = setTimeout(function () {
+        readTimer = null;
+        if (mine !== loadSeq || split.dataset.open !== url) return; // moved on meanwhile
+        var token = "";
+        try { token = JSON.parse(document.body.getAttribute("hx-headers") || "{}")["X-CSRFToken"] || ""; } catch (e) { /* none */ }
+        fetch(pathOf(url), {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "X-CSRFToken": token, "X-Requested-With": "XMLHttpRequest", "Content-Type": "application/x-www-form-urlencoded" },
+          body: "action=mark_read",
+        }).then(function (r) { if (r.ok) window.htmx.trigger(document.body, "inbox-refresh"); }).catch(function () { /* stays unread */ });
+      }, PEEK_READ_MS);
+    }
+
+    // ``push``: true adds a history entry (a click), "replace" swaps the current one (J/K
+    // stepping through the list), false leaves history alone (a popstate re-open).
+    // ``peek``: opened by J/K; it isn't marked read on opening (see markReadLater), and focus
+    // stays on its row so the next J/K carries on from there.
+    function openInPane(url, push, peek) {
+      cancelRead();
       var mine = ++loadSeq;
       paneEpoch++; // and again when it swaps in (onBeforeSwap): forms sent meanwhile are A's
       lastLoad = { url: url, push: push };
@@ -129,8 +158,11 @@
       // app.js never runs a View Transition for a pane load (it isn't boosted), so the swap
       // has happened by the time the promise resolves and the pane can be read straight away.
       window.htmx.trigger(pane, "htmx:abort");
+      var requestUrl = url;
+      if (peek) { var u = new URL(url, window.location.href); u.searchParams.set("peek", "1"); requestUrl = u.href; }
+      var wasUnread = peek && !!(rowFor(url) && rowFor(url).classList.contains("is-unread"));
       window.htmx
-        .ajax("GET", url, { target: "#conversation-pane-inner", swap: "innerHTML", source: pane, headers: paneHeaders })
+        .ajax("GET", requestUrl, { target: "#conversation-pane-inner", swap: "innerHTML", source: pane, headers: paneHeaders })
         .then(function () {
           stopListening();
           if (mine !== loadSeq) return; // a newer conversation was asked for meanwhile
@@ -139,9 +171,11 @@
           // the full page shows whatever it is.
           if (!pane.querySelector("[data-title]")) { window.location.href = url; return; }
           split.classList.remove("is-loading");
-          if (push) history.pushState({ akilentPane: url }, "", url);
+          if (push === "replace") history.replaceState({ akilentPane: url }, "", url);
+          else if (push) history.pushState({ akilentPane: url }, "", url);
           setTitle();
-          focusPaneHeading();
+          if (peek) { if (wasUnread) markReadLater(url, mine); }
+          else focusPaneHeading();
         })
         .catch(function () {
           stopListening();
@@ -243,7 +277,73 @@
       history.replaceState(Object.assign({}, history.state, { akilentPane: window.location.href }), "", window.location.href);
     }
 
+    // The inbox's keys. Capture phase, so they're handled here before app.js's page shortcuts
+    // (which skip a key already handled): there J/K only move focus between rows, which is
+    // still what they do below 1024px, where there's no pane to open into.
+    function typing(t) {
+      return !!t && (t.isContentEditable || (t.matches && t.matches("input, textarea, select")));
+    }
+    function dialogOpen() {
+      return Array.prototype.some.call(document.querySelectorAll('[role="dialog"][aria-modal="true"], [role="menu"]'),
+        function (d) { return d.offsetParent !== null || d.getClientRects().length > 0; });
+    }
+    function chatData() {
+      var cv = pane.querySelector(".cv");
+      return cv && window.Alpine ? window.Alpine.$data(cv) : null;
+    }
+    // A pane action as if from its own form: answered with the pane again (and a toast, with
+    // Undo for a close), stamped like any form in the pane so it can't land on the next one.
+    function paneAction(values) {
+      var url = split.dataset.open;
+      if (!url) return;
+      window.htmx.ajax("POST", pathOf(url), { target: "#conversation-pane-inner", swap: "innerHTML",
+        source: pane.querySelector(".cv") || pane, values: values });
+    }
+    function onKey(e) {
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (!document.body.contains(split) || !isWide() || typing(e.target) || dialogOpen()) return;
+      var key = e.key;
+      var open = !!split.dataset.open && !!pane.querySelector("[data-title]");
+      if (key === "j" || key === "k") {
+        var rows = Array.prototype.filter.call(list.querySelectorAll(".inbox-row"), function (r) { return r.offsetParent !== null; });
+        if (!rows.length) return;
+        e.preventDefault();
+        var at = rows.findIndex(function (r) { return r.getAttribute("aria-current") === "true"; });
+        if (at === -1) at = rows.findIndex(function (r) { return r === document.activeElement; });
+        var next = rows[Math.min(rows.length - 1, Math.max(0, at === -1 ? 0 : at + (key === "j" ? 1 : -1)))];
+        next.focus({ preventScroll: true });
+        next.scrollIntoView({ block: "nearest" });
+        if (next.getAttribute("aria-current") === "true" && open) return; // already showing it
+        openInPane(next.href, split.dataset.open ? "replace" : true, true);
+        return;
+      }
+      if (!open) return;
+      var chat = chatData();
+      if (key === "r") {
+        var box = pane.querySelector(".cv-composer textarea");
+        if (!box || box.offsetParent === null || box.disabled) return;
+        e.preventDefault();
+        box.focus();
+      } else if (key === "e") {
+        if (!chat || !chat.open) return; // already closed
+        e.preventDefault();
+        paneAction({ action: "close" });
+      } else if (key === "a") {
+        var me = pane.querySelector("[data-me]");
+        if (!me) return;
+        e.preventDefault();
+        paneAction({ action: "assign", assignee: me.getAttribute("data-me") });
+      } else if (key === "Escape") {
+        e.preventDefault();
+        var row = rowFor(split.dataset.open);
+        history.pushState(null, "", inboxUrl);
+        closePane();
+        if (row) row.focus({ preventScroll: true });
+      }
+    }
+
     document.addEventListener("click", onClickCapture, true);
+    document.addEventListener("keydown", onKey, true);
     window.addEventListener("popstate", onPopState);
     document.addEventListener("htmx:afterSwap", onAfterSwap);
     document.addEventListener("htmx:beforeSwap", onBeforeSwap);
@@ -252,6 +352,8 @@
     window.addEventListener("resize", fit, { passive: true });
     return function cleanup() {
       document.removeEventListener("click", onClickCapture, true);
+      document.removeEventListener("keydown", onKey, true);
+      cancelRead();
       window.removeEventListener("popstate", onPopState);
       document.removeEventListener("htmx:afterSwap", onAfterSwap);
       document.removeEventListener("htmx:beforeSwap", onBeforeSwap);

@@ -2488,3 +2488,13 @@
   #inbox-body.is-fresh .inbox-row { animation: none; }
   .cv-arrow-link:hover svg { transform: none; }
 }
+
+/* Inbox keyboard (Phase 4): rows carry data-row for the page shortcuts (J/K, Enter). Content
+   Studio's arrival fade for [data-row] (static/css/studio.css) would run on every swap of the
+   list, the 8-second refresh included, so the inbox's rows opt out; they fade only on a search
+   (.is-fresh, above). Two ids, to outrank that rule wherever it loads. */
+#inbox-split #inbox-body [data-row] { opacity: 1; transform: none;
+  transition: background-color var(--duration-fast) var(--ease-emphasized); }
+/* The row J/K is on: the focus ring sits inside the row, so the list's card doesn't clip it. */
+.inbox-row:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) { #inbox-split #inbox-body [data-row] { transition: none; } }

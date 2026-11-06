@@ -3,7 +3,7 @@
 // and phone layout. Every POST is intercepted, so nothing is sent to a customer.
 // Usage: node tools/qa/inbox_qa.mjs <repoRoot> <outDir>   (QA_SCAN=1 contrast scan, QA_HDR=1 header sizes,
 // QA_LAYOUT=1 Phase 2 layout targets, QA_COMPOSER=1 closed-window composer and details, QA_OB=1 setup over composer,
-// QA_LOOK=1 Phase 3 menus and template list in both themes;
+// QA_LOOK=1 Phase 3 menus and template list in both themes, QA_KEYS=1 Phase 4 keyboard;
 // QA_BASE=http://127.0.0.1:8001 for a server started with WHATSAPP_ENABLED=True)
 // Needs the dev server on :8000 and QA_UI_EMAIL / QA_UI_PASSWORD in .env.
 import { spawn } from "node:child_process";
@@ -281,6 +281,62 @@ if (process.env.QA_LOOK) {
     out[theme].channelMenu = await evaluate("(() => { const m = document.querySelector('.inbox-filter .cv-menu-panel'); return m && m.offsetParent ? m.innerText.replace(/\s+/g, ' ').trim() : null; })()");
     await shot0(`look-channel-${theme}`);
   }
+  console.log(JSON.stringify(out, null, 1));
+  process.exit(0);
+}
+// Phase 4 keys at 1280: J/K peek and mark read only after 1.5s (five quick J presses mark only
+// the last), R, E with Undo, A, Esc, and nothing while typing. Close, Undo and Assign go through
+// to the local server (QA data); mark-read is intercepted and counted.
+if (process.env.QA_KEYS) {
+  const out = {};
+  const press = async (k) => { await key(k, k.length === 1 ? "Key" + k.toUpperCase() : k, k.length === 1 ? k.toUpperCase().charCodeAt(0) : 27); };
+  const reads = () => log.filter((l) => l.includes("POST") && l.includes("/inbox/conv_")).length;
+  rules = [
+    { match: (r) => r.method === "POST" && /^\/inbox\/conv_[^/]+\/$/.test(new URL(r.url).pathname) && (r.postData || "").includes("action=mark_read"), act: { status: 200, body: { ok: true } } },
+    { match: (r) => r.method === "POST" && (/\/undo-close\//.test(new URL(r.url).pathname) || /action=(close|assign)/.test(r.postData || "")), act: null },
+  ];
+  await viewport(1280, 800, false);
+  await go("/inbox/?view=all", 1500);
+  await evaluate("document.activeElement && document.activeElement.blur()");
+  const rowsHref = await evaluate("[...document.querySelectorAll('.inbox-row')].map(a => a.getAttribute('href'))");
+  // J once: the first row opens as a peek, focus stays on it.
+  await press("j"); await sleep(1300);
+  out.firstJ = await evaluate(`({ path: location.pathname, focusRow: !!(document.activeElement && document.activeElement.matches('.inbox-row')), peek: performance.getEntriesByType('resource').some(e => e.name.includes('peek=1')) })`);
+  // Five quick J presses: none marked read early, then only the last.
+  const before = reads();
+  for (let i = 0; i < 5; i++) { await press("j"); await sleep(60); }
+  await sleep(1000);
+  const early = reads() - before;
+  await sleep(1500);
+  const markLog = log.filter((l) => l.includes("POST") && l.includes("/inbox/conv_")).slice(before);
+  out.fiveJ = { early, after: markLog.length, landedOn: await evaluate("location.pathname"), expected: rowsHref[Math.min(rowsHref.length - 1, 5)], markLog };
+  // K goes back one.
+  await press("k"); await sleep(1400);
+  out.k = { path: await evaluate("location.pathname"), expected: rowsHref[Math.min(rowsHref.length - 1, 5) - 1] };
+  // Nothing while typing.
+  await evaluate("document.getElementById('inbox-q').focus()");
+  await press("j"); await sleep(600);
+  out.typing = { path: await evaluate("location.pathname"), value: await evaluate("document.getElementById('inbox-q').value") };
+  await evaluate("document.getElementById('inbox-q').value = ''; document.getElementById('inbox-q').blur()");
+  // R: the reply box, when it can be used.
+  await press("r"); await sleep(200);
+  out.r = await evaluate("(() => { const t = document.querySelector('.cv-composer textarea'); return { usable: !!t && t.offsetParent !== null && !t.disabled, focused: document.activeElement === t }; })()");
+  await evaluate("document.activeElement && document.activeElement.blur()");
+  // A: assigned to me.
+  await press("a"); await sleep(1500);
+  out.a = await evaluate("document.querySelector('.cv-assign-label') ? document.querySelector('.cv-assign-label').textContent.trim() : null");
+  // E: closed, with an Undo that puts it back.
+  await press("e"); await sleep(1800);
+  out.e = { open: await chat("c.open"), toast: await evaluate("Alpine.store('toasts').items.map(t => t.message + (t.action ? ' [' + t.action.label + ']' : ''))") };
+  await evaluate("(() => { const s = Alpine.store('toasts'); const t = s.items.find(i => i.action && i.action.label === 'Undo'); if (t) s.run(t); })()");
+  await sleep(3000);
+  out.undo = { open: await chat("c.open"), toast: await evaluate("Alpine.store('toasts').items.map(t => t.message)") };
+  // Esc: back to the list, focus on the row.
+  const openPath = await evaluate("location.pathname");
+  await evaluate("document.activeElement && document.activeElement.blur()");
+  await press("Escape"); await sleep(600);
+  out.esc = await evaluate(`({ path: location.pathname, paneOpen: document.getElementById('inbox-split').classList.contains('has-conversation'), focus: document.activeElement && document.activeElement.getAttribute('href') === ${JSON.stringify(openPath)} })`);
+  await shot0("keys-1280");
   console.log(JSON.stringify(out, null, 1));
   process.exit(0);
 }
