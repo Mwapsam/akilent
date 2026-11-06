@@ -203,5 +203,9 @@ def test_only_a_search_animates_the_list_never_the_refresh(shop):
     poll = page[page.index('id="inbox-body"') :]
     assert "is-fresh" not in poll[: poll.index(">")]
     css = (settings.BASE_DIR / "assets" / "app.css").read_text(encoding="utf-8")
-    reduced = css[css.rindex("@media (prefers-reduced-motion: reduce) {") :]
-    assert "#inbox-body.is-fresh .inbox-row { animation: none; }" in reduced
+    # Any reduced-motion block, wherever it sits (later phases append their own).
+    blocks = css.split("@media (prefers-reduced-motion: reduce) {")[1:]
+    assert any(
+        "#inbox-body.is-fresh .inbox-row { animation: none; }" in b.split("\n}")[0]
+        for b in blocks
+    )
