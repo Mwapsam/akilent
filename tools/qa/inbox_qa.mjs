@@ -275,7 +275,9 @@ if (process.env.QA_LOOK) {
     for (let i = 0; i < 30 && !(await evaluate("!!document.querySelector('#cv-panel .cv-panel-btn')")); i++) await sleep(150);
     await clickSel("#cv-panel .cv-panel-btn"); await sleep(400);
     out[theme] = { pauseMenu: await evaluate("[...document.querySelectorAll('#cv-panel .cv-menu-panel')].filter(e => e.offsetParent).map(e => e.innerText.replace(/\\s+/g, ' ').trim())") };
-    await clickSel(".cv-tpl-option"); await sleep(300);
+    await key("Escape", "Escape", 27); await sleep(200);
+    await clickSel(".cv-tplpick-open"); await sleep(300); // the picker opens over the thread (Phase 5C)
+    await clickSel(".cv-tplpop .cv-tpl-option"); await sleep(300);
     out[theme].picked = await evaluate("!!document.querySelector('#template-inline-list input:checked')");
     await shot0(`look-pane-${theme}`);
     await key("Escape", "Escape", 27);

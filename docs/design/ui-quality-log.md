@@ -2080,3 +2080,91 @@ Plan: the Inbox plan of 2026-11-06, Phase 3.
   - ruff, format, mypy and `makemigrations --check` clean;
   - `inbox_qa.mjs` 79/79; `QA_LAYOUT` 5/5; `QA_LOOK` (new) with WhatsApp on, in dark and light: menus open, a template can be picked;
   - the contrast scan in both themes: 0 failures; `area_scan /inbox` 26 pages, 0 issues.
+
+### Entry 29: Inbox Phase 4: the keyboard (2026-11-06)
+Plan: the Inbox plan of 2026-11-06, Phase 4.
+
+- **J/K** open the next or previous conversation in the pane, as mail clients do (`static/js/inbox_pane.js`, capture phase, so app.js's page shortcuts step aside).
+  - Focus stays on the row, so J/K carry on from there.
+  - The first J adds a history entry, and further steps replace it, so Back returns to the list rather than stepping back through every peek.
+  - Below 1024 px, where there's no pane, they move between rows as on other pages (rows carry `data-row`), and Enter opens one.
+- **Read state:**
+  - a J/K load asks for `?peek=1`, which doesn't mark the conversation read (`views.conversation_detail`);
+  - it's marked read (`action=mark_read`) once it has stayed open 1.5 s;
+  - moving on, or closing the pane, cancels that, so five quick J presses mark only the last one;
+  - a click still marks read at once.
+- **R** focuses the reply box (when a reply can go).
+- **E** closes the conversation. Every close answered in the pane or panel (the ⋯ menu's too) now carries an Undo:
+  - the state before the close (status, assignee, close reason, close time) is signed into the Undo's address, so the server keeps nothing and nothing can be forged (`views.undo_close`, POST only, 2 minutes);
+  - Undo puts all of it back, an earlier close reason included;
+  - Undo refuses if anything changed since (the customer wrote, someone reopened or closed it again), if the link is someone else's, or if it has expired, and says so;
+  - the pane's toasts now keep their Undo (`_messages_to_toast`).
+- **A** assigns the conversation to you. **Esc** goes back to the list, with focus on that conversation's row.
+- **Where these keys stay inactive:** while typing, with a dialog or menu open, and below 1024 px for R, E, A and Esc. All are listed under "?".
+- **N** is now per page: `data-shortcut-new` on Content Studio's tabs (`publishing/_subnav.html`). Before, it fired on any `/publishing/` address, edit forms included. The inbox has none.
+- **Rows opt out of Content Studio's `[data-row]` arrival fade,** which would otherwise run on every 8-second refresh; they still fade on a search.
+- **Verification:**
+  - `test_inbox_keys.py` (new, 10 tests): peek, mark read, click; close then Undo restoring status, assignee, reason and close time; an earlier close reason; no change after the customer wrote; forged and someone else's links; POST only; the hooks on the page;
+  - `QA_KEYS` (new) at 1280: the first J peeks with focus on the row; five quick J presses marked read 0 times in the first second, then once, for the conversation stopped on; K, R, A ("You"), E (closed, toast with Undo, Undo reopens it), Esc (list, focus on the row); a J typed in the search box does nothing;
+  - ruff, format, mypy and `makemigrations --check` clean.
+  - with Phase 5A–5C in place, the full regression: `pytest -n 4` (full suite) passing, ruff, format, mypy (695 files) and `makemigrations --check` clean; `inbox_qa.mjs` 79/79; `QA_LAYOUT` 5/5; `QA_KEYS`, `QA_COMPOSER` and `QA_LOOK` as above; the contrast scan in both themes 0 failures; `area_scan /inbox` 26 pages, 0 issues.
+- **Fixed on the way:** `test_inbox_look`'s reduced-motion check read only the file's last such block, which is now this phase's; it reads every block.
+
+
+### Entry 30: Inbox Phase 5A–5C: instant open, one look for bubbles, the template picker (2026-11-06)
+Plan: the Inbox plan of 2026-11-06, Phase 5 as revised after the prod review of the same day (items 1–4).
+
+- **5A, opening feels instant** (`static/js/inbox_pane.js`):
+  - **Named skeleton:** the loading pane shows the row's name and avatar at once (`fillSkeleton`).
+  - **Fetched ahead:**
+    - a row hovered for 150 ms, and the next one after J, are fetched ahead, one at a time;
+    - each is a peek with `X-Inbox-Prefetch: 1`, so it is never marked read and never uses up a queued toast (`views.conversation_detail`).
+  - **Kept panes:**
+    - the last 5 panes are kept for 60 s, each only while its row in the list reads the same (status, assignee, last message, "Not sent"), so a stale pane is never shown;
+    - anything posted from the pane drops its copy;
+    - new messages after it come from the thread's own poll;
+    - a click on a kept peek still marks it read at once.
+  - **Headers:** the pane response now has `Vary: HX-Request, HX-Target` and `no-store` (it didn't).
+  - **Background requests:** they already pause while the tab is hidden (list, both badges, thread), so nothing to change there.
+  - **The ~900 ms gap on prod:** not reproducible here. The sign-in page alone showed `cfOrigin=579` ms against `cfEdge=4` ms, so the time is between Cloudflare and the app, which matches Phase 0's worker-queue finding (Entry 26). Workers are the user's decision.
+- **5B, bubbles and errors:**
+  - **One palette on every channel:** incoming on the surface colour, outgoing a navy tint (`--color-brand-500` at 16 %, 34 % in dark), the page ground behind. Dark mode follows the tokens; the WhatsApp greens and the Instagram purple are gone.
+  - **Grouping:** messages from the same side and sender within 5 minutes form a group. Only the last shows the tail, time and ticks; the others show their time beside the bubble on hover (`.cv-hover-time`, out of the flow).
+  - **AI chip:** "Sent by AI" is a chip.
+  - **Account-level failures** (billing, display name, connection) are said once, in a banner above the composer with the fix, whether the window is open or closed. Each message they stopped says "Not sent ⓘ", with the reason on tap. Message-level failures keep their full text.
+- **5C, the template picker** (`_template_form.html`, `tplPicker` in `chat.js`):
+  - **Inline (window closed):** one "Send a template" button opens the picker over the thread; on a phone it's a sheet from the bottom.
+  - **Picker contents:**
+    - readable names (`MessageTemplate.label`);
+    - search past 3 templates;
+    - each value a labelled field (`MessageTemplate.fields`: "Value 1" for `{{1}}`, Meta's example as the hint);
+    - a live preview filled the way the send fills it (position i fills `{{i}}` or `{{name}}`, as `campaign_ui.render_body`);
+    - Cancel.
+  - **Keyboard:** Esc or a click outside closes it, with focus back on its button. The inbox's Esc no longer closes the conversation while a non-modal dialog is open.
+  - **Send:** disabled, and not yellow, until the template and every value are in.
+- **Verification:**
+  - **Unit tests:**
+    - `test_inbox_fast.py` (3): fetch ahead keeps the toast and the unread, pane headers, skeleton slots;
+    - `test_inbox_bubbles.py` (7): labels, fields, the picker, search, one banner, "Not sent", the AI chip;
+    - updated: the look test (two yellows, never at once), the layout test (the banner), and the confidence test (no per-channel palette).
+  - **`QA_FAST` (new), at 1280:**
+
+    | Open | Name shows | Whole pane | Requests |
+    |---|---|---|---|
+    | Cold click | 10 ms | 401 ms | 1 |
+    | After a hover | 17 ms | 17 ms | 0 |
+    | Reopened | 31 ms | 31 ms | 0 |
+    | J (next fetched ahead) | 22 ms | 22 ms | — |
+
+    Mark-read as planned.
+  - **`QA_PICKER` (new), with WhatsApp on:**
+    - the thread stays 406 px at 1280×631 with the picker open, which sits over the thread;
+    - the preview fills in as you type;
+    - Send is grey, then yellow;
+    - Esc closes it with focus back on its button;
+    - one banner, one reason, one Fix link, two "Not sent";
+    - grouping and the AI chip;
+    - a 390 px sheet;
+    - light and dark.
+  - the regression in Entry 29 ran with this phase in place. `QA_LOOK` opens the picker before choosing a template.
+- **Not done here (5D–5F need a go-ahead):** two-line rows, the empty pane, wording, live feel, and the responsive harness.
