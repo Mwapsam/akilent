@@ -57,11 +57,12 @@ class TestPaneStyles:
         assert "<style" not in body
         assert 'class="cv" data-channel="whatsapp"' in body
 
-    def test_the_instagram_palette_follows_the_channel_attribute(self, logged_in):
-        client, account = logged_in
+    def test_every_channel_has_the_same_bubbles(self, logged_in):
+        """One outgoing colour from the brand tokens (Inbox Phase 5B): the channel is said by
+        its icon, not by a palette of its own."""
         css = (ROOT / "assets" / "app.css").read_text(encoding="utf-8")
-        assert '.cv[data-channel="instagram"]' in css
-        assert ':root[data-theme="dark"] .cv[data-channel="instagram"]' in css
+        assert ".cv[data-channel=" not in css
+        assert "--cv-out-bg: color-mix(in srgb, var(--color-brand-500)" in css
 
 
 class TestSendOutcomes:

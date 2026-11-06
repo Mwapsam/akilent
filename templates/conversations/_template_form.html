@@ -2,50 +2,74 @@
 24-hour window is closed (inline, the only thing that can still go), and the chat-template
 dialog while it's open (Next steps, an AI suggestion). ``prefix`` keeps their ids apart.
 
+Inline, it's one "Send a template" button that opens the picker over the thread, a sheet on a
+phone, so the thread keeps its height (tplPicker in static/js/chat.js). Each template reads by
+its label ("Download app"), with a search over names and text; its values are labelled fields
+with a live preview of the message; Send waits until the template and every value are in.
+
 An AI suggestion's template and values arrive on the ai-template-apply event (chat.js
 aiReviewTemplate), with the proposal it answers, since the dialog sits outside the chat
 component. Field names are per template (var__<id>__<name>): every template's fields are in
 the form, and only the chosen one's are read (views.conversation_detail send_template).{% endcomment %}
-<form method="post" action="{{ detail_url }}" class="{% if inline %}cv-tpl-form{% else %}space-y-4{% endif %}" data-template-form
-      {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}
-      x-data="{ tpl: '', proposal: '' }"
-      {% if not inline %}@submit="$dispatch('modal-close', 'chat-template')"
-      @modal-open.window="if ($event.detail === 'chat-template') proposal = ''"{% endif %}
-      x-on:ai-template-apply.window="tpl = String($event.detail.templateId); proposal = String($event.detail.proposal || ''); $nextTick(() => { for (const [k, v] of Object.entries($event.detail.values || {})) { const el = $el.querySelector('[name=&quot;var__' + $event.detail.templateId + '__' + k + '&quot;]'); if (el) el.value = v; } })">
-  {% csrf_token %}
-  <input type="hidden" name="action" value="send_template" />
-  <input type="hidden" name="ai_proposal" :value="proposal" />
-  {% if not inline %}<p class="text-sm text-ink-subtle">Once 24 hours have passed since {{ display_name }}'s last message, WhatsApp only delivers an approved template. A reply they send opens the window again.</p>{% endif %}
-  {% comment %}The templates as a list to read, not a closed select: the name, its kind and language,
-  and the start of its text, so the right one is picked without opening each. Radios, so the
-  keyboard (arrows) and a page without scripts both work.{% endcomment %}
-  <fieldset>
-    <legend class="{% if inline %}sr-only{% else %}label{% endif %}">Template</legend>
-    <div class="cv-tpl-list" id="{{ prefix }}-list">
-      {% for t in approved_templates %}
-      <label class="cv-tpl-option">
-        <input type="radio" name="template_id" value="{{ t.pk }}" x-model="tpl" required class="sr-only" />
-        <span class="cv-tpl-name">{{ t.name }}<span class="cv-tpl-meta">{{ t.get_category_display }} · {{ t.language_code }}</span></span>
-        <span class="cv-tpl-body">{{ t.content|truncatechars:140 }}</span>
+<div class="{% if inline %}cv-tplpick{% endif %}" x-data="tplPicker({{ inline|yesno:'true,false' }})"
+     {% if inline %}@keydown.escape.window="if (pick) close()" @click.outside="if (pick) close()"{% endif %}
+     x-on:ai-template-apply.window="apply($event.detail)"
+     {% if not inline %}@modal-open.window="if ($event.detail === 'chat-template') proposal = ''"{% endif %}>
+  {% if inline %}
+  <button type="button" class="btn btn-primary btn-sm cv-tplpick-open" x-ref="tplOpen" x-show="!pick" @click="open()"
+          aria-haspopup="dialog" :aria-expanded="pick">Send a template</button>
+  {% endif %}
+  <form method="post" action="{{ detail_url }}" class="{% if inline %}cv-tplpop{% else %}space-y-4{% endif %}" data-template-form
+        {% if inline %}x-show="pick" x-cloak x-transition.opacity role="dialog" aria-label="Send a template"{% endif %}
+        {% if in_pane %}hx-post="{{ detail_url }}" hx-target="#conversation-pane-inner" hx-swap="innerHTML"{% endif %}
+        {% if not inline %}@submit="$dispatch('modal-close', 'chat-template')"{% endif %}>
+    {% csrf_token %}
+    <input type="hidden" name="action" value="send_template" />
+    <input type="hidden" name="ai_proposal" :value="proposal" />
+    {% if inline %}<p class="cv-tplpop-title">Send a template</p>{% else %}<p class="text-sm text-ink-subtle">Once 24 hours have passed since {{ display_name }}'s last message, WhatsApp only delivers an approved template. A reply they send opens the window again.</p>{% endif %}
+    {% if approved_templates|length > 3 %}
+    <label class="sr-only" for="{{ prefix }}-search">Search templates</label>
+    <input id="{{ prefix }}-search" type="search" class="input input-sm w-full" x-ref="tplSearch" x-model="q"
+           placeholder="Search templates" autocomplete="off" />
+    {% endif %}
+    {% comment %}The templates as a list to read, not a closed select: the label, its kind and
+    language, and the start of its text. Radios, so arrows and a page without scripts both work.{% endcomment %}
+    <fieldset>
+      <legend class="sr-only">Template</legend>
+      <div class="cv-tpl-list" id="{{ prefix }}-list">
+        {% for t in approved_templates %}
+        <label class="cv-tpl-option" data-tpl-option="{{ t.pk }}" data-content="{{ t.content }}"
+               data-fields="{% for f in t.fields %}{{ f.name }}{% if not forloop.last %}|{% endif %}{% endfor %}"
+               data-search="{{ t.label|lower }} {{ t.name|lower }} {{ t.content|lower }}" x-show="shows($el.dataset.search)">
+          <input type="radio" name="template_id" value="{{ t.pk }}" x-model="tpl" required class="sr-only" />
+          <span class="cv-tpl-name">{{ t.label }}<span class="cv-tpl-meta">{{ t.get_category_display }} · {{ t.language_code }}</span></span>
+          <span class="cv-tpl-body">{{ t.content|truncatechars:140 }}</span>
+        </label>
+        {% endfor %}
+        <p class="cv-tpl-none" x-show="noMatch()" x-cloak>No template matches “<span x-text="q.trim()"></span>”.</p>
+      </div>
+    </fieldset>
+    {% for t in approved_templates %}
+    {% if t.variables %}
+    <div x-show="tpl === '{{ t.pk }}'" x-cloak class="cv-tpl-fields">
+      {% for f in t.fields %}
+      <label class="block text-xs text-ink-subtle">{{ f.label }}
+        <input class="input input-sm mt-1" name="var__{{ t.pk }}__{{ f.name }}" x-model="vals['var__{{ t.pk }}__{{ f.name }}']"
+               :required="tpl === '{{ t.pk }}'"{% if f.example %} placeholder="{{ f.example }}"{% endif %} />
       </label>
       {% endfor %}
     </div>
-  </fieldset>
-  {% for t in approved_templates %}
-  {% if t.variables %}
-  <div x-show="tpl === '{{ t.pk }}'" x-cloak class="grid sm:grid-cols-2 gap-3">
-    {% for v in t.variables %}
-    <label class="block text-xs text-ink-subtle">{{ v }}
-      <input class="input mt-1" name="var__{{ t.pk }}__{{ v }}" :required="tpl === '{{ t.pk }}'" />
-    </label>
+    {% endif %}
     {% endfor %}
-  </div>
-  {% endif %}
-  {% endfor %}
-  <div class="flex justify-end gap-2{% if not inline %} pt-1{% endif %}">
-    {% if not inline %}<button type="button" class="btn btn-ghost btn-sm" @click="$dispatch('modal-close', 'chat-template')">Cancel</button>{% endif %}
-    {% comment %}Yellow only where it's the composer's one action (the window closed, so it stands in
-    for Send); in the dialog it's the tonal secondary.{% endcomment %}
-    <button class="btn {% if inline %}btn-primary{% else %}btn-tonal{% endif %} btn-sm" :disabled="!tpl">Send template</button>
-  </div>
-</form>
+    <div class="cv-tpl-preview" x-show="tpl" x-cloak aria-live="polite">
+      <span class="cv-tpl-preview-label">Preview</span>
+      <p x-text="preview()"></p>
+    </div>
+    <div class="flex justify-end gap-2{% if not inline %} pt-1{% endif %}">
+      <button type="button" class="btn btn-ghost btn-sm" @click="close()">Cancel</button>
+      {% comment %}Yellow only where it's the composer's one action (the window closed, so it stands in
+      for Send), and only once it can go; in the dialog it's the tonal secondary.{% endcomment %}
+      <button class="btn {% if inline %}btn-primary{% else %}btn-tonal{% endif %} btn-sm cv-tpl-send" :disabled="!ready()">Send template</button>
+    </div>
+  </form>
+</div>

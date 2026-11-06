@@ -1739,14 +1739,14 @@
    Moved out of an inline <style> in the pane, which was re-sent with every
    conversation opened in the two-pane inbox. Deliberately outside any @layer,
    as the inline block was: these rules have to win over .input and the other
-   components they restyle inside the chat. The chat surface keeps its own
-   WhatsApp-like palette (a brand-navy thread would not read as a chat); the
-   Instagram palette applies via .cv[data-channel="instagram"].
+   components they restyle inside the chat. One palette on every channel, from
+   the brand tokens (see .cv below).
    ========================================================================== */
 /* ── Conversation view. Tune --cv-top to your base layout's header + padding height. ── */
-/* Chrome reads the app's semantic tokens, so dark mode needs no extra work
-   here. The chat surface keeps its own WhatsApp-like palette - a brand-navy
-   message thread would not read as a chat - and gets explicit dark values. */
+/* Chrome and thread both read the app's semantic tokens, so dark mode needs no extra work
+   here. One look on every channel (Inbox Phase 5B): incoming on the surface colour, outgoing
+   in a navy tint, the page ground behind them. The channel is said by its icon in the
+   header and the list, not by the bubbles' colour (which made Messenger read as WhatsApp). */
 .cv { --cv-top: 7rem; --cv-accent: var(--color-accent);
       --cv-line: var(--color-border);
       --cv-surface: var(--color-surface);
@@ -1755,14 +1755,14 @@
       --cv-ink-muted: var(--color-ink-muted);
       --cv-ink-subtle: var(--color-ink-subtle);
       --cv-hover: var(--color-hover);
-      --cv-wallpaper: #efeae2;
-      --cv-in-bg: #ffffff;
-      --cv-in-fg: #111b21;
-      --cv-out-bg: #d9fdd3;
-      --cv-out-fg: #111b21;
-      --cv-stamp: #667781;
+      --cv-wallpaper: var(--color-canvas);
+      --cv-in-bg: var(--color-surface);
+      --cv-in-fg: var(--color-ink);
+      --cv-out-bg: color-mix(in srgb, var(--color-brand-500) 16%, var(--color-surface));
+      --cv-out-fg: var(--color-ink);
+      --cv-stamp: var(--color-ink-subtle);
       --cv-tick-read: #53bdeb;
-      --cv-chip: rgb(255 255 255 / .94);
+      --cv-chip: var(--color-surface);
       --cv-warn-bg: var(--color-amber-50);
       --cv-warn-border: var(--color-amber-200);
       --cv-warn-fg: var(--color-amber-800);
@@ -2024,14 +2024,32 @@
 .help-tip-label:hover { color: var(--cv-ink, var(--color-ink)); }
 .help-tip-label:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; border-radius: .25rem; }
 .cv-closedwin-body { flex: 1; min-width: 0; }
-.cv-closedwin-problem, .cv-closedwin-empty { display: flex; flex-direction: column; align-items: flex-start; gap: .5rem;
-                                             padding: .625rem .75rem; border-radius: .75rem; font-size: .875rem; }
-.cv-closedwin-problem { background: var(--tone-coral-bg); color: var(--tone-coral-fg); }
+.cv-closedwin-empty { display: flex; flex-direction: column; align-items: flex-start; gap: .5rem;
+                      padding: .625rem .75rem; border-radius: .75rem; font-size: .875rem; }
 .cv-closedwin-empty { background: var(--cv-surface); border: 1px solid var(--cv-line); color: var(--cv-ink-muted); }
-/* The template picker inline: the template, its fields, Send, each on its own line. */
-.cv-tpl-form { display: flex; flex-direction: column; gap: .5rem; padding: .625rem .75rem; border-radius: .75rem;
-               background: var(--cv-surface); border: 1px solid var(--cv-line); }
-.cv-tpl-form .select { width: 100%; }
+/* The template picker inline (Phase 5C): one button in the reply box's place, opening the
+   picker over the thread (anchored to the footer's top edge), so the thread keeps its height.
+   On a phone it's a sheet from the bottom of the screen. */
+.cv-footer { position: relative; }
+.cv-tplpick-open { width: 100%; justify-content: center; }
+.cv-tplpop { position: absolute; z-index: 30; left: .75rem; right: .75rem; bottom: calc(100% + .5rem);
+  display: flex; flex-direction: column; gap: .625rem; max-height: min(30rem, 70vh); overflow-y: auto; padding: .75rem;
+  border-radius: var(--radius-surface); background: var(--cv-surface); border: 1px solid var(--cv-line);
+  box-shadow: 0 12px 32px -8px rgb(11 20 26 / .28), 0 2px 6px rgb(11 20 26 / .08); }
+.cv-tplpop-title { font-size: .9375rem; font-weight: 600; color: var(--cv-ink); }
+.cv-tplpop .cv-tpl-list { max-height: 15rem; }
+@media (max-width: 767px) {
+  .cv-tplpop { position: fixed; left: 0; right: 0; bottom: 0; max-height: 85dvh; border-radius: 1rem 1rem 0 0;
+    padding-bottom: calc(.75rem + env(safe-area-inset-bottom, 0px)); }
+}
+.cv-tpl-fields { display: grid; gap: .5rem; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); }
+.cv-tpl-none { padding: .5rem .625rem; font-size: .8125rem; color: var(--color-ink-subtle); }
+.cv-tpl-preview { padding: .5rem .625rem; border-radius: .625rem; background: var(--cv-out-bg); color: var(--cv-out-fg); font-size: .875rem; }
+.cv-tpl-preview p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.cv-tpl-preview-label { display: block; margin-bottom: .125rem; font-size: .6875rem; font-weight: 600; letter-spacing: .02em;
+  text-transform: uppercase; color: var(--cv-stamp); }
+/* Not yellow until it can go: yellow is the screen's one action, and a disabled one isn't. */
+.cv-tpl-send:disabled { background: var(--tone-neutral-bg); color: var(--color-ink-subtle); border-color: transparent; opacity: 1; cursor: not-allowed; }
 /* A reply box that can't send (the window closed on Instagram or Messenger) looks it. */
 .cv-composer .cv-input:disabled { cursor: not-allowed; background: transparent; }
 .cv-inputwrap:has(.cv-input:disabled) { background: var(--cv-surface-muted); }
@@ -2119,58 +2137,20 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .cv {
-    --cv-wallpaper: #0B141A;
-    --cv-in-bg: #1F2C34;
-    --cv-in-fg: #E9EDEF;
-    --cv-out-bg: #005C4B;
-    --cv-out-fg: #E9EDEF;
-    --cv-stamp: #8696A0;
-    --cv-chip: rgb(255 255 255 / .08);
+    --cv-out-bg: color-mix(in srgb, var(--color-brand-500) 34%, var(--color-surface));
     --cv-warn-bg: color-mix(in srgb, var(--color-amber-400) 14%, transparent);
     --cv-warn-border: color-mix(in srgb, var(--color-amber-400) 32%, transparent);
     --cv-warn-fg: var(--color-amber-200);
   }
 }
 :root[data-theme="dark"] .cv {
-  --cv-wallpaper: #0B141A;
-  --cv-in-bg: #1F2C34;
-  --cv-in-fg: #E9EDEF;
-  --cv-out-bg: #005C4B;
-  --cv-out-fg: #E9EDEF;
-  --cv-stamp: #8696A0;
-  --cv-chip: rgb(255 255 255 / .08);
+  --cv-out-bg: color-mix(in srgb, var(--color-brand-500) 34%, var(--color-surface));
   --cv-warn-bg: color-mix(in srgb, var(--color-amber-400) 14%, transparent);
   --cv-warn-border: color-mix(in srgb, var(--color-amber-400) 32%, transparent);
   --cv-warn-fg: var(--color-amber-200);
 }
 
 @media (prefers-reduced-motion: reduce) { .cv-inputwrap, .cv-send { transition: none; } }
-
-/* Instagram channel — soft gradient background, white bubbles both directions */
-.cv[data-channel="instagram"] {
-  --cv-wallpaper: #fafafa;
-  --cv-in-bg: #ffffff;
-  --cv-in-fg: #111827;
-  --cv-out-bg: #f0e6ff;
-  --cv-out-fg: #111827;
-  --cv-accent: #c13584;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .cv[data-channel="instagram"] {
-    --cv-wallpaper: #1a1a2e;
-    --cv-in-bg: #16213e;
-    --cv-in-fg: #e5e7eb;
-    --cv-out-bg: #4a2060;
-    --cv-out-fg: #e5e7eb;
-  }
-}
-:root[data-theme="dark"] .cv[data-channel="instagram"] {
-  --cv-wallpaper: #1a1a2e;
-  --cv-in-bg: #16213e;
-  --cv-in-fg: #e5e7eb;
-  --cv-out-bg: #4a2060;
-  --cv-out-fg: #e5e7eb;
-}
 
 /* Touch screens: the header's icon buttons are 44px targets (they were 36px). To keep
    room for the customer's name on a phone, the avatar, which only repeats the initial,
@@ -2498,3 +2478,40 @@
 /* The row J/K is on: the focus ring sits inside the row, so the list's card doesn't clip it. */
 .inbox-row:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: -2px; }
 @media (prefers-reduced-motion: reduce) { #inbox-split #inbox-body [data-row] { transition: none; } }
+
+/* Inbox Phase 5A: the loading pane names the conversation at once, from its row
+   (inbox_pane.js fillSkeleton); the grey placeholders show only when there's no row to read. */
+.inbox-skel-real { display: none; }
+.inbox-split.skel-named .inbox-skel-header > .inbox-skel { display: none; }
+.inbox-split.skel-named .inbox-skel-real { display: inline-flex; }
+.inbox-skel-name { font-weight: 600; color: var(--color-ink); min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+
+/* Inbox Phase 5B: bubbles and errors. */
+/* A grouped bubble's time, beside it on hover or focus, outside the flow so nothing moves. */
+.cv-hover-time { position: absolute; bottom: .25rem; left: calc(100% + .5rem); white-space: nowrap; font-size: .6875rem;
+  color: var(--cv-stamp); opacity: 0; pointer-events: none; transition: opacity var(--duration-fast) var(--ease-emphasized); }
+.cv-msg--out .cv-hover-time { left: auto; right: calc(100% + .5rem); }
+.cv-msg:hover .cv-hover-time, .cv-msg:focus-within .cv-hover-time { opacity: 1; }
+@media (pointer: coarse) { .cv-hover-time { display: none; } }
+/* Sent by AI: a chip, not a sentence. */
+.cv-ai-chip { display: inline-flex; align-items: center; padding: 0 .3125rem; border-radius: 999px; font-size: .625rem;
+  font-weight: 600; letter-spacing: .02em; line-height: 1rem; color: var(--tone-brand-fg); background: var(--tone-brand-bg);
+  border: 1px solid var(--tone-brand-border); }
+/* A send the account stopped: "Not sent", its reason a tap away (the banner has the fix). */
+.cv-fail-short { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .25rem; }
+.cv-fail-why { display: inline-flex; align-items: center; justify-content: center; min-width: 1.5rem; min-height: 1.5rem;
+  border-radius: 999px; color: inherit; }
+.cv-fail-why:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
+.cv-fail-why:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 1px; }
+.cv-fail-reason { flex-basis: 100%; color: var(--cv-ink-muted); }
+.cv-msg--out .cv-fail-short { justify-content: flex-end; }
+/* The account's problem, once, above the composer. */
+.cv-acct-banner { display: flex; flex-wrap: wrap; align-items: flex-start; gap: .5rem .625rem; margin: 0 0 .5rem; padding: .625rem .75rem;
+  border-radius: var(--radius-control); border: 1px solid var(--tone-coral-border);
+  background: var(--tone-coral-bg); color: var(--cv-ink); font-size: .875rem; }
+.cv-acct-banner > svg { margin-top: .125rem; color: var(--tone-coral-fg); }
+.cv-acct-banner > p { flex: 1 1 14rem; min-width: 0; }
+.cv-acct-banner-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+@media (prefers-reduced-motion: reduce) { .cv-hover-time { transition: none; } }
+.cv-msg--out .cv-fail-reason { text-align: right; }

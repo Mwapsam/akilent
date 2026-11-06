@@ -14,6 +14,9 @@
  *   - the inbox's keys (onKey): J/K open the next or previous conversation as a peek, which is
  *     marked read only once it has stayed open PEEK_READ_MS; R reply, E close (with Undo), A
  *     assign to me, Esc back to the list. Never while typing or with a dialog open.
+ *   - opening feels instant: the skeleton shows the row's name and avatar at once, a row is
+ *     fetched ahead when hovered (or next after J), and the last few opened are kept a minute
+ *     (paneCache), each only while its row in the list still reads the same.
  */
 (function () {
   "use strict";
@@ -104,7 +107,7 @@
     var PEEK_READ_MS = 1500;
     var readTimer = null;
     function cancelRead() { clearTimeout(readTimer); readTimer = null; }
-    function markReadLater(url, mine) {
+    function markReadLater(url, mine, delay) {
       readTimer = setTimeout(function () {
         readTimer = null;
         if (mine !== loadSeq || split.dataset.open !== url) return; // moved on meanwhile
@@ -116,7 +119,79 @@
           headers: { "X-CSRFToken": token, "X-Requested-With": "XMLHttpRequest", "Content-Type": "application/x-www-form-urlencoded" },
           body: "action=mark_read",
         }).then(function (r) { if (r.ok) window.htmx.trigger(document.body, "inbox-refresh"); }).catch(function () { /* stays unread */ });
-      }, PEEK_READ_MS);
+      }, delay === undefined ? PEEK_READ_MS : delay);
+    }
+
+    // Panes fetched ahead or opened lately, by path. An entry is used only while its row in
+    // the list reads the same as when it was fetched: the 8-second poll re-renders a row whose
+    // status, assignee, last message or "Not sent" changed, so a stale pane is never shown.
+    // New messages after it are the thread's own poll's job (chat.js, from lastId), as on any
+    // open. Every fetch ahead is a peek, so it never marks anything read.
+    var CACHE_MS = 60000;
+    var CACHE_MAX = 5;
+    var PREFETCH_HOVER_MS = 150;
+    var paneCache = new Map();
+    var prefetching = null; // one at a time, so hovering down the list can't queue a burst
+    var hoverTimer = null;
+    function rowKey(url) {
+      var r = rowFor(url);
+      // Reading it marks it read; that alone doesn't make the pane stale.
+      return r ? r.textContent.replace("Unread.", "").replace(/\s+/g, " ").trim() : null;
+    }
+    function remember(url, html) {
+      var key = rowKey(url);
+      // Only a conversation: never a sign-in page or an error state.
+      if (key === null || !html || html.indexOf("data-title") === -1) return;
+      var path = pathOf(url);
+      paneCache.delete(path);
+      paneCache.set(path, { html: html, at: Date.now(), key: key });
+      while (paneCache.size > CACHE_MAX) paneCache.delete(paneCache.keys().next().value);
+    }
+    function cached(url) {
+      var hit = paneCache.get(pathOf(url));
+      if (!hit) return null;
+      if (Date.now() - hit.at > CACHE_MS || hit.key !== rowKey(url)) { paneCache.delete(pathOf(url)); return null; }
+      return hit.html;
+    }
+    function prefetch(url) {
+      if (!url || prefetching || cached(url) || split.dataset.open === url) return;
+      if (navigator.connection && navigator.connection.saveData) return;
+      var u = new URL(url, window.location.href);
+      u.searchParams.set("peek", "1");
+      var path = pathOf(url);
+      prefetching = path;
+      fetch(u.href, {
+        credentials: "same-origin",
+        headers: { "HX-Request": "true", "HX-Target": "conversation-pane-inner", "X-Inbox-Prefetch": "1" },
+      }).then(function (r) {
+        // A sign-in page or an error is not worth keeping: the real open will say what it is.
+        return r.ok && !r.redirected ? r.text() : null;
+      }).then(function (html) {
+        remember(url, html);
+      }).catch(function () { /* the real open fetches it */ }).then(function () {
+        if (prefetching === path) prefetching = null;
+      });
+    }
+    function onHover(e) {
+      var a = e.target.closest && e.target.closest(".inbox-row");
+      if (!a || !list.contains(a) || !isWide()) return;
+      clearTimeout(hoverTimer);
+      hoverTimer = setTimeout(function () { prefetch(a.href); }, PREFETCH_HOVER_MS);
+    }
+    function onHoverOut(e) {
+      var a = e.target.closest && e.target.closest(".inbox-row");
+      if (a && !a.contains(e.relatedTarget)) clearTimeout(hoverTimer);
+    }
+    // The skeleton names the conversation being opened at once, from its row.
+    function fillSkeleton(url) {
+      var row = rowFor(url);
+      var name = split.querySelector("[data-skel-name]");
+      var avatar = split.querySelector("[data-skel-avatar]");
+      if (!name || !avatar) return;
+      var rowAvatar = row && row.querySelector(".inbox-avatar");
+      name.textContent = row ? row.getAttribute("data-title") || "" : "";
+      avatar.innerHTML = rowAvatar ? rowAvatar.innerHTML : "";
+      split.classList.toggle("skel-named", !!row);
     }
 
     // ``push``: true adds a history entry (a click), "replace" swaps the current one (J/K
@@ -132,6 +207,27 @@
       selectRow(rowFor(url));
       split.classList.add("has-conversation", "is-loading");
       fit(); // the inbox header is shorter while a conversation is open
+      var wasUnread = !!(rowFor(url) && rowFor(url).classList.contains("is-unread"));
+      // What a shown pane needs, however it arrived.
+      function shown() {
+        split.classList.remove("is-loading");
+        if (push === "replace") history.replaceState({ akilentPane: url }, "", url);
+        else if (push) history.pushState({ akilentPane: url }, "", url);
+        setTitle();
+        if (peek) { if (wasUnread) markReadLater(url, mine); }
+        else focusPaneHeading();
+      }
+      var html = cached(url);
+      if (html) {
+        window.htmx.trigger(pane, "htmx:abort");
+        paneEpoch++;
+        window.htmx.swap(pane, html, { swapStyle: "innerHTML" });
+        // Kept from a peek, so a click still has to mark it read, at once as always.
+        if (!peek && wasUnread) markReadLater(url, mine, 0);
+        shown();
+        return;
+      }
+      fillSkeleton(url);
       var failed = false;
       var status = 0;
       // Only this load's own failure: a form inside the pane (assign, tags, snooze) also
@@ -160,7 +256,6 @@
       window.htmx.trigger(pane, "htmx:abort");
       var requestUrl = url;
       if (peek) { var u = new URL(url, window.location.href); u.searchParams.set("peek", "1"); requestUrl = u.href; }
-      var wasUnread = peek && !!(rowFor(url) && rowFor(url).classList.contains("is-unread"));
       window.htmx
         .ajax("GET", requestUrl, { target: "#conversation-pane-inner", swap: "innerHTML", source: pane, headers: paneHeaders })
         .then(function () {
@@ -170,12 +265,7 @@
           // Answered, but not with a conversation (a sign-in page, an unexpected redirect):
           // the full page shows whatever it is.
           if (!pane.querySelector("[data-title]")) { window.location.href = url; return; }
-          split.classList.remove("is-loading");
-          if (push === "replace") history.replaceState({ akilentPane: url }, "", url);
-          else if (push) history.pushState({ akilentPane: url }, "", url);
-          setTitle();
-          if (peek) { if (wasUnread) markReadLater(url, mine); }
-          else focusPaneHeading();
+          shown();
         })
         .catch(function () {
           stopListening();
@@ -230,6 +320,10 @@
     function inPane(el) { return !!el && (el === pane || pane.contains(el)); }
     function onBeforeRequest(e) {
       if (!isPaneLoad(e.detail) && inPane(e.detail.target) && e.detail.xhr) e.detail.xhr._akPaneEpoch = paneEpoch;
+      var verb = e.detail.requestConfig && e.detail.requestConfig.verb;
+      if (verb && verb !== "get" && split.dataset.open && (inPane(e.detail.elt) || inPane(e.detail.target))) {
+        paneCache.delete(pathOf(split.dataset.open));
+      }
     }
     function onBeforeSwap(e) {
       var cfg = e.detail && e.detail.requestConfig;
@@ -243,7 +337,10 @@
         return;
       }
       if (!split.dataset.open || pathOf(cfg.path) !== pathOf(split.dataset.open)) e.detail.shouldSwap = false;
-      else paneEpoch++; // the pane is about to show this conversation
+      else {
+        paneEpoch++; // the pane is about to show this conversation
+        if (e.detail.xhr && e.detail.xhr.status === 200) remember(split.dataset.open, e.detail.serverResponse);
+      }
     }
 
     // The pane's error state asks for a retry through data-error-retry-event (app.js) rather
@@ -283,8 +380,10 @@
     function typing(t) {
       return !!t && (t.isContentEditable || (t.matches && t.matches("input, textarea, select")));
     }
+    // Any dialog or menu showing, modal or not (the template picker opens over the thread):
+    // its own Esc closes it, not the conversation.
     function dialogOpen() {
-      return Array.prototype.some.call(document.querySelectorAll('[role="dialog"][aria-modal="true"], [role="menu"]'),
+      return Array.prototype.some.call(document.querySelectorAll('[role="dialog"], [role="menu"]'),
         function (d) { return d.offsetParent !== null || d.getClientRects().length > 0; });
     }
     function chatData() {
@@ -315,6 +414,8 @@
         next.scrollIntoView({ block: "nearest" });
         if (next.getAttribute("aria-current") === "true" && open) return; // already showing it
         openInPane(next.href, split.dataset.open ? "replace" : true, true);
+        var after = rows[rows.indexOf(next) + (key === "j" ? 1 : -1)];
+        if (after) setTimeout(function () { prefetch(after.href); }, PREFETCH_HOVER_MS);
         return;
       }
       if (!open) return;
@@ -344,6 +445,8 @@
 
     document.addEventListener("click", onClickCapture, true);
     document.addEventListener("keydown", onKey, true);
+    list.addEventListener("mouseover", onHover);
+    list.addEventListener("mouseout", onHoverOut);
     window.addEventListener("popstate", onPopState);
     document.addEventListener("htmx:afterSwap", onAfterSwap);
     document.addEventListener("htmx:beforeSwap", onBeforeSwap);
@@ -353,6 +456,10 @@
     return function cleanup() {
       document.removeEventListener("click", onClickCapture, true);
       document.removeEventListener("keydown", onKey, true);
+      list.removeEventListener("mouseover", onHover);
+      list.removeEventListener("mouseout", onHoverOut);
+      clearTimeout(hoverTimer);
+      paneCache.clear();
       cancelRead();
       window.removeEventListener("popstate", onPopState);
       document.removeEventListener("htmx:afterSwap", onAfterSwap);

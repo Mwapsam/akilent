@@ -107,5 +107,32 @@ class MessageTemplate(models.Model):
     def sendable_outside_window(self) -> bool:
         return self.approval_status == self.ApprovalStatus.APPROVED
 
+    @property
+    def label(self) -> str:
+        """The name as people read it ("Download app" for ``download_app``); Meta's name is
+        unchanged and is what's sent."""
+        words = " ".join(self.name.replace("_", " ").replace("-", " ").split())
+        return words[:1].upper() + words[1:]
+
+    def fields(self) -> list[dict]:
+        """Each parameter as the picker asks for it: ``{{1}}`` has no name of its own, so it's
+        "Value 1", with Meta's example as the hint."""
+        examples = list(self.variable_examples or [])
+        out = []
+        for i, v in enumerate(self.variables or []):
+            name = str(v)
+            out.append(
+                {
+                    "name": name,
+                    "label": f"Value {name}"
+                    if name.isdigit()
+                    else name.replace("_", " ").capitalize(),
+                    "example": str(examples[i])
+                    if i < len(examples) and examples[i]
+                    else "",
+                }
+            )
+        return out
+
     def __str__(self):
         return f"{self.name} [{self.approval_status}]"

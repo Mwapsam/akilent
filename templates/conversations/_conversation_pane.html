@@ -190,6 +190,7 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
               <template x-if="item.type === 'msg' && item.m.direction !== 'system'">
                 <div class="cv-msg" :class="{ 'cv-msg--out': item.m.direction === 'outbound', 'cv-msg--pending': item.m.pending, 'cv-msg--failed': item.m.status === 'failed', 'cv-msg--unknown': item.m.unknown, 'cv-msg--last': item.showMeta }">
                   <div class="cv-bubble">
+                    <time class="cv-hover-time" x-show="!item.showMeta" :datetime="item.m.ts" :title="new Date(item.m.ts).toLocaleString()" x-text="time(item.m.ts)"></time>
                     {% comment %} Customer media (photos, videos, voice notes, files), streamed by
                        conversations:message_media after an account check. {% endcomment %}
                     <template x-if="item.m.media">
@@ -243,7 +244,7 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
                     <p class="cv-text" x-show="showText(item.m)" :class="{ 'italic text-ink-subtle': !item.m.body }" x-text="item.m.body || '(no text content)'"></p>
                     <div class="cv-stamp" x-show="item.showMeta" :title="new Date(item.m.ts).toLocaleString()">
                       {# Time is visible; the full status label ("Delivered", "Read"…) is kept for screen readers and hover. #}
-                      <span x-show="item.m.byAi" class="font-medium">Sent by AI ·</span>
+                      <span x-show="item.m.byAi" class="cv-ai-chip" title="Sent by AI">AI</span>
                       <span x-text="time(item.m.ts)"></span>
                       <span class="sr-only" x-text="meta(item.m)"></span>
                       <span class="cv-ticks" x-show="item.m.direction === 'outbound' && item.m.status !== 'failed' && !item.m.unknown" :class="{ 'is-read': item.m.status === 'read' }" :title="meta(item.m)" aria-hidden="true">
@@ -253,16 +254,23 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
                       </span>
                     </div>
                   </div>
-                  <div class="cv-fail" :class="{ 'is-unknown': item.m.unknown }" x-show="item.showFailure">
-                    <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
-                    <span x-text="failureText(item.m)"></span>
+                  <div class="cv-fail" :class="{ 'is-unknown': item.m.unknown }" x-show="item.showFailure" x-data="{ why: false }">
+                    <svg x-show="!item.m.failureFix || item.m.unknown" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
                     {% comment %}A failure that's about the WhatsApp account (billing, display name,
-                    connection) rather than this message says where to fix it: until then every
-                    send, templates included, fails the same way (views._failure).{% endcomment %}
-                    <a class="cv-fail-action" x-show="item.m.failureFix" x-cloak
-                       :href="item.m.failureFix && item.m.failureFix.url"
-                       :target="item.m.failureFix && item.m.failureFix.url.startsWith('http') ? '_blank' : null"
-                       rel="noopener" x-text="item.m.failureFix && item.m.failureFix.label"></a>
+                    connection) rather than this message (views._failure gives only those a
+                    failureFix) is said once, in the banner above the composer, with where to fix it.
+                    Each message it stopped says only "Not sent", its reason a tap away.{% endcomment %}
+                    <template x-if="item.m.failureFix && !item.m.unknown">
+                      <span class="cv-fail-short">
+                        <span>Not sent</span>
+                        <button type="button" class="cv-fail-why" @click="why = !why" :aria-expanded="why"
+                                :title="failureText(item.m)" aria-label="Why it wasn't sent">
+                          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+                        </button>
+                        <span x-show="why" x-cloak class="cv-fail-reason" x-text="failureText(item.m)"></span>
+                      </span>
+                    </template>
+                    <span x-show="!item.m.failureFix || item.m.unknown" x-text="failureText(item.m)"></span>
                     {% comment %}A failed send is known not to have gone, so it can go straight back
                     into the reply box. One whose outcome is unknown may already have reached the
                     customer: the choices are to look again, to put it back knowingly, or to drop it.{% endcomment %}
@@ -477,19 +485,23 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
             {% else %}{% include "components/help_tip.html" with tip_label="Why?" text="Once 24 hours have passed since the customer's last message, WhatsApp only delivers a template approved by Meta. A reply from them opens the window again." %}{% endif %}
           </p>
         </div>
+        {% comment %}The account can't send (billing, display name, connection): said once, here,
+        with where to fix it, whether or not the window is open. With the window closed and
+        templates approved, a template can still be tried.{% endcomment %}
+        <div class="cv-acct-banner" x-show="accountProblem" x-cloak role="alert" data-account-banner>
+          {% include "components/icon.html" with name="alert" class="w-4 h-4 shrink-0" %}
+          <p x-text="accountProblem && accountProblem.failureReason"></p>
+          <div class="cv-acct-banner-actions">
+            <a class="btn btn-tonal btn-sm" :href="accountProblem && accountProblem.failureFix.url"
+               :target="accountProblem && accountProblem.failureFix.url.startsWith('http') ? '_blank' : null" rel="noopener"
+               x-text="accountProblem && accountProblem.failureFix.label"></a>
+            {% if conversation.channel == "whatsapp" and approved_templates %}<button type="button" class="btn btn-ghost btn-sm" x-show="!windowOpen && !tplAnyway" @click="tplAnyway = true">Try a template anyway</button>{% endif %}
+          </div>
+        </div>
         <div class="cv-composer-row">
         {% include "conversations/_composer_next.html" %}
         {% if conversation.channel == "whatsapp" %}
         <div class="cv-closedwin-body" x-show="!windowOpen" x-cloak>
-          <div class="cv-closedwin-problem" x-show="accountProblem && !tplAnyway" role="alert">
-            <p x-text="accountProblem && accountProblem.failureReason"></p>
-            <div class="flex flex-wrap gap-2">
-              <a class="btn btn-secondary btn-sm" :href="accountProblem && accountProblem.failureFix.url"
-                 :target="accountProblem && accountProblem.failureFix.url.startsWith('http') ? '_blank' : null" rel="noopener"
-                 x-text="accountProblem && accountProblem.failureFix.label"></a>
-              {% if approved_templates %}<button type="button" class="btn btn-ghost btn-sm" @click="tplAnyway = true">Try a template anyway</button>{% endif %}
-            </div>
-          </div>
           {% if approved_templates %}
           <div x-show="!accountProblem || tplAnyway" data-closed-templates>
             {% include "conversations/_template_form.html" with prefix="template-inline" inline=True %}

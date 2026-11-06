@@ -93,12 +93,21 @@ def test_an_open_conversation_has_no_yellow_button_but_send(shop):
     pane = client.get(f"/inbox/{chat.public_id}/", **PANE).content.decode()
     panel = client.get(f"/inbox/{chat.public_id}/panel/", **BG).content.decode()
 
-    # The only btn-primary is the closed-window picker's, which stands in for Send.
-    inline = pane[pane.index('id="template-inline-list"') :]
-    assert len(_yellow(pane)) == 1 and _yellow(inline[: inline.index("</form>")])
+    # The only btn-primary are the closed-window picker's, which stands in for Send: its
+    # "Send a template", hidden while the picker is open, and the picker's Send, which isn't
+    # yellow until it can go (.cv-tpl-send:disabled). Never two at once.
+    inline = pane[pane.index('class="cv-tplpick"') :]
+    inline = inline[: inline.index("</form>")]
+    assert len(_yellow(pane)) == 2 and len(_yellow(inline)) == 2
+    assert 'x-show="!pick" @click="open()"' in inline
     assert _yellow(panel) == []
     dialog = pane[pane.index('id="template-list"') :]
-    assert 'class="btn btn-tonal btn-sm" :disabled="!tpl">Send template' in dialog
+    assert (
+        'class="btn btn-tonal btn-sm cv-tpl-send" :disabled="!ready()">Send template'
+        in dialog
+    )
+    css = (settings.BASE_DIR / "assets" / "app.css").read_text(encoding="utf-8")
+    assert ".cv-tpl-send:disabled { background: var(--tone-neutral-bg);" in css
     css = (settings.BASE_DIR / "assets" / "app.css").read_text(encoding="utf-8")
     assert (
         '.cv-send:not(.cv-send--rec)[aria-label="Send"] { background: var(--color-amber-400);'

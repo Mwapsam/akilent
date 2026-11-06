@@ -3,7 +3,9 @@
 // and phone layout. Every POST is intercepted, so nothing is sent to a customer.
 // Usage: node tools/qa/inbox_qa.mjs <repoRoot> <outDir>   (QA_SCAN=1 contrast scan, QA_HDR=1 header sizes,
 // QA_LAYOUT=1 Phase 2 layout targets, QA_COMPOSER=1 closed-window composer and details, QA_OB=1 setup over composer,
-// QA_LOOK=1 Phase 3 menus and template list in both themes, QA_KEYS=1 Phase 4 keyboard;
+// QA_LOOK=1 Phase 3 menus and template list in both themes, QA_KEYS=1 Phase 4 keyboard,
+// QA_FAST=1 Phase 5A instant open (skeleton header, hover/J prefetch, recent panes kept),
+// QA_PICKER=1 Phase 5B/5C bubbles, errors once, the template picker over the thread (needs QA_BASE :8001);
 // QA_BASE=http://127.0.0.1:8001 for a server started with WHATSAPP_ENABLED=True)
 // Needs the dev server on :8000 and QA_UI_EMAIL / QA_UI_PASSWORD in .env.
 import { spawn } from "node:child_process";
@@ -176,7 +178,7 @@ if (process.env.QA_LAYOUT) {
 if (process.env.QA_COMPOSER) {
   const out = {};
   const footer = () => evaluate(`(() => { const f = document.querySelector('.cv-footer'); if (!f) return null; const vis = (s) => { const e = f.querySelector(s); return !!e && !!e.offsetParent; };
-    return { note: (f.querySelector('.cv-closedwin-note') || {}).innerText, closed: vis('.cv-closedwin'), picker: vis('[data-closed-templates]'), problem: vis('.cv-closedwin-problem'), empty: vis('[data-no-templates]'),
+    return { note: (f.querySelector('.cv-closedwin-note') || {}).innerText, closed: vis('.cv-closedwin'), picker: vis('[data-closed-templates]'), problem: vis('[data-account-banner]'), empty: vis('[data-no-templates]'),
       reply: vis('.cv-composer'), replyDisabled: !!(f.querySelector('.cv-input') || {}).disabled, attach: vis('[aria-label="Attach a file"]'), mic: vis('[aria-label="Record a voice note"]'), cta: !!f.querySelector('.cv-tpl-cta') }; })()`);
   await viewport(1280, 800, false);
   for (const ch of ["whatsapp", "instagram"]) {
@@ -196,7 +198,7 @@ if (process.env.QA_COMPOSER) {
       await sleep(300);
       out.whatsappAccountProblem = await footer();
       await shot0("composer-closed-whatsapp-account");
-      await clickSel(".cv-closedwin-problem .btn-ghost"); await sleep(300);
+      await clickSel("[data-account-banner] .btn-ghost"); await sleep(300);
       out.whatsappTryAnyway = await footer();
     }
   }
@@ -337,6 +339,140 @@ if (process.env.QA_KEYS) {
   await press("Escape"); await sleep(600);
   out.esc = await evaluate(`({ path: location.pathname, paneOpen: document.getElementById('inbox-split').classList.contains('has-conversation'), focus: document.activeElement && document.activeElement.getAttribute('href') === ${JSON.stringify(openPath)} })`);
   await shot0("keys-1280");
+  console.log(JSON.stringify(out, null, 1));
+  process.exit(0);
+}
+// Phase 5A at 1280: how soon a click shows the conversation's name, and the whole pane, when
+// cold, after a hover (fetched ahead), when reopened (kept), and after J (the next one fetched
+// ahead). Timed in the page from the click to the frame it shows in. Mark-read is intercepted.
+if (process.env.QA_FAST) {
+  const out = {};
+  rules = [{ match: (r) => r.method === "POST" && (r.postData || "").includes("action=mark_read"), act: { status: 200, body: { ok: true } } }];
+  await viewport(1280, 800, false);
+  await go("/inbox/?view=all", 1500);
+  await evaluate(`window.__open = (how, n) => new Promise(res => {
+    const rows = [...document.querySelectorAll('.inbox-row')]; const cur = rows.findIndex(r => r.getAttribute('aria-current') === 'true'); const row = how === 'click' ? rows[n] : rows[cur + 1]; const want = row.getAttribute('data-title');
+    const sp = document.getElementById('inbox-split'); const t0 = performance.now(); let header = null;
+    if (how === 'click') row.click(); else document.dispatchEvent(new KeyboardEvent('keydown', { key: how, bubbles: true }));
+    (function tick() {
+      const t = performance.now() - t0; const pane = document.querySelector('#conversation-pane-inner [data-title]');
+      const full = !sp.classList.contains('is-loading') && pane && pane.getAttribute('data-title') === want;
+      const named = sp.classList.contains('is-loading') && document.querySelector('[data-skel-name]').textContent === want;
+      if (header === null && (named || full)) header = Math.round(t);
+      if (full) return res({ header, pane: Math.round(t) });
+      if (t > 10000) return res({ header, pane: null });
+      requestAnimationFrame(tick);
+    })();
+  })`);
+  const gets = () => log.filter((l) => / GET \/inbox\/conv_[^/]+\/(\?|$| )/.test(l)).length;
+  const hover = async (n) => {
+    const p = await evaluate(`(() => { const r = document.querySelectorAll('.inbox-row')[${n}].getBoundingClientRect(); return { x: r.left + 40, y: r.top + r.height / 2 }; })()`);
+    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: p.x, y: p.y });
+  };
+  out.rows = await evaluate("document.querySelectorAll('.inbox-row').length");
+  process.stderr.write(`rows ${out.rows}
+`);
+  const step = async (label, how, n) => {
+    process.stderr.write(`step ${label}
+`);
+    const g = gets(); const r = await evaluate(`__open(${JSON.stringify(how)}, ${n})`); await sleep(400);
+    out[label] = { ...r, requests: gets() - g };
+  };
+  // Cold: never hovered, nothing kept.
+  await step("cold", "click", 2);
+  // Hovered first, then clicked: fetched ahead as a peek.
+  await hover(4); await sleep(1500);
+  out.prefetchWasPeek = log.slice(-6).some((l) => l.includes("GET /inbox/conv_")) ? await evaluate("performance.getEntriesByType('resource').some(e => e.name.includes('peek=1'))") : null;
+  await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 5, y: 5 });
+  await step("hovered", "click", 4);
+  // Back to one opened a moment ago: kept.
+  await step("reopened", "click", 2);
+  // J from the open one, then J again: the second was fetched ahead after the first.
+  await step("cold2", "click", 6); await sleep(600);
+  await step("j1", "j", 0); await sleep(1200);
+  await step("j2", "j", 0);
+  out.marks = log.filter((l) => l.includes("POST /inbox/conv_")).length;
+  out.errors = await evaluate("document.querySelectorAll('#conversation-pane-inner [data-error-state]').length");
+  await shot0("fast-1280");
+  console.log(JSON.stringify(out, null, 1));
+  process.exit(0);
+}
+// Phase 5B/5C: the picker opens over the thread (its height unchanged), search, a live preview,
+// Send only once it can go (and not yellow before), Esc back to the button; an account problem
+// said once; grouped bubbles; the phone sheet. Light and dark. Nothing is sent: every POST is
+// intercepted.
+if (process.env.QA_PICKER) {
+  const out = {};
+  const NO_MOTION = `(() => { const s=document.createElement('style'); s.textContent='*,*::before,*::after{transition:none!important;animation:none!important}'; document.head.appendChild(s); })()`;
+  const state = () => evaluate(`(() => { const f = document.querySelector('.cv-footer'); const pop = document.querySelector('.cv-tplpop'); const t = document.querySelector('.cv-thread');
+    const vis = (e) => !!e && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden'; const send = document.querySelector('.cv-tplpop .cv-tpl-send');
+    const pr = pop && pop.getBoundingClientRect(), fr = f && f.getBoundingClientRect(), tr = t && t.getBoundingClientRect();
+    return { thread: t ? Math.round(t.clientHeight) : null, popOpen: vis(pop), overThread: !!(pr && tr && pr.bottom <= fr.top + 1 && pr.top >= tr.top - 1),
+      popPos: pop ? getComputedStyle(pop).position : null, popW: pr ? Math.round(pr.width) : null,
+      shown: [...document.querySelectorAll('.cv-tplpop [data-tpl-option]')].filter(vis).length, none: vis(document.querySelector('.cv-tplpop .cv-tpl-none')),
+      preview: vis(document.querySelector('.cv-tplpop .cv-tpl-preview')) ? document.querySelector('.cv-tplpop .cv-tpl-preview p').textContent : null,
+      sendDisabled: send ? send.disabled : null, sendBg: send ? getComputedStyle(send).backgroundColor : null,
+      openBtn: vis(document.querySelector('.cv-tplpick-open')), focus: document.activeElement && (document.activeElement.className || document.activeElement.tagName) }; })()`);
+  const openClosedChat = async () => {
+    const hrefs = await evaluate("[...document.querySelectorAll('.inbox-row')].map(a => a.getAttribute('href'))");
+    for (const href of hrefs.slice(0, 15)) {
+      await clickSel(`.inbox-row[href="${href}"]`); await sleep(1500);
+      if (await chat("c.open && !c.windowOpen") && await evaluate("!!document.querySelector('.cv-tplpick-open')")) return href;
+    }
+    return null;
+  };
+  await viewport(1280, 631, false);
+  await go("/inbox/?view=all&channel=whatsapp", 1500);
+  await evaluate(NO_MOTION);
+  const href = await openClosedChat();
+  if (!href) { console.log("FAIL no closed-window WhatsApp chat with templates"); process.exit(1); }
+  out.closed = await state();
+  await clickSel(".cv-tplpick-open"); await sleep(300);
+  out.opened = await state();
+  // Search: nothing matches, then everything again.
+  await evaluate("(() => { const s = document.querySelector('.cv-tplpop input[type=search]'); if (!s) return; s.value = 'zzzz'; s.dispatchEvent(new Event('input')); })()"); await sleep(150);
+  out.searchNone = await state();
+  await evaluate("(() => { const s = document.querySelector('.cv-tplpop input[type=search]'); if (!s) return; s.value = ''; s.dispatchEvent(new Event('input')); })()"); await sleep(150);
+  // Choose the first with a value to fill, else the first.
+  await evaluate("(() => { const o = [...document.querySelectorAll('.cv-tplpop [data-tpl-option]')]; const pick = o.find(x => x.dataset.fields) || o[0]; pick.querySelector('input').click(); })()"); await sleep(200);
+  out.chosen = await state();
+  await evaluate("(() => { for (const i of document.querySelectorAll('.cv-tplpop .cv-tpl-fields input')) { if (!i.offsetParent) continue; i.value = 'Thandi QA'; i.dispatchEvent(new Event('input')); } })()"); await sleep(200);
+  out.filled = await state();
+  out.filledProbe = await evaluate("(() => { const d = Alpine.$data(document.querySelector('.cv-tplpop')); return { fn: d.preview(), vals: JSON.stringify(d.vals), tpl: d.tpl }; })()");
+  for (const theme of ["light", "dark"]) {
+    await evaluate(`document.documentElement.dataset.theme = ${JSON.stringify(theme)}`); await sleep(200);
+    await shot0(`picker-1280-${theme}`);
+  }
+  await key("Escape", "Escape", 27); await sleep(250);
+  out.esc = await state();
+  // An account problem and a run of messages, as chat.js would have them.
+  await chat(`(() => { const now = Date.now(); const iso = (s) => new Date(now - s * 1000).toISOString();
+    c.messages.push({ id: 'qa-g1', direction: 'outbound', body: 'First of a run', ts: iso(120), status: 'delivered' });
+    c.messages.push({ id: 'qa-g2', direction: 'outbound', body: 'Second, a minute later', ts: iso(60), status: 'delivered' });
+    c.messages.push({ id: 'qa-g2b', direction: 'outbound', body: 'And one from the AI', ts: iso(50), status: 'delivered', byAi: true });
+    c.messages.push({ id: 'qa-g3', direction: 'outbound', body: 'download_app', ts: iso(30), status: 'failed', failureReason: 'WhatsApp could not take payment for this message.', failureFix: { label: 'Fix the payment method in Meta', url: 'https://business.facebook.com/billing_hub' } });
+    c.messages.push({ id: 'qa-g4', direction: 'outbound', body: 'download_app', ts: iso(10), status: 'failed', failureReason: 'WhatsApp could not take payment for this message.', failureFix: { label: 'Fix the payment method in Meta', url: 'https://business.facebook.com/billing_hub' } });
+    return 1; })()`);
+  await sleep(300);
+  await evaluate("document.querySelector('.cv-thread').scrollTop = 1e6"); await sleep(200);
+  out.errors = await evaluate(`(() => { const vis = (e) => !!e && !!e.offsetParent; const text = document.querySelector('.cv-pane').innerText;
+    return { banners: [...document.querySelectorAll('[data-account-banner]')].filter(vis).length, reasonTimes: text.split('could not take payment').length - 1,
+      notSent: [...document.querySelectorAll('.cv-fail-short')].filter(vis).length, fixLinks: [...document.querySelectorAll('.cv-pane a')].filter(a => vis(a) && a.textContent.includes('Fix the payment')).length,
+      groupedHoverTimes: [...document.querySelectorAll('.cv-hover-time')].filter(vis).length, stamps: [...document.querySelectorAll('.cv-stamp')].filter(vis).length, aiChips: [...document.querySelectorAll('.cv-ai-chip')].filter(vis).length,
+      outBg: getComputedStyle(document.querySelector('.cv-msg--out .cv-bubble')).backgroundColor }; })()`);
+  await evaluate("document.querySelector('.cv-fail-why') && document.querySelector('.cv-fail-why').click()"); await sleep(150);
+  out.errors.whyShown = await evaluate("[...document.querySelectorAll('.cv-fail-reason')].some(e => !!e.offsetParent)");
+  for (const theme of ["light", "dark"]) {
+    await evaluate(`document.documentElement.dataset.theme = ${JSON.stringify(theme)}`); await sleep(200);
+    await shot0(`bubbles-1280-${theme}`);
+  }
+  // The phone: a sheet from the bottom, full width.
+  await viewport(390, 844, true);
+  await go(href, 1600); await evaluate(NO_MOTION);
+  await evaluate("document.documentElement.dataset.theme = 'light'");
+  await clickSel(".cv-tplpick-open"); await sleep(300);
+  out.phone = await state();
+  await shot0("picker-390");
   console.log(JSON.stringify(out, null, 1));
   process.exit(0);
 }

@@ -7,6 +7,8 @@
  * component stops polling in destroy(), which Alpine calls when the page is swapped away. */
 (function () {
 function registerChat() {
+  // How far apart two messages from the same side can be and still read as one group.
+  const GROUP_MINUTES = 5;
   const STATUS_LABELS = { queued: 'Sending…', sent: 'Sent', delivered: 'Delivered', read: 'Read', failed: 'Failed', held: 'Held (plan limit)', unconfirmed: 'Not confirmed', unknown: 'Not confirmed' };
   const BASE_INTERVAL = 3000;
   const MAX_INTERVAL = 30000;
@@ -331,11 +333,13 @@ function registerChat() {
         }
         out.push({ key: 'm-' + m.id, type: 'msg', m, showMeta: true, showFailure: m.status === 'failed' || m.status === 'held' || m.status === 'unconfirmed' || !!m.unknown });
       }
-      // Only the last message of a same-direction, same-minute run shows its meta line.
+      // Messages sent in a row (same side, same sender, GROUP_MINUTES apart at most) are one
+      // group: only its last shows the tail, time and ticks; the others show their time beside
+      // the bubble on hover (.cv-hover-time), so nothing moves.
       for (let i = 0; i < out.length - 1; i++) {
         const a = out[i], b = out[i + 1];
-        if (a.type === 'msg' && b.type === 'msg' && a.m.direction === b.m.direction
-            && this.minute(a.m.ts) === this.minute(b.m.ts)) a.showMeta = false;
+        if (a.type === 'msg' && b.type === 'msg' && a.m.direction === b.m.direction && !!a.m.byAi === !!b.m.byAi
+            && !a.showFailure && this.minute(b.m.ts) - this.minute(a.m.ts) <= GROUP_MINUTES) a.showMeta = false;
       }
       return out;
     },
@@ -651,7 +655,7 @@ function registerChat() {
       if (!this.windowOpen) {
         this.tplAnyway = true;
         apply();
-        this.$nextTick(() => { const r = this.$root.querySelector('#template-inline-list input:checked') || this.$root.querySelector('#template-inline-list input'); if (r) r.focus(); });
+        setTimeout(() => { const r = this.$root.querySelector('#template-inline-list input:checked') || this.$root.querySelector('#template-inline-list input'); if (r) r.focus(); }, 50);
         return;
       }
       window.dispatchEvent(new CustomEvent('modal-open', { detail: 'chat-template' }));
@@ -1039,6 +1043,66 @@ function registerChat() {
     onEnded() {
       this.onPause();
       this.current = 0;
+    },
+  }));
+
+  /* The template picker (_template_form.html): in the composer while the window is closed it
+   * opens over the thread (``inline``), so the thread keeps its height; in the dialog it's the
+   * dialog's body. Search over names and text, a live preview with the values typed so far,
+   * and Send only once a template is chosen and every value it needs is filled. Each option
+   * carries its text and parameter names (data-content, data-fields), so nothing is sent
+   * twice. An AI suggestion arrives on ai-template-apply (chat.js aiReviewTemplate). */
+  Alpine.data('tplPicker', (inline) => ({
+    inline: !!inline,
+    pick: !inline,
+    tpl: '',
+    proposal: '',
+    q: '',
+    vals: {},
+    option(id) { return this.$root.querySelector('[data-tpl-option="' + (id || this.tpl) + '"]'); },
+    fields(id) {
+      const o = this.option(id);
+      return o && o.dataset.fields ? o.dataset.fields.split('|') : [];
+    },
+    shows(text) { const q = this.q.trim().toLowerCase(); return !q || text.includes(q); },
+    noMatch() {
+      return !!this.q.trim() && ![...this.$root.querySelectorAll('[data-tpl-option]')].some((o) => this.shows(o.dataset.search));
+    },
+    // As the send fills it (apps.whatsapp.campaign_ui.render_body): the value at position i
+    // fills {{i}}, or {{its name}}.
+    preview() {
+      const o = this.option();
+      if (!o) return '';
+      const fields = this.fields();
+      return o.dataset.content.replace(/\{\{\s*([^}\s]+)\s*\}\}/g, (all, name) => {
+        const field = /^\d+$/.test(name) ? fields[Number(name) - 1] : (fields.includes(name) ? name : null);
+        if (field === undefined || field === null) return all;
+        const v = (this.vals['var__' + this.tpl + '__' + field] || '').trim();
+        return v || '[' + (/^\d+$/.test(field) ? 'Value ' + field : field.replace(/_/g, ' ')) + ']';
+      });
+    },
+    ready() {
+      return !!this.tpl && this.fields().every((f) => (this.vals['var__' + this.tpl + '__' + f] || '').trim());
+    },
+    open() {
+      this.pick = true;
+      // Into the picker: its search, else the chosen (or first) template.
+      this.$nextTick(() => {
+        const s = this.$refs.tplSearch;
+        const r = this.$root.querySelector('[data-tpl-option] input:checked') || this.$root.querySelector('[data-tpl-option] input');
+        if (s && s.getClientRects().length) s.focus(); else if (r) r.focus();
+      });
+    },
+    close() {
+      if (!this.inline) { this.$dispatch('modal-close', 'chat-template'); return; }
+      this.pick = false;
+      this.$nextTick(() => { const b = this.$refs.tplOpen; if (b) b.focus(); });
+    },
+    apply(detail) {
+      this.tpl = String(detail.templateId);
+      this.proposal = String(detail.proposal || '');
+      for (const [k, v] of Object.entries(detail.values || {})) this.vals['var__' + detail.templateId + '__' + k] = v;
+      if (this.inline) this.pick = true;
     },
   }));
 }

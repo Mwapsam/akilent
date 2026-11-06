@@ -139,11 +139,13 @@ def test_an_account_problem_comes_before_the_templates(shop):
     _template(account)
     html = _pane(client, _chat(account))
 
-    problem = html[html.index('class="cv-closedwin-problem"') :]
-    problem = problem[: problem.index("data-closed-templates")]
-    assert 'x-show="accountProblem && !tplAnyway"' in problem
-    assert "Try a template anyway" in problem
+    # Said once, above the composer, open window or not (Phase 5B), with the way past it.
+    banner = html[html.index('class="cv-acct-banner"') :]
+    banner = banner[: banner.index('class="cv-composer-row"')]
+    assert 'x-show="accountProblem"' in banner and "data-account-banner" in banner
+    assert "Try a template anyway" in banner
     assert 'x-show="!accountProblem || tplAnyway"' in html
+    assert html.count("accountProblem.failureReason") == 1
 
 
 def test_no_approved_templates_says_how_to_get_one(shop):

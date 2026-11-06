@@ -937,7 +937,13 @@ def conversation_detail(request, public_id: str):
     # is no pane to load into, so a row's own href still points here and gets the full page below.
     if in_pane:
         pane = render(request, "conversations/_conversation_pane.html", pane_context)
-        _messages_to_toast(request, pane)
+        # The same address is the full page without these headers.
+        pane["Vary"] = "HX-Request, HX-Target"
+        pane["Cache-Control"] = "no-store"
+        # Fetched ahead (a hovered row, the next one after J) and maybe never shown: a
+        # queued confirmation is left for the load that does show.
+        if request.headers.get("X-Inbox-Prefetch") != "1":
+            _messages_to_toast(request, pane)
         if mutated:
             # Assignment, close and reopen change the list beside the pane: refresh it now.
             pane["HX-Trigger"] = "inbox-refresh"
