@@ -2601,7 +2601,7 @@
 /* Inbox Phase 5E: live feel. A message that arrives while the conversation is open slides in;
    "New messages" marks where the unread ones start; a list row that changed on a refresh is
    highlighted for a moment. None of it under reduced motion (the divider stays). */
-.cv-msg--fresh { animation: cv-msg-in 180ms var(--ease-emphasized) both; }
+.cv-msg--fresh { animation: cv-msg-in 180ms var(--ease-emphasized) backwards; }
 @keyframes cv-msg-in { from { opacity: 0; transform: translateY(6px); } }
 .cv-unread { display: flex; align-items: center; gap: .75rem; margin: .75rem 0 .5rem; color: var(--tone-coral-fg);
   font-size: .75rem; font-weight: 600; }
@@ -2616,8 +2616,14 @@
    the list (its own page, with Back); the reply box clears the home indicator; the details open
    as a full-screen sheet. The keyboard is --kb-inset (app.js, from visualViewport). */
 @media (max-width: 767px) {
-  .inbox-split.has-conversation .inbox-pane-col { animation: inbox-pane-in 220ms var(--ease-emphasized) both; }
-  .inbox-split:not(.has-conversation) .inbox-list-col { animation: inbox-list-in 220ms var(--ease-emphasized) both; }
+  /* The slide must never make the page scroll sideways while it moves (clip, not hidden: no
+     scroll box of its own, so nothing sticky inside breaks). */
+  .inbox-split { overflow-x: clip; }
+  /* backwards, not both: a transform animation left "in effect" after it ends makes the column
+     the containing block for anything fixed inside it, and the full-screen details sheet came
+     out the column's width. */
+  .inbox-split.has-conversation .inbox-pane-col { animation: inbox-pane-in 220ms var(--ease-emphasized) backwards; }
+  .inbox-split:not(.has-conversation) .inbox-list-col { animation: inbox-list-in 220ms var(--ease-emphasized) backwards; }
   .cv-footer { padding-bottom: calc(.625rem + var(--safe-bottom)); }
   .cv-side { width: 100%; }
   .cv-side-inner { padding-top: var(--safe-top); padding-bottom: var(--safe-bottom); }

@@ -768,12 +768,15 @@ await key("Escape", "Escape", 27);
 await sleep(400);
 st = await evaluate(`(() => ({ open: Alpine.$data(document.querySelector('.cv')).infoOpen, focusBack: document.activeElement === document.querySelector('.cv-info-btn'), inert: document.querySelectorAll('[data-dialog-inert]').length, depth: akDialog.depth }))()`);
 check("drawer.esc-closes-restores", !st.open && st.focusBack && st.inert === 0 && st.depth === 0, st);
+// On a phone the details are a full-screen sheet (Phase 5F), so there's no backdrop to tap:
+// its Close button closes it, and nothing is left inert.
 await clickSel(".cv-info-btn"); await sleep(500);
-const bp = await evaluate("(() => { const b=document.querySelector('.cv-backdrop'); const r=b.getBoundingClientRect(); return {x:r.left+10,y:r.top+r.height/2}; })()");
-for (const type of ["mousePressed", "mouseReleased"]) await send("Input.dispatchMouseEvent", { type, x: bp.x, y: bp.y, button: "left", clickCount: 1 });
-await sleep(400);
+st = await evaluate("(() => { const s = document.querySelector('.cv-side'); return { w: Math.round(s.getBoundingClientRect().width), vw: innerWidth }; })()");
+check("drawer.full-screen-on-a-phone", st.w === st.vw, st);
+for (let i = 0; i < 30 && !(await evaluate("!!(document.querySelector('.cv-side-close') || {}).offsetParent")); i++) await sleep(150);
+await clickSel(".cv-side-close"); await sleep(400);
 st = await evaluate("({ open: Alpine.$data(document.querySelector('.cv')).infoOpen, depth: akDialog.depth, inert: document.querySelectorAll('[data-dialog-inert]').length })");
-check("drawer.backdrop-closes", !st.open && st.depth === 0 && st.inert === 0, st);
+check("drawer.close-button-closes", !st.open && st.depth === 0 && st.inert === 0, st);
 
 // 9. Phone layout: reply box on screen, no sideways scroll, back link, 16px input.
 const layout = `(() => { const r=document.querySelector('.cv-composer').getBoundingClientRect(); const back=document.querySelector('.cv-h-back'); return { composerBottom: Math.round(r.bottom), vh: innerHeight, hscroll: document.documentElement.scrollWidth - document.documentElement.clientWidth, back: !!back && getComputedStyle(back).display !== 'none', fontSize: getComputedStyle(document.querySelector('.cv-input')).fontSize }; })()`;

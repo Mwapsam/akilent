@@ -2168,3 +2168,69 @@ Plan: the Inbox plan of 2026-11-06, Phase 5 as revised after the prod review of 
     - light and dark.
   - the regression in Entry 29 ran with this phase in place. `QA_LOOK` opens the picker before choosing a template.
 - **Not done here (5D–5F need a go-ahead):** two-line rows, the empty pane, wording, live feel, and the responsive harness.
+
+### Entry 31: Inbox Phase 5D–5F, the blink, two prod bugs, nginx compression (2026-11-06)
+Plan: the Inbox plan of 2026-11-06, revised Phase 5, items 5–8 and the responsive spec. Also: the user's signed-in prod measurement, the list's 8-second blink, and two bugs from the prod review.
+
+- **The ~900 ms gap: nginx sent HTML uncompressed.**
+  - **The measurement (the user's, signed in):** the list spent ~600 ms more than the follow-up badge between the origin and Cloudflare, growing with page size, not with load.
+  - **The cause:** `nginx/conf.d/default.conf` had no `gzip`, and the `nginx:1.27-alpine` image ships it off. Cloudflare pulled the 123 KB list uncompressed over the long link.
+  - **The fix:** gzip for HTML, JSON, JS, CSS and SVG, with `gzip_proxied any`. `text/event-stream` is left out, so `/events/` isn't held back. Checked with `nginx -t` on the production image (throwaway certificate).
+  - **Also checked:** `ServerTimingMiddleware` is outermost and `render()` runs inside it, so `app` includes rendering.
+  - Rolling out the config, and the server-side `curl` check, are the user's steps.
+- **The blink:**
+  - **Cause:** a site-wide `.htmx-request { opacity: .55; pointer-events: none }` dimmed the list for every 8-second check's whole round trip, and blocked clicks on it.
+  - **Background refreshes no longer look busy:** app.js marks background refreshes `.ak-auto-request` (the requests it already classed as `_akAuto`: a timer or a pushed event on a `data-auto-refresh` element), and those never dim or block. A click on the same element (Next page) still shows busy.
+  - **Search** keeps its box usable and shows a thin line under it.
+  - **AI ideas poll:** `publishing/_ai_ideas.html`'s 2-second poll gained the marker.
+  - **Header redraw:** `chat.js applyStatus` updates the header badges' hover text in place when only that changed (a "(5 minutes)" in a title), instead of re-rendering them.
+- **Prod bugs:**
+  - **Words run together in AI text:** the AI's narrow no-break spaces (U+202F) rendered as almost nothing. `proposals.plain_spaces` turns odd spaces into plain ones and drops zero-width ones, keeping emoji joiners, where a proposal is checked (reply text and template values). AI messages sent before this show with plain spaces (`_message_json`).
+  - **"You're welcome…" twice:**
+    - **The race:** a direct send's outbox row stayed QUEUED while it checked the window and eligibility (a Meta call). The outbox drain could claim it in that gap, and both sent it.
+    - **The fix:** `send_outbound` now claims the row (QUEUED to SENDING, conditional update) before sending, and the drain passes `claimed=True`. Whoever claims first sends; the other stops, and the inbox shows the row as on its way, not failed. Both Instagram and Facebook.
+    - Not confirmed against prod data; the race is real either way.
+- **5D:**
+  - **Rows** are two lines (65 px, from about 96), with the channel on the avatar's corner and the badges dropping out whole.
+  - **Quick actions** on hover: Close (with Undo), Assign to me, Follow up tomorrow. They post the pane's actions with `X-Inbox-Row`, answered 204 with the toast and an `inbox-refresh` (`views._row_action`).
+  - **Wording:**
+    - "Quiet" is now "Waiting on them", with a help tip in the header and hover text on the row;
+    - Messenger says "24-hour window closed";
+    - "Why?" reads as a tip (a ? icon, no underline);
+    - the bar's icons have tooltips;
+    - follow-ups use a calendar icon, not the bell (bar, rows, sidebar).
+  - **The empty pane** says what needs you (waiting, missed, unassigned, follow-ups due), each a link to its view, plus the keys. It refreshes with the list.
+- **5E:**
+  - **"New messages"** where the customer's unread run starts (`_first_unread`, the same run `_recent_thread` keeps), and the thread opens on it if more is unread than fits.
+  - **Arrivals:** messages that arrive while it's open slide in.
+  - **Changed rows:** a row whose content changed on a refresh is highlighted for a moment; times don't count as a change.
+  - **Screen readers:** the thread is already `role="log"` with `aria-live`, so no second announcement.
+  - **Not built:** the customer typing indicator; Meta sends none.
+- **5F:**
+  - **Breakpoint:** two panes from 768 px (it was 1024): a 320 px list (380 from 1024), with details as a drawer and docked from about 1440.
+  - **Under 768:** one pane at a time. The conversation slides in with Back, the reply box clears the safe area, and the details open full screen.
+  - **Touch targets:** "Why?", the reply box and the setup button are 44 px on touch.
+- **Verification:**
+  - **Unit tests:**
+    - `test_inbox_quick.py` (8): row actions, avatar channel, tooltips, the empty pane, New messages;
+    - `test_plain_spaces.py` (3);
+    - outbox claim tests for Instagram (2) and Facebook (1);
+    - updated: the copy rules (no "Remind", no "Follow-ups due"), the Waiting on them tests, and the view-link count.
+  - **Harness:**
+
+    | Check | Result |
+    |---|---|
+    | `QA_BLINK` | list opacity 1 and clickable through 800 ms checks; search shows a line |
+    | `QA_ROWS` | rows 65 px, Close and Undo for real, tooltips, the empty pane |
+    | `QA_LIVE` | divider, only the changed row highlighted, slide-in |
+    | `QA_RESP` at 360, 390, 768, 1024, 1280 and 1440, light and dark | no sideways scroll, panes 1/1/2/2/2/2, thread 458–734 px, 0 touch targets under 44 px, 0 contrast failures |
+  - **The regression found two faults in the phone slide, both fixed:**
+    - it made the page scroll sideways while it moved (the split now clips horizontal overflow under 768);
+    - its `both` fill kept the transform in effect, which made the column the containing block for fixed elements, so the full-screen details sheet came out the column's width. It now fills `backwards`.
+  - **Phone drawer check:** the main harness no longer taps a backdrop on a phone, since the details fill the screen. It checks the sheet is full width and that its Close button closes it.
+  - **Full regression:**
+    - `pytest -n 4`: 5,982 passed, 0 failed. One earlier run reported 37 failures but had collected about 800 fewer tests; two runs after it were clean.
+    - ruff, format, mypy (695 files) and `makemigrations --check` clean.
+    - `inbox_qa.mjs` 80/80; `QA_LAYOUT` 5/5; `QA_KEYS`, `QA_COMPOSER`, `QA_LOOK`, `QA_PICKER`, `QA_FAST`, `QA_BLINK`, `QA_ROWS`, `QA_LIVE` and `QA_RESP` as above.
+    - The contrast scan in both themes: 0 failures, and the inbox's phone screens 0 targets under 44 px. `area_scan /inbox`: 26 pages, 0 issues.
+
