@@ -127,7 +127,7 @@ def test_the_empty_pane_says_what_needs_you_and_moves_with_the_list(shop):
     _chat(account)
     page = client.get("/inbox/").content.decode()
     today = page[page.index('id="inbox-today"') :]
-    assert "What needs you" in today and "Waiting for a reply" in today
+    assert "What needs you" in today and "Needs your reply" in today
     assert "?view=missed" in today and "Follow-ups to do" in today
     assert "<kbd>J</kbd>" in today
 

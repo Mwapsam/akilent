@@ -520,12 +520,17 @@ if (process.env.QA_ROWS) {
   await go("/inbox/?view=all", 1500);
   await evaluate("document.activeElement && document.activeElement.blur()");
   out.rows = await evaluate(`(() => { const r = [...document.querySelectorAll('.inbox-row')].slice(0, 8); return { heights: r.map(a => Math.round(a.getBoundingClientRect().height)),
-    channelMarks: document.querySelectorAll('.inbox-row .inbox-avatar-channel').length, channelTags: document.querySelectorAll('.inbox-row .channel-tag').length }; })()`);
+    channelMarks: document.querySelectorAll('.inbox-row .inbox-avatar-channel').length, channelTags: document.querySelectorAll('.inbox-row .channel-tag').length,
+    namesCut: r.map(a => a.querySelector('.inbox-name')).filter(n => n.scrollWidth > n.clientWidth + 1).map(n => n.innerText.trim()), badgesCut: r.filter(a => { const m = a.querySelector('.inbox-meta'); const t = m.getBoundingClientRect().top; return [...m.children].some(c => c.getBoundingClientRect().top - t < 8 && c.getBoundingClientRect().right > m.getBoundingClientRect().right + 1); }).length }; })()`);
   out.empty = await evaluate(`(() => { const t = document.getElementById('inbox-today'); return t ? { shown: !!t.offsetParent, text: t.innerText.replace(/\s+/g, ' ').trim() } : null; })()`);
   // Hover the second row: its actions show.
   const p = await evaluate(`(() => { const r = document.querySelectorAll('.inbox-row')[1].getBoundingClientRect(); return { x: r.left + 60, y: r.top + r.height / 2 }; })()`);
   await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: p.x, y: p.y }); await sleep(300);
-  out.hover = await evaluate(`(() => { const li = document.querySelectorAll('.inbox-list > li')[1]; const a = li.querySelector('.inbox-row-actions'); return a ? { opacity: getComputedStyle(a).opacity, buttons: [...a.querySelectorAll('button')].map(b => b.title) } : null; })()`);
+  out.hover = await evaluate(`(() => { const li = document.querySelectorAll('.inbox-list > li')[1]; const a = li.querySelector('.inbox-row-actions'); return a ? { opacity: getComputedStyle(a).opacity, buttons: [...a.querySelectorAll('button')].map(b => b.title),
+    timeHidden: getComputedStyle(li.querySelector('.inbox-when')).visibility === 'hidden', previewFades: getComputedStyle(li.querySelector('.inbox-preview')).maskImage !== 'none' } : null; })()`);
+  // The follow-ups count sits off the calendar icon, not on it.
+  out.badge = await evaluate(`(() => { const b = document.querySelector('[data-inbox-followups-link] .inbox-tab-count'); const i = document.querySelector('[data-inbox-followups-link] svg'); if (!b || !i) return 'no count shown';
+    const r = b.getBoundingClientRect(), s = i.getBoundingClientRect(); return { overlapX: Math.max(0, Math.round(s.right - r.left)), overlapY: Math.max(0, Math.round(r.bottom - s.top)) }; })()`);
   await shot0("rows-hover-1280");
   const name = await evaluate("document.querySelectorAll('.inbox-row')[1].getAttribute('data-title')");
   await evaluate("document.querySelectorAll('.inbox-list > li')[1].querySelector('.inbox-row-act[title=\"Close\"]').click()"); await sleep(2500);
@@ -536,6 +541,11 @@ if (process.env.QA_ROWS) {
     listedAgain: await evaluate(`[...document.querySelectorAll('.inbox-row')].some(a => a.getAttribute('data-title') === ${JSON.stringify(name)})`) };
   // The bar's icon buttons say what they are.
   out.tooltips = await evaluate(`[...document.querySelectorAll('#inbox-bar .tooltip')].map(b => b.getAttribute('data-tooltip'))`);
+  // The header: the name wins over the status chips, which drop out whole.
+  await clickSel(".inbox-row"); await sleep(1800);
+  out.header = await evaluate(`(() => { const n = document.querySelector('.cv-h-name'); const s = document.querySelector('.cv-h-status');
+    const top = s.getBoundingClientRect().top; const shown = [...s.children].filter(c => c.getBoundingClientRect().top - top < 8 && c.getBoundingClientRect().width).map(c => c.innerText.trim()).filter(Boolean);
+    return { name: n.innerText.trim(), nameCut: n.scrollWidth > n.clientWidth + 1, chipsShown: shown, chipCut: [...s.children].some(c => c.getBoundingClientRect().top - top < 8 && c.getBoundingClientRect().right > s.getBoundingClientRect().right + 1) }; })()`);
   for (const theme of ["light", "dark"]) {
     await evaluate(`document.documentElement.dataset.theme = ${JSON.stringify(theme)}`); await sleep(200);
     await shot0(`rows-1280-${theme}`);

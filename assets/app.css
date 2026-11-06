@@ -694,8 +694,8 @@
     color: var(--color-ink-muted);
   }
   .inbox-bar-btn:focus-visible { @apply outline-none ring-2 ring-brand-500; }
-  /* The follow-ups count rides on the bell's corner. */
-  .inbox-bar-badge { @apply absolute -top-0.5 -right-1 pointer-events-none; }
+  /* The follow-ups count sits just off the calendar's corner, ringed, never on the icon. */
+  .inbox-bar-badge { @apply absolute pointer-events-none; top: -0.3125rem; right: -0.5rem; }
   .inbox-bar-badge .inbox-tab-count { @apply min-w-4 h-4 px-1; font-size: 0.625rem; box-shadow: 0 0 0 2px var(--color-canvas, var(--color-surface-muted)); }
   /* The bar's menus reuse the conversation menus (.cv-menu), outside .cv. */
   .inbox-tools { --cv-line: var(--color-border); --cv-surface: var(--color-surface); --cv-ink: var(--color-ink);
@@ -1803,12 +1803,13 @@
 .cv-h-back { grid-area: back; }
 .cv-h-avatar { grid-area: avatar; width: 2.25rem; height: 2.25rem; }
 .cv-h-title { grid-area: title; display: flex; align-items: center; gap: .5rem; min-width: 0; }
-.cv-h-name { flex: 0 1 auto; min-width: 0; }
-/* The status gives way first (it shrinks 100x faster), but never below its widest badge: what
-   doesn't fit wraps onto a second line that its fixed height hides, so badges drop out whole
-   from the end (the channel, then the state), never cut mid-word. */
-.cv-h-status { flex: 0 100 auto; min-width: min-content; height: 1.375rem; overflow: hidden; display: flex; flex-wrap: wrap;
+.cv-h-name { flex: 0 1 auto; min-width: 0; max-width: max-content; }
+/* The name wins: the status takes only what's left. What doesn't fit wraps onto a second line
+   that its fixed height hides, so badges drop out whole from the end (the channel, then the
+   state), never cut mid-word; the empty first item lets even the first badge wrap away. */
+.cv-h-status { flex: 1 1 0; min-width: 0; height: 1.375rem; overflow: hidden; display: flex; flex-wrap: wrap;
                align-items: center; column-gap: .5rem; row-gap: 1rem; font-size: .75rem; color: var(--cv-ink-muted); }
+.cv-h-status::before { content: ""; width: 0; margin-right: -.5rem; }
 .cv-h-status > * { flex-shrink: 0; }
 .cv-h-extra { display: none; }
 @container cvpane (min-width: 52rem) { .cv-h-extra { display: inline; } }
@@ -2544,7 +2545,9 @@
    three lines in the list column (the two-line layout waited for a 34rem column it never had). */
 .inbox-list > li { position: relative; }
 .inbox-row { align-items: center; padding-top: .625rem; padding-bottom: .625rem; }
-.inbox-row-body { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name when" "preview meta"; row-gap: .125rem; }
+/* Three columns, so the name only gives way to the time on its own line, not to a badge below
+   it: the middle column takes what the badges need beyond the time's width. */
+.inbox-row-body { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "name name when" "preview meta meta"; row-gap: .125rem; }
 /* One line of badges: one that doesn't fit wraps onto a hidden second line and drops out whole,
    never cut mid-word (the state comes first, so it's the last to go). */
 .inbox-meta { margin-top: 0; flex-wrap: wrap; justify-content: flex-end; align-content: flex-start; row-gap: 2rem;
@@ -2569,6 +2572,14 @@
   padding: .125rem; border-radius: var(--radius-control); background: var(--color-surface); box-shadow: var(--shadow-pop);
   opacity: 0; pointer-events: none; transition: opacity var(--duration-fast) var(--ease-emphasized); }
 .inbox-list > li:hover .inbox-row-actions, .inbox-list > li:focus-within .inbox-row-actions { opacity: 1; pointer-events: auto; }
+/* Under them: the time and the badges step aside, the preview takes the whole line, and only
+   its end fades out before the actions. */
+@media (hover: hover) {
+  .inbox-list > li:is(:hover, :focus-within) :is(.inbox-when, .inbox-meta) { visibility: hidden; }
+  .inbox-list > li:is(:hover, :focus-within) .inbox-preview { grid-column: 1 / -1;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 8rem), transparent calc(100% - 6.5rem));
+            mask-image: linear-gradient(to right, #000 calc(100% - 8rem), transparent calc(100% - 6.5rem)); }
+}
 .inbox-row-act { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; border-radius: calc(var(--radius-control) - 2px);
   color: var(--color-ink-muted); }
 .inbox-row-act:hover { background: var(--color-hover); color: var(--color-ink); }

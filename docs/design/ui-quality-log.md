@@ -2258,3 +2258,10 @@ Plan: the Inbox plan of 2026-11-06, Phase 6 (from the user's panel proposal). Do
   - Updated: the panel answer's `HX-Trigger`, "Pause for…", the follow-up form's promise said once, "Why didn't it reply?" only when left for the team.
   - Harness `QA_PANEL`: at 1440×900 docked, the follow-up line ends at 625 px (Status and Next step above the fold); a folded form opens, Esc folds it with focus back on its summary and the conversation still open; Pause for 1 hour then Resume, for real; Send a template opens the picker; 390 full-screen sheet and 1440 docked in both themes: no sideways scroll, 0 contrast failures, 0 touch targets under 44 px at 390.
   - `inbox_qa.mjs` 80/80; `QA_RESP` unchanged from Entry 31.
+
+### Entry 33: four small things from the prod review of 5D (2026-11-06)
+- **"Waiting for a reply" vs "Waiting on them":** the empty pane's item is now "Needs your reply" (the customer is waiting on you); rows keep "Waiting on them" (you're waiting on them).
+- **Names cut off:** in the list, the time column on line 1 was as wide as the widest badge on line 2, so a "Follow-up due" or "Waiting on them" chip took width from the name. The row grid is now three columns (`"name name when" / "preview meta meta"`): the name only gives way to the time. In the conversation header, the name now wins and the status chips take what's left, dropping out whole (a leading empty item lets even the first one wrap away).
+- **Hover actions over the preview:** on hover or focus the time and badges step aside, the preview takes the whole line, and only its end fades out before the actions.
+- **Follow-ups count on the calendar:** it sits just off the icon's corner (no horizontal overlap), with its ring.
+- **Verification:** `QA_ROWS` now also measures the names cut (0), badges cut (0), the time hidden and the preview fading on hover, the count's overlap with the icon (0 px across), and the header's name (not cut, both chips shown). `QA_RESP`: no sideways scroll at any width, 0 touch targets under 44 px on touch sizes, 0 contrast failures. Conversations tests pass.
