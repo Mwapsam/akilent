@@ -181,6 +181,10 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
               <template x-if="item.type === 'day'">
                 <div class="cv-day"><span x-text="item.label"></span></div>
               </template>
+              {% comment %}Where the customer's unread messages start (chat.js firstUnreadId).{% endcomment %}
+              <template x-if="item.type === 'unread'">
+                <div class="cv-unread" role="separator"><span x-text="item.label"></span></div>
+              </template>
               {% comment %} Neither party speaking — a commercial fact (payment
                  received) belonging to this customer's story, shown like a day
                  divider. {% endcomment %}
@@ -188,7 +192,7 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
                 <div class="cv-day"><span x-text="item.m.body"></span></div>
               </template>
               <template x-if="item.type === 'msg' && item.m.direction !== 'system'">
-                <div class="cv-msg" :class="{ 'cv-msg--out': item.m.direction === 'outbound', 'cv-msg--pending': item.m.pending, 'cv-msg--failed': item.m.status === 'failed', 'cv-msg--unknown': item.m.unknown, 'cv-msg--last': item.showMeta }">
+                <div class="cv-msg" :class="{ 'cv-msg--out': item.m.direction === 'outbound', 'cv-msg--pending': item.m.pending, 'cv-msg--failed': item.m.status === 'failed', 'cv-msg--unknown': item.m.unknown, 'cv-msg--last': item.showMeta, 'cv-msg--fresh': item.m.fresh }">
                   <div class="cv-bubble">
                     <time class="cv-hover-time" x-show="!item.showMeta" :datetime="item.m.ts" :title="new Date(item.m.ts).toLocaleString()" x-text="time(item.m.ts)"></time>
                     {% comment %} Customer media (photos, videos, voice notes, files), streamed by
@@ -479,9 +483,9 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
         <div class="cv-closedwin" x-show="!windowOpen" x-cloak role="status">
           <p class="cv-closedwin-note">
             {% include "components/icon.html" with name="clock" class="w-4 h-4 shrink-0" %}
-            <span>{% if conversation.channel == "facebook" %}{% with fb=conversation.facebook_conversation %}{% if fb and not fb.last_inbound_at %}Waiting for their reply{% else %}Reply window closed{% endif %}{% endwith %}{% else %}24-hour window closed{% endif %}</span>
+            <span>{% if conversation.channel == "facebook" %}{% with fb=conversation.facebook_conversation %}{% if fb and not fb.last_inbound_at %}Waiting for their reply{% else %}24-hour window closed{% endif %}{% endwith %}{% else %}24-hour window closed{% endif %}</span>
             {% if conversation.channel == "instagram" %}{% include "components/help_tip.html" with tip_label="Why?" text="Instagram only delivers a reply within 24 hours of the customer's last message. Once they write again, you can reply here." %}
-            {% elif conversation.channel == "facebook" %}{% with fb=conversation.facebook_conversation %}{% if fb and not fb.last_inbound_at %}{% include "components/help_tip.html" with tip_label="Why?" text="You've sent a private reply to their comment. Messenger lets you write again once they reply, and it will appear here." %}{% else %}{% include "components/help_tip.html" with tip_label="Why?" text="Messenger only delivers a reply within its reply window. Once the customer writes again, you can reply here." %}{% endif %}{% endwith %}
+            {% elif conversation.channel == "facebook" %}{% with fb=conversation.facebook_conversation %}{% if fb and not fb.last_inbound_at %}{% include "components/help_tip.html" with tip_label="Why?" text="You've sent a private reply to their comment. Messenger lets you write again once they reply, and it will appear here." %}{% else %}{% include "components/help_tip.html" with tip_label="Why?" text="Messenger only delivers a reply within 24 hours of the customer's last message. Once they write again, you can reply here." %}{% endif %}{% endwith %}
             {% else %}{% include "components/help_tip.html" with tip_label="Why?" text="Once 24 hours have passed since the customer's last message, WhatsApp only delivers a template approved by Meta. A reply from them opens the window again." %}{% endif %}
           </p>
         </div>

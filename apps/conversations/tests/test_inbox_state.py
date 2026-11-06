@@ -4,7 +4,7 @@
   after the fact;
 - a failure reads in plain words, worked out from its code when shown, with where to fix it
   when the cause is the WhatsApp account;
-- Closed is the stored status; an open chat gone quiet is "Quiet", not "Closed";
+- Closed is the stored status; an open chat gone quiet is "Waiting on them", not "Closed";
 - views go by status, so the counts add up, and every count shows, 0 included;
 - the channel filter only offers channels with conversations; search finds names, numbers and
   words from the chat.
@@ -172,11 +172,11 @@ def test_an_open_chat_gone_quiet_says_quiet_not_closed(shop):
     row = _row(client.get("/inbox/").content.decode(), "Thandi")
     header = client.get(f"/inbox/{chat.public_id}/", **PANE).content.decode()
 
-    assert ">Quiet</span>" in row and ">Closed</span>" not in row
+    assert ">Waiting on them</span>" in row and ">Closed</span>" not in row
     status = json.loads(
         re.search(r'id="chat-config"[^>]*>(.*?)</script>', header, re.S).group(1)
     )["statusHtml"]
-    assert "Quiet" in status and "Closed" not in status
+    assert "Waiting on them" in status and "Closed" not in status
 
 
 def test_a_closed_chat_offers_reopen_in_the_more_menu(shop):

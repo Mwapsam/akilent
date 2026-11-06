@@ -80,6 +80,8 @@ button.switch { border: 0; padding: 0; }  /* a switch that submits its form (Rep
   border-radius: 999px; font-size: .8125rem; font-weight: 500; color: var(--color-ink);
   background: var(--color-surface-muted); border: 1px solid var(--color-border); }
 .ob-launch:hover { border-color: var(--color-border-strong); }
+/* A 44px target on touch screens (36px was under the minimum). */
+@media (pointer: coarse) { .ob-launch { min-height: 2.75rem; } }
 .ob-ring { width: 1.125rem; height: 1.125rem; transform: rotate(-90deg); }
 .ob-ring circle { fill: none; stroke-width: 2.5; }
 .ob-ring-track { stroke: var(--color-border-strong); }

@@ -87,6 +87,9 @@ function registerChat() {
     open: cfg.open,
     windowOpen: cfg.windowOpen !== false,
     statusHtml: cfg.statusHtml || '',
+    // "New messages" (Phase 5E): where the customer's unread run starts when it opened.
+    firstUnreadId: cfg.firstUnreadId || null,
+    unreadCount: cfg.unreadCount || 0,
     // "Show the details": opens the drawer where the details don't fit beside the chat, and
     // brings the column back where they do (docked, collapsed).
     infoOpen: false,
@@ -196,7 +199,13 @@ function registerChat() {
         this.sortMessages();
         this.saveUnknown();
       } catch (e) { /* storage blocked or bad JSON: nothing kept */ }
-      this.$nextTick(() => this.scrollBottom(true));
+      this.$nextTick(() => {
+        this.scrollBottom(true);
+        // More unread than fits: open on "New messages", not past it.
+        const d = this.$root.querySelector('.cv-unread');
+        const t = this.thread;
+        if (d && t && d.offsetTop < t.scrollTop) t.scrollTop = Math.max(0, d.offsetTop - 8);
+      });
       // --cv-top defaults to a fixed 7rem, which only holds when the app shell's topbar is the
       // only thing above .cv. Embedded in the two-pane inbox, the inbox header/filters push it
       // down further, so measure the real offset instead of assuming one — this is what keeps
@@ -331,6 +340,9 @@ function registerChat() {
           out.push({ key: 'day-' + key, type: 'day', label: this.dayLabel(d) });
           lastDay = key;
         }
+        if (m.id === this.firstUnreadId) {
+          out.push({ key: 'unread', type: 'unread', label: this.unreadCount > 1 ? this.unreadCount + ' new messages' : 'New message' });
+        }
         out.push({ key: 'm-' + m.id, type: 'msg', m, showMeta: true, showFailure: m.status === 'failed' || m.status === 'held' || m.status === 'unconfirmed' || !!m.unknown });
       }
       // Messages sent in a row (same side, same sender, GROUP_MINUTES apart at most) are one
@@ -363,6 +375,26 @@ function registerChat() {
       // message somehow has no reason recorded.
       if (m.unknown) return m.mediaUnknown ? UNKNOWN_MEDIA_TEXT : UNKNOWN_TEXT;
       return m.failureReason || 'This message could not be delivered.';
+    },
+
+    // The header's badges from a poll. Their hover text carries a time ("… (5 minutes)") that
+    // moves on while what they show doesn't; re-rendering for that redrew the header just after
+    // a conversation opened. When only the hover text changed, it's updated in place.
+    applyStatus(html) {
+      if (html === this.statusHtml) return;
+      const strip = (h) => h.replace(/\s+title="[^"]*"/g, '');
+      const box = this.$root.querySelector('.cv-h-status');
+      if (box && strip(html) === strip(this.statusHtml)) {
+        const next = document.createElement('div');
+        next.innerHTML = html;
+        const now = box.querySelectorAll('[title]');
+        const fresh = next.querySelectorAll('[title]');
+        if (now.length === fresh.length) {
+          fresh.forEach((el, i) => now[i].setAttribute('title', el.getAttribute('title')));
+          return;
+        }
+      }
+      this.statusHtml = html;
     },
 
     // ── scrolling ────────────────────────────────────────────────
@@ -549,6 +581,7 @@ function registerChat() {
           id: raw.id, direction: raw.direction, body: raw.body, ts: raw.timestamp,
           status: raw.status, failureReason: raw.failureReason || null, failureFix: raw.failureFix || null,
           byAi: !!raw.byAi, media: raw.media || null,
+          fresh: true, // arrived while open: it slides in (.cv-msg--fresh)
         });
         this.lastId = Math.max(this.lastId, raw.id);
       }
@@ -564,7 +597,7 @@ function registerChat() {
         if (fix) m.failureFix = fix;
       }
       this.sortMessages();
-      if (data.status_html !== undefined) this.statusHtml = data.status_html;
+      if (data.status_html !== undefined) this.applyStatus(data.status_html);
       this.open = data.open;
       if (data.windowOpen !== undefined) this.windowOpen = data.windowOpen;
       if (this.ai.enabled && data.aiProposal !== undefined) this.ai.proposal = data.aiProposal;
@@ -575,6 +608,7 @@ function registerChat() {
           else if (inbound) this.newBelow = true;
         });
       }
+
     },
 
     // ── AI proposals (a person always reviews and sends) ─────────

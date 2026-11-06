@@ -380,7 +380,7 @@ class TestInboxLayout:
 
     def test_a_quiet_conversation_says_quiet_not_closed(self, logged_in):
         """Closed is the stored status. An open conversation the customer hasn't written in
-        for a day, with us having spoken last, is Quiet, and the badge says why."""
+        for a day, with us having spoken last, is "Waiting on them", and the badge says why."""
         client, account, _ = logged_in
         conv = _conversation(account, first="Joseph", waited=timedelta(days=2))
         Message.objects.create(
@@ -392,5 +392,5 @@ class TestInboxLayout:
             timestamp=timezone.now() - timedelta(days=1, hours=23),
         )
         row = self._list(_inbox(client))
-        assert ">Quiet</span>" in row and ">Closed<" not in row
-        assert "No message from the customer in over 24 hours" in row
+        assert ">Waiting on them</span>" in row and ">Closed<" not in row
+        assert "You spoke last, and they haven't written in over 24 hours" in row

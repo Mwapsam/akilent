@@ -5,7 +5,11 @@
 // QA_LAYOUT=1 Phase 2 layout targets, QA_COMPOSER=1 closed-window composer and details, QA_OB=1 setup over composer,
 // QA_LOOK=1 Phase 3 menus and template list in both themes, QA_KEYS=1 Phase 4 keyboard,
 // QA_FAST=1 Phase 5A instant open (skeleton header, hover/J prefetch, recent panes kept),
-// QA_PICKER=1 Phase 5B/5C bubbles, errors once, the template picker over the thread (needs QA_BASE :8001);
+// QA_PICKER=1 Phase 5B/5C bubbles, errors once, the template picker over the thread (needs QA_BASE :8001),
+// QA_BLINK=1 the list never dims or blocks during its background check, search shows a line instead,
+// QA_ROWS=1 Phase 5D two-line rows, channel on the avatar, hover actions (Close + Undo for real), tooltips, the empty pane,
+// QA_LIVE=1 Phase 5E "New messages", a changed row highlighted, a message sliding in,
+// QA_RESP=1 Phase 5F every width (360-1440) in both themes: panes, sideways scroll, thread height, tap targets;
 // QA_BASE=http://127.0.0.1:8001 for a server started with WHATSAPP_ENABLED=True)
 // Needs the dev server on :8000 and QA_UI_EMAIL / QA_UI_PASSWORD in .env.
 import { spawn } from "node:child_process";
@@ -476,6 +480,118 @@ if (process.env.QA_PICKER) {
   out.phone = await state();
   await shot0("picker-390");
   console.log(JSON.stringify(out, null, 1));
+  process.exit(0);
+}
+// The list's 8-second check dimmed it to 0.55 (and blocked clicks) for the whole round trip,
+// even when nothing changed: background refreshes never look busy now. Each check is held
+// 800 ms here, prod's round trip, so a dim would be caught. A search still says it's working,
+// with a line under the box, the box itself left usable.
+if (process.env.QA_BLINK) {
+  const out = {};
+  rules = [{ match: (r) => r.method === "GET" && new URL(r.url).pathname.startsWith("/inbox/feed"), act: { delay: 800 } }];
+  await viewport(1280, 800, false);
+  await go("/inbox/?view=all", 1500);
+  await evaluate("document.activeElement && document.activeElement.blur()");
+  const watch = (ms) => evaluate(`new Promise(res => { const b = document.getElementById('inbox-body'); let min = 1, blocked = false, busy = 0; const t0 = performance.now();
+    (function tick() { const cs = getComputedStyle(b); min = Math.min(min, +cs.opacity); if (cs.pointerEvents === 'none') blocked = true; if (b.classList.contains('htmx-request')) busy++;
+      if (performance.now() - t0 < ${ms}) requestAnimationFrame(tick); else res({ minOpacity: +min.toFixed(2), blocked, framesInFlight: busy }); })(); })`);
+  // The timer's own check (wait for one), then a pushed refresh (as after marking read).
+  out.timer = await watch(10000);
+  const pushed = watch(2000);
+  await evaluate("htmx.trigger(document.body, 'inbox-refresh')");
+  out.pushed = await pushed;
+  // A search: the box stays usable and shows a line.
+  out.search = await evaluate(`new Promise(res => { const f = document.querySelector('.inbox-search'); const q = document.getElementById('inbox-q'); q.focus(); q.value = 'zz'; q.dispatchEvent(new Event('input', { bubbles: true }));
+    let seen = null; const t0 = performance.now();
+    (function tick() { if (f.classList.contains('htmx-request') && !seen) { const cs = getComputedStyle(f); seen = { opacity: +cs.opacity, pointer: cs.pointerEvents, line: getComputedStyle(f, '::after').content !== 'none' }; }
+      if (performance.now() - t0 < 2500) requestAnimationFrame(tick); else res(seen); })(); })`);
+  out.requests = log.filter((l) => l.includes("/inbox/feed")).length;
+  console.log(JSON.stringify(out, null, 1));
+  process.exit(0);
+}
+// Phase 5D at 1280: rows are two lines (about 64px) with the channel on the avatar; hovering a
+// row shows its quick actions, and Close then Undo go through to the local server (QA data);
+// the bar's icons say what they are; the empty pane says what needs you.
+if (process.env.QA_ROWS) {
+  const out = {};
+  rules = [{ match: (r) => r.method === "POST" && (/action=close/.test(r.postData || "") || /\/undo-close\//.test(new URL(r.url).pathname)), act: null }];
+  await viewport(1280, 800, false);
+  await go("/inbox/?view=all", 1500);
+  await evaluate("document.activeElement && document.activeElement.blur()");
+  out.rows = await evaluate(`(() => { const r = [...document.querySelectorAll('.inbox-row')].slice(0, 8); return { heights: r.map(a => Math.round(a.getBoundingClientRect().height)),
+    channelMarks: document.querySelectorAll('.inbox-row .inbox-avatar-channel').length, channelTags: document.querySelectorAll('.inbox-row .channel-tag').length }; })()`);
+  out.empty = await evaluate(`(() => { const t = document.getElementById('inbox-today'); return t ? { shown: !!t.offsetParent, text: t.innerText.replace(/\s+/g, ' ').trim() } : null; })()`);
+  // Hover the second row: its actions show.
+  const p = await evaluate(`(() => { const r = document.querySelectorAll('.inbox-row')[1].getBoundingClientRect(); return { x: r.left + 60, y: r.top + r.height / 2 }; })()`);
+  await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: p.x, y: p.y }); await sleep(300);
+  out.hover = await evaluate(`(() => { const li = document.querySelectorAll('.inbox-list > li')[1]; const a = li.querySelector('.inbox-row-actions'); return a ? { opacity: getComputedStyle(a).opacity, buttons: [...a.querySelectorAll('button')].map(b => b.title) } : null; })()`);
+  await shot0("rows-hover-1280");
+  const name = await evaluate("document.querySelectorAll('.inbox-row')[1].getAttribute('data-title')");
+  await evaluate("document.querySelectorAll('.inbox-list > li')[1].querySelector('.inbox-row-act[title=\"Close\"]').click()"); await sleep(2500);
+  out.closed = { toast: await evaluate("Alpine.store('toasts').items.map(t => t.message + (t.action ? ' [' + t.action.label + ']' : ''))"),
+    stillListed: await evaluate(`[...document.querySelectorAll('.inbox-row')].some(a => a.getAttribute('data-title') === ${JSON.stringify(name)})`) };
+  await evaluate("(() => { const s = Alpine.store('toasts'); const t = s.items.find(i => i.action && i.action.label === 'Undo'); if (t) s.run(t); })()"); await sleep(2500);
+  out.undone = { toast: await evaluate("Alpine.store('toasts').items.map(t => t.message)"),
+    listedAgain: await evaluate(`[...document.querySelectorAll('.inbox-row')].some(a => a.getAttribute('data-title') === ${JSON.stringify(name)})`) };
+  // The bar's icon buttons say what they are.
+  out.tooltips = await evaluate(`[...document.querySelectorAll('#inbox-bar .tooltip')].map(b => b.getAttribute('data-tooltip'))`);
+  for (const theme of ["light", "dark"]) {
+    await evaluate(`document.documentElement.dataset.theme = ${JSON.stringify(theme)}`); await sleep(200);
+    await shot0(`rows-1280-${theme}`);
+  }
+  console.log(JSON.stringify(out, null, 1));
+  process.exit(0);
+}
+// Phase 5E at 1280: an unread conversation opens with "New messages" where the unread run
+// starts; once it's marked read (for real, local QA data), the refreshed list highlights its
+// row and only its row; a message arriving while it's open slides in.
+if (process.env.QA_LIVE) {
+  const out = {};
+  rules = [{ match: (r) => r.method === "POST" && (r.postData || "").includes("action=mark_read"), act: null }];
+  await viewport(1280, 800, false);
+  await go("/inbox/?view=all", 1500);
+  await evaluate("document.activeElement && document.activeElement.blur()");
+  const unreadHref = await evaluate("(document.querySelector('.inbox-row.is-unread') || {}).getAttribute ? document.querySelector('.inbox-row.is-unread').getAttribute('href') : null");
+  if (!unreadHref) { console.log("FAIL no unread row (run scratchpad unread.py first)"); process.exit(1); }
+  await clickSel(`.inbox-row[href="${unreadHref}"]`); await sleep(1800);
+  out.divider = await evaluate("(() => { const d = document.querySelector('.cv-unread'); return d ? { text: d.innerText.trim(), shown: !!d.offsetParent } : null; })()");
+  // The click marked it read; the list's refresh (inbox-refresh) shows that row changed.
+  await evaluate("htmx.trigger(document.body, 'inbox-refresh')"); await sleep(2500);
+  out.highlight = await evaluate(`({ changed: [...document.querySelectorAll('.inbox-row.is-changed')].map(a => a.getAttribute('href')), expected: ${JSON.stringify(unreadHref)} })`);
+  // A message arriving while open.
+  await chat("c.messages.push({ id: 999999, direction: 'inbound', body: 'QA arrived just now', ts: new Date().toISOString(), status: 'delivered', fresh: true })");
+  await sleep(60);
+  out.fresh = await evaluate("(() => { const m = [...document.querySelectorAll('.cv-msg')].pop(); return { cls: m.className, anim: getComputedStyle(m).animationName }; })()");
+  await sleep(300);
+  await shot0("live-1280");
+  console.log(JSON.stringify(out, null, 1));
+  process.exit(0);
+}
+// Phase 5F: each width in both themes. Under 768 one pane at a time (the conversation its own
+// page); from 768 two panes; details docked from about 1440. No sideways scroll anywhere, the
+// thread's height at each size, tap targets on touch sizes, contrast.
+if (process.env.QA_RESP) {
+  const out = [];
+  const NO_MOTION = `(() => { const s=document.createElement('style'); s.textContent='*,*::before,*::after{transition:none!important;animation:none!important}'; document.head.appendChild(s); })()`;
+  const sizes = [[360, 740, true], [390, 844, true], [768, 1024, true], [1024, 768, false], [1280, 800, false], [1440, 900, false]];
+  for (const [w, h, touch] of sizes) {
+    await viewport(w, h, touch);
+    await go("/inbox/?view=all", 1500);
+    await evaluate(scanner); await evaluate(NO_MOTION);
+    const href = await evaluate("document.querySelector('.inbox-row').getAttribute('href')");
+    const list = await evaluate(`({ sideways: document.documentElement.scrollWidth > innerWidth + 1, panes: [...document.querySelectorAll('.inbox-list-col, .inbox-pane-col')].filter(e => e.getClientRects().length && getComputedStyle(e).display !== 'none').length })`);
+    if (w < 768) await go(href, 1600); else { await clickSel(".inbox-row"); await sleep(1800); }
+    await evaluate(scanner); await evaluate(NO_MOTION);
+    for (const theme of ["light", "dark"]) {
+      const r = await evaluate(`(async () => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const s = await window.__uiScan({ max: 4 }); const t = document.querySelector('.cv-thread'); const side = document.querySelector('.cv-side');
+        return { sideways: document.documentElement.scrollWidth > innerWidth + 1, thread: t ? Math.round(t.clientHeight) : null, back: !!(document.querySelector('.cv-h-back') || {}).offsetParent,
+          docked: !!side && getComputedStyle(side).position === 'relative' && !!side.offsetParent, under44: s.targets.under44, ex: innerWidth < 1024 ? s.targets.examples : undefined, contrastFail: s.contrast.failing, overflow: s.overflow.count }; })()`);
+      out.push({ size: `${w}x${h}`, theme, listPanes: list.panes, listSideways: list.sideways, ...r });
+      writeFileSync(join(shots, `resp-${w}-${theme}.jpg`), Buffer.from((await send("Page.captureScreenshot", { format: "jpeg", quality: 60 })).data, "base64"));
+    }
+  }
+  console.log(JSON.stringify(out));
   process.exit(0);
 }
 if (process.env.QA_SCAN) {

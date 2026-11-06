@@ -9,12 +9,13 @@ runs out of room, the badges after it give way whole (.cv-h-status wraps onto a 
 line), never cut mid-word. "First reply in 92s" shows only in a wide pane.{% endcomment %}
 {% comment %}Closed is the stored status, as in the list (someone closed it, or STOP did). An
 open conversation the customer hasn't written in for a day, with us having spoken last, is
-Quiet: it was shown as Closed here while the list (rightly) didn't say so. One with no messages
+"Waiting on them" (once "Quiet", which needed explaining): it was shown as Closed here while
+the list (rightly) didn't say so. One with no messages
 yet shows no state.{% endcomment %}
 {% if conversation.status == "closed" %}<span class="badge badge-neutral whitespace-nowrap" title="Closed{% if conversation.resolution %} as {{ conversation.get_resolution_display }}{% endif %}. It reopens if the customer writes again.">Closed</span>
 {% elif snapshot.missed %}<span class="badge badge-danger whitespace-nowrap" title="Missed: no reply for over 24 hours">Missed</span>
 {% elif snapshot.state == WAITING_FOR_AGENT %}<span class="badge badge-warning whitespace-nowrap" title="Waiting for you since {{ snapshot.last_customer_message_at|date:'j M Y, H:i' }} ({{ snapshot.last_customer_message_at|timesince:now }})">Waiting · {{ snapshot.last_customer_message_at|ago:now }}</span>
 {% elif snapshot.state == WAITING_FOR_CUSTOMER %}<span class="badge badge-success whitespace-nowrap" title="Replied: waiting for the customer">Replied</span>
-{% elif snapshot.closed_reason == "inactive_24h" %}<span class="badge badge-neutral whitespace-nowrap" title="No message from the customer in over 24 hours">Quiet</span>{% endif %}
+{% elif snapshot.closed_reason == "inactive_24h" %}<span class="badge badge-neutral whitespace-nowrap">Waiting on them</span>{% include "components/help_tip.html" with text="You spoke last, and they haven't written in over 24 hours. It isn't closed: it stays in your open views." %}{% endif %}
 {% include "components/channel_tag.html" with channel=conversation.channel compact=True %}
 {% if snapshot.first_response_seconds is not None %}<span class="cv-h-extra text-xs text-ink-subtle whitespace-nowrap">First reply in {{ snapshot.first_response_seconds|floatformat:0 }}s</span>{% endif %}

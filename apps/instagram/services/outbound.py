@@ -56,7 +56,7 @@ def enqueue_reply(
         return None
 
 
-def send_outbound(outbound: OutboundMessage) -> bool:
+def send_outbound(outbound: OutboundMessage, *, claimed: bool = False) -> bool:
     """
     Attempt to send one OutboundMessage via the Meta provider.
 
@@ -114,9 +114,22 @@ def send_outbound(outbound: OutboundMessage) -> bool:
         _notify_automation_failed(outbound)
         return False
 
-    outbound.status = OutboundMessage.Status.SENDING
+    # Claim the row before sending, as the outbox drain does (``claimed``: it already has).
+    # A direct send's row is QUEUED while the checks above run, and the drain may take it in
+    # that time; without this both sent it, and the customer got the message twice. Whoever
+    # moves it to SENDING first sends it; the other stops (the row isn't failed, so the
+    # inbox says it's on its way).
     # updated_at is what the drain's stale-"sending" check measures from.
-    outbound.save(update_fields=["status", "updated_at"])
+    if claimed:
+        outbound.status = OutboundMessage.Status.SENDING
+        outbound.save(update_fields=["status", "updated_at"])
+    elif not OutboundMessage.objects.filter(
+        pk=outbound.pk, status=OutboundMessage.Status.QUEUED
+    ).update(status=OutboundMessage.Status.SENDING, updated_at=timezone.now()):
+        logger.info("send_outbound: outbound=%s is already being sent", outbound.pk)
+        return False
+    else:
+        outbound.status = OutboundMessage.Status.SENDING
 
     if outbound.action_type == OutboundMessage.ActionType.PRIVATE_REPLY:
         # private_reply expects a comment_id, not an igsid; the caller must
@@ -467,7 +480,7 @@ def drain_outbox(now=None) -> dict:
     for outbound in OutboundMessage.objects.filter(pk__in=due_ids).select_related(
         "instagram_account"
     ):
-        if send_outbound(outbound):
+        if send_outbound(outbound, claimed=True):
             sent += 1
         else:
             failed += 1

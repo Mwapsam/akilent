@@ -3,7 +3,7 @@
   each finished idea can be added to Planning as an idea, never as a post.
 {% endcomment %}
 <div id="ai-ideas-panel"
-     {% if draft and draft.status == "pending" %}hx-get="{% url 'publishing:ai-ideas-status' draft.pk %}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+     {% if draft and draft.status == "pending" %}data-auto-refresh hx-get="{% url 'publishing:ai-ideas-status' draft.pk %}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
   {% if not draft %}
   {% elif draft.status == "pending" %}
   <p class="text-sm text-ink-subtle" role="status">Writing ideas from your results…</p>

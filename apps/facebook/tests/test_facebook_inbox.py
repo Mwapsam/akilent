@@ -165,6 +165,29 @@ def test_a_reply_inside_24_hours_is_a_response(graph):
     )
 
 
+def test_a_row_the_drain_took_is_not_sent_again_directly(graph):
+    """As on Instagram: the drain taking a direct send's row while it was still being checked
+    sent one reply twice. Whoever claims it first sends it."""
+    from apps.facebook.services.outbound import (
+        drain_outbox,
+        enqueue_reply,
+        send_outbound,
+    )
+
+    _account, _user, conn = make_page()
+    contact, _convo, _spine = make_messenger_contact(conn)
+    outbound = enqueue_reply(
+        conn,
+        contact.psid,
+        "On its way",
+        action_type=FacebookOutboundMessage.ActionType.DM_REPLY,
+        idempotency_key="wf:race",
+    )
+    assert drain_outbox()["sent"] == 1
+    assert send_outbound(outbound) is False  # the caller's copy, still QUEUED in memory
+    assert len(graph.sent()) == 1
+
+
 def test_after_24_hours_only_a_person_can_reply_with_the_human_agent_tag(graph):
     from apps.conversations.inbox_keys import inbox_key
 

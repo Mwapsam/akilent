@@ -6,18 +6,18 @@
 
 {% block content %}
 {% comment %}One bar of about 44px above the list: the title (which is the view menu), the channel choice, and
-links to the neighbouring pages. It belongs to the list, so at lg it sits over the list column
+links to the neighbouring pages. It belongs to the list, so with two panes it sits over the list column
 only and the conversation beside it starts at the top, with all the height. It doesn't change
 with a conversation open, so nothing below it moves. The view and channel choices come from
 _inbox_views.html, which the list's poll refreshes with it (views.inbox_feed).
 
 The links are icon buttons with their labels kept for screen readers (sr-only).{% endcomment %}
 {% comment %}
-  Two-pane at lg (see .inbox-split, assets/app.css): the list on the left, and whichever
+  Two-pane from 768px (see .inbox-split, assets/app.css): the list on the left, and whichever
   conversation was opened from it on the right, so opening another one never re-loads the
   shell or the list itself. static/js/inbox_pane.js intercepts a row click at that width and
   loads the conversation into #conversation-pane-inner instead of following the link; below
-  lg there's no room for both, so a row click falls through to its plain href — the existing
+  768px there's no room for both, so a row click falls through to its plain href — the existing
   boosted, full-page navigation to conversations:detail, unchanged from before this feature.
 {% endcomment %}
 {% comment %}A conversation's own address loaded as a full page (a reload, a link, a new tab)
@@ -31,15 +31,15 @@ and data-inbox-url / data-inbox-title are what closing it goes back to.{% endcom
     {% comment %}Its number is the nav badge's own (followups_badge, the Mine tab's count),
     loaded and refreshed the same way (components/_nav_item.html), so the two can never
     disagree.{% endcomment %}
-    <a href="{% url 'conversations:followups_due' %}" class="inbox-bar-btn" title="Follow-ups" data-inbox-followups-link>
-      {% include "components/icon.html" with name="bell" class="w-4 h-4" %}
+    <a href="{% url 'conversations:followups_due' %}" class="inbox-bar-btn tooltip tooltip--below" data-tooltip="Follow-ups" data-inbox-followups-link>
+      {% include "components/icon.html" with name="calendar" class="w-4 h-4" %}
       <span class="sr-only">Follow-ups</span>
       <span class="inbox-bar-badge" hx-get="{% url 'conversations:followups_badge' %}" hx-swap="innerHTML" data-auto-refresh="followup-changed" hx-trigger="intersect once, every 300s [document.visibilityState === 'visible' && this.offsetParent !== null], sse:followup.due, sse:followup.updated, followup-changed from:body"></span>
     </a>
     {% comment %}The set-up pages, opened now and then rather than all day: one menu
     (cvMenu, static/js/chat.js) instead of four buttons.{% endcomment %}
     <div class="cv-menu" x-data="cvMenu">
-      <button type="button" class="inbox-bar-btn" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="menuOpen" title="Inbox set-up">
+      <button type="button" class="inbox-bar-btn tooltip tooltip--below" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="menuOpen" data-tooltip="Inbox set-up">
         {% include "components/icon.html" with name="settings" class="w-4 h-4" %}
         <span class="sr-only">Set-up</span>
       </button>
@@ -119,8 +119,9 @@ and data-inbox-url / data-inbox-title are what closing it goes back to.{% endcom
       </span>
       <p class="font-medium text-ink">Select a conversation</p>
       <p class="text-sm text-ink-subtle">It opens here, with the list still beside it.</p>
+      {% include "conversations/_inbox_today.html" %}
       {% comment %}The one suggested next step (onboarding.next_action), here where nothing else
-      is shown rather than above the list. Below lg the list has the screen and this state
+      is shown rather than above the list. Below 768px the list has the screen and this state
       isn't shown, so the suggestion is on the dashboard there.{% endcomment %}
       <div class="inbox-suggest">{% next_action_card %}</div>
     </div>

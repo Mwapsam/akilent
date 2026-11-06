@@ -342,6 +342,36 @@ class TestOutbox(InstagramCase):
         sent = Message.objects.get(direction="outbound")
         self.assertEqual(sent.metadata.get("sent_by"), "automation")
 
+    def test_a_row_the_drain_took_is_not_sent_again_directly(self):
+        """A direct send's row is QUEUED while it checks the window and eligibility; the drain
+        could take it then, and both sent it (one reply reached the customer twice)."""
+        from apps.instagram.models import OutboundMessage
+        from apps.instagram.services.outbound import drain_outbox, send_outbound
+
+        outbound = self._queued()  # the direct caller's copy, still QUEUED in memory
+        sent = SendResult(success=True, provider_message_id="mid.once")
+        with patch(
+            "apps.instagram.providers.meta.MetaInstagramProvider.send_message",
+            return_value=sent,
+        ) as provider_send:
+            self.assertEqual(drain_outbox()["sent"], 1)  # the drain got there first
+            self.assertFalse(send_outbound(outbound))
+        self.assertEqual(provider_send.call_count, 1)
+        outbound.refresh_from_db()
+        self.assertEqual(outbound.status, OutboundMessage.Status.SENT)
+
+    def test_a_row_sent_directly_is_not_taken_by_the_drain(self):
+        from apps.instagram.services.outbound import drain_outbox, send_outbound
+
+        outbound = self._queued()
+        with patch(
+            "apps.instagram.providers.meta.MetaInstagramProvider.send_message",
+            return_value=SendResult(success=True, provider_message_id="mid.direct"),
+        ) as provider_send:
+            self.assertTrue(send_outbound(outbound))
+            self.assertEqual(drain_outbox()["sent"], 0)
+        self.assertEqual(provider_send.call_count, 1)
+
     def test_invalid_token_marks_the_account_for_reconnect(self):
         from apps.instagram.services.outbound import send_outbound
 

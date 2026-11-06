@@ -57,7 +57,8 @@ against it. channel and overdue carry across views; the page and the poll's dige
   <form method="get" action="{% url 'conversations:inbox' %}" class="cv-menu inbox-filter{% if channel %} is-active{% endif %}" x-data="cvMenu">
     <input type="hidden" name="view" value="{{ view }}" />
     {% if q %}<input type="hidden" name="q" value="{{ q }}" />{% endif %}
-    <button type="button" class="inbox-filter-btn" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="menuOpen"
+    <button type="button" class="inbox-filter-btn tooltip tooltip--below" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="menuOpen"
+            data-tooltip="Filter by channel"
             aria-label="Channel: {% if channel %}{% for value, label in channel_choices %}{% if value == channel %}{{ label }}{% endif %}{% endfor %}{% else %}all channels{% endif %}. Change">
       {% include "components/icon.html" with name="sliders" class="w-4 h-4 shrink-0" %}
       {% if channel %}<span class="truncate">{% for value, label in channel_choices %}{% if value == channel %}{{ label }}{% endif %}{% endfor %}</span>{% endif %}

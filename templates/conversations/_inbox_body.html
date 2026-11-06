@@ -26,10 +26,15 @@ it out, with a one-click way back to every channel.{% endcomment %}
     <a href="{% url 'conversations:detail' c.public_id %}" class="inbox-row{% if c.is_unread %} is-unread{% endif %}" data-title="{{ name }}" data-row>
       {% comment %}A phone number's first character is "+", which is not an
       initial; contacts with no name get a person glyph instead.{% endcomment %}
-      <span class="chat-avatar inbox-avatar" aria-hidden="true">
-        {% if c.contact.full_name %}{{ c.contact.full_name|slice:":1"|upper }}
-        {% elif c.contact.email %}{{ c.contact.email|slice:":1"|upper }}
-        {% else %}{% include "components/icon.html" with name="user" class="w-5 h-5" %}{% endif %}
+      {% comment %}The channel sits on the avatar's corner (Phase 5D), so it costs no line of its
+      own; its name is there for screen readers.{% endcomment %}
+      <span class="inbox-avatar-wrap">
+        <span class="chat-avatar inbox-avatar" aria-hidden="true">
+          {% if c.contact.full_name %}{{ c.contact.full_name|slice:":1"|upper }}
+          {% elif c.contact.email %}{{ c.contact.email|slice:":1"|upper }}
+          {% else %}{% include "components/icon.html" with name="user" class="w-5 h-5" %}{% endif %}
+        </span>
+        <span class="inbox-avatar-channel" data-channel="{{ c.channel }}" title="{{ c.get_channel_display }}">{% if c.channel == "instagram" %}{% include "components/icon.html" with name="instagram" class="w-2.5 h-2.5" %}{% elif c.channel == "facebook" %}{% include "components/icon.html" with name="facebook" class="w-2.5 h-2.5" %}{% elif c.channel == "whatsapp" %}{% include "components/icon.html" with name="message-circle" class="w-2.5 h-2.5" %}{% elif c.channel == "sms" %}{% include "components/icon.html" with name="chat" class="w-2.5 h-2.5" %}{% else %}{% include "components/icon.html" with name="mail" class="w-2.5 h-2.5" %}{% endif %}<span class="sr-only">{{ c.get_channel_display }}.</span></span>
       </span>
 
       {% comment %}Grid areas, not nested rows, so the same four pieces lay out
@@ -75,17 +80,17 @@ it out, with a one-click way back to every channel.{% endcomment %}
           all. Plain waiting is already the amber clock.{% endcomment %}
           {% comment %}Closed is the stored status: someone closed it (or the customer sent STOP),
           whatever its messages. An open conversation the customer hasn't written in for a day,
-          with us having spoken last, is Quiet: not closed, and still in the open views.{% endcomment %}
+          with us having spoken last, is "Waiting on them": not closed, and still in the open views. A row
+          is a link, so the badge's why is its hover text; the header has the tip.{% endcomment %}
           {% if c.is_closed %}<span class="badge badge-neutral" title="Closed{% if c.resolution %} as {{ c.get_resolution_display }}{% endif %}. It reopens if the customer writes again.">Closed</span>
           {% elif c.snapshot.missed %}<span class="badge badge-danger">Missed</span>
           {% elif c.snapshot.state == WAITING_FOR_CUSTOMER %}<span class="badge badge-success">Replied</span>
-          {% elif c.is_quiet %}<span class="badge badge-neutral" title="No message from the customer in over 24 hours">Quiet</span>{% endif %}
+          {% elif c.is_quiet %}<span class="badge badge-neutral" title="You spoke last, and they haven't written in over 24 hours">Waiting on them</span>{% endif %}
           {% comment %}No badge at all for a conversation with no messages yet
           (state INDETERMINATE) — it used to fall through to "Closed".{% endcomment %}
-          {% include "components/channel_tag.html" with channel=c.channel compact=True %}
           {% comment %}Follow-ups live on the Follow-ups page; the row only says one is set and
           when, in the page's words. A missed chat shows its Missed badge instead.{% endcomment %}
-          {% if c.followup_tag %}<span class="badge badge-neutral" data-inbox-followup>{% include "components/icon.html" with name="bell" class="w-3 h-3" %}{{ c.followup_tag }}</span>{% endif %}
+          {% if c.followup_tag %}<span class="badge badge-neutral" data-inbox-followup>{% include "components/icon.html" with name="calendar" class="w-3 h-3" %}{{ c.followup_tag }}</span>{% endif %}
           {% comment %}A teammate in this conversation right now (apps.conversations.presence):
           typing beats viewing, so two people don't open the same customer and both reply.{% endcomment %}
           {% if c.presence %}
@@ -108,6 +113,24 @@ it out, with a one-click way back to every channel.{% endcomment %}
         </div>
       </div>
     </a>
+    {% comment %}Quick actions on hover (Phase 5D): the pane's own actions, answered with their toast
+    (Close keeps its Undo) and the list re-read (views._row_action). Out of the Tab order: E and A
+    do the same from the keyboard. A touch screen opens the conversation instead.{% endcomment %}
+    {% if not c.is_closed %}
+    {% url 'conversations:detail' c.public_id as row_url %}
+    <div class="inbox-row-actions" hx-headers='{"X-Inbox-Row": "1"}' hx-swap="none">
+      <button type="button" class="inbox-row-act" tabindex="-1" hx-post="{{ row_url }}" hx-vals='{"action": "close"}'
+              title="Close" aria-label="Close the conversation with {{ name }}">{% include "components/icon.html" with name="check" class="w-4 h-4" %}</button>
+      {% if c.assigned_to_id != user.id %}
+      <button type="button" class="inbox-row-act" tabindex="-1" hx-post="{{ row_url }}" hx-vals='{"action": "assign", "assignee": "{{ user.id }}"}'
+              title="Assign to me" aria-label="Assign {{ name }} to me">{% include "components/icon.html" with name="user" class="w-4 h-4" %}</button>
+      {% endif %}
+      {% if not c.followup_tag %}
+      <button type="button" class="inbox-row-act" tabindex="-1" hx-post="{{ row_url }}" hx-vals='{"action": "create_followup", "when": "tomorrow"}'
+              title="Follow up tomorrow" aria-label="Follow up with {{ name }} tomorrow">{% include "components/icon.html" with name="clock" class="w-4 h-4" %}</button>
+      {% endif %}
+    </div>
+    {% endif %}
   </li>
   {% endwith %}
   {% endfor %}

@@ -745,13 +745,15 @@
      380px column, where the one-line "wide" row squeezed name, badges and time together. */
   .inbox-list-col { container: inboxlist / inline-size; }
 
-  @media (min-width: 1024px) {
+  /* Two panes from 768px (Phase 5F): below lg the app's sidebar is a drawer, so a tablet has
+     the whole width for a 320px list and the conversation; 380px from lg. */
+  @media (min-width: 768px) {
     /* Both columns fill the viewport below the shell's top bar and scroll on their own, so
        the conversation never moves when the list scrolls. The bar heads the list column
        only: the conversation starts at the top, level with it, and gets the full height.
        --inbox-top is measured by static/js/inbox_pane.js; 6rem is a fallback until it is. */
     .inbox-split {
-      @apply grid gap-x-4; grid-template-columns: 380px minmax(0, 1fr);
+      @apply grid gap-x-4; grid-template-columns: 320px minmax(0, 1fr);
       grid-template-rows: auto minmax(0, 1fr);
       height: calc(100dvh - var(--inbox-top, 6rem) - var(--kb-inset, 0px)); min-height: 22rem;
     }
@@ -772,6 +774,9 @@
     .inbox-split .inbox-pane-col,
     .inbox-split.has-conversation .inbox-pane-col { display: block; grid-column: 2; grid-row: 1 / span 2; min-height: 0; }
     .inbox-split:not(.has-conversation) .inbox-pane-empty { display: flex; }
+  }
+  @media (min-width: 1024px) {
+    .inbox-split { grid-template-columns: 380px minmax(0, 1fr); }
   }
 
   /* The view menu: the current view and its count on the button, every view in the menu. */
@@ -1600,6 +1605,9 @@
     pointer-events: none;
     transition: opacity 0.15s ease;
   }
+  /* Except a background refresh (a timer, a pushed event: app.js marks it .ak-auto-request),
+     which nobody is waiting on: it must never dim or block what's on screen. */
+  .htmx-request.ak-auto-request { opacity: 1; pointer-events: auto; }
 
   .empty-state { @apply text-center py-12 px-6; }
   .empty-state-icon {
@@ -1834,7 +1842,7 @@
 /* In the two-pane inbox the list is already beside the pane: no "back" needed. And the
    conversation fills its column exactly: the split is already sized to the viewport, so
    measuring the viewport again from the pane's own offset left it 32px short of the list. */
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   #inbox-split .cv-h-back { display: none; }
   /* Column → pane → .cv-wrap → .cv, each a flex column passing the height down (percent
      heights don't resolve through these). Only one of the column's children shows at a
@@ -2020,7 +2028,10 @@
    box's place, what can still go. */
 .cv-closedwin-note { display: flex; align-items: center; gap: .375rem; margin: 0 0 .5rem .25rem; font-size: .8125rem;
                      font-weight: 500; color: var(--cv-warn-fg); }
-.help-tip-label { font-weight: 500; text-decoration: underline; text-underline-offset: 2px; color: var(--cv-ink-muted, var(--color-ink-muted)); }
+/* "Why?": a tip, not a link (a question mark beside it, no underline). */
+.help-tip-label { display: inline-flex; align-items: center; gap: .25rem; min-height: 1.5rem; padding: 0 .375rem; border-radius: 999px;
+  font-weight: 500; color: var(--cv-ink-muted, var(--color-ink-muted)); }
+.help-tip-label:hover { background: var(--cv-hover, var(--color-hover)); }
 .help-tip-label:hover { color: var(--cv-ink, var(--color-ink)); }
 .help-tip-label:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; border-radius: .25rem; }
 .cv-closedwin-body { flex: 1; min-width: 0; }
@@ -2075,8 +2086,8 @@
 .cv-side-inner { height: 100%; overflow-y: auto; background: var(--cv-surface); }
 /* The inbox's search, above the list (inbox.html): a pill with its icon inside. */
 .inbox-search { position: relative; margin-bottom: .75rem; }
-/* At lg the list column scrolls under the search, which stays put at its top. */
-@media (min-width: 1024px) {
+/* With two panes the list column scrolls under the search, which stays put at its top. */
+@media (min-width: 768px) {
   .inbox-split .inbox-search { position: sticky; top: 0; z-index: 1; margin-bottom: 0; padding-bottom: .5rem;
                                background-color: var(--color-canvas, var(--color-surface-muted)); }
 }
@@ -2515,3 +2526,109 @@
 .cv-acct-banner-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 @media (prefers-reduced-motion: reduce) { .cv-hover-time { transition: none; } }
 .cv-msg--out .cv-fail-reason { text-align: right; }
+
+/* Inbox search in flight: a thin line under the box, not the box dimmed and unclickable
+   (the shared .htmx-request look) while someone is still typing. */
+.inbox-search { position: relative; }
+.inbox-search.htmx-request { opacity: 1; pointer-events: auto; }
+.inbox-search.htmx-request::after { content: ""; position: absolute; left: .75rem; right: .75rem; bottom: 1px; height: 2px;
+  border-radius: 999px; background: linear-gradient(90deg, transparent, var(--color-accent), transparent);
+  background-size: 50% 100%; background-repeat: no-repeat; animation: inbox-search-run 1s linear infinite; }
+@keyframes inbox-search-run { from { background-position: -50% 0; } to { background-position: 150% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .inbox-search.htmx-request::after { animation: none; background: var(--color-accent); opacity: .5; }
+}
+
+/* Inbox Phase 5D: two-line rows at every width (about 64px): name and time, then the preview
+   with the status badges at its end. The channel is a mark on the avatar's corner. These were
+   three lines in the list column (the two-line layout waited for a 34rem column it never had). */
+.inbox-list > li { position: relative; }
+.inbox-row { align-items: center; padding-top: .625rem; padding-bottom: .625rem; }
+.inbox-row-body { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name when" "preview meta"; row-gap: .125rem; }
+/* One line of badges: one that doesn't fit wraps onto a hidden second line and drops out whole,
+   never cut mid-word (the state comes first, so it's the last to go). */
+.inbox-meta { margin-top: 0; flex-wrap: wrap; justify-content: flex-end; align-content: flex-start; row-gap: 2rem;
+  height: 1.375rem; overflow: hidden; justify-self: end; max-width: 11rem; }
+/* The view's count and "33 missed" stay on one line each; the view's name gives way first. */
+.inbox-tab-count { white-space: nowrap; flex-shrink: 0; }
+.inbox-meta > * { flex-shrink: 0; }
+.inbox-preview { margin-top: 0; }
+.inbox-row.is-unread .inbox-preview { font-weight: 500; }
+.inbox-avatar-wrap { position: relative; flex-shrink: 0; }
+.inbox-avatar-channel { position: absolute; right: -3px; bottom: -3px; display: inline-flex; align-items: center; justify-content: center;
+  width: 1.25rem; height: 1.25rem; border-radius: 999px; background: var(--color-surface-muted); color: var(--color-ink-muted);
+  border: 1px solid var(--color-border-strong); box-shadow: 0 0 0 2px var(--color-surface); }
+.inbox-avatar-channel > svg { width: .75rem; height: .75rem; }
+.inbox-avatar-channel[data-channel="whatsapp"] { color: var(--tone-teal-fg); }
+.inbox-avatar-channel[data-channel="sms"] { color: var(--tone-info-fg); }
+.inbox-avatar-channel[data-channel="instagram"] { color: var(--tone-coral-fg); }
+.inbox-avatar-channel[data-channel="facebook"] { color: var(--tone-info-fg); }
+.inbox-avatar-channel[data-channel="email"] { color: var(--tone-amber-fg); }
+/* Quick actions over the row's end, on hover or focus; a touch screen opens the row instead. */
+.inbox-row-actions { position: absolute; top: 50%; right: .5rem; transform: translateY(-50%); display: flex; gap: .125rem;
+  padding: .125rem; border-radius: var(--radius-control); background: var(--color-surface); box-shadow: var(--shadow-pop);
+  opacity: 0; pointer-events: none; transition: opacity var(--duration-fast) var(--ease-emphasized); }
+.inbox-list > li:hover .inbox-row-actions, .inbox-list > li:focus-within .inbox-row-actions { opacity: 1; pointer-events: auto; }
+.inbox-row-act { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; border-radius: calc(var(--radius-control) - 2px);
+  color: var(--color-ink-muted); }
+.inbox-row-act:hover { background: var(--color-hover); color: var(--color-ink); }
+.inbox-row-act.htmx-request { opacity: .5; }
+@media (hover: none) { .inbox-row-actions { display: none; } }
+@media (prefers-reduced-motion: reduce) { .inbox-row-actions { transition: none; } }
+/* The inbox bar's icon buttons say what they are on hover or focus (the shared .tooltip opens to
+   the right, for the sidebar rail); not while their menu is open. */
+.tooltip--below::after { left: 50%; top: calc(100% + .375rem); margin-left: 0; translate: -50% 0; z-index: 40; }
+.tooltip--below[aria-expanded="true"]::after { opacity: 0; }
+
+/* Inbox Phase 5D: the empty pane says what needs you, each count a link to its view, and the keys. */
+.inbox-today { margin-top: 1.25rem; width: min(22rem, 100%); text-align: left; }
+.inbox-today-title { margin-bottom: .375rem; font-size: .8125rem; font-weight: 600; color: var(--color-ink); }
+.inbox-today-list { display: flex; flex-direction: column; border: 1px solid var(--color-border); border-radius: var(--radius-surface);
+  background: var(--color-surface); overflow: hidden; }
+.inbox-today-list > li + li { border-top: 1px solid var(--color-border); }
+.inbox-today-item { display: flex; align-items: center; gap: .75rem; min-height: 2.75rem; padding: .375rem .75rem; font-size: .875rem;
+  color: var(--color-ink-muted); transition: background-color var(--duration-fast) var(--ease-emphasized); }
+.inbox-today-item:hover, .inbox-today-item:focus-visible { background: var(--color-hover); color: var(--color-ink); }
+.inbox-today-n { min-width: 1.75rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--color-ink); }
+.inbox-today-n.is-amber { color: var(--tone-amber-fg); }
+.inbox-today-n.is-red { color: var(--tone-coral-fg); }
+.inbox-today-keys { margin-top: .75rem; font-size: .75rem; color: var(--color-ink-subtle); line-height: 1.9; }
+.inbox-today-keys kbd { display: inline-block; min-width: 1.25rem; margin-right: .125rem; padding: 0 .3125rem; border-radius: .3125rem;
+  border: 1px solid var(--color-border-strong); background: var(--color-surface); font-family: inherit; font-size: .6875rem;
+  font-weight: 600; text-align: center; color: var(--color-ink-muted); }
+@media (prefers-reduced-motion: reduce) { .inbox-today-item { transition: none; } }
+
+/* Inbox Phase 5E: live feel. A message that arrives while the conversation is open slides in;
+   "New messages" marks where the unread ones start; a list row that changed on a refresh is
+   highlighted for a moment. None of it under reduced motion (the divider stays). */
+.cv-msg--fresh { animation: cv-msg-in 180ms var(--ease-emphasized) both; }
+@keyframes cv-msg-in { from { opacity: 0; transform: translateY(6px); } }
+.cv-unread { display: flex; align-items: center; gap: .75rem; margin: .75rem 0 .5rem; color: var(--tone-coral-fg);
+  font-size: .75rem; font-weight: 600; }
+.cv-unread::before, .cv-unread::after { content: ""; flex: 1; height: 1px; background: color-mix(in srgb, var(--tone-coral-fg) 40%, transparent); }
+.inbox-row.is-changed { animation: inbox-row-changed 1.6s ease-out; }
+@keyframes inbox-row-changed { from { background-color: var(--tone-brand-bg); } }
+@media (prefers-reduced-motion: reduce) {
+  .cv-msg--fresh, .inbox-row.is-changed { animation: none; }
+}
+
+/* Inbox Phase 5F: a phone (under 768px) shows one pane at a time. A conversation slides in over
+   the list (its own page, with Back); the reply box clears the home indicator; the details open
+   as a full-screen sheet. The keyboard is --kb-inset (app.js, from visualViewport). */
+@media (max-width: 767px) {
+  .inbox-split.has-conversation .inbox-pane-col { animation: inbox-pane-in 220ms var(--ease-emphasized) both; }
+  .inbox-split:not(.has-conversation) .inbox-list-col { animation: inbox-list-in 220ms var(--ease-emphasized) both; }
+  .cv-footer { padding-bottom: calc(.625rem + var(--safe-bottom)); }
+  .cv-side { width: 100%; }
+  .cv-side-inner { padding-top: var(--safe-top); padding-bottom: var(--safe-bottom); }
+}
+@keyframes inbox-pane-in { from { transform: translateX(24%); opacity: 0; } }
+@keyframes inbox-list-in { from { transform: translateX(-12%); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .inbox-split.has-conversation .inbox-pane-col, .inbox-split:not(.has-conversation) .inbox-list-col { animation: none; }
+}
+/* Touch: "Why?" and the reply box were 24 and 38px tall; 44px each (.ob-launch: controls.css). */
+@media (pointer: coarse) {
+  .help-tip-label { min-height: 2.75rem; }
+  .cv-composer .cv-input { min-height: 2.75rem; }
+}

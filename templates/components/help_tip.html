@@ -1,12 +1,13 @@
 {% comment %}Small info tooltip (hover/focus/tap). Usage:
   include components/help_tip.html with text="Storage capped by your plan."
-With tip_label="Why?" the button says that instead of showing the question mark.{% endcomment %}
+With tip_label="Why?" the button says that beside the question mark, so it reads as a tip, not
+a link.{% endcomment %}
 <span x-data="{ open: false }" class="relative inline-flex align-middle">
   <button type="button" class="{% if tip_label %}help-tip-label{% else %}inline-flex items-center justify-center w-6 h-6 -m-1 text-ink-subtle hover:text-ink-muted{% endif %}"
           @mouseenter="open = true" @mouseleave="open = false"
           @focus="open = true" @blur="open = false" @click.prevent="open = !open"
           :aria-expanded="open"{% if not tip_label %} aria-label="More information"{% endif %}>
-    {% if tip_label %}{{ tip_label }}{% else %}{% include "components/icon.html" with name="question" class="w-4 h-4" %}{% endif %}
+    {% if tip_label %}{% include "components/icon.html" with name="question" class="w-3.5 h-3.5" %}<span>{{ tip_label }}</span>{% else %}{% include "components/icon.html" with name="question" class="w-4 h-4" %}{% endif %}
   </button>
   <span x-show="open" x-cloak x-transition.opacity role="tooltip"
         style="z-index: var(--z-dropdown)"

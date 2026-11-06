@@ -1,4 +1,4 @@
-/* Two-pane inbox (≥1024px): loads a conversation into #conversation-pane-inner instead of
+/* Two-pane inbox (≥768px, Phase 5F; it was 1024px): loads a conversation into #conversation-pane-inner instead of
  * navigating the whole page, so switching between conversations keeps the list in view. Below
  * that width there is no pane to load into, so a row's own href is left alone and the existing
  * full-page boosted navigation (apps/core/htmx.py) handles it exactly as it did before this file
@@ -10,7 +10,7 @@
  *     must close or re-open the pane to match it.
  *   - the open row stays highlighted across the list's 8-second poll, which re-renders it.
  *   - the tab title names the open conversation.
- *   - at ≥1024px the two columns fill the viewport and scroll on their own.
+ *   - with two panes the columns fill the viewport and scroll on their own.
  *   - the inbox's keys (onKey): J/K open the next or previous conversation as a peek, which is
  *     marked read only once it has stayed open PEEK_READ_MS; R reply, E close (with Undo), A
  *     assign to me, Esc back to the list. Never while typing or with a dialog open.
@@ -21,7 +21,7 @@
 (function () {
   "use strict";
 
-  var WIDE = "(min-width: 1024px)";
+  var WIDE = "(min-width: 768px)";
 
   function isWide() {
     return window.matchMedia(WIDE).matches;
@@ -348,12 +348,41 @@
     // history and title included.
     function onRetry() { if (lastLoad) openInPane(lastLoad.url, lastLoad.push); }
 
-    // The list poll re-renders every row; keep the open conversation highlighted.
-    function onAfterSwap(e) {
-      if (e.detail && e.detail.target === list && split.dataset.open) selectRow(rowFor(split.dataset.open));
+    // A row whose content changed on a refresh (a new message, a status, an assignee) is
+    // highlighted for a moment (.is-changed), so the eye finds it (Phase 5E). Read before the
+    // swap, compared after; never on a search's swap, which fades in as a whole (.is-fresh).
+    var before = null;
+    // Its words, without its times: "5m" becoming "6m" isn't news.
+    function rowText(r) {
+      var c = r.cloneNode(true);
+      c.querySelectorAll("time").forEach(function (t) { t.remove(); });
+      return c.textContent.replace(/\s+/g, " ");
+    }
+    function rowTexts() {
+      var map = {};
+      list.querySelectorAll(".inbox-row").forEach(function (r) { map[pathOf(r.href)] = rowText(r); });
+      return map;
+    }
+    function onBeforeListSwap(e) {
+      before = e.detail && e.detail.target === list && !list.classList.contains("is-fresh") ? rowTexts() : null;
     }
 
-    // At ≥1024px the split fills the viewport below it, so each column scrolls on its own
+    // The list poll re-renders every row; keep the open conversation highlighted.
+    function onAfterSwap(e) {
+      if (!e.detail || e.detail.target !== list) return;
+      if (split.dataset.open) selectRow(rowFor(split.dataset.open));
+      if (!before) return;
+      var was = before;
+      before = null;
+      list.querySelectorAll(".inbox-row").forEach(function (r) {
+        var path = pathOf(r.href);
+        if (path in was && was[path] === rowText(r)) return;
+        if (!(path in was) && Object.keys(was).length === 0) return;
+        r.classList.add("is-changed");
+      });
+    }
+
+    // With two panes the split fills the viewport below it, so each column scrolls on its own
     // instead of the page scrolling both. Measured, like chat.js `_fit`, because what sits
     // above it (header, banners) varies.
     function fit() {
@@ -376,7 +405,7 @@
 
     // The inbox's keys. Capture phase, so they're handled here before app.js's page shortcuts
     // (which skip a key already handled): there J/K only move focus between rows, which is
-    // still what they do below 1024px, where there's no pane to open into.
+    // still what they do below 768px, where there's no pane to open into.
     function typing(t) {
       return !!t && (t.isContentEditable || (t.matches && t.matches("input, textarea, select")));
     }
@@ -450,6 +479,7 @@
     window.addEventListener("popstate", onPopState);
     document.addEventListener("htmx:afterSwap", onAfterSwap);
     document.addEventListener("htmx:beforeSwap", onBeforeSwap);
+    document.addEventListener("htmx:beforeSwap", onBeforeListSwap);
     document.addEventListener("htmx:beforeRequest", onBeforeRequest);
     pane.addEventListener("inbox-pane-retry", onRetry);
     window.addEventListener("resize", fit, { passive: true });
@@ -464,6 +494,7 @@
       window.removeEventListener("popstate", onPopState);
       document.removeEventListener("htmx:afterSwap", onAfterSwap);
       document.removeEventListener("htmx:beforeSwap", onBeforeSwap);
+      document.removeEventListener("htmx:beforeSwap", onBeforeListSwap);
       document.removeEventListener("htmx:beforeRequest", onBeforeRequest);
       pane.removeEventListener("inbox-pane-retry", onRetry);
       window.removeEventListener("resize", fit);

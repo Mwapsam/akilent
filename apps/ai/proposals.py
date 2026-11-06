@@ -63,6 +63,18 @@ EXTRA_KINDS = ("tag", "track_interest", "follow_up")
 _SOURCES = ("contact.", "account.", "context.", "business.")
 
 
+# Spaces a model writes that read as no space at all: U+202F (narrow no-break) between words
+# showed "the Plumbing category" as "thePlumbingcategory". Each becomes a plain space. Zero-width
+# joiners are kept: emoji are built with them.
+_ODD_SPACES = re.compile(r"[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]")
+_INVISIBLE = re.compile(r"[\u200b\u2060\ufeff]")
+
+
+def plain_spaces(text: str) -> str:
+    """``text`` with the spaces a model writes made plain, and invisible characters removed."""
+    return _INVISIBLE.sub("", _ODD_SPACES.sub(" ", text or ""))
+
+
 class ProposalError(ValueError):
     """The model's answer can't be used. The message is safe to show to staff."""
 
@@ -181,7 +193,7 @@ def validate(
     reason = str(data.get("reason") or "").strip()[:300]
 
     if action == "reply":
-        text = str(payload.get("text") or "").strip()
+        text = plain_spaces(str(payload.get("text") or "")).strip()
         if not text:
             raise ProposalError("The AI proposed an empty reply.")
         if not window_open:
@@ -205,7 +217,7 @@ def validate(
         raw: dict = _raw_vars if isinstance(_raw_vars, dict) else {}
         variables: dict[str, str] = {}
         for blank in templates[name]:
-            value = str(raw.get(blank) or "").strip().strip("{} ").strip()
+            value = plain_spaces(str(raw.get(blank) or "")).strip().strip("{} ").strip()
             is_source = value.startswith(_SOURCES)
             if looks_like_name(blank) and not is_source:
                 # A name only ever comes from this customer's own details, whatever the AI wrote

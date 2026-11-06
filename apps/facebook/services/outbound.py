@@ -88,7 +88,7 @@ def _connection_for(outbound: FacebookOutboundMessage):
     return conn
 
 
-def send_outbound(outbound: FacebookOutboundMessage) -> bool:
+def send_outbound(outbound: FacebookOutboundMessage, *, claimed: bool = False) -> bool:
     """Send one outbox row. True when Meta accepted it."""
     from apps.facebook.providers.meta import provider_for
 
@@ -131,8 +131,22 @@ def send_outbound(outbound: FacebookOutboundMessage) -> bool:
             _notify_automation_failed(outbound)
             return False
 
-    outbound.status = FacebookOutboundMessage.Status.SENDING
-    outbound.save(update_fields=["status", "updated_at"])
+    # Claim the row before sending, as the outbox drain does (``claimed``: it already has).
+    # A direct send's row is QUEUED while the checks above run, and the drain may take it in
+    # that time; without this both sent it, and the customer got the message twice. Whoever
+    # moves it to SENDING first sends it; the other stops (the row isn't failed, so the
+    # inbox says it's on its way).
+    # updated_at is what the drain's stale-"sending" check measures from.
+    if claimed:
+        outbound.status = FacebookOutboundMessage.Status.SENDING
+        outbound.save(update_fields=["status", "updated_at"])
+    elif not FacebookOutboundMessage.objects.filter(
+        pk=outbound.pk, status=FacebookOutboundMessage.Status.QUEUED
+    ).update(status=FacebookOutboundMessage.Status.SENDING, updated_at=timezone.now()):
+        logger.info("send_outbound: outbound=%s is already being sent", outbound.pk)
+        return False
+    else:
+        outbound.status = FacebookOutboundMessage.Status.SENDING
 
     provider = provider_for(conn)
     if outbound.action_type == A.PRIVATE_REPLY:
@@ -463,7 +477,7 @@ def drain_outbox(now=None) -> dict:
     for outbound in FacebookOutboundMessage.objects.filter(
         pk__in=due_ids
     ).select_related("account"):
-        if send_outbound(outbound):
+        if send_outbound(outbound, claimed=True):
             sent += 1
         else:
             failed += 1

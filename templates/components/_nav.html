@@ -21,7 +21,7 @@ Arrow Up/Down move through every link in the nav; groups are labelling only.{% e
     {% if "instagram" in enabled_channels or "facebook" in enabled_channels %}
     {% include "components/_nav_item.html" with href="/inbox/comments/" label="Comments" icon="chat" match="inbox/comments instagram/rules" collapsible=collapsible %}
     {% endif %}
-    {% include "components/_nav_item.html" with href="/inbox/followups/" label="Follow-ups" icon="bell" match="inbox/followups" collapsible=collapsible badge_url="/inbox/followups/badge/" %}
+    {% include "components/_nav_item.html" with href="/inbox/followups/" label="Follow-ups" icon="calendar" match="inbox/followups" collapsible=collapsible badge_url="/inbox/followups/badge/" %}
     {% if released.support %}
     {% include "components/_nav_item.html" with href="/support/" label="Support" icon="life-buoy" match="support" collapsible=collapsible %}
     {% endif %}

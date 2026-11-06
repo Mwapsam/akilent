@@ -262,7 +262,7 @@ def _inbox_context(request, account) -> dict:
             _failure(_as_dict(c.preview_metadata))[0] if c.not_sent else ""
         )
         # Closed is the stored status. An open conversation the customer has gone quiet on
-        # (24h, and we spoke last) is "Quiet": it isn't closed, and stays in the open views.
+        # (24h, and we spoke last) is "Waiting on them": it isn't closed, and stays in the open views.
         c.is_closed = c.status == Conversation.Status.CLOSED
         c.is_quiet = (
             not c.is_closed
@@ -365,6 +365,10 @@ def inbox_feed(request):
         # changes on its own is still a change.
         html += render_to_string(
             "conversations/_inbox_views.html", {**context, "oob": True}, request=request
+        )
+        # The empty pane's "What needs you" counts (Phase 5D), the same way.
+        html += render_to_string(
+            "conversations/_inbox_today.html", {**context, "oob": True}, request=request
         )
         digest = hashlib.sha1(html.encode("utf-8"), usedforsecurity=False).hexdigest()[
             :12
@@ -604,7 +608,9 @@ def conversation_detail(request, public_id: str):
     in_pane = _in_pane(request)
     # A pane or details-panel action answers in place, so its confirmation rides along as a
     # toast; a plain form post shows it on the page it redirects to.
-    answers_in_place = in_pane or _panel_target(request)
+    # A quick action on a list row (close, assign to me, later): answered with its toast only.
+    row_action = request.method == "POST" and _row_action(request)
+    answers_in_place = in_pane or _panel_target(request) or row_action
     mutated = False
 
     if request.method == "POST":
@@ -845,6 +851,12 @@ def conversation_detail(request, public_id: str):
                     return JsonResponse({"ok": True, "unconfirmed": True})
                 return JsonResponse({"ok": True})
             mutated = True
+        if row_action:
+            # Nothing to swap: the toast (Close keeps its Undo) and the list re-read.
+            answer = HttpResponse(status=204)
+            _messages_to_toast(request, answer)
+            answer["HX-Trigger"] = "inbox-refresh"
+            return answer
         if _panel_target(request):
             return _panel_response(
                 request,
@@ -884,6 +896,9 @@ def conversation_detail(request, public_id: str):
         "lastId": thread[-1].id if thread else 0,
         # Older messages than the thread shows ("Show earlier messages", ?before=).
         "hasEarlier": has_earlier,
+        # Where "New messages" goes (Phase 5E): the first of what the customer wrote since the
+        # business last spoke, the same run _recent_thread keeps in the window.
+        **_first_unread(thread, unread=was_unread),
         # The browser's clock can be off; a first estimate of how far, refined by every
         # feed poll (which measures the round trip).
         "serverNow": now.isoformat(),
@@ -951,7 +966,7 @@ def conversation_detail(request, public_id: str):
 
     # A full page load of a conversation's own address (a reload after opening it in the
     # pane, a bookmark, a link, a new tab) shows it the way it was opened: inside the inbox,
-    # in the pane beside the list. Below lg the pane shows alone (.has-conversation), with
+    # in the pane beside the list. Below 768px the pane shows alone (.has-conversation), with
     # Back to the list, as the standalone page did.
     return render(
         request,
@@ -971,6 +986,11 @@ def _in_pane(request) -> bool:
         is_background(request)
         and request.headers.get("HX-Target") == "conversation-pane-inner"
     )
+
+
+def _row_action(request) -> bool:
+    """A quick action from a list row (_inbox_body.html), which only needs its toast back."""
+    return is_background(request) and request.headers.get("X-Inbox-Row") == "1"
 
 
 def _panel_target(request) -> bool:
@@ -1007,6 +1027,21 @@ def _recent_thread(conversation, *, unread: bool) -> tuple[list, bool]:
     return shown[::-1], has_earlier
 
 
+def _first_unread(thread: list, *, unread: bool) -> dict:
+    """``firstUnreadId`` and ``unreadCount`` for the thread's "New messages" divider: the
+    customer's messages after the business last spoke, when the conversation is unread."""
+    if not unread:
+        return {"firstUnreadId": None, "unreadCount": 0}
+    run = []
+    for m in reversed(thread):
+        if m.direction != Message.Direction.INBOUND:
+            break
+        run.append(m)
+    if not run:
+        return {"firstUnreadId": None, "unreadCount": 0}
+    return {"firstUnreadId": run[-1].id, "unreadCount": len(run)}
+
+
 def _failure(meta: dict | None) -> tuple[str | None, dict | None]:
     """Why a message didn't go, in plain words, and where to fix it when the cause is the
     WhatsApp account itself (billing, display name, connection) rather than this message.
@@ -1027,10 +1062,14 @@ def _message_json(m, conversation) -> dict:
     """A message as the thread (static/js/chat.js) shows it."""
     meta = m.metadata or {}
     reason, fix = _failure(meta)
+    from apps.ai.proposals import plain_spaces
+
     return {
         "id": m.id,
         "direction": m.direction,
-        "body": m.body,
+        # The AI's narrow no-break spaces made words run together; proposals.plain_spaces now
+        # stops them at the source, and what it sent before shows with plain spaces.
+        "body": plain_spaces(m.body) if meta.get("sent_by") == "ai" else m.body,
         "ts": m.timestamp.isoformat(),
         "status": m.status,
         "failureReason": reason,
@@ -1687,6 +1726,9 @@ def followups_badge(request):
     if account is None:
         return HttpResponse("")
     due = followups.due_for(request.user, account)
+    if request.GET.get("plain"):
+        # The empty pane's "Follow-ups due" (_inbox_today.html): the number alone, 0 included.
+        return HttpResponse(str(due))
     label = followup_copy.due_count(due)
     html = (
         f'<span class="inbox-tab-count inbox-tab-count--danger" '

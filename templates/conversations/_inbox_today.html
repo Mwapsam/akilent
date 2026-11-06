@@ -1,0 +1,16 @@
+{% comment %}What needs you today, in the empty pane (inbox.html, Phase 5D): each count a link to its
+view, from the counts the bar already has (views._inbox_context), so it costs no query of its
+own. Follow-ups due loads like the bar's badge (followups_badge). The list's poll sends this
+again out of band with the bar (views.inbox_feed), so the counts move with the rows. A line of
+the inbox's keys under it.{% endcomment %}
+{% url 'conversations:inbox' as inbox_url %}
+<div class="inbox-today" id="inbox-today"{% if oob %} hx-swap-oob="true"{% endif %}>
+  <p class="inbox-today-title">{% if needs_attention_count or missed_count or unassigned_count %}What needs you{% else %}Nothing is waiting on you{% endif %}</p>
+  <ul class="inbox-today-list">
+    <li><a href="{{ inbox_url }}{% querystring view='needs_attention' page=None h=None %}" class="inbox-today-item"><span class="inbox-today-n{% if needs_attention_count %} is-amber{% endif %}">{{ needs_attention_count }}</span>Waiting for a reply</a></li>
+    <li><a href="{{ inbox_url }}{% querystring view='missed' page=None h=None %}" class="inbox-today-item"><span class="inbox-today-n{% if missed_count %} is-red{% endif %}">{{ missed_count }}</span>Missed (over 24 hours)</a></li>
+    <li><a href="{{ inbox_url }}{% querystring view='unassigned' page=None h=None %}" class="inbox-today-item"><span class="inbox-today-n">{{ unassigned_count }}</span>Nobody assigned</a></li>
+    <li><a href="{% url 'conversations:followups_due' %}" class="inbox-today-item"><span class="inbox-today-n" hx-get="{% url 'conversations:followups_badge' %}?plain=1" hx-trigger="load" hx-swap="innerHTML" data-auto-refresh>·</span>Follow-ups to do</a></li>
+  </ul>
+  <p class="inbox-today-keys"><kbd>J</kbd><kbd>K</kbd> next, previous · <kbd>R</kbd> reply · <kbd>E</kbd> close · <kbd>A</kbd> assign to me · <kbd>?</kbd> all keys</p>
+</div>

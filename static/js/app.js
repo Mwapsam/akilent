@@ -995,7 +995,17 @@
     const own = ev == null; // htmx's own trigger (every/poll/load): no event at all
     const pushed = ev instanceof Event && !ev.isTrusted &&
       (ev.type.indexOf("sse:") === 0 || listed.indexOf(ev.type) !== -1);
-    if (own || pushed) xhr._akAuto = true;
+    if (own || pushed) {
+      xhr._akAuto = true;
+      // Nobody asked for it, so it never looks busy (app.css .ak-auto-request): the inbox
+      // list dimmed for the whole round trip of every 8-second check, even when nothing
+      // had changed, and couldn't be clicked meanwhile.
+      el.classList.add("ak-auto-request");
+    }
+  });
+  document.addEventListener("htmx:afterRequest", function (e) {
+    const el = e.detail.elt;
+    if (el && el.classList && e.detail.xhr && e.detail.xhr._akAuto) el.classList.remove("ak-auto-request");
   });
 
   // A follow-up form (data-followup-form) that went through tells the page, so the nav badge
