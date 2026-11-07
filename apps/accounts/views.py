@@ -845,14 +845,20 @@ def landing(request):
     from apps.billing import api as billing_api
     from apps.core.models import Testimonial
 
+    # The page needs nothing from the workspace but "Open dashboard": the nav and onboarding
+    # context processors skip it (accounts.context_processors._public_page).
+    request.public_page = True
     # Only plans signup can sell right now, so a "Choose" button never opens on nothing.
     offered, _ = signup_offer()
     plans = [p for p, _ in offered]
     # Each card is the plan's plan_card (what the signup wizard lists) plus what the landing
     # card leads with: its tagline, the three limits that differ and the annual price.
-    pricing = billing_api.pricing_table(offered)
+    data = billing_api.plan_data(
+        plans
+    )  # three queries for every plan, not three per plan
+    pricing = billing_api.pricing_table(offered, data=data)
     cards = [
-        {**_plan_card(p, channels), **extra}
+        {**billing_api.plan_card(p, channels=channels, data=data), **extra}
         for (p, channels), extra in zip(offered, pricing["cards"], strict=True)
     ]
     # The hero's "N-day free trial" line links to a plain /signup/, so it shows what that gives.

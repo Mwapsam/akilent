@@ -84,13 +84,24 @@ def test_cards_lead_with_who_its_for_and_the_limits_that_differ(client, plans):
     starter = next(c for c in cards if ">Starter<" in c)
     assert "For starter teams." in starter
     limits = re.findall(r"<li>([^<]+)</li>", starter.split('class="lp-limits"', 1)[1])
-    # Limits that differ between plans come first (conversations, history); every plan has one
-    # WhatsApp number, so that line only fills the third place.
-    assert limits == [
-        "1,000 conversations/mo",
-        "14 days of message history",
-        "1 WhatsApp number",
-    ]
+    # Limits that differ between plans come first; every plan has one WhatsApp number, so that
+    # line only fills a place. Message history isn't advertised: nothing enforces it.
+    assert limits[0] == "1,000 conversations/mo"
+    assert "1 WhatsApp number" in limits and len(limits) == 3
+    assert "message history" not in pricing
+    # Every card shows the same three limits, so the lines match across cards.
+    shapes = {
+        tuple(
+            re.sub(r"^[\d,]+ |^Unlimited ", "", line).rstrip("s")
+            for line in re.findall(
+                r"<li>([^<]+)</li>",
+                c.split('class="lp-limits"', 1)[1].split("</ul>", 1)[0],
+            )
+        )
+        for c in cards
+        if 'class="lp-limits"' in c and "lp-plan-ent" not in c[:40]
+    }
+    assert len(shapes) == 1, shapes
 
 
 @pytest.mark.django_db
@@ -129,7 +140,7 @@ def test_all_plans_include_only_what_every_plan_has(client, plans):
 
 
 @pytest.mark.django_db
-def test_the_comparison_table_lists_every_limit_and_feature(client, plans):
+def test_the_comparison_table_lists_only_what_differs(client, plans):
     trial = plans[0]
     ComingSoonFeature.objects.create(name="Website chat", is_active=True).plans.add(
         trial
@@ -140,16 +151,18 @@ def test_the_comparison_table_lists_every_limit_and_feature(client, plans):
     assert 'class="lp-compare-scroll table-scroll" role="region"' in table
     for label in (
         "Customer conversations per month",
-        "WhatsApp numbers",
-        "Message history",
-        "90 days",
         "Unlimited",
         "Automations",
-        "WhatsApp campaigns",
         "Website chat",
         "Coming soon",
     ):
         assert label in table, label
+    # The same on every plan: in "All plans include", not a row of identical cells.
+    for same in ("WhatsApp campaigns", "WhatsApp numbers", "Message history"):
+        assert same not in table, same
+    assert "per day per day" not in pricing and "per month per month" not in pricing
+    # Collapsed until opened.
+    assert '<details class="lp-compare lp-catalog lp-reveal">' in pricing
     for plan in plans:
         assert f'<th scope="col">{plan.name}</th>' in table
 
@@ -340,3 +353,31 @@ def test_share_and_search_tags(client, plans, settings):
     # The product markup is for the landing page only.
     help_html = client.get("/help/").content.decode()
     assert "SoftwareApplication" not in help_html
+
+
+@pytest.mark.django_db
+def test_the_inbox_tab_has_its_own_picture(client, plans):
+    """Platform -> Inbox no longer repeats the journey's Engage chat."""
+    html = client.get("/").content.decode()
+    assert html.count('data-art="thread"') == 1
+    assert 'data-art="assign"' in _section(html, "platform")
+
+
+@pytest.mark.django_db
+def test_the_page_stays_cheap_for_signed_in_visitors(
+    client, plans, django_user_model, django_assert_max_num_queries
+):
+    """Features, limits and coming-soon items load in three queries for every plan, and the
+    dashboard's nav and onboarding context processors skip the landing page."""
+    from apps.accounts.models import Account, Membership
+
+    user = django_user_model.objects.create_user("o", "o@example.com", "pw")
+    account = Account.objects.create(company_name="Shop")
+    Membership.objects.create(user=user, account=account, role=Membership.Role.OWNER)
+    client.force_login(user)
+    client.get("/")
+    with django_assert_max_num_queries(20):
+        resp = client.get("/")
+    assert "onboarding" not in resp.context
+    assert "locked_features" not in resp.context
+    assert "Open dashboard" in resp.content.decode()

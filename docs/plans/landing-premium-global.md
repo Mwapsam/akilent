@@ -208,7 +208,7 @@ Plan names and prices are unchanged; only how they're shown changed. Everything 
   - columns: Product, Use cases, Company (Contact sales, Book a demo, Help centre), Trust (Security, Status when set, Privacy, Terms, Data deletion);
   - social links come from new site settings (core migration 0021, Operator Console → Settings) and show only when set;
   - no About or Careers link, because neither page exists;
-  - "Verified Meta Tech Provider" sits in the company block.
+  - "Meta Tech Provider" sits in the company block.
 - **Share and search:**
   - `static/img/seo/og-default.png` didn't exist, so every page's `og:image` pointed at a missing file. There is now a 1200 × 630 image; its source is `tools/og/og-default.html`, redrawn with `node tools/og/render.mjs`.
   - `og:image:width`/`height`/`alt` and `twitter:image:alt` are added.
@@ -222,3 +222,23 @@ Plan names and prices are unchanged; only how they're shown changed. Everything 
 - **Plan taglines:** check each one under Operator Console → Plans.
 - **Social links:** add them under Operator Console → Settings → Branding.
 - **Enterprise:** when per-number routing, SSO, audit-log export or invoicing exist, add them to the Enterprise card and the claim register.
+
+## Review fixes (2026-11-07, after the live walkthrough)
+- **Product on the first screen:** from 1024 px the headline sits on two lines and the hero spacing is tighter.
+  - At 1150 × 631 the top 140 px of the product scene now shows on the first screen; before, it started 110 px below the fold.
+  - The hero went from 1,263 to 1,014 px tall.
+- **Pricing:**
+  - The comparison table keeps only rows that differ between plans (it was always collapsed; it's a closed `<details>`).
+  - What's the same everywhere (features and channels on every plan, limits unlimited on all) moves into "All plans include".
+  - "AI actions per day per day" is fixed.
+  - Every card shows the same three limits, so the lines match across cards.
+- **Message history taken off the landing page:** `Plan.log_retention_days` isn't enforced anywhere (no job deletes or hides old messages), so "N days of message history" advertised a limit that doesn't exist. It still appears in `plan_card`, which the signup wizard and the Billing Plans page use. Enforcing it or removing it there is your call.
+- **Inbox tab has its own picture** (`art/_assign.html`): the team inbox with the real filters, an owner on every chat and the "Assign to" menu. It no longer repeats the journey's Engage chat.
+- **Tech Provider wording:** now "Meta Tech Provider", without "Verified". Meta talks about business verification but publishes no "Verified Tech Provider" phrase.
+- **Claims checked:**
+  - **Backups:** nightly dump and a Sunday restore test are in `docker/backup/backup.sh` and the compose `backup` service. "Kept 30 days" is the S3 lifecycle rule (`docs/ops/backups.md`), which lives in AWS; `/manage/pilot/` shows the newest dump and the last restore test.
+  - **Region:** still left out, as you decided.
+- **Signed-in speed:**
+  - The page ran 39 queries signed in and 31 logged out (locally); now 13 and 10. Features, limits and coming-soon items load in three queries for every plan (`billing_api.plan_data`).
+  - The dashboard's nav and onboarding context processors skip the landing page (`request.public_page`). The onboarding one builds the whole setup state and was the likeliest cause of the 3.4 s wait.
+- **Footer Status and social links** show once `STATUS_PAGE_URL` and the social profiles (Operator Console → Settings) are set; nothing to build.

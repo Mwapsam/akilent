@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from django.db import transaction
+from django.db import models, transaction
 
 from apps.accounts.models import Account
 from apps.billing import features as catalog
@@ -570,7 +570,7 @@ _PRICING_LIMITS = (
 )
 
 
-def plan_card(plan: Plan, *, channels=None) -> dict:
+def plan_card(plan: Plan, *, channels=None, data=None) -> dict:
     """What a pricing card says about ``plan``: the channels it sells, its limits, the other
     features it includes in catalog order, and coming-soon teasers. The pricing page, signup
     wizard and landing page all use it, so what's advertised is what the plan gives.
@@ -579,7 +579,6 @@ def plan_card(plan: Plan, *, channels=None) -> dict:
 
     Every channel is listed the same way, on one line that comes first in ``limits``; channel
     features are left out of ``features`` so they aren't listed twice."""
-    from apps.billing.models import PlanLimit
     from apps.core.channels import (
         CHANNEL_FEATURE,
         feature_visible,
@@ -590,8 +589,9 @@ def plan_card(plan: Plan, *, channels=None) -> dict:
     if channels is None:
         channels = public_channels()
 
-    keys = set(PlanFeature.objects.filter(plan=plan).values_list("key", flat=True))
-    values = dict(PlanLimit.objects.filter(plan=plan).values_list("key", "value"))
+    # ``data``: plan_data() for several plans at once (the landing page), else this plan's own.
+    data = (data or plan_data([plan]))[plan.pk]
+    keys, values = data["keys"], data["values"]
     sellable = {f.key: f for f in catalog.matrix_features()}
     sold = [
         ch
@@ -622,18 +622,41 @@ def plan_card(plan: Plan, *, channels=None) -> dict:
         "limits": limits,
         "features": included,
         "feature_names": [f.name for f in included],
-        "coming_soon": list(plan.coming_soon.filter(is_active=True)),
+        "coming_soon": data["soon"],
     }
+
+
+def plan_data(plans) -> dict:
+    """Features, limits and coming-soon items for ``plans`` in three queries, keyed by plan id,
+    for ``plan_card`` and ``pricing_table`` (one query per plan each, otherwise)."""
+    from apps.billing.models import ComingSoonFeature, PlanLimit
+
+    ids = [p.pk for p in plans]
+    data: dict = {pk: {"keys": set(), "values": {}, "soon": []} for pk in ids}
+    for pk, key in PlanFeature.objects.filter(plan_id__in=ids).values_list(
+        "plan_id", "key"
+    ):
+        data[pk]["keys"].add(key)
+    for pk, key, value in PlanLimit.objects.filter(plan_id__in=ids).values_list(
+        "plan_id", "key", "value"
+    ):
+        data[pk]["values"][key] = value
+    for item in (
+        ComingSoonFeature.objects.filter(is_active=True, plans__in=ids)
+        .annotate(plan_pk=models.F("plans"))
+        .order_by("pk")
+    ):
+        data[item.plan_pk]["soon"].append(item)
+    return data
 
 
 # The limits a landing pricing card leads with, in order of preference. A card shows the first
 # three whose values differ between the plans on offer, so it says what changes from plan to
-# plan (every plan has one WhatsApp number today, so that row waits in the table until it
-# differs). "history" is the plan's message history in days.
+# plan; every card shows the same three. Message history isn't one: Plan.log_retention_days
+# isn't enforced anywhere, so the landing page doesn't advertise it as a difference.
 _CARD_LIMITS = (
     "conversations_month",
     "whatsapp_numbers",
-    "history",
     "team_members",
     "contacts",
     "automation_rules",
@@ -642,70 +665,58 @@ _CARD_LIMITS = (
 )
 
 
-def pricing_table(offered) -> dict:
+def pricing_table(offered, data=None) -> dict:
     """What the landing page's pricing section shows for ``offered``, a list of
     ``(plan, channels)`` pairs as ``accounts.forms.signup_offer`` returns them:
 
-    - ``cards``: per plan, its three limits that differ between plans, its tagline and the
-      monthly equivalent of the annual price (``pricing.price_for``, the price checkout charges);
-    - ``included``: names of the features every plan includes (the "All plans include" line);
-    - ``rows``: the comparison table, one row per limit, channel, feature and coming-soon item,
-      with a cell per plan: a number or text, True / False for a tick, or "soon";
+    - ``cards``: per plan, the same three limits (those that differ between plans first), its
+      tagline and the monthly equivalent of the annual price (``pricing.price_for``, the price
+      checkout charges);
+    - ``included``: what every plan has: features and channels on every plan, and limits that
+      are unlimited on all of them (the "All plans include" line);
+    - ``rows``: the comparison table, only what differs between plans: a row per limit, channel,
+      feature and coming-soon item, with a cell per plan (a number or text, True / False for a
+      tick, or "soon");
     - ``annual_save_pct``: the annual saving, from the same multiplier checkout uses.
 
-    Like ``plan_card``, it's read from the plans themselves, so nothing is promised that a
-    plan doesn't give."""
+    ``data`` is ``plan_data(plans)`` when the caller already has it. Like ``plan_card``, it's
+    read from the plans themselves, so nothing is promised that a plan doesn't give."""
     from decimal import ROUND_HALF_UP, Decimal
 
-    from apps.billing.models import PlanLimit, Subscription
+    from apps.billing.models import Subscription
     from apps.billing.pricing import multiplier_for, price_for
     from apps.core.channels import CHANNEL_FEATURE, feature_visible, limit_visible
 
     plans = [plan for plan, _ in offered]
+    if data is None:
+        data = plan_data(plans)
     shown = frozenset().union(*(set(channels) for _, channels in offered))
-    keys = {
-        plan.pk: set(
-            PlanFeature.objects.filter(plan=plan).values_list("key", flat=True)
-        )
-        for plan in plans
-    }
-    values = {
-        plan.pk: dict(PlanLimit.objects.filter(plan=plan).values_list("key", "value"))
-        for plan in plans
-    }
 
     def limit_value(plan, key) -> int:
-        if key == "history":
-            return plan.log_retention_days
-        return values[plan.pk].get(key, limit_catalog.get(key).default)
+        return data[plan.pk]["values"].get(key, limit_catalog.get(key).default)
 
-    def limit_text(value: int, key: str) -> str:
-        if key == "history":
-            return f"{value} days" if value else "—"
+    def limit_text(value: int) -> str:
         return "Unlimited" if value == limit_catalog.UNLIMITED else f"{value:,}"
 
+    def differs(cells) -> bool:
+        return len(set(cells)) > 1
+
     labels = {key: label for key, label, _ in _PRICING_LIMITS}
-    labels["history"] = "days of message history"
-    candidates = [k for k in _CARD_LIMITS if k == "history" or limit_visible(k, shown)]
-    differing = [k for k in candidates if len({limit_value(p, k) for p in plans}) > 1]
+    candidates = [k for k in _CARD_LIMITS if limit_visible(k, shown)]
+    differing = [k for k in candidates if differs([limit_value(p, k) for p in plans])]
     card_keys = (differing + [k for k in candidates if k not in differing])[:3]
 
     multiplier = multiplier_for(Subscription.ANNUALLY)
     cards = []
-    for plan, channels in offered:
-        lines = [
-            _limit_line(limit_value(plan, k), labels[k])
-            if k != "history"
-            else f"{plan.log_retention_days} days of message history"
-            for k in card_keys
-            if k != "history" or plan.log_retention_days
-        ]
+    for plan, _channels in offered:
         annual = price_for(plan, Subscription.ANNUALLY)
         cards.append(
             {
                 "plan": plan,
                 "tagline": plan.tagline,
-                "key_limits": lines,
+                "key_limits": [
+                    _limit_line(limit_value(plan, k), labels[k]) for k in card_keys
+                ],
                 "annual_total": annual,
                 "annual_monthly": (annual / 12).quantize(
                     Decimal("0.01"), rounding=ROUND_HALF_UP
@@ -716,46 +727,42 @@ def pricing_table(offered) -> dict:
     sellable = catalog.matrix_features()
     channel_keys = {CHANNEL_FEATURE[ch] for ch in CHANNEL_FEATURE if ch in shown}
     rows: list[dict] = []
-    per = {limit_catalog.MONTH: " per month", limit_catalog.DAY: " per day"}
-    for key, _, _ in _PRICING_LIMITS:
-        if limit_visible(key, shown):
-            limit = limit_catalog.get(key)
-            rows.append(
-                {
-                    "group": "Limits",
-                    "label": limit.name + per.get(limit.period, ""),
-                    "cells": [limit_text(limit_value(p, key), key) for p in plans],
-                }
-            )
-    rows.append(
-        {
-            "group": "Limits",
-            "label": "Message history",
-            "cells": [limit_text(p.log_retention_days, "history") for p in plans],
-        }
-    )
+    included: list[str] = []
+
+    def add(group: str, label: str, cells: list, same: str) -> None:
+        if differs(cells):
+            rows.append({"group": group, "label": label, "cells": cells})
+        elif same:
+            included.append(same)
+
     for f in sellable:
         if f.key in channel_keys:
-            rows.append(
-                {
-                    "group": "Channels",
-                    "label": f.name,
-                    "cells": [f.key in keys[p.pk] for p in plans],
-                }
-            )
-    included = []
+            cells = [f.key in data[p.pk]["keys"] for p in plans]
+            add("Channels", f.name, cells, f.name if all(cells) else "")
+    for key, _, _ in _PRICING_LIMITS:
+        if not limit_visible(key, shown):
+            continue
+        spec = limit_catalog.get(key)
+        values = [limit_value(p, key) for p in plans]
+        # "AI actions per day" already says its period; "Customer conversations" doesn't.
+        label = spec.name
+        if spec.period == limit_catalog.MONTH and "month" not in label.lower():
+            label += " per month"
+        elif spec.period == limit_catalog.DAY and "day" not in label.lower():
+            label += " per day"
+        same = ""
+        if values and values[0] == limit_catalog.UNLIMITED:
+            same = f"Unlimited {label[0].lower()}{label[1:]}"
+        add("Limits", label, [limit_text(v) for v in values], same)
     for f in sellable:
         if f.key in catalog.CHANNEL_FEATURES or not feature_visible(f.key, shown):
             continue
-        cells = [f.key in keys[p.pk] for p in plans]
-        if not any(cells):
-            continue
-        if all(cells):
-            included.append(f.name)
-        rows.append({"group": "Features", "label": f.name, "cells": cells})
+        cells = [f.key in data[p.pk]["keys"] for p in plans]
+        if any(cells):
+            add("Features", f.name, cells, f.name)
     soon: dict[str, set[int]] = {}
     for plan in plans:
-        for item in plan.coming_soon.filter(is_active=True):
+        for item in data[plan.pk]["soon"]:
             soon.setdefault(item.name, set()).add(plan.pk)
     for name, plan_ids in soon.items():
         rows.append(

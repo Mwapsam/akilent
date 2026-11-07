@@ -207,7 +207,7 @@ Evidence is `path::text`: the file must exist and contain the text.
 | mfa | Capability | Two-step sign-in with an authenticator app, an email code or a passkey, with recovery codes | apps/accounts/models.py::class PasskeyCredential(Device) |
 | support-access | Mechanism | Akilent support can only view a workspace read-only, for up to an hour, and each view is logged | apps/core/middleware.py::class ViewAsReadOnlyMiddleware |
 | incident-response | Mechanism | Written security-incident runbook; affected customers are told directly | docs/ops/incidents/INC-006-security-incident.md::Notify affected pilot customers promptly and directly |
-| meta-tech-provider | Mechanism | Akilent is a verified Meta Tech Provider; businesses connect through Meta's own sign-in (Embedded Signup) | docs/ops/security-facts.md::Verified Meta Tech Provider (confirmed by owner) |
+| meta-tech-provider | Mechanism | Akilent is a Meta Tech Provider; businesses connect through Meta's own sign-in (Embedded Signup) | docs/ops/security-facts.md::Meta Tech Provider (confirmed by owner) |
 | subprocessors | Mechanism | The service providers that process data for Akilent, listed on the Security page | templates/legal/security.html::id="subprocessors" |
 | trial | Capability | N-day free trial, no card required (N from the signup plan) | apps/billing/api.py::def default_signup_trial |
 | cancel | Capability | Cancel from Billing at any time | apps/billing/views.py::def cancel_subscription |

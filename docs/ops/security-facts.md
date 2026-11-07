@@ -15,5 +15,5 @@ the same change.**
 | Encryption at rest | EBS encryption is on for the production database volume. Backups use S3 server-side encryption (SSE-S3, `docs/ops/backups.md`). Channel access tokens are also encrypted field by field (`apps/accounts/fields.py`). | Owner, 2026-11-07 |
 | Backups | Running in production: nightly at 02:00 UTC, kept 30 days, restore-tested every Sunday (`docker/backup/`, `docs/ops/backups.md`). | Owner, 2026-11-07 |
 | GDPR / data processing agreement | **Not offered yet.** Leave GDPR and DPA wording off public pages until a DPA exists. | Owner, 2026-11-07 |
-| Meta Tech Provider | Verified Meta Tech Provider (confirmed by owner). Shown as plain text ("Verified Meta Tech Provider"), never with Meta's or WhatsApp's logo: Meta publishes no Tech Provider badge and its brand rules forbid implying endorsement. | 2026-11-07 |
+| Meta Tech Provider | Meta Tech Provider (confirmed by owner). Shown as plain text ("Meta Tech Provider"), never with Meta's or WhatsApp's logo: Meta publishes no Tech Provider badge and its brand rules forbid implying endorsement. | 2026-11-07 |
 | Status page | Linked only when `STATUS_PAGE_URL` is set (a hosted status page). | 2026-11-07 |

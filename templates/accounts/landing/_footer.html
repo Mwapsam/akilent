@@ -3,7 +3,7 @@
   Footer: the company block (positioning line, contact, address, social profiles from Operator
   Console → Settings), then Product, Use cases, Company and Trust. Only pages that exist are
   linked: there is no About or Careers page yet, Status shows once STATUS_PAGE_URL is set.
-  "Verified Meta Tech Provider" is plain text: Meta publishes no badge, and its marks may not suggest
+  "Meta Tech Provider" is plain text: Meta publishes no badge, and its marks may not suggest
   endorsement.
 {% endcomment %}
 <footer class="lp-footer lp-navy">
@@ -15,7 +15,7 @@
         {% if site.support_email %}<a href="mailto:{{ site.support_email }}">{{ site.support_email }}</a><br>{% endif %}
         Lusaka, Zambia
       </p>
-      <p class="lp-small lp-lo lp-mt" data-claim="meta-tech-provider">Verified Meta Tech Provider</p>
+      <p class="lp-small lp-lo lp-mt" data-claim="meta-tech-provider">Meta Tech Provider</p>
       {% if site.linkedin_url or site.x_url or site.instagram_url or site.facebook_url %}
       <ul class="lp-social" aria-label="{{ app }} on social media">
         {% if site.linkedin_url %}<li><a href="{{ site.linkedin_url }}" rel="noopener me">LinkedIn</a></li>{% endif %}

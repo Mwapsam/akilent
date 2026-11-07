@@ -218,6 +218,6 @@ def test_meta_tech_provider_is_stated_in_plain_text(client, plans, settings):
         assert 'data-claim="meta-tech-provider"' in part
         assert "Meta Tech Provider" in part
     footer = html.split('<footer class="lp-footer', 1)[1]
-    assert "Verified Meta Tech Provider" in footer
+    assert "Meta Tech Provider" in footer
     assert not re.search(r"<img[^>]+(meta|whatsapp)[^>]*>", html, re.I)
-    assert "verified Meta Tech Provider" in client.get("/security/").content.decode()
+    assert "Meta Tech Provider" in client.get("/security/").content.decode()

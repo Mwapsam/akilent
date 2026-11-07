@@ -1,3 +1,9 @@
+def _public_page(request) -> bool:
+    """A marketing page (the landing page sets ``request.public_page``) shows nothing from the
+    workspace beyond "Open dashboard", so it skips the dashboard's nav and onboarding work."""
+    return getattr(request, "public_page", False)
+
+
 def plan_features(request):
     """What the nav needs from the business's entitlements:
 
@@ -10,7 +16,7 @@ def plan_features(request):
     Defensive like ``onboarding_status``: never breaks rendering.
     """
     user = getattr(request, "user", None)
-    if not user or not user.is_authenticated:
+    if not user or not user.is_authenticated or _public_page(request):
         return {}
     try:
         from apps.accounts.utils import get_current_account
@@ -100,7 +106,7 @@ def onboarding_status(request):
     from apps.core.htmx import is_background
 
     # HTMX fragments never render the widget or the tour, and some are polled.
-    if is_background(request):
+    if is_background(request) or _public_page(request):
         return {}
     try:
         from apps.accounts import onboarding as ob
