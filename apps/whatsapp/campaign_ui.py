@@ -284,9 +284,9 @@ SUMMARY_WEEKS = 8
 def summary(account) -> dict:
     """The list page's tiles: what campaign messages did this month, each with its trend over
     the last ``SUMMARY_WEEKS`` weeks, in the workspace's own days. ``{"tiles", "replies",
-    "since"}``: ``replies`` is who replied per campaign, counted over every message since
-    ``since``, so a campaign that started after it needs no count of its own
-    (reply_counts_for). One query (plus the workspace's timezone)."""
+    "orders", "since"}``: ``replies`` and ``orders`` are per campaign, counted over every
+    message and order since ``since``, so a campaign that started after it needs no count of
+    its own (reply_counts_for, orders_for). Two queries (plus the workspace's timezone)."""
     from collections import Counter
     from datetime import datetime, time, timedelta
 
@@ -294,7 +294,11 @@ def summary(account) -> dict:
 
     from apps.accounts.business_hours import workspace_zone
     from apps.core.charts import kpi_spark
-    from apps.whatsapp.campaigns import REPLY_DAYS, activity_in_ranges
+    from apps.whatsapp.campaigns import (
+        REPLY_DAYS,
+        activity_in_ranges,
+        campaign_orders_since,
+    )
 
     zone = workspace_zone(account)
     today = djtz.localtime(djtz.now(), zone).date()
@@ -376,7 +380,41 @@ def summary(account) -> dict:
             "trend": kpi_spark([f["replied"] for f in w], labels),
         },
     ]
-    return {"tiles": tiles, "replies": dict(replies), "since": since}
+    # Orders credited to a campaign (a reply to its own message started the chat), by
+    # when the order was made, in the same weeks and month.
+    orders_month, orders_paid = 0, 0
+    orders_weeks = [0] * SUMMARY_WEEKS
+    by_campaign: dict = {}
+    for row in campaign_orders_since(account, since):
+        made = row["order__created_at"]
+        mine = by_campaign.setdefault(
+            row["source_whatsapp_campaign_id"], {"orders": 0, "paid": 0}
+        )
+        mine["orders"] += 1
+        mine["paid"] += 1 if row["paid"] else 0
+        if made >= ranges["month"][0]:
+            orders_month += 1
+            orders_paid += 1 if row["paid"] else 0
+        for i in range(SUMMARY_WEEKS):
+            start, end = ranges[f"w{i}"]
+            if start <= made < end:
+                orders_weeks[i] += 1
+    tiles.append(
+        {
+            "key": "orders",
+            "label": "Orders this month",
+            "value": orders_month,
+            "note": f"{orders_paid} paid · from customers who replied to a campaign",
+            "spark_label": "Orders in the week",
+            "trend": kpi_spark(orders_weeks, labels),
+        }
+    )
+    return {
+        "tiles": tiles,
+        "replies": dict(replies),
+        "orders": by_campaign,
+        "since": since,
+    }
 
 
 def starting_points(templates, n: int = 3) -> list:

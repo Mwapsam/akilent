@@ -2384,3 +2384,39 @@ Plan: the Campaigns plan of 2026-11-06, Phase G (the last before H).
   - **Tests:** `test_campaign_look.py` (5): the header on every page; the switch; local times on the campaign and the list; replies reading the same inside and outside the tiles' weeks; a one-time-code template alone not being ready. Budgets for four pages.
   - **Browser sweep** (`campaigns_qa.mjs`): `QA_SETTINGS` (new: the switch, its 48 px row, the times hiding when off, navy Save), `QA_LIST`, `QA_DETAIL`, `QA_WIZARD`, `QA_BLANKS` and `QA_PATHS`. Six widths in both themes, with no sideways scroll, no contrast failures, no overflow and no small targets among Campaigns' own controls.
   - **`area_scan /campaigns`:** 6 pages at 360 and 1280 in both themes, 0 issues. Under Git Bash it needs `MSYS_NO_PATHCONV=1` and Windows paths; otherwise `/campaigns` becomes a Windows path and nothing is scanned.
+
+### Entry 41: Campaigns Phase H, chats and orders credited to a campaign (2026-11-07)
+Plan: the Campaigns plan of 2026-11-06, Phase H (the user's decision: replies now, sales only from a tracked signal).
+
+- **The signal:** WhatsApp's own reply reference, not a code added to messages. When a customer swipes to reply to a campaign's message, or taps one of its buttons, the webhook carries `context.id`, the id of the message answered. Every inbound webhook is already stored (`MessageLog.raw_payload`), and every sent campaign message keeps its WhatsApp id, so no template, button or sending change was needed.
+  - `whatsapp.interactive.replied_to` reads the id.
+  - `conversations.entry_points.match_campaign_reply`, run with the other inbound hooks and never raising, links the conversation to that campaign once.
+  - A message typed on its own is a reply (Phase D's Replied), never a credit, even minutes later.
+  - Another workspace's campaign message is never matched.
+- **Migration** (`conversations/0029_entry_point_whatsapp_campaign`):
+  - `ConversationEntryPoint.post` becomes optional, with a new `whatsapp_campaign` and kind `campaign_reply`;
+  - a check that every entry point names a post or a campaign, and one entry per conversation and campaign;
+  - `ConversationAttribution.source_whatsapp_campaign`, filled from the first entry point when a lead, deal or order is made;
+  - the "a guess credits nothing" constraint now also forbids a guessed conversation naming a campaign.
+
+  Existing rows all have a post, so the check holds on existing data. Applied to the dev SQLite database only.
+- **Where it shows:**
+  - the list's **Orders** column (count, with the paid count on hover) and an **Orders this month** tile with its 8-week trend (the tiles are now five: three across from 1024 px, five from 1280, the last campaign full-width on phones);
+  - an order's or lead's "Where this came from" now says **From a WhatsApp campaign: <name>**, "The customer replied to the campaign's message", linked to it.
+
+  Help tips and the help article (`whatsapp-campaign-lists`, "Replies and orders") say what counts and what doesn't. `docs/marketing/messaging.md` adds the third kind of evidence and a `campaign-orders` claim row (the claims test passes).
+- **Content Studio's report keeps its meaning** (`publishing.results.journey`): its chats and "tracking on" read only a post's entry points, and a chat a campaign started still counts among the chats no post is credited with (it used to require no entry point at all).
+- **Speed:** the list's budget goes from 15 to 16 queries: orders for the tile, with the column reusing them for campaigns inside the tiles' weeks (as Replied does) and counting only older ones on their own.
+- **Verification:** `test_campaign_credit.py` (12):
+  - the answered id read from the webhook;
+  - a reply to the campaign message linking the chat once;
+  - a typed message, a reply to another message, and another workspace's campaign not linking;
+  - an entry point with neither a post nor a campaign refused by the database;
+  - an order from that chat credited (and counted, with paid);
+  - an order from a chat that only wrote not credited;
+  - a guessed conversation naming a campaign refused by the database;
+  - the list's column and tile;
+  - Content Studio's chats and untracked chats;
+  - the order page's "From a WhatsApp campaign".
+
+  `campaigns_qa.mjs QA_LIST` with five tiles: six widths in both themes, no problems (a temporary third campaign in the dev workspace, deleted after).

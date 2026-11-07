@@ -58,10 +58,10 @@
   {% comment %}This month at a glance, from campaigns that went out (campaign_ui.summary); until
   there are enough for a trend, how the last one went and where to start the next.{% endcomment %}
   {% if whatsapp_summary %}
-  <section aria-label="Campaign messages this month" class="kpi-row mb-4" data-campaign-tiles>
+  <section aria-label="Campaign messages this month" class="kpi-row kpi-row--campaigns mb-4" data-campaign-tiles>
     {% for k in whatsapp_summary %}
     <div class="kpi" data-kpi="{{ k.key }}">
-      <p class="kpi-label">{{ k.label }}{% if k.key == "replied" %} {% include "components/help_tip.html" with text="Customers who wrote to you within 3 days of their campaign message. It counts replies, not why they wrote." %}{% endif %}</p>
+      <p class="kpi-label">{{ k.label }}{% if k.key == "replied" %} {% include "components/help_tip.html" with text="Customers who wrote to you within 3 days of their campaign message. It counts replies, not why they wrote." %}{% elif k.key == "orders" %} {% include "components/help_tip.html" with text="Orders from chats that began with a reply to a campaign's own message: the customer swiped to reply to it or tapped its button. A customer who just writes later isn't counted." %}{% endif %}</p>
       <p class="kpi-value tabular-nums">{{ k.value }}</p>
       <p class="kpi-note">{{ k.note }}</p>
       {% if k.trend.end %}{% include "publishing/_kpi_spark.html" with trend=k.trend label=k.spark_label %}{% endif %}
@@ -92,6 +92,7 @@
         <th><span title="Opened by the customer, of the messages prepared">Read</span></th>
         <th><span title="WhatsApp couldn't send it, of the messages prepared">Failed</span></th>
         <th>Replied {% include "components/help_tip.html" with text="Customers who wrote to you within 3 days of their campaign message, of the messages prepared. It counts replies, not why they wrote." %}</th>
+        <th>Orders {% include "components/help_tip.html" with text="Orders from chats that began with a reply to this campaign's own message: the customer swiped to reply to it or tapped its button. A customer who just writes later isn't counted." %}</th>
         <th></th>
       </tr></thead>
       <tbody>
@@ -103,13 +104,14 @@
           </td>
           <td data-label="Status" class="whitespace-nowrap">{% include "components/status.html" with state=c.state badge=True %}</td>
           {% if c.state == 'draft' or c.state == 'scheduled' %}
-          <td data-label="Sent" class="text-ink-subtle" colspan="5">Not sent yet</td>
+          <td data-label="Sent" class="text-ink-subtle" colspan="6">Not sent yet</td>
           {% else %}
           <td data-label="Sent" class="tabular-nums whitespace-nowrap" title="{{ c.rates.sent }} accepted by WhatsApp of {{ c.recipient_count }} on the list{% if c.skipped_count %}; {{ c.skipped_count }} not sent{% endif %}">{{ c.rates.sent }}<span class="text-ink-subtle"> of {{ c.recipient_count }}</span></td>
           <td data-label="Delivered" class="tabular-nums" title="{{ c.rates.delivered }} of {{ c.rates.prepared }}">{{ c.rates.pct.delivered|default:"—" }}</td>
           <td data-label="Read" class="tabular-nums" title="{{ c.rates.read }} of {{ c.rates.prepared }}">{{ c.rates.pct.read|default:"—" }}</td>
           <td data-label="Failed" class="tabular-nums" title="{{ c.rates.failed }} of {{ c.rates.prepared }}">{{ c.rates.pct.failed|default:"—" }}</td>
           <td data-label="Replied" class="tabular-nums" title="{{ c.rates.replied }} of {{ c.rates.prepared }}">{{ c.rates.pct.replied|default:"—" }}</td>
+          <td data-label="Orders" class="tabular-nums" title="{{ c.orders.paid }} paid">{{ c.orders.orders }}</td>
           {% endif %}
           <td class="text-right"><a href="{% url 'whatsapp-campaign-detail' c.pk %}" data-skeleton="campaign" class="btn btn-ghost btn-sm">View</a></td>
         </tr>

@@ -266,6 +266,10 @@
 .kpi-value { font-size: 1.625rem; line-height: 2rem; font-weight: 600; letter-spacing: -.02em; color: var(--color-ink); }
 .kpi-value-more { font-size: .9375rem; font-weight: 600; color: var(--color-ink); }
 .kpi-note { font-size: .75rem; color: var(--color-ink-subtle); }
+/* Campaigns' five tiles (email/campaigns.html): three across, then all five on a wide screen. */
+@media (max-width: 1023px) { .kpi-row--campaigns > [data-kpi="latest"] { grid-column: 1 / -1; } }
+@media (min-width: 1024px) { .kpi-row--campaigns { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1280px) { .kpi-row--campaigns { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 .kpi-delta { font-size: .75rem; font-weight: 500; color: var(--color-ink-subtle); }
 .kpi-delta.is-up { color: var(--tone-teal-fg); }
 .kpi-delta.is-down { color: var(--tone-coral-fg); }

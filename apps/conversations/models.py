@@ -967,17 +967,21 @@ class FollowUp(models.Model):
 
 
 class ConversationEntryPoint(models.Model):
-    """Explicit evidence that a published post started (or fed) a conversation.
+    """Explicit evidence that a published post or a WhatsApp campaign started (or fed) a
+    conversation.
 
-    Made only from a hard signal: the customer sent a post's tracked-link ref code, or
-    a private reply to a comment on the post opened the DM. Never inferred from timing,
-    so a chat with no entry point stays unattributed.
+    Made only from a hard signal: the customer sent a post's tracked-link ref code, a
+    private reply to a comment on the post opened the DM, or the customer replied to a
+    campaign's message itself (WhatsApp says which message a reply or a tapped button
+    answers). Never inferred from timing, so a chat with no entry point stays unattributed.
+    Each names a post or a WhatsApp campaign.
     """
 
     class Kind(models.TextChoices):
         TRACKED_LINK = "tracked_link", "Tracked link"
         IG_COMMENT = "ig_comment", "Instagram comment"
         FB_COMMENT = "fb_comment", "Facebook comment"
+        CAMPAIGN_REPLY = "campaign_reply", "Reply to a WhatsApp campaign"
 
     account = models.ForeignKey(
         "accounts.Account", on_delete=models.CASCADE, related_name="entry_points"
@@ -996,6 +1000,16 @@ class ConversationEntryPoint(models.Model):
     post = models.ForeignKey(
         "publishing.ContentPost",
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="entry_points",
+    )
+    # The WhatsApp campaign whose message the customer replied to (CAMPAIGN_REPLY).
+    whatsapp_campaign = models.ForeignKey(
+        "whatsapp.WhatsAppCampaign",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name="entry_points",
     )
     variant = models.ForeignKey(
@@ -1036,10 +1050,22 @@ class ConversationEntryPoint(models.Model):
                 fields=["conversation", "post", "kind"],
                 name="one_entry_point_per_post_and_kind",
             ),
+            models.UniqueConstraint(
+                fields=["conversation", "whatsapp_campaign"],
+                condition=models.Q(whatsapp_campaign__isnull=False),
+                name="one_entry_point_per_whatsapp_campaign",
+            ),
+            models.CheckConstraint(
+                name="entry_point_names_a_post_or_campaign",
+                condition=models.Q(post__isnull=False)
+                | models.Q(whatsapp_campaign__isnull=False),
+            ),
         ]
 
     def __str__(self) -> str:
-        return f"{self.conversation} ← {self.post} ({self.kind})"
+        return (
+            f"{self.conversation} ← {self.post or self.whatsapp_campaign} ({self.kind})"
+        )
 
 
 class ConversationAttribution(models.Model):
@@ -1133,6 +1159,14 @@ class ConversationAttribution(models.Model):
         blank=True,
         related_name="attributions",
     )
+    # The WhatsApp campaign the customer replied to, copied from the first entry point.
+    source_whatsapp_campaign = models.ForeignKey(
+        "whatsapp.WhatsAppCampaign",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="attributions",
+    )
     attributed_at = models.DateTimeField(auto_now_add=True)
     metadata = models.JSONField(default=dict, blank=True)
 
@@ -1153,7 +1187,8 @@ class ConversationAttribution(models.Model):
             ),
             # A guessed conversation credits nothing: no post, channel, campaign, entry
             # point or insight. This is the one guarantee behind every report that reads
-            # ``source_post`` (rows written before it were cleared by migration 0025).
+            # ``source_post`` or ``source_whatsapp_campaign`` (rows written before it were
+            # cleared by migration 0025).
             models.CheckConstraint(
                 name="attribution_guess_credits_nothing",
                 condition=(
@@ -1162,6 +1197,7 @@ class ConversationAttribution(models.Model):
                         source_post__isnull=True,
                         source_variant__isnull=True,
                         source_campaign__isnull=True,
+                        source_whatsapp_campaign__isnull=True,
                         entry_point__isnull=True,
                         originated_from__isnull=True,
                     )

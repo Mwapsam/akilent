@@ -17,7 +17,7 @@ from apps.whatsapp.tests.test_campaign_results import (  # noqa: F401
 pytestmark = pytest.mark.django_db
 
 BUDGET = {
-    "list": 15,
+    "list": 16,
     "detail": 19,
     "new": 17,
     "settings": 13,
@@ -30,6 +30,8 @@ BUDGET = {
 # count by status and skip reason, one "still waiting" check for Pause and Cancel, with the
 # workspace's timezone added for local times); new 19 -> 17 (readiness from the templates
 # already loaded); settings measured at 13.
+# list 15 -> 16 (Phase H, new content): orders credited to a campaign, for the Orders tile and
+# column (the column reuses the tile's for recent campaigns, as Replied does).
 
 
 def _urls(campaign):

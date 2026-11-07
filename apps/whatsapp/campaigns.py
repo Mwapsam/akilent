@@ -1087,6 +1087,64 @@ def reply_counts_for(campaign_ids) -> dict:
     return out
 
 
+def orders_for(campaign_ids) -> dict:
+    """``{campaign_id: {"orders", "paid"}}``: orders credited to each campaign, in one grouped
+    query. Credited means the order's conversation started with a reply to the campaign's own
+    message (conversations.entry_points.match_campaign_reply), recorded when the order was
+    made (ConversationAttribution.source_whatsapp_campaign); never from timing."""
+    from django.db.models import Count, Q
+
+    from apps.commerce.models import Order
+    from apps.conversations.models import ConversationAttribution
+
+    ids = list(campaign_ids)
+    out = {cid: {"orders": 0, "paid": 0} for cid in ids}
+    if not ids:
+        return out
+    rows = (
+        ConversationAttribution.objects.filter(
+            source_whatsapp_campaign_id__in=ids, order__isnull=False
+        )
+        .values("source_whatsapp_campaign_id")
+        .annotate(
+            orders=Count("id"),
+            paid=Count("id", filter=Q(order__status=Order.Status.PAID)),
+        )
+    )
+    for row in rows:
+        out[row["source_whatsapp_campaign_id"]] = {
+            "orders": row["orders"],
+            "paid": row["paid"],
+        }
+    return out
+
+
+def campaign_orders_since(account, since) -> list:
+    """Orders credited to any of the account's WhatsApp campaigns, made since ``since``:
+    ``[{"order__created_at", "paid", "source_whatsapp_campaign_id"}]``, for the list's
+    Orders tile (and, for campaigns that started since then, its Orders column). One query."""
+    from django.db.models import Case, Value, When
+
+    from apps.commerce.models import Order
+    from apps.conversations.models import ConversationAttribution
+
+    return list(
+        ConversationAttribution.objects.filter(
+            account=account,
+            source_whatsapp_campaign__isnull=False,
+            order__isnull=False,
+            order__created_at__gte=since,
+        )
+        .annotate(
+            paid=Case(
+                When(order__status=Order.Status.PAID, then=Value(True)),
+                default=Value(False),
+            )
+        )
+        .values("order__created_at", "paid", "source_whatsapp_campaign_id")
+    )
+
+
 def activity_in_ranges(account, since, ranges: dict) -> list:
     """The account's campaign messages since ``since`` (by when they went to WhatsApp, or were
     prepared if not yet), grouped by campaign, delivery bucket and whether they were replied to,

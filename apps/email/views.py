@@ -1738,6 +1738,7 @@ def campaigns_list(request):
         from apps.whatsapp.campaigns import (
             delivery_stats_for,
             failure_groups,
+            orders_for,
             reply_counts_for,
         )
         from apps.whatsapp.models import WhatsAppCampaign
@@ -1787,22 +1788,29 @@ def campaigns_list(request):
         # Who replied: the tiles' query counts it for every message in their 8 weeks, so a
         # campaign that started inside them needs no count of its own.
         replies: dict = {}
+        orders: dict = {}
         if went_out >= _TILES_FROM:
             tiles = summary(account)
             whatsapp_summary = tiles["tiles"]
-            replies = {
-                c.pk: tiles["replies"].get(c.pk, 0)
+            recent = [
+                c.pk
                 for c in whatsapp_campaigns
                 if c.started_at and c.started_at >= tiles["since"]
+            ]
+            replies = {pk: tiles["replies"].get(pk, 0) for pk in recent}
+            orders = {
+                pk: tiles["orders"].get(pk, {"orders": 0, "paid": 0}) for pk in recent
             }
         elif whatsapp_any or whatsapp_readiness.ready:  # type: ignore[union-attr]
             whatsapp_starts = starting_points(template_options(account))
         replies.update(reply_counts_for([pk for pk in ids if pk not in replies]))
+        orders.update(orders_for([pk for pk in ids if pk not in orders]))
         for c in whatsapp_campaigns:
             c.stats = stats[c.pk]  # type: ignore[attr-defined]
             c.state = lifecycle_state(c, c.stats)  # type: ignore[attr-defined]
             c.when_label = local_label(c.scheduled_at, c.timezone)  # type: ignore[attr-defined]
             c.rates = rates(c.stats, replies[c.pk])  # type: ignore[attr-defined]
+            c.orders = orders[c.pk]  # type: ignore[attr-defined]
         if latest is not None:
             latest.state = lifecycle_state(latest, stats[latest.pk])  # type: ignore[attr-defined]
             latest.outcome = (  # type: ignore[attr-defined]

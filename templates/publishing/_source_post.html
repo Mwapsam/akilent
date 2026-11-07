@@ -1,15 +1,17 @@
 {% load publishing_filters %}{% comment %}
 Where a lead or order came from, and how sure Akilent is. Expects ``subject`` (a Lead or Order).
 Shown only to a business that can publish posts (same gate as the Insights journey), or when
-a post is already credited. Three states, never blurred:
+a post or a WhatsApp campaign is already credited. Four states, never blurred:
 - from a post: the lead or order was made from a named chat (by the team or an automation)
   and a tracked post started that chat;
+- from a WhatsApp campaign: the same, and the chat started with a reply to the campaign's
+  own message (conversations.entry_points.match_campaign_reply);
 - a guess: no chat was named, so Akilent linked the customer's latest chat; no post is credited;
 - not from a tracked post: a named chat no post started, or no chat at all.
 {% endcomment %}
 {% post_tracking_on subject.account as tracking_on %}
-{% with att=subject.attribution %}{% if tracking_on or att.credits_post %}
-<div class="pt-2 border-t border-border" data-attribution="{% if att.credits_post %}post{% elif att.is_guess %}guess{% else %}none{% endif %}">
+{% with att=subject.attribution %}{% if tracking_on or att.credits_post or att.source_whatsapp_campaign_id %}
+<div class="pt-2 border-t border-border" data-attribution="{% if att.credits_post %}post{% elif att.source_whatsapp_campaign_id %}campaign{% elif att.is_guess %}guess{% else %}none{% endif %}">
   <p class="text-ink-subtle mb-1">Where this came from</p>
   {% if att.credits_post %}
   <p class="font-medium text-ink">From a post:
@@ -21,6 +23,11 @@ a post is already credited. Three states, never blurred:
   {% with basis=att.entry_point|credit_label %}{% if basis %}
   <p class="text-xs tone-amber-fg" data-credit-basis>{{ basis|capfirst }}.</p>
   {% endif %}{% endwith %}
+  {% elif att.source_whatsapp_campaign_id %}
+  <p class="font-medium text-ink">From a WhatsApp campaign:
+    <a href="{% url 'whatsapp-campaign-detail' att.source_whatsapp_campaign_id %}" class="cs-link">{{ att.source_whatsapp_campaign.name }}</a>
+  </p>
+  <p class="text-xs text-ink-subtle">The customer replied to the campaign's message · made from this chat{% if att.workflow_run_id %} by an automation{% endif %}</p>
   {% elif att.is_guess %}
   <p class="font-medium text-ink">Linked to a recent chat (a guess)</p>
   <p class="text-xs text-ink-subtle">No chat was chosen, so Akilent linked the customer's latest chat{% if att.conversation %} (<a href="{% url 'conversations:detail' att.conversation.public_id %}" class="cs-link">view it</a>){% endif %}. Because it's a guess, no post is credited with this.</p>

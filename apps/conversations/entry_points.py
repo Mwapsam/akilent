@@ -1,8 +1,10 @@
-"""Record which published post started a conversation.
+"""Record which published post or WhatsApp campaign started a conversation.
 
-Only hard evidence counts: the customer's message carries a tracked link's ref code,
-or a private reply to a comment on the post opened the DM. A conversation with neither
-stays unattributed; nothing here guesses from timing or "the latest post".
+Only hard evidence counts: the customer's message carries a tracked link's ref code, a
+private reply to a comment on the post opened the DM, or the message answers a campaign's
+own message (a swipe-reply or a tapped button: WhatsApp names the message it answers). A
+conversation with none stays unattributed; nothing here guesses from timing or "the latest
+post", so a customer who simply writes after a campaign is a reply, not a credit.
 
 Inbound hooks never raise: a failure here must not stop a message reaching the inbox.
 """
@@ -22,6 +24,10 @@ def on_inbound_message(conversation, message) -> None:
         match_ref_code(conversation, message)
     except Exception:
         logger.exception("Ref-code match failed for message=%s", message.pk)
+    try:
+        match_campaign_reply(conversation, message)
+    except Exception:
+        logger.exception("Campaign-reply match failed for message=%s", message.pk)
     try:
         record_dm_reply(conversation, message)
     except Exception:
@@ -72,6 +78,41 @@ def match_ref_code(conversation, message) -> ConversationEntryPoint | None:
     return entry
 
 
+def match_campaign_reply(conversation, message) -> ConversationEntryPoint | None:
+    """Link the conversation to the WhatsApp campaign whose message this one answers.
+
+    The answered message must be a campaign message of the same workspace. One entry per
+    campaign and conversation: a second reply to the same campaign changes nothing."""
+    if not message.whatsapp_message_id:
+        return None
+    from apps.whatsapp.interactive import replied_to
+    from apps.whatsapp.models import WhatsAppCampaignRecipient
+
+    answered = replied_to(message.whatsapp_message)
+    if not answered:
+        return None
+    recipient = (
+        WhatsAppCampaignRecipient.objects.filter(
+            campaign__account_id=conversation.account_id,
+            message__message_log__message_id=answered,
+        )
+        .select_related("campaign")
+        .first()
+    )
+    if recipient is None:
+        return None
+    entry, _ = ConversationEntryPoint.objects.get_or_create(
+        conversation=conversation,
+        whatsapp_campaign=recipient.campaign,
+        defaults={
+            "account_id": conversation.account_id,
+            "kind": ConversationEntryPoint.Kind.CAMPAIGN_REPLY,
+            "message": message,
+        },
+    )
+    return entry
+
+
 def record_comment_entry(thread) -> ConversationEntryPoint | None:
     """A private reply to a comment on a Content Studio post opened this DM.
 
@@ -107,7 +148,7 @@ def first_entry_point(conversation) -> ConversationEntryPoint | None:
         return None
     return (
         ConversationEntryPoint.objects.filter(conversation=conversation)
-        .select_related("post", "variant", "campaign")
+        .select_related("post", "variant", "campaign", "whatsapp_campaign")
         .first()
     )
 

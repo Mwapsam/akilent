@@ -87,6 +87,20 @@ def reply_for_log(message_log) -> dict | None:
     return None
 
 
+def replied_to(message_log) -> str:
+    """The id of the message this inbound one answers, from its stored webhook payload:
+    WhatsApp sends ``context.id`` when the customer swipes to reply to a message or taps
+    one of its buttons. "" for a message typed on its own."""
+    if not message_log.message_id:
+        return ""
+    for entry in (message_log.raw_payload or {}).get("entry") or []:
+        for change in entry.get("changes") or []:
+            for message in (change.get("value") or {}).get("messages") or []:
+                if message.get("id") == message_log.message_id:
+                    return str((message.get("context") or {}).get("id") or "")
+    return ""
+
+
 # --- outbound -----------------------------------------------------------------------------
 
 

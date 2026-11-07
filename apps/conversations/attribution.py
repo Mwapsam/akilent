@@ -70,9 +70,9 @@ def record(
 ):
     """Write the immutable attribution for a lead, deal or order and set its shortcut field.
 
-    Also records, from explicit evidence only, the post that started the conversation
-    (its first entry point) and the insight whose DM started it. Returns None when there
-    is no conversation to credit. Safe to call twice: an object that already has a
+    Also records, from explicit evidence only, the post or WhatsApp campaign that started
+    the conversation (its first entry point) and the insight whose DM started it. Returns
+    None when there is no conversation to credit. Safe to call twice: an object that already has a
     record keeps it.
     """
     from apps.conversations.entry_points import first_entry_point
@@ -101,6 +101,7 @@ def record(
         source_post=entry.post if entry else None,
         source_variant=entry.variant if entry else None,
         source_campaign=entry.campaign if entry else None,
+        source_whatsapp_campaign=entry.whatsapp_campaign if entry else None,
         originated_from=_originating_recommendation(conversation) if explicit else None,
         **{subject: obj},
     )

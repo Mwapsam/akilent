@@ -163,7 +163,10 @@ def journey(account, period) -> dict | None:
         **during("published_at"),
     )
     has_links = TrackedLink.objects.filter(account=account).exists()
-    entry_points = ConversationEntryPoint.objects.filter(account=account)
+    # A post's entry points only: a WhatsApp campaign's are Campaigns' to report.
+    entry_points = ConversationEntryPoint.objects.filter(
+        account=account, post__isnull=False
+    )
     chats_tracked = has_links or entry_points.exists()
 
     out: dict[str, Any] = {
@@ -230,9 +233,10 @@ def journey(account, period) -> dict | None:
     out["untracked_chats"] = (
         Conversation.objects.filter(
             account=account,
-            entry_points__isnull=True,
             pk__in=inbound.filter(**during("timestamp")).values("conversation"),
         )
+        # Never linked to a post (a chat a WhatsApp campaign started still counts here).
+        .exclude(entry_points__post__isnull=False)
         .exclude(
             Exists(
                 inbound.filter(conversation=OuterRef("pk"), timestamp__lt=period.start)
