@@ -242,3 +242,45 @@ Plan names and prices are unchanged; only how they're shown changed. Everything 
   - The page ran 39 queries signed in and 31 logged out (locally); now 13 and 10. Features, limits and coming-soon items load in three queries for every plan (`billing_api.plan_data`).
   - The dashboard's nav and onboarding context processors skip the landing page (`request.public_page`). The onboarding one builds the whole setup state and was the likeliest cause of the 3.4 s wait.
 - **Footer Status and social links** show once `STATUS_PAGE_URL` and the social profiles (Operator Console → Settings) are set; nothing to build.
+
+## Visual system and responsive rules (2026-11-07)
+The values live in `assets/landing.css` as tokens. Rebuild a section from them rather than tweaking it in place.
+
+- **Type:**
+  - Inter Tight (`static/fonts/inter-tight-variable.woff2`, 45 KB, SIL OFL, preloaded) for the headline, section headings and prices; Inter for everything else.
+  - While Inter Tight loads, headings use the already-loaded Inter scaled to its width (`size-adjust: 92.2%`), so line breaks don't move.
+  - **Scale** (`--lp-fs-*`): 64 / 44 / 20 / 17 / 15 px on desktop, shrinking with `clamp()`. The headline is 40 px at 360 px. On laptops the hero headline stays at two lines so the product shows on the first screen.
+  - **Headings:** semibold, line height 1.1, −2% tracking.
+  - **Body:** regular, line height 1.6, at most 65 characters wide.
+- **Colour:**
+  - mostly neutral (navy, near-white, the grey steps);
+  - teal is the accent: icons, ticks, links on hover, the headline highlight;
+  - yellow is used only for the main action (hero, Professional, closing band).
+- **Rhythm:** a dark hero; light Channels, How it works and Platform; a dark Trust band halfway down; light Pricing and FAQ; then dark Developers, closing band and footer.
+- **Components:**
+  - **Buttons:** one height (48 px, 40 px small) and one radius; labels never wrap. The harness checks every width.
+  - **Cards:** a hairline edge and a faint shadow, 28 px padding; only cards that are links lift on hover, with their arrow nudging 2 px.
+  - **Icons:** one set, 1.5 px stroke, in the same tinted square.
+- **Imagery:**
+  - The mock-ups are built from the app's components with one cast of global names.
+  - Only the hero scene has depth: a soft glow and a slight tilt from 1024 px. Every other mock-up is flat.
+  - Captions are visually hidden; each picture's `role="img"` label carries the description. This follows the earlier review, which found visible captions read like wireframe notes.
+- **Motion:**
+  - reveals take 200 ms with an 8 px rise, once;
+  - the hero loop fires one event about every 1.4 s and stops off screen;
+  - reduced motion turns off everything except colour changes.
+- **Phones:**
+  - **Hero:** the headline, then the two stacked buttons, the proof strip on two lines, and the chat pane only (the details panel joins at a 40 rem wide scene).
+  - **Platform tabs:** one pill row that scrolls sideways.
+  - **How it works:** a stacked list.
+  - **Pricing:** cards stacked with Professional first; the comparison table scrolls inside its own box with the row names fixed.
+- **Details:** a teal focus ring; anchor scrolling offset for the top bar; PNG icons at 32 px and 180 px (Apple touch) beside the SVG.
+- **Harness** (`tools/qa/landing_qa.mjs`, 51 checks):
+  - no sideways scroll, AA contrast and 44 px targets at seven widths;
+  - button labels on one line;
+  - buttons aligned;
+  - every section drawn before it is scanned.
+- **Not done:**
+  - **Hidden `/styleguide/` page:** not built.
+  - **Sticky bottom "Start free trial" bar on phones:** left out, because the top bar already keeps it reachable.
+  - **404 page in the landing style:** not built.

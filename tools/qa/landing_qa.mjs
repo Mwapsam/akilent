@@ -144,6 +144,9 @@ for (const [w, h, mobile] of widths) {
   const sc = await scan();
   check(`layout.${w}x${h}`, st.hscroll <= 0 && sc.overflow === 0, { ...st, overflow: sc.overflow, offenders: sc.offenders });
   check(`contrast.${w}x${h}`, sc.contrast === 0, sc.ex);
+  // No button label wraps onto a second line or spills out of its button.
+  const wrapped = await evaluate("[...document.querySelectorAll('.lp-btn, .lp-ptabs button, .lp-billing label')].filter(b => b.getClientRects().length).filter(b => { const lh = parseFloat(getComputedStyle(b).lineHeight) || 24; const pad = parseFloat(getComputedStyle(b).paddingTop) + parseFloat(getComputedStyle(b).paddingBottom); const min = parseFloat(getComputedStyle(b).minHeight) || 0; return b.scrollWidth > b.clientWidth + 1 || b.clientHeight > Math.max(min, pad + lh * 1.6); }).map(b => b.textContent.trim().slice(0, 30))");
+  check(`buttons.one-line.${w}x${h}`, wrapped.length === 0, wrapped);
   // Links inside a sentence are exempt from the 24px target size (WCAG 2.5.8, inline exception).
   const smallTargets = (sc.small || []).filter((t) => t.belowAA && !/^a\.lp-link /.test(t.el));
   check(`targets.${w}x${h}`, smallTargets.length === 0, smallTargets);

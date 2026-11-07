@@ -7,12 +7,15 @@
   {% seo_meta %}
   {% google_analytics %}
   <link rel="preload" href="{% static 'fonts/inter-variable.woff2' %}" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="{% static 'fonts/inter-tight-variable.woff2' %}" as="font" type="font/woff2" crossorigin>
   {% comment %}The page's one script: deferred, so it never holds up the first paint.{% endcomment %}
   <script defer src="{% static 'js/landing.js' %}"></script>
   {% comment %}The landing page's own stylesheet, built from assets/landing.css on the app's shared
   tokens (assets/tokens.css). It does not load the dashboard's app.css.{% endcomment %}
   <link rel="stylesheet" href="{% static 'css/landing.css' %}">
   <link rel="icon" type="image/svg+xml" href="{% static 'img/brand/icon-color.svg' %}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/brand/icon-32.png' %}">
+  <link rel="apple-touch-icon" href="{% static 'img/brand/icon-180.png' %}">
 </head>
 <body class="lp">
 {% with app=site.app_name|default:"Akilent" %}

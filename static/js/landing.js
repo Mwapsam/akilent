@@ -90,6 +90,10 @@
         panelOf(t).hidden = !on;
       });
       if (focus) tab.focus();
+      // A pill row that scrolls sideways on phones: keep the chosen tab in view.
+      if (tablist.scrollWidth > tablist.clientWidth) {
+        tablist.scrollLeft = tab.offsetLeft - (tablist.clientWidth - tab.offsetWidth) / 2;
+      }
     };
     tablist.hidden = false;
     select(tabs[0], false);

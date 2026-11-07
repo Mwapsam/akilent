@@ -75,6 +75,10 @@
 
 /* --- Base ---------------------------------------------------------------- */
 /* Arial sized to Inter's metrics: until the font file arrives, lines break in the same places. */
+@font-face { font-family: "Inter Tight"; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url("/static/fonts/inter-tight-variable.woff2") format("woff2"); }
+@font-face { font-family: "Inter Tight Fallback"; src: url("/static/fonts/inter-variable.woff2") format("woff2");
+  font-weight: 100 900; size-adjust: 92.2%; }
 @font-face { font-family: "Inter Fallback"; src: local("Arial"); size-adjust: 107.12%; ascent-override: 90.44%;
   descent-override: 22.52%; line-gap-override: 0%; }
 .lp { margin: 0; overflow-x: clip; background: var(--lp-navy); color: var(--lp-on-navy); font-family: "Inter Variable", "Inter Fallback", var(--font-sans);
@@ -106,12 +110,18 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
   letter-spacing: .08em; text-transform: uppercase; color: var(--lp-teal-ink); }
 .lp-navy .lp-eyebrow { color: var(--lp-teal-on-navy); }
 .lp-eyebrow::before { content: ""; width: 1.25rem; height: 1px; background: currentColor; opacity: .6; }
-.lp-display { margin: 0; font-size: clamp(2.375rem, 5.6vw, 4.25rem); line-height: 1.02; font-weight: 700; letter-spacing: -0.035em; text-wrap: balance; }
-.lp-h2 { margin: 0; font-size: clamp(2rem, 4vw, 3rem); line-height: 1.08; font-weight: 700; letter-spacing: -0.03em; text-wrap: balance; }
-.lp-h3 { margin: 0; font-size: 1.1875rem; line-height: 1.3; font-weight: 650; letter-spacing: -0.015em; }
-.lp-lead { margin: 0; font-size: clamp(1.0625rem, 1.6vw, 1.25rem); line-height: 1.65; text-wrap: pretty; }
-.lp-body { margin: 0; font-size: 1.0625rem; line-height: 1.65; text-wrap: pretty; }
-.lp-small { margin: 0; font-size: .9375rem; line-height: 1.6; }
+/* The type scale: 64 / 44 / 28 / 20 / 17 / 15px on desktop, shrinking with clamp() so the
+   headline is about 40px on a 360px phone. Headings: Inter Tight, semibold, 1.1, -2%. Body: Inter,
+   regular, 1.6, never wider than 65 characters. */
+.lp { --lp-fs-display: clamp(2.5rem, 1.6rem + 3.9vw, 4rem); --lp-fs-h2: clamp(2rem, 1.5rem + 2vw, 2.75rem);
+  --lp-fs-h3: 1.25rem; --lp-fs-lead: clamp(1.0625rem, .95rem + .5vw, 1.25rem); --lp-fs-body: 1.0625rem; --lp-fs-small: .9375rem;
+  --lp-font-display: "Inter Tight", "Inter Tight Fallback", "Inter Variable", var(--font-sans); }
+.lp-display { margin: 0; font-family: var(--lp-font-display); font-size: var(--lp-fs-display); line-height: 1.04; font-weight: 600; letter-spacing: -0.02em; text-wrap: balance; }
+.lp-h2 { margin: 0; font-family: var(--lp-font-display); font-size: var(--lp-fs-h2); line-height: 1.1; font-weight: 600; letter-spacing: -0.02em; text-wrap: balance; }
+.lp-h3 { margin: 0; font-size: var(--lp-fs-h3); line-height: 1.3; font-weight: 600; letter-spacing: -0.01em; }
+.lp-lead { margin: 0; max-width: 65ch; font-size: var(--lp-fs-lead); line-height: 1.6; text-wrap: pretty; }
+.lp-body { margin: 0; max-width: 65ch; font-size: var(--lp-fs-body); line-height: 1.6; text-wrap: pretty; }
+.lp-small { margin: 0; font-size: var(--lp-fs-small); line-height: 1.6; }
 .lp-mid { color: var(--lp-on-navy-mid); }
 .lp-lo { color: var(--lp-on-navy-lo); }
 .lp-muted { color: var(--lp-ink-2); }
@@ -142,7 +152,7 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
 .lp-btn-dark { color: var(--lp-on-navy); background: var(--lp-navy); }
 .lp-btn-dark:hover { background: var(--lp-navy-3); }
 
-.lp-ico { width: 1.25rem; height: 1.25rem; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.lp-ico { width: 1.25rem; height: 1.25rem; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .lp-tile { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem;
   border-radius: var(--lp-r-md); background: var(--lp-teal-tint); color: var(--lp-teal-ink); }
 .lp-navy .lp-tile { background: color-mix(in srgb, var(--color-teal-300) 10%, transparent); color: var(--lp-teal-on-navy); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-teal-300) 18%, transparent); }
@@ -223,6 +233,9 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
 .lp-proof svg { width: 1rem; height: 1rem; color: var(--lp-teal-on-navy); }
 .lp-proof .lp-proof-label { color: var(--lp-on-navy-lo); font-weight: 400; }
 .lp-hero-stage { position: relative; padding-block: clamp(3rem, 6vw, 4.5rem) clamp(3.5rem, 8vw, 6rem); }
+@media (min-width: 1024px) {
+  .lp-hero .lp-scene .lp-window { transform: perspective(2400px) rotateX(4deg); transform-origin: 50% 0; }
+}
 /* Laptops: the headline in two lines and tighter spacing, so the top of the product scene
    shows on the first screen (it started below the fold at 1150 x 631). */
 @media (min-width: 1024px) {
@@ -335,7 +348,10 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
 .lp-dcard em { display: block; font-style: normal; color: var(--lp-ink-3); }
 .lp-dcard .lp-tile { width: 2.25rem; height: 2.25rem; border-radius: var(--radius-control-sm); }
 .lp-dcard.remind .lp-tile { background: var(--lp-amber-tint); color: var(--lp-amber-ink); }
+/* Phones see the chat only; the details panel joins once the scene is wide enough for it. */
+.lp-scene .lp-details { display: none; }
 @container (min-width: 40rem) {
+  .lp-scene .lp-details { display: grid; }
   .lp-scene-grid { grid-template-columns: 14rem minmax(0, 1fr); }
   .lp-scene .lp-inbox-list { display: block; }
   .lp-details { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
@@ -377,7 +393,7 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
   .lp-channels:has(> :nth-child(4)) { grid-template-columns: repeat(4, 1fr); } }
 .lp-card { position: relative; border-radius: var(--lp-r-lg); background: var(--lp-white); border: 1px solid var(--lp-rule);
   padding: 1.75rem; box-shadow: var(--lp-shadow-1); transition: transform .35s var(--lp-ease), box-shadow .35s ease, border-color .35s ease; }
-.lp-card:hover { transform: translateY(-2px); box-shadow: var(--lp-shadow-2); border-color: var(--lp-rule-2); }
+a.lp-card:hover { transform: translateY(-2px); box-shadow: var(--lp-shadow-2); border-color: var(--lp-rule-2); }
 /* Softer cards: a lighter edge and a faint shadow rather than a hard outline. */
 .lp-light :is(.lp-card, .lp-plan:not(.featured):not(.lp-plan-ent)) { border-color: color-mix(in srgb, var(--lp-rule) 70%, transparent);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--lp-navy) 4%, transparent), 0 8px 24px -12px color-mix(in srgb, var(--lp-navy) 10%, transparent); }
@@ -551,10 +567,10 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
   transition: background-color var(--duration-base) ease, color var(--duration-base) ease, box-shadow var(--duration-base) ease; }
 .lp-ptabs button:hover { color: var(--lp-ink); }
 .lp-ptabs button[aria-selected="true"] { background: var(--lp-white); color: var(--lp-ink); box-shadow: var(--lp-shadow-1); }
-/* Phones: two by two, so no tab hides off the edge. */
+/* Phones: one pill row that scrolls sideways; the chosen tab scrolls into view (landing.js). */
 @media (max-width: 520px) {
-  .lp-ptabs { display: grid; grid-template-columns: 1fr 1fr; width: 100%; border-radius: var(--lp-r-md); }
-  .lp-ptabs button { border-radius: var(--lp-r-sm); }
+  .lp-ptabs { justify-content: flex-start; scroll-snap-type: x proximity; }
+  .lp-ptabs button { scroll-snap-align: start; }
 }
 .lp-panels { display: grid; gap: 4.5rem; margin-top: 3rem; }
 .lp-panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2.5rem; align-items: center; border-radius: var(--lp-r-lg); }
@@ -595,14 +611,15 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
   color: var(--lp-ink-3); }
 .lp-trust-row + .lp-trust { margin-top: 0; }
 .lp-trust { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15.5rem), 1fr)); }
-.lp-trust > :is(div, a) { display: flex; flex-direction: column; gap: 1rem; padding: 1.5rem; border-radius: var(--lp-r-lg);
+.lp-trust > :is(div, a) { display: flex; flex-direction: column; gap: 1rem; padding: 1.75rem; border-radius: var(--lp-r-lg);
   border: 1px solid var(--lp-rule); background-color: var(--lp-white); color: inherit; text-decoration: none; }
 .lp-trust .lp-h3 { font-size: 1.0625rem; }
 .lp-trust .lp-small { margin-top: .375rem; color: var(--lp-ink-2); }
 /* Security cards open their part of the Security page. */
 .lp-trust-link { transition: border-color var(--duration-base) ease, transform var(--duration-base) var(--lp-ease); }
 .lp-trust-link:hover { border-color: var(--lp-rule-2); transform: translateY(-2px); }
-.lp-trust-link .lp-h3::after { content: " →"; color: var(--lp-teal-ink); }
+.lp-trust-link .lp-h3::after { content: "→"; display: inline-block; margin-left: .375rem; color: var(--lp-teal-ink); transition: transform var(--duration-base) ease; }
+.lp-trust-link:hover .lp-h3::after { transform: translateX(2px); }
 /* Trust sits on a dark band between Platform and Pricing. */
 .lp-band { background: radial-gradient(60rem 30rem at 50% 0%, color-mix(in srgb, var(--color-teal-400) 10%, transparent), transparent 70%), var(--lp-navy); }
 .lp-navy .lp-trust > :is(div, a) { background-color: color-mix(in srgb, var(--lp-white) 4%, transparent); border-color: var(--lp-line); }
@@ -656,7 +673,7 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
 .lp-plan-top { min-height: 5.25rem; }
 .lp-plan-for { margin: .375rem 0 0; font-size: .9375rem; line-height: 1.45; color: var(--lp-ink-2); }
 .lp-price { margin: 1rem 0 0; display: flex; align-items: baseline; gap: .25rem; }
-.lp-price b { font-size: 2.5rem; line-height: 1; font-weight: 700; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+.lp-price b { font-family: var(--lp-font-display); font-size: 2.75rem; line-height: 1; font-weight: 600; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
 .lp-price-note { min-height: 1.4em; margin: .5rem 0 0; font-size: .8125rem; color: var(--lp-ink-3); }
 .lp-plan .lp-btn { margin-top: 1.25rem; width: 100%; padding-inline: .75rem; }
 .lp-plan-foot { margin: .5rem 0 0; text-align: center; font-size: .8125rem; color: var(--lp-ink-3); }
