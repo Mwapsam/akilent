@@ -1,14 +1,18 @@
 {% if ga_id %}<script>
   (function () {
+    // The queue and its config are set up straight away, so events sent before gtag.js
+    // arrives (a signup step, a queued server event) wait in order behind the config;
+    // only the script itself waits for the browser to be idle.
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = function () { dataLayer.push(arguments); };
+    gtag('js', new Date());
+    gtag('config', '{{ ga_id }}');
+    {% if ga_event %}gtag('event', '{{ ga_event.name|escapejs }}', { {% for key, value in ga_event.params.items %}'{{ key|escapejs }}': '{{ value|escapejs }}'{% if not forloop.last %}, {% endif %}{% endfor %} });{% endif %}
     function loadGA() {
       var s = document.createElement('script');
       s.async = true;
       s.src = 'https://www.googletagmanager.com/gtag/js?id={{ ga_id }}';
       document.head.appendChild(s);
-      window.dataLayer = window.dataLayer || [];
-      window.gtag = function () { dataLayer.push(arguments); };
-      gtag('js', new Date());
-      gtag('config', '{{ ga_id }}');
     }
     // Defer until the browser is idle so gtag never blocks initial render.
     if ('requestIdleCallback' in window) {

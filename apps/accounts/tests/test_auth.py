@@ -81,7 +81,9 @@ def test_signup_creates_active_account_and_sends_verification(
     assert account.selected_channels == ["email"]
     assert account.onboarding_state == Account.Onboarding.DOMAIN_SETUP
     assert account.email_verified is False
-    assert account.city == "Lusaka" and account.country == "Zambia"
+    # The address isn't asked for at signup (it's asked for before the first email
+    # campaign), so whatever is posted for it is ignored.
+    assert account.address_line1 == "" and account.country == "" and account.phone == ""
     assert Membership.objects.filter(
         user=user, account=account, role=Membership.Role.OWNER
     ).exists()
@@ -198,21 +200,98 @@ def test_verify_email_rejects_bad_token(client, trial_plan, email_plan):
     assert Account.objects.get(company_name="Bad Co").email_verified is False
 
 
-@pytest.mark.django_db
-def test_signup_honors_plan_query_param(client, trial_plan, whatsapp_plan):
-    resp = client.get(SIGNUP_URL + "?plan=professional")
+@pytest.fixture
+def paid_whatsapp_plan(db):
+    plan = Plan.objects.create(
+        slug=Plan.PROFESSIONAL, name="Professional", price_monthly=49
+    )
+    billing_api.set_plan_channels(plan, ["whatsapp"])
+    return plan
+
+
+def _preselect(resp):
     assert resp.status_code == 200
-    pre = resp.context["wizard_config"]["preselect"]
+    return resp.context["wizard_config"]["preselect"]
+
+
+@pytest.mark.django_db
+def test_signup_honors_paid_plan_query_param(client, trial_plan, paid_whatsapp_plan):
+    pre = _preselect(client.get(SIGNUP_URL + "?plan=professional"))
     assert pre["plan"] == "professional"
     assert pre["channels"] == ["whatsapp"]
-    assert pre["startStep"] == 2
+    assert pre["startStep"] == "account"
+    assert pre["entry"] == "plans"
+    assert pre["steps"] == ["channels", "package", "account", "review"]
+
+
+@pytest.mark.django_db
+def test_a_free_plan_link_skips_the_package_step(client, trial_plan, whatsapp_plan):
+    pre = _preselect(client.get(SIGNUP_URL + "?plan=professional"))
+    assert pre["plan"] == "professional"
+    # The customer picks from what the plan gives, then goes on to their details.
+    assert pre["channels"] == [] and pre["startStep"] == "channels"
+    assert pre["entry"] == "trial"
+    assert pre["steps"] == ["channels", "account", "review"]
+
+
+@pytest.mark.django_db
+def test_plain_signup_starts_on_the_default_trial(client, trial_plan, email_plan):
+    pre = _preselect(client.get(SIGNUP_URL))
+    assert pre["plan"] == Plan.TRIAL
+    assert pre["entry"] == "trial"
+    assert pre["startStep"] == "channels"
+    assert pre["fromQuery"] is False
+
+
+@pytest.mark.django_db
+def test_plain_signup_without_a_free_trial_shows_every_package(client, email_plan):
+    pre = _preselect(client.get(SIGNUP_URL))
+    assert pre["entry"] == "plans" and pre["plan"] == ""
+
+
+@pytest.mark.django_db
+def test_step_in_the_url_never_skips_what_is_missing(client, trial_plan, email_plan):
+    # A shared link with nothing picked opens on Channels.
+    pre = _preselect(client.get(SIGNUP_URL + "?step=account"))
+    assert pre["startStep"] == "channels"
+    # With the channels and plan in the link, an earlier step can be asked for...
+    pre = _preselect(client.get(SIGNUP_URL + "?plan=trial&channels=email&step=channels"))
+    assert pre["startStep"] == "channels"
+    # ...and the furthest one the link reaches is the default.
+    pre = _preselect(client.get(SIGNUP_URL + "?plan=trial&channels=email"))
+    assert pre["startStep"] == "account" and pre["channels"] == ["email"]
+    assert pre["fromQuery"] is True
+
+
+@pytest.mark.django_db
+def test_a_bounced_trial_signup_keeps_its_entry(client, trial_plan, email_plan):
+    resp = client.post(
+        SIGNUP_URL, _payload(plan=Plan.TRIAL, entry="trial", password2="different")
+    )
+    assert resp.status_code == 400
+    cfg = resp.context["wizard_config"]
+    assert cfg["preselect"]["entry"] == "trial"
+    assert "password2" in cfg["errors"]
+    # Passwords are never sent back to the page.
+    assert "password1" not in cfg["formData"]
+
+
+@pytest.mark.django_db
+def test_signup_queues_a_signup_created_event(client, trial_plan, email_plan):
+    from apps.seo.analytics import SESSION_KEY
+
+    client.post(SIGNUP_URL, _payload())
+    assert client.session[SESSION_KEY] == {
+        "name": "signup_created",
+        "params": {"plan": Plan.STARTER},
+    }
 
 
 @pytest.mark.django_db
 def test_signup_ignores_unknown_plan_slug(client, trial_plan):
     resp = client.get(SIGNUP_URL + "?plan=not-a-real-plan")
     assert resp.status_code == 200
-    assert resp.context["wizard_config"]["preselect"]["startStep"] == 0
+    assert resp.context["wizard_config"]["preselect"]["startStep"] == "channels"
 
 
 @pytest.mark.django_db
@@ -246,3 +325,13 @@ def test_resend_verification_unknown_email_shows_same_page(client, trial_plan):
     resp = client.post(reverse("resend-verification"), {"email": "nobody@example.com"})
     assert resp.status_code == 200
     assert len(mail.outbox) == 0
+
+
+@pytest.mark.django_db
+def test_signup_needs_no_address_or_phone(client, trial_plan, email_plan):
+    data = _payload()
+    for key in ("phone", "address_line1", "city", "country"):
+        data.pop(key)
+    resp = client.post(SIGNUP_URL, data)
+    assert resp.status_code == 302, resp.content[:2000]
+    assert Account.objects.filter(company_name="New Co").exists()

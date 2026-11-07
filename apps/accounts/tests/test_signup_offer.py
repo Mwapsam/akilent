@@ -193,10 +193,10 @@ def test_links_preselect_channels(client, plans, settings):
     settings.WHATSAPP_ENABLED = True
     cfg = _wizard_config(client.get(SIGNUP_URL + "?channels=whatsapp,email"))
     assert cfg["preselect"]["channels"] == ["whatsapp", "email"]
-    assert cfg["preselect"]["startStep"] == 1
+    assert cfg["preselect"]["startStep"] == "package"
     # A channel that isn't offered is dropped.
     cfg = _wizard_config(client.get(SIGNUP_URL + "?channels=instagram"))
-    assert cfg["preselect"]["channels"] == [] and cfg["preselect"]["startStep"] == 0
+    assert cfg["preselect"]["channels"] == [] and cfg["preselect"]["startStep"] == "channels"
 
 
 @pytest.mark.django_db

@@ -215,7 +215,7 @@ Evidence is `path::text`: the file must exist and contain the text.
 | annual-billing | Capability | Any paid plan can be billed yearly, at the discount checkout applies | apps/billing/pricing.py::Subscription.ANNUALLY: Decimal( |
 | payment-confirmation | Capability | Every payment is confirmed by email, with the plan and amount | apps/billing/tasks.py::small_print="Keep this email for your records." |
 | meta-fees | Mechanism | Meta bills WhatsApp message fees to the business directly; Akilent never resells or marks them up | apps/billing/limit_catalog.py::Akilent must not resell or mark that up |
-| any-country | Capability | Sign up from any country (country is free text; no allow-list) | apps/accounts/forms.py::country = forms.CharField(max_length=120, required=True) |
+| any-country | Capability | Sign up from any country (signup asks for no country; no allow-list) | apps/accounts/forms.py::No country is asked for or checked here |
 | custom-limits | Mechanism | Enterprise: limits set for one workspace on request | apps/billing/models.py::class AccountLimitOverride( |
 | feature-overrides | Mechanism | Enterprise: features switched on for one workspace on request | apps/billing/models.py::class AccountFeatureOverride( |
 | demo | Capability | Book a demo / contact sales: one form that records the request and emails the team, who reply by email | apps/accounts/views.py::def demo(request) |

@@ -76,8 +76,10 @@ def plans_covering(offered, picks) -> list:
 
 
 class SignupForm(UserCreationForm):
-    """Channel-first signup: personal + business details that create the User
-    and the Account in one step.
+    """Channel-first signup: the few details that create the User and the Account in
+    one step. The rest of the business profile (legal name, address, industry, ...) is
+    asked for later, where it's needed: the postal address before the first email
+    campaign, the rest in Settings -> Business.
 
     Email is the login credential (see apps.accounts.backends.EmailBackend),
     so there's no separate username field — ``User.username`` is set from the
@@ -91,28 +93,8 @@ class SignupForm(UserCreationForm):
     )
     first_name = forms.CharField(max_length=150, required=True, label="First name")
     last_name = forms.CharField(max_length=150, required=True, label="Last name")
-
     company_name = forms.CharField(max_length=255, required=True, label="Company name")
-    legal_name = forms.CharField(
-        max_length=255, required=False, label="Legal / registered name"
-    )
-    website = forms.CharField(max_length=255, required=False)
-    industry = forms.CharField(max_length=120, required=False)
-    company_size = forms.CharField(max_length=40, required=False, label="Company size")
-    phone = forms.CharField(max_length=40, required=True, label="Phone number")
-
-    address_line1 = forms.CharField(
-        max_length=255, required=True, label="Address line 1"
-    )
-    address_line2 = forms.CharField(
-        max_length=255, required=False, label="Address line 2"
-    )
-    city = forms.CharField(max_length=120, required=True)
-    state_region = forms.CharField(
-        max_length=120, required=False, label="State / region"
-    )
-    postal_code = forms.CharField(max_length=40, required=False, label="Postal code")
-    country = forms.CharField(max_length=120, required=True)
+    # No country is asked for or checked here: a business signs up from anywhere.
 
     selected_channels = forms.MultipleChoiceField(
         choices=[(v, label) for v, label, _ in CHANNEL_CHOICES],
@@ -134,17 +116,6 @@ class SignupForm(UserCreationForm):
             "first_name",
             "last_name",
             "company_name",
-            "legal_name",
-            "website",
-            "industry",
-            "company_size",
-            "phone",
-            "address_line1",
-            "address_line2",
-            "city",
-            "state_region",
-            "postal_code",
-            "country",
             "selected_channels",
             "plan",
             "billing_period",

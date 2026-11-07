@@ -33,6 +33,7 @@ from apps.accounts.models import (
     PasskeyCredential,
 )
 from apps.accounts.utils import get_current_account, set_current_account
+from apps.seo.analytics import queue_ga_event
 
 logger = logging.getLogger(__name__)
 
@@ -254,21 +255,6 @@ def _mark_email_verified(user):
     )
 
 
-_ACCOUNT_PROFILE_FIELDS = (
-    "legal_name",
-    "website",
-    "industry",
-    "company_size",
-    "phone",
-    "address_line1",
-    "address_line2",
-    "city",
-    "state_region",
-    "postal_code",
-    "country",
-)
-
-
 def _plan_card(plan, channels) -> dict:
     """``billing_api.plan_card`` for what the plan gives right now: ``channels`` are the
     channels it gives on offer (forms.plan_channels), so a channel it doesn't cover, or
@@ -284,6 +270,22 @@ def _plan_feature_bullets(plan, channels) -> list:
     the wizard's JSON config."""
     card = _plan_card(plan, channels)
     return card["limits"] + card["feature_names"]
+
+
+def _is_free_plan(card) -> bool:
+    """Whether a wizard plan card (see _build_signup_wizard_config) costs nothing."""
+    return card is not None and card["priceMonthly"] <= 0
+
+
+def _default_trial_card(by_slug):
+    """The wizard card for the plan a plain signup starts on (billing_api
+    .default_signup_trial), when it's on offer and free. ``None`` otherwise, and the
+    wizard falls back to showing every package."""
+    from apps.billing import api as billing_api
+
+    plan, _days = billing_api.default_signup_trial()
+    card = by_slug.get(plan.slug) if plan is not None else None
+    return card if _is_free_plan(card) else None
 
 
 def _build_signup_wizard_config(request, *, form_data=None, errors=None):
@@ -319,39 +321,67 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
         key=lambda p: p["priceMonthly"],
     )
 
-    # Figure out where the wizard should open.
-    picks = [
-        c for c in (form_data or {}).get("selected_channels", []) if c in offered_keys
-    ]
-    plan_slug = (form_data or {}).get("plan", "")
-    period = (form_data or {}).get("billing_period") or request.GET.get("period", "")
+    # Figure out where the wizard should open. Steps are named, not numbered: a free or
+    # trial signup skips the Package step ("trial" entry), so the numbers would shift.
+    #   channels -> package -> account -> review     ("plans" entry)
+    #   channels -> account -> review                ("trial" entry)
+    by_slug = {p["slug"]: p for p in plans}
+    data = form_data or {}
+    picks = [c for c in data.get("selected_channels", []) if c in offered_keys]
+    plan_slug = data.get("plan", "") if data.get("plan", "") in by_slug else ""
+    period = data.get("billing_period") or request.GET.get("period", "")
     if period not in periods:
         period = Subscription.MONTHLY
-    if not picks and not plan_slug:
+    if form_data is not None:
+        # A submit bounced back: keep the entry it was made through. The page works out
+        # which step shows the first error.
+        entry = "trial" if data.get("entry") == "trial" else "plans"
+        if entry == "trial" and not _is_free_plan(by_slug.get(plan_slug)):
+            entry = "plans"
+    else:
         req_plan = request.GET.get("plan", "").strip()
         # ?channels=whatsapp,instagram
         req_channels = [
             c.strip() for c in request.GET.get("channels", "").split(",") if c.strip()
         ]
         req_channels = [c for c in req_channels if c in offered_keys]
-        matched = (
-            next((p for p in plans if p["slug"] == req_plan), None)
-            if req_plan
-            else None
-        )
-        if matched:
-            # The channels asked for that this plan gives, else everything it gives.
+        matched = by_slug.get(req_plan) if req_plan else None
+        if matched and not _is_free_plan(matched):
+            # A paid plan from the pricing cards: the channels asked for that it gives,
+            # else everything it gives, then straight on to the details.
             picks = [c for c in req_channels if c in matched["channels"]] or list(
                 matched["channels"]
             )
-            plan_slug = matched["slug"]
-            start_step = 2
-        elif req_channels:
-            picks, start_step = req_channels, 1
+            plan_slug, entry = matched["slug"], "plans"
+        elif req_channels and not matched:
+            # Channel links from the for-pages: pick a package for them.
+            picks, entry = req_channels, "plans"
         else:
-            start_step = 0
+            # "Start free trial", a free plan's card, or a plain /signup/: the trial (or
+            # the free plan asked for), and the customer picks from what it gives.
+            trial = matched or _default_trial_card(by_slug)
+            if trial is None:
+                entry = "plans"
+                picks = req_channels
+            else:
+                plan_slug, entry = trial["slug"], "trial"
+                picks = [c for c in req_channels if c in trial["channels"]]
+    steps = ["channels", "account", "review"]
+    if entry == "plans":
+        steps.insert(1, "package")
+    # The furthest step the query string gets the customer to; ?step= can ask for an
+    # earlier one, never a later one (a shared link with ?step=account and nothing
+    # picked opens on Channels).
+    if not picks:
+        reachable = "channels"
+    elif not plan_slug:
+        reachable = "package"
     else:
-        start_step = 2
+        reachable = "account"
+    start_step = reachable
+    asked = request.GET.get("step", "")
+    if asked in steps and steps.index(asked) < steps.index(reachable):
+        start_step = asked
 
     from apps.billing.views import checkout_options
     from apps.core.models import SiteSettings
@@ -377,7 +407,13 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
             "channels": picks,
             "plan": plan_slug,
             "period": period,
+            "entry": entry,
+            "steps": steps,
             "startStep": start_step,
+            # A link that chose the plan or channels wins over progress saved in the
+            # browser from an earlier visit.
+            "fromQuery": form_data is None
+            and bool(request.GET.get("plan") or request.GET.get("channels")),
         },
         "formData": form_data or {},
         "errors": errors or {},
@@ -434,7 +470,6 @@ def signup(request):
                         selected_channels=sorted(cd["selected_channels"]),
                         onboarding_state=Account.Onboarding.ACCOUNT_CREATED,
                         billing_email=cd["email"],
-                        **{f: cd.get(f, "") for f in _ACCOUNT_PROFILE_FIELDS},
                     )
                     Membership.objects.create(
                         user=user, account=account, role=Membership.Role.OWNER
@@ -459,6 +494,8 @@ def signup(request):
                 login(request, user, backend="apps.accounts.backends.EmailBackend")
                 set_current_account(request, account)
                 verification_sent = _send_verification_email(request, user)
+                # Sent by the next page the browser loads (dashboard or checkout).
+                queue_ga_event(request, "signup_created", plan=form.chosen_plan.slug)
                 if cd.get("product_updates"):
                     try:
                         from apps.platform_mail.services.consent import (
@@ -503,7 +540,7 @@ def signup(request):
                     messages.success(
                         request,
                         # Queued, not yet delivered: say "sending", not "emailed".
-                        "Your account is ready. We're sending a link to verify your address.",
+                        "Your account is ready. We're sending a link to confirm your email address.",
                     )
                 else:
                     messages.warning(
@@ -515,7 +552,7 @@ def signup(request):
 
         config = _build_signup_wizard_config(
             request,
-            # Step 2 fields are echoed back so the JS-side `fields` object
+            # Account-step fields are echoed back so the JS-side `fields` object
             # (bound via x-model, used to gate "Continue" and populate
             # Review) doesn't blank out what the user already typed.
             # Passwords are deliberately never round-tripped.
@@ -523,14 +560,11 @@ def signup(request):
                 "selected_channels": request.POST.getlist("selected_channels"),
                 "plan": request.POST.get("plan", ""),
                 "billing_period": request.POST.get("billing_period", ""),
+                "entry": request.POST.get("entry", ""),
                 "first_name": request.POST.get("first_name", ""),
                 "last_name": request.POST.get("last_name", ""),
                 "email": request.POST.get("email", ""),
-                "phone": request.POST.get("phone", ""),
                 "company_name": request.POST.get("company_name", ""),
-                "address_line1": request.POST.get("address_line1", ""),
-                "city": request.POST.get("city", ""),
-                "country": request.POST.get("country", ""),
             },
             errors=form.errors.get_json_data(escape_html=True),
         )

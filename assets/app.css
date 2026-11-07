@@ -576,6 +576,9 @@
   }
   .help { @apply text-xs mt-1; color: var(--color-ink-subtle); }
   .field-error { @apply text-xs mt-1; color: var(--tone-coral-fg); }
+  /* A native checkbox in the brand colour, sized to sit on the first line of its label. */
+  .checkbox { width: 1rem; height: 1rem; flex-shrink: 0; cursor: pointer; accent-color: var(--color-brand-600); }
+  .checkbox:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
 
   /* Dialog offset: room above a centred dialog only when the screen is tall
      enough to spare it. On a phone held sideways or at 200% zoom (~400px tall)

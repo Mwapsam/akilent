@@ -11,7 +11,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="color-scheme" content="light dark">
   {% seo_meta title=False %}
-  {% google_analytics %}
+  {% google_analytics events=True %}
 {% endif %}
   <title>{% block title %}{{ seo.title|default:site.app_name|default:"Akilent" }}{% endblock %}</title>
   <meta name="akilent-shell" content="{% block shell_name %}{% if user.is_authenticated %}app{% else %}public{% endif %}{% endblock %}">

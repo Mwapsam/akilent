@@ -1,0 +1,18 @@
+{% comment %}One field on the signup wizard's Your account step, checked when the customer
+leaves it (signup-wizard.js fieldError/touch/edited). The server's error, if a submit
+bounced back, shows first and clears once the field is edited.
+Usage: include "accounts/_signup_field.html" with name="email" label="Work email" type="email" autocomplete="email" placeholder="you@company.com"{% endcomment %}
+<div>
+  <label class="label" for="id_{{ name }}">{{ label }} <span class="tone-coral-fg" aria-hidden="true">*</span></label>
+  <input id="id_{{ name }}" name="{{ name }}" type="{{ type|default:'text' }}"
+         x-model="fields.{{ name }}"
+         @blur="touch('{{ name }}')" @input="edited('{{ name }}')"
+         {% if autocomplete %}autocomplete="{{ autocomplete }}"{% endif %}
+         {% if inputmode %}inputmode="{{ inputmode }}"{% endif %}
+         {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+         required aria-required="true" maxlength="{{ maxlength|default:'150' }}"
+         :aria-invalid="fieldError('{{ name }}') ? 'true' : null"
+         :aria-describedby="fieldError('{{ name }}') ? 'err_{{ name }}' : null"
+         class="input">
+  <p id="err_{{ name }}" class="field-error" x-show="fieldError('{{ name }}')" x-text="fieldError('{{ name }}')"></p>
+</div>
