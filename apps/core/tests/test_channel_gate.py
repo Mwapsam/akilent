@@ -28,7 +28,7 @@ def test_an_enabled_channels_pages_pass_through(client, settings):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("path", ["/email/campaigns/", "/email/templates/"])
+@pytest.mark.parametrize("path", ["/campaigns/", "/email/templates/"])
 def test_shared_hubs_stay_open_while_whatsapp_is_on(client, email_off, settings, path):
     assert client.get(path).status_code == 302  # to login, not 404
     settings.WHATSAPP_ENABLED = False

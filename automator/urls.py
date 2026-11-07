@@ -108,6 +108,7 @@ urlpatterns = [
     path("", include("apps.accounts.urls")),
     # Channel modules are always mounted; ChannelGateMiddleware hides a disabled one.
     path("email/", include("apps.email.urls")),
+    path("campaigns/", include("apps.core.campaign_urls")),
     path("logs/", include("apps.logs.urls", namespace="logs")),
     path("contacts/", include("apps.contacts.urls", namespace="contacts")),
     path("inbox/", include("apps.conversations.urls", namespace="conversations")),

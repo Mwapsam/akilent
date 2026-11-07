@@ -25,7 +25,7 @@ def test_index_redirects_to_campaigns_scheduled_filter(logged_in):
     )
     r = client.get("/scheduled/")
     assert r.status_code == 302
-    assert r.url == "/email/campaigns/?status=scheduled"
+    assert r.url == "/campaigns/?status=scheduled"
 
 
 @pytest.mark.django_db

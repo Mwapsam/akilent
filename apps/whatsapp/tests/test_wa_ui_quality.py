@@ -75,7 +75,7 @@ def _rows(body: str) -> str:
 @pytest.mark.django_db
 def test_a_queued_message_is_not_called_sent(logged_in, campaign):  # noqa: F811
     client, _ = logged_in
-    rows = _rows(client.get(f"/whatsapp/campaigns/{campaign.pk}/").content.decode())
+    rows = _rows(client.get(f"/campaigns/{campaign.pk}/").content.decode())
     assert 'badge-success">Sent' not in rows
     assert 'badge-danger">Failed' in rows
     assert 'badge-warning">Not confirmed' in rows
@@ -91,16 +91,12 @@ def test_the_failed_filter_includes_messages_that_failed_after_queueing(
 ):
     client, _ = logged_in
     failed = _rows(
-        client.get(
-            f"/whatsapp/campaigns/{campaign.pk}/?outcome=failed"
-        ).content.decode()
+        client.get(f"/campaigns/{campaign.pk}/?outcome=failed").content.decode()
     )
     assert "Failed Fiona" in failed
     assert "Unsure Uma" not in failed and "Queued Quinn" not in failed
     # Nothing has been confirmed by WhatsApp, so the Sent filter is empty.
-    sent = _rows(
-        client.get(f"/whatsapp/campaigns/{campaign.pk}/?outcome=sent").content.decode()
-    )
+    sent = _rows(client.get(f"/campaigns/{campaign.pk}/?outcome=sent").content.decode())
     assert "No recipients match this filter" in sent
 
 
@@ -110,7 +106,7 @@ def test_a_held_message_says_how_long_it_waits(logged_in, campaign):  # noqa: F8
     client, _ = logged_in
     OutboundMessage.objects.filter(status=_O.QUEUED).update(status=_O.HELD)
     with override_settings(WHATSAPP_CAMPAIGN_HOLD_MAX_HOURS=48):
-        rows = _rows(client.get(f"/whatsapp/campaigns/{campaign.pk}/").content.decode())
+        rows = _rows(client.get(f"/campaigns/{campaign.pk}/").content.decode())
     assert 'badge-warning">Waiting' in rows
     assert "within 48 hours" in rows
 

@@ -82,8 +82,8 @@ Open programmatically with: window.dispatchEvent(new CustomEvent('palette-open')
       trigger: null, // Track the element that triggered open for focus return
       items: [
         { group: "Go to", label: "Dashboard", href: "/dashboard/" },
-        {% if CAMPAIGNS_ENABLED %}{ group: "Go to", label: "Campaigns", href: "/email/campaigns/" },
-        { group: "Go to", label: "Scheduled campaigns", href: "/email/campaigns/?status=scheduled" },{% endif %}
+        {% if CAMPAIGNS_ENABLED %}{ group: "Go to", label: "Campaigns", href: "/campaigns/" },
+        { group: "Go to", label: "Scheduled campaigns", href: "/campaigns/?status=scheduled" },{% endif %}
         { group: "Go to", label: "Automations", href: "/automations/" },
         { group: "Go to", label: "Customers", href: "/contacts/" },
         { group: "Go to", label: "Insights", href: "/insights/" },
@@ -100,7 +100,7 @@ Open programmatically with: window.dispatchEvent(new CustomEvent('palette-open')
         { group: "Action", label: "Schedule a send", href: "/email/campaigns/new/" },
         { group: "Action", label: "Add domain", href: "/email/domains/create/" },
         { group: "Action", label: "New template", href: "/email/templates/create/" },
-        {% elif WHATSAPP_ENABLED %}{ group: "Action", label: "New campaign", href: "/whatsapp/campaigns/new/" },{% endif %}
+        {% elif WHATSAPP_ENABLED %}{ group: "Action", label: "New campaign", href: "/campaigns/new/" },{% endif %}
         { group: "Action", label: "Invite teammate", href: "{% url 'settings-team' %}" },
         // The page shortcuts (static/js/app.js); "?" opens the palette on these. No href: choosing
         // one just closes the palette.

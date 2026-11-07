@@ -46,7 +46,7 @@
         {% endif %}
       {% enddropdown %}
       {% if can_send and readiness.total %}
-        <a href="/whatsapp/campaigns/new/?list={{ contact_list.pk }}" class="btn btn-primary btn-sm">
+        <a href="/campaigns/new/?list={{ contact_list.pk }}" class="btn btn-primary btn-sm">
           {% include "components/icon.html" with name="send" class="w-4 h-4" %} Send WhatsApp campaign
         </a>
       {% endif %}

@@ -139,7 +139,7 @@ def test_the_list_and_the_page_say_failed_not_sent(shop):
     client, account, template, clist = shop
     campaign = _campaign(account, template, clist, ["failed", "failed"])
 
-    page = client.get(f"/whatsapp/campaigns/{campaign.pk}/").content.decode()
+    page = client.get(f"/campaigns/{campaign.pk}/").content.decode()
     live = page[page.index('id="campaign-live"') :]
     live = live[: live.index("grid")]
     assert "badge-danger" in live and "Failed" in live and "badge-success" not in live
@@ -148,7 +148,7 @@ def test_the_list_and_the_page_say_failed_not_sent(shop):
     assert "Every message handed to WhatsApp" not in page
     assert "Sent to 2 customers" not in page
 
-    listing = client.get("/email/campaigns/?channel=whatsapp").content.decode()
+    listing = client.get("/campaigns/?channel=whatsapp").content.decode()
     row = listing[listing.index("App Download") :]
     row = row[: row.index("</tr>")]
     assert "badge-danger" in row and "badge-success" not in row
@@ -158,7 +158,7 @@ def test_the_list_and_the_page_say_failed_not_sent(shop):
 def test_partly_sent_reads_as_partly(shop):
     client, account, template, clist = shop
     campaign = _campaign(account, template, clist, ["failed", "read"])
-    page = client.get(f"/whatsapp/campaigns/{campaign.pk}/").content.decode()
+    page = client.get(f"/campaigns/{campaign.pk}/").content.decode()
     assert "Partly sent" in page
 
 
@@ -169,7 +169,7 @@ def test_partly_sent_reads_as_partly(shop):
 def test_failures_read_plainly_grouped_with_their_fix(shop):
     client, account, template, clist = shop
     campaign = _campaign(account, template, clist, ["failed", "failed", "bad_number"])
-    page = client.get(f"/whatsapp/campaigns/{campaign.pk}/").content.decode()
+    page = client.get(f"/campaigns/{campaign.pk}/").content.decode()
 
     groups = page[page.index("data-failure-groups") :]
     groups = groups[: groups.index("</section>")]
@@ -201,7 +201,7 @@ def test_a_stored_sentence_with_metas_code_reads_plainly_too():
 def test_retry_gives_way_to_the_fix_while_the_account_problem_stands(shop):
     client, account, template, clist = shop
     campaign = _campaign(account, template, clist, ["failed", "failed"])
-    page = client.get(f"/whatsapp/campaigns/{campaign.pk}/").content.decode()
+    page = client.get(f"/campaigns/{campaign.pk}/").content.decode()
     assert "data-campaign-fix" in page and "Retry anyway" in page
     assert "Retry 2 failed" not in page
 
@@ -210,13 +210,13 @@ def test_retry_gives_way_to_the_fix_while_the_account_problem_stands(shop):
 def test_retry_stays_for_message_level_failures_or_once_a_send_works(shop):
     client, account, template, clist = shop
     campaign = _campaign(account, template, clist, ["bad_number"])
-    page = client.get(f"/whatsapp/campaigns/{campaign.pk}/").content.decode()
+    page = client.get(f"/campaigns/{campaign.pk}/").content.decode()
     assert "data-campaign-fix" not in page
 
     billing = _campaign(account, template, clist, ["failed"])
     # A message went through since: the problem is over.
     _campaign(account, template, clist, ["sent"])
-    page = client.get(f"/whatsapp/campaigns/{billing.pk}/").content.decode()
+    page = client.get(f"/campaigns/{billing.pk}/").content.decode()
     assert "Retry anyway" not in page and "data-campaign-fix" not in page
 
 
@@ -264,7 +264,7 @@ def ready(shop):
 @_wa_urls
 def test_the_composer_warns_in_step_one_and_on_review(ready):
     client, _, _, _ = ready
-    page = client.get("/whatsapp/campaigns/new/").content.decode()
+    page = client.get("/campaigns/new/").content.decode()
     assert page.count("data-account-problem") == 2
     assert "Messages from your WhatsApp account are failing" in page
     assert "Fix the payment method in Meta" in page
@@ -278,15 +278,13 @@ def test_send_is_refused_without_the_confirm_and_goes_with_it(
     client, account, template, clist = ready
     form = {"name": "Launch", "contact_list": clist.pk, "template_id": template.pk}
 
-    resp = client.post("/whatsapp/campaigns/new/", form)
+    resp = client.post("/campaigns/new/", form)
     assert resp.status_code == 400
     assert b"Confirm to send anyway." in resp.content
     assert not WhatsAppCampaign.objects.filter(account=account, name="Launch").exists()
 
     with django_capture_on_commit_callbacks(execute=True):
-        resp = client.post(
-            "/whatsapp/campaigns/new/", {**form, "confirm_account_problem": "1"}
-        )
+        resp = client.post("/campaigns/new/", {**form, "confirm_account_problem": "1"})
     assert resp.status_code == 302
     assert WhatsAppCampaign.objects.filter(account=account, name="Launch").exists()
 
@@ -295,7 +293,7 @@ def test_send_is_refused_without_the_confirm_and_goes_with_it(
 def test_the_send_button_asks_first(ready):
     client, _, template, clist = ready
     html = client.get(
-        "/whatsapp/campaigns/estimate/",
+        "/campaigns/estimate/",
         {"contact_list": clist.pk, "template_id": template.pk},
         HTTP_HX_REQUEST="true",
     ).content.decode()

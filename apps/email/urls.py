@@ -1,5 +1,6 @@
 from django.urls import path
 
+from apps.core.campaign_urls import moved as campaigns_moved
 from apps.email import ses_webhooks, views
 
 urlpatterns = [
@@ -73,7 +74,8 @@ urlpatterns = [
         views.asset_delete,
         name="email-asset-delete",
     ),
-    path("campaigns/", views.campaigns_list, name="email-campaigns"),
+    # The campaigns list moved to /campaigns/ (apps.core.campaign_urls); old links redirect.
+    path("campaigns/", campaigns_moved),
     path("campaigns/new/", views.campaign_compose, name="email-campaign-compose"),
     path("campaigns/create/", views.campaign_create, name="email-campaign-create"),
     path(

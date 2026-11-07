@@ -387,7 +387,7 @@ _ACTION_DESTINATIONS = {
     "inbox": "/inbox/",
     "follow_up": "/inbox/?view=needs_attention&overdue=1",
     "create_followup": "/inbox/?view=needs_attention&overdue=1",
-    "campaign": "/whatsapp/campaigns/new/",
+    "campaign": "/campaigns/new/",
 }
 
 

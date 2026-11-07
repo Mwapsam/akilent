@@ -280,16 +280,14 @@ def test_composer_schedules_and_rejects_a_past_time(owner_client, template, vips
         "send_tz": "Africa/Lusaka",
         "send_time": "09:00",
     }
-    resp = owner_client.post(
-        "/whatsapp/campaigns/new/", {**base, "send_date": "2020-01-01"}
-    )
+    resp = owner_client.post("/campaigns/new/", {**base, "send_date": "2020-01-01"})
     assert resp.status_code == 400
     assert "already passed" in resp.content.decode()
 
     day = (timezone.now() + timedelta(days=3)).date().isoformat()
-    resp = owner_client.post("/whatsapp/campaigns/new/", {**base, "send_date": day})
+    resp = owner_client.post("/campaigns/new/", {**base, "send_date": day})
     campaign = WhatsAppCampaign.objects.get()
-    assert resp["Location"] == f"/whatsapp/campaigns/{campaign.pk}/"
+    assert resp["Location"] == f"/campaigns/{campaign.pk}/"
     assert campaign.status == _S.SCHEDULED
     assert campaign.timezone == "Africa/Lusaka"
     local = campaign.scheduled_at.astimezone(
@@ -308,14 +306,14 @@ def test_member_can_draft_but_not_send(client, account, template, vips):
     client.force_login(user)
     data = {"audience": f"list:{vips.pk}", "template_id": template.pk}
 
-    resp = client.post("/whatsapp/campaigns/new/", {**data, "action": "send"})
+    resp = client.post("/campaigns/new/", {**data, "action": "send"})
     assert resp.status_code == 400
     assert not WhatsAppCampaign.objects.exists()
 
-    client.post("/whatsapp/campaigns/new/", {**data, "action": "draft"})
+    client.post("/campaigns/new/", {**data, "action": "draft"})
     draft = WhatsAppCampaign.objects.get()
     assert draft.status == _S.DRAFT
-    client.post(f"/whatsapp/campaigns/{draft.pk}/send_now/")
+    client.post(f"/campaigns/{draft.pk}/send_now/")
     draft.refresh_from_db()
     assert draft.status == _S.DRAFT
 
@@ -335,13 +333,11 @@ def test_draft_opens_in_the_composer_and_sends(owner_client, template, vips):
         template_id=template.pk,
         contact_list=vips,
     )
-    body = owner_client.get(
-        f"/whatsapp/campaigns/new/?draft={draft.pk}"
-    ).content.decode()
+    body = owner_client.get(f"/campaigns/new/?draft={draft.pk}").content.decode()
     assert "step: 4" in body and "December" in body and f"list:{vips.pk}" in body
 
     owner_client.post(
-        "/whatsapp/campaigns/new/",
+        "/campaigns/new/",
         {
             "draft_id": draft.pk,
             "audience": f"list:{vips.pk}",
@@ -358,16 +354,16 @@ def test_draft_opens_in_the_composer_and_sends(owner_client, template, vips):
 @pytest.mark.django_db
 def test_detail_actions_pause_and_cancel(owner_client, account, template, vips):
     campaign = _sent_now(account, template, vips)
-    body = owner_client.get(f"/whatsapp/campaigns/{campaign.pk}/").content.decode()
+    body = owner_client.get(f"/campaigns/{campaign.pk}/").content.decode()
     assert "Pause" in body and "Cancel campaign" in body
 
-    owner_client.post(f"/whatsapp/campaigns/{campaign.pk}/pause/")
+    owner_client.post(f"/campaigns/{campaign.pk}/pause/")
     campaign.refresh_from_db()
     assert campaign.status == _S.PAUSED
-    owner_client.post(f"/whatsapp/campaigns/{campaign.pk}/cancel/")
+    owner_client.post(f"/campaigns/{campaign.pk}/cancel/")
     campaign.refresh_from_db()
     assert campaign.status == _S.CANCELLED
-    body = owner_client.get(f"/whatsapp/campaigns/{campaign.pk}/").content.decode()
+    body = owner_client.get(f"/campaigns/{campaign.pk}/").content.decode()
     assert "Cancelled" in body and "History" in body
 
 
@@ -376,9 +372,7 @@ def test_detail_actions_pause_and_cancel(owner_client, account, template, vips):
 def test_export_escapes_formulas(owner_client, account, template, vips):
     vips.contacts.update(first_name="=HYPERLINK(1)")
     campaign = _sent_now(account, template, vips)
-    body = owner_client.get(
-        f"/whatsapp/campaigns/{campaign.pk}/export.csv"
-    ).content.decode()
+    body = owner_client.get(f"/campaigns/{campaign.pk}/export.csv").content.decode()
     assert "'=HYPERLINK(1)" in body and "+26097700" in body
 
 
@@ -390,13 +384,8 @@ def test_another_accounts_campaign_actions_are_404(owner_client, template, vips)
         account=other, name="T", whatsapp_template_name="t", content="x"
     )
     theirs = WhatsAppCampaign.objects.create(account=other, name="X", template=t)
-    assert (
-        owner_client.post(f"/whatsapp/campaigns/{theirs.pk}/cancel/").status_code == 404
-    )
-    assert (
-        owner_client.get(f"/whatsapp/campaigns/{theirs.pk}/export.csv").status_code
-        == 404
-    )
+    assert owner_client.post(f"/campaigns/{theirs.pk}/cancel/").status_code == 404
+    assert owner_client.get(f"/campaigns/{theirs.pk}/export.csv").status_code == 404
 
 
 # --- Segments ------------------------------------------------------------------

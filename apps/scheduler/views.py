@@ -21,7 +21,7 @@ from apps.scheduler.models import ScheduledJob
 
 @login_required
 def scheduled_index(request):
-    return redirect("/email/campaigns/?status=scheduled")
+    return redirect("/campaigns/?status=scheduled")
 
 
 def _job_or_none(account, public_id):

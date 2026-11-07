@@ -1,5 +1,6 @@
-from django.urls import path
+from django.urls import path, re_path
 
+from apps.core.campaign_urls import moved as campaigns_moved
 from apps.whatsapp import numbers, views
 from apps.whatsapp.views import WhatsAppWebhookView
 
@@ -23,29 +24,8 @@ urlpatterns = [
     ),
     path("codes/", views.codes_setup, name="whatsapp-codes"),
     path("codes/key/", views.codes_key_create, name="whatsapp-codes-key"),
-    path("campaigns/new/", views.campaign_new, name="whatsapp-campaign-new"),
-    path(
-        "campaigns/estimate/",
-        views.campaign_estimate,
-        name="whatsapp-campaign-estimate",
-    ),
-    path("campaigns/test/", views.campaign_test, name="whatsapp-campaign-test"),
-    path(
-        "campaigns/settings/",
-        views.campaign_settings,
-        name="whatsapp-campaign-settings",
-    ),
-    path("campaigns/<int:pk>/", views.campaign_detail, name="whatsapp-campaign-detail"),
-    path(
-        "campaigns/<int:pk>/export.csv",
-        views.campaign_export,
-        name="whatsapp-campaign-export",
-    ),
-    path(
-        "campaigns/<int:pk>/<str:action>/",
-        views.campaign_action,
-        name="whatsapp-campaign-action",
-    ),
+    # Campaign pages moved to /campaigns/ (apps.core.campaign_urls); old links redirect.
+    re_path(r"^campaigns/(?P<rest>.*)$", campaigns_moved),
     path("numbers/", numbers.numbers_list, name="whatsapp-numbers"),
     path("numbers/create/", numbers.numbers_create, name="whatsapp-numbers-create"),
     path(

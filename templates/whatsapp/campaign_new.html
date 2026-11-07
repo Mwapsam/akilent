@@ -4,7 +4,7 @@
 {% block content %}
 <header class="mb-6">
   <nav class="mb-1 flex items-center gap-1.5 text-xs text-ink-subtle" aria-label="Breadcrumb">
-    <a href="/email/campaigns/?channel=whatsapp" class="hover:text-ink">Campaigns</a>
+    <a href="/campaigns/?channel=whatsapp" class="hover:text-ink">Campaigns</a>
     <span aria-hidden="true">/</span><span class="text-ink">{% if draft %}{{ draft.name }}{% else %}New WhatsApp campaign{% endif %}</span>
   </nav>
   <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">{% if draft %}Edit campaign{% else %}New WhatsApp campaign{% endif %}</h1>
@@ -109,7 +109,7 @@ and the send could only fail.{% endcomment %}
           {% endfor %}
         </div>
         {% endif %}
-        <p class="mt-3 text-sm"><a href="{% url 'contacts:lists' %}" class="text-accent hover:text-accent-strong">+ Make a new list</a> · <a href="{% url 'contacts:segments' %}" class="text-accent hover:text-accent-strong">+ Make a segment</a></p>
+        <p class="mt-3 text-sm"><a href="{% url 'campaign-lists' %}" class="text-accent hover:text-accent-strong">+ Make a new list</a> · <a href="{% url 'contacts:segments' %}" class="text-accent hover:text-accent-strong">+ Make a segment</a></p>
       </fieldset>
 
       {% comment %}Step 2: message.{% endcomment %}
@@ -251,7 +251,7 @@ and the send could only fail.{% endcomment %}
     <div class="max-w-7xl mx-auto pl-4 pr-20 sm:pl-6 lg:pl-8 py-3 flex items-center justify-between gap-3">
       <div>
         <button type="button" class="btn btn-ghost btn-sm" x-show="step > 1" @click="go(step - 1)">Back</button>
-        <a href="{% if draft %}{% url 'whatsapp-campaign-detail' draft.pk %}{% else %}/email/campaigns/?channel=whatsapp{% endif %}" class="btn btn-ghost btn-sm" x-show="step === 1">Cancel</a>
+        <a href="{% if draft %}{% url 'whatsapp-campaign-detail' draft.pk %}{% else %}/campaigns/?channel=whatsapp{% endif %}" class="btn btn-ghost btn-sm" x-show="step === 1">Cancel</a>
       </div>
       <div class="flex items-center gap-2">
         <button type="submit" name="action" value="draft" class="btn btn-secondary btn-sm" x-show="audience && template" x-cloak formnovalidate>Save draft</button>

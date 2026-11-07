@@ -1727,11 +1727,17 @@ def campaigns_list(request):
         }
         wa_tab = request.GET.get("wa_status") or ""
         wa_all = WhatsAppCampaign.objects.filter(account=account)
-        whatsapp_tab_counts = {
-            key: wa_all.filter(status__in=statuses).count()
-            for key, statuses in wa_tabs.items()
-        }
-        whatsapp_any = wa_all.exists()
+        # Every tab's count in one query (it was one per tab, plus one for "any").
+        from django.db.models import Count, Q
+
+        whatsapp_tab_counts = wa_all.aggregate(
+            all=Count("pk"),
+            **{
+                key: Count("pk", filter=Q(status__in=statuses))
+                for key, statuses in wa_tabs.items()
+            },
+        )
+        whatsapp_any = bool(whatsapp_tab_counts["all"])
         wa_qs = (
             wa_all.filter(status__in=wa_tabs[wa_tab]) if wa_tab in wa_tabs else wa_all
         )

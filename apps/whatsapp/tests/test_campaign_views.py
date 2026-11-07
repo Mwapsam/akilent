@@ -62,7 +62,7 @@ def contact_list(logged_in):
 @pytest.mark.django_db
 def test_campaign_new_page_renders(logged_in, approved_template, contact_list, number):
     client, _ = logged_in
-    resp = client.get("/whatsapp/campaigns/new/")
+    resp = client.get("/campaigns/new/")
     assert resp.status_code == 200
     assert "VIPs" in resp.content.decode()
     assert "Promo" in resp.content.decode()
@@ -79,7 +79,7 @@ def test_create_campaign_via_view_redirects_to_detail(
     client, account = logged_in
     with django_capture_on_commit_callbacks(execute=True):
         resp = client.post(
-            "/whatsapp/campaigns/new/",
+            "/campaigns/new/",
             {
                 "name": "Launch",
                 "contact_list": contact_list.pk,
@@ -88,7 +88,7 @@ def test_create_campaign_via_view_redirects_to_detail(
         )
     assert resp.status_code == 302
     campaign = WhatsAppCampaign.objects.get(account=account, name="Launch")
-    assert resp["Location"] == f"/whatsapp/campaigns/{campaign.pk}/"
+    assert resp["Location"] == f"/campaigns/{campaign.pk}/"
     assert campaign.status == WhatsAppCampaign.Status.COMPLETED
 
 
@@ -102,7 +102,7 @@ def test_create_campaign_cannot_use_another_accounts_contact_list(
     other_list = ContactList.objects.create(account=other, name="Other list")
 
     resp = client.post(
-        "/whatsapp/campaigns/new/",
+        "/campaigns/new/",
         {
             "name": "X",
             "contact_list": other_list.pk,
@@ -133,7 +133,7 @@ def test_campaign_detail_scoped_to_account(logged_in):
         contact_list=other_list,
         template=other_template,
     )
-    resp = client.get(f"/whatsapp/campaigns/{other_campaign.pk}/")
+    resp = client.get(f"/campaigns/{other_campaign.pk}/")
     assert resp.status_code == 404
 
 
@@ -158,12 +158,12 @@ def test_campaigns_list_shows_whatsapp_tab(
         template=template,
         status=WhatsAppCampaign.Status.COMPLETED,
     )
-    resp = client.get("/email/campaigns/?channel=whatsapp")
+    resp = client.get("/campaigns/?channel=whatsapp")
     assert resp.status_code == 200
     assert "Sept promo" in resp.content.decode()
 
     # Email tab (default) never shows the WhatsApp row.
-    resp = client.get("/email/campaigns/")
+    resp = client.get("/campaigns/")
     assert "Sept promo" not in resp.content.decode()
 
 
@@ -177,7 +177,7 @@ def test_campaigns_list_shows_whatsapp_tab(
 @pytest.mark.django_db
 def test_campaign_new_explains_a_missing_contact_list(logged_in, approved_template):
     client, _ = logged_in
-    body = client.get("/whatsapp/campaigns/new/").content.decode()
+    body = client.get("/campaigns/new/").content.decode()
     assert "Make a list of people to send to" in body
     assert 'href="/contacts/lists/"' in body
     # The unsatisfiable form must not be shown at all.
@@ -188,7 +188,7 @@ def test_campaign_new_explains_a_missing_contact_list(logged_in, approved_templa
 @pytest.mark.django_db
 def test_campaign_new_explains_a_missing_template(logged_in, contact_list):
     client, _ = logged_in
-    body = client.get("/whatsapp/campaigns/new/").content.decode()
+    body = client.get("/campaigns/new/").content.decode()
     assert "Get a message template approved by Meta" in body
     assert 'name="template_id"' not in body
 
@@ -199,7 +199,7 @@ def test_campaign_new_shows_the_form_when_both_exist(
     logged_in, approved_template, contact_list, number
 ):
     client, _ = logged_in
-    body = client.get("/whatsapp/campaigns/new/").content.decode()
+    body = client.get("/campaigns/new/").content.decode()
     assert 'name="audience"' in body
     assert 'name="template_id"' in body
     assert "Make a list of people to send to" not in body
@@ -215,7 +215,7 @@ def test_campaign_new_needs_a_connected_number(
 ):
     """Lists and templates but no number: the checklist, not a form whose send can only fail."""
     client, _ = logged_in
-    body = client.get("/whatsapp/campaigns/new/").content.decode()
+    body = client.get("/campaigns/new/").content.decode()
     assert "Connect your WhatsApp number" in body
     assert 'name="audience"' not in body
 
@@ -232,7 +232,7 @@ def test_template_cards_name_their_blanks(logged_in, contact_list, number):
         variables=["name"],
         approval_status=MessageTemplate.ApprovalStatus.APPROVED,
     )
-    body = client.get("/whatsapp/campaigns/new/").content.decode()
+    body = client.get("/campaigns/new/").content.decode()
     assert "Hi [name], your order is ready." in body
     assert "Hi {{1}}" not in body
 
@@ -246,11 +246,11 @@ def test_send_button_stays_on_the_review_step(
     the page's own wrapper keeps it to step 4: a replaced slot lost that and showed from
     step 2, so a campaign could be sent before choosing when or seeing the review."""
     client, _ = logged_in
-    page = client.get("/whatsapp/campaigns/new/").content.decode()
+    page = client.get("/campaigns/new/").content.decode()
     assert '<div x-show="step === 4" x-cloak><div id="send-slot"></div></div>' in page
 
     est = client.get(
-        "/whatsapp/campaigns/estimate/",
+        "/campaigns/estimate/",
         {"audience": f"list:{contact_list.pk}", "template_id": approved_template.pk},
     ).content.decode()
     assert '<div id="send-slot" hx-swap-oob="innerHTML">' in est
@@ -264,7 +264,7 @@ def test_estimate_shows_reach_once_an_audience_is_picked(logged_in, contact_list
     """Step 1: who the list reaches, before a message is chosen, and no send button."""
     client, _ = logged_in
     est = client.get(
-        "/whatsapp/campaigns/estimate/", {"audience": f"list:{contact_list.pk}"}
+        "/campaigns/estimate/", {"audience": f"list:{contact_list.pk}"}
     ).content.decode()
     assert "Who gets it" in est and "on VIPs" in est
     assert "1 opted in" in est
@@ -299,7 +299,7 @@ def test_estimate_shows_who_a_promotion_reaches_and_why_not(
     clist.contacts.add(opted, unknown, nophone)
 
     resp = client.get(
-        "/whatsapp/campaigns/estimate/",
+        "/campaigns/estimate/",
         {
             "contact_list": clist.pk,
             "template_id": approved_template.pk,
@@ -321,7 +321,7 @@ def test_estimate_ignores_another_accounts_list(logged_in, approved_template):
     other = Account.objects.create(company_name="Other Co")
     other_list = ContactList.objects.create(account=other, name="Theirs")
     resp = client.get(
-        "/whatsapp/campaigns/estimate/",
+        "/campaigns/estimate/",
         {"contact_list": other_list.pk, "template_id": approved_template.pk},
     )
     assert "Theirs" not in resp.content.decode()
@@ -338,8 +338,8 @@ def test_double_submitting_the_composer_creates_one_campaign(
         "template_id": approved_template.pk,
         "submission_key": "page-load-1",
     }
-    first = client.post("/whatsapp/campaigns/new/", data)
-    second = client.post("/whatsapp/campaigns/new/", data)
+    first = client.post("/campaigns/new/", data)
+    second = client.post("/campaigns/new/", data)
     assert first["Location"] == second["Location"]
     assert WhatsAppCampaign.objects.filter(account=account).count() == 1
 
@@ -350,9 +350,7 @@ def test_composer_opens_on_the_message_step_when_linked_from_a_list(
     logged_in, approved_template, contact_list, number
 ):
     client, _ = logged_in
-    body = client.get(
-        f"/whatsapp/campaigns/new/?list={contact_list.pk}"
-    ).content.decode()
+    body = client.get(f"/campaigns/new/?list={contact_list.pk}").content.decode()
     assert "step: 2" in body
     assert f"audience: 'list:{contact_list.pk}'" in body
 
@@ -371,7 +369,7 @@ def test_media_header_templates_are_shown_but_not_choosable(
         header_format=MessageTemplate.HeaderFormat.IMAGE,
         approval_status=MessageTemplate.ApprovalStatus.APPROVED,
     )
-    body = client.get("/whatsapp/campaigns/new/").content.decode()
+    body = client.get("/campaigns/new/").content.decode()
     assert "Picture promo" in body
     assert "campaigns can't send those yet" in body
 
@@ -400,13 +398,13 @@ def test_detail_explains_who_was_not_sent_to_and_polls_while_sending(
         skip_reason=WhatsAppCampaignRecipient.SkipReason.NOT_OPTED_IN,
     )
 
-    body = client.get(f"/whatsapp/campaigns/{campaign.pk}/").content.decode()
+    body = client.get(f"/campaigns/{campaign.pk}/").content.decode()
     assert "Not sent to 1 customer" in body
     assert "Haven&#x27;t opted in" in body
     assert 'hx-trigger="every 5s"' in body
 
     live = client.get(
-        f"/whatsapp/campaigns/{campaign.pk}/?part=live", HTTP_HX_REQUEST="true"
+        f"/campaigns/{campaign.pk}/?part=live", HTTP_HX_REQUEST="true"
     ).content.decode()
     assert (
         live.lstrip().startswith('<div id="campaign-live"')
@@ -426,7 +424,7 @@ def test_failed_campaign_says_why(logged_in, approved_template, contact_list):
         status=WhatsAppCampaign.Status.FAILED,
         error="Template 'promo' can't be sent yet.",
     )
-    body = client.get(f"/whatsapp/campaigns/{campaign.pk}/").content.decode()
+    body = client.get(f"/campaigns/{campaign.pk}/").content.decode()
     assert "This campaign stopped" in body
     assert "can&#x27;t be sent yet" in body
     assert 'hx-trigger="every 5s"' not in body
@@ -437,6 +435,6 @@ def test_failed_campaign_says_why(logged_in, approved_template, contact_list):
 @pytest.mark.django_db
 def test_campaigns_home_shows_readiness_checklist_first(logged_in):
     client, _ = logged_in
-    body = client.get("/email/campaigns/?channel=whatsapp").content.decode()
+    body = client.get("/campaigns/?channel=whatsapp").content.decode()
     assert "Send your first WhatsApp campaign" in body
     assert "Connect your WhatsApp number" in body

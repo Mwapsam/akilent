@@ -5,7 +5,14 @@
 {% block content %}
 <header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
   <div class="min-w-0">
+    {% comment %}The same page at /campaigns/lists/ (reached from Campaigns, apps.core.campaign_urls)
+    and /contacts/lists/ (from Customers): it goes back where it came from, and the sidebar
+    follows the address.{% endcomment %}
+    {% if request.path|slice:":11" == "/campaigns/" %}
+    <a href="{% url 'email-campaigns' %}" class="inline-flex items-center min-h-6 text-sm text-ink-subtle hover:text-ink">&larr; Campaigns</a>
+    {% else %}
     <a href="{% url 'contacts:list' %}" class="inline-flex items-center min-h-6 text-sm text-ink-subtle hover:text-ink">&larr; Customers</a>
+    {% endif %}
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink mt-1">Lists</h1>
     <p class="mt-1 text-sm text-ink-muted max-w-2xl">A list is who a WhatsApp campaign goes to — for example “VIP customers” or “Bought in December”.</p>
   </div>

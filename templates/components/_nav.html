@@ -17,7 +17,7 @@ Arrow Up/Down move through every link in the nav; groups are labelling only.{% e
     {% if "orders" not in tools_off %}
     {% include "components/_nav_item.html" with href="/orders/" label="Orders" icon="layout-template" match="orders" feature="orders" collapsible=collapsible %}
     {% endif %}
-    {% if CAMPAIGNS_ENABLED %}{% include "components/_nav_item.html" with href="/email/campaigns/" label="Campaigns" icon="send" match="email/campaigns scheduled whatsapp/campaigns" collapsible=collapsible %}{% endif %}
+    {% if CAMPAIGNS_ENABLED %}{% include "components/_nav_item.html" with href="/campaigns/" label="Campaigns" icon="send" match="campaigns email/campaigns scheduled" collapsible=collapsible %}{% endif %}
     {% if "instagram" in enabled_channels or "facebook" in enabled_channels %}
     {% include "components/_nav_item.html" with href="/inbox/comments/" label="Comments" icon="chat" match="inbox/comments instagram/rules" collapsible=collapsible %}
     {% endif %}

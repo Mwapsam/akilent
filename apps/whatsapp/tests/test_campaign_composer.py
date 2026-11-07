@@ -63,7 +63,7 @@ def composer(shop):  # noqa: F811
 def _estimate(client, template, clist, at, **extra):
     with patch("django.utils.timezone.now", return_value=at):
         return client.get(
-            "/whatsapp/campaigns/estimate/",
+            "/campaigns/estimate/",
             {"contact_list": clist.pk, "template_id": template.pk, **extra},
             HTTP_HX_REQUEST="true",
         ).content.decode()
@@ -106,7 +106,7 @@ def test_sending_outside_hours_says_so_after(
         django_capture_on_commit_callbacks(execute=True),
     ):
         resp = client.post(
-            "/whatsapp/campaigns/new/",
+            "/campaigns/new/",
             {
                 "name": "Launch",
                 "contact_list": clist.pk,
@@ -133,14 +133,14 @@ def test_authentication_templates_are_not_offered_or_sent(composer):
         category=MessageTemplate.Category.AUTHENTICATION,
         approval_status=MessageTemplate.ApprovalStatus.APPROVED,
     )
-    page = client.get("/whatsapp/campaigns/new/").content.decode()
+    page = client.get("/campaigns/new/").content.decode()
     assert "account_confirmation" not in page and template.name in page
 
     with pytest.raises(CampaignError, match="one-time code"):
         _check_sendable(otp)
 
     resp = client.post(
-        "/whatsapp/campaigns/new/",
+        "/campaigns/new/",
         {"name": "Codes", "contact_list": clist.pk, "template_id": otp.pk},
     )
     assert resp.status_code == 400
@@ -153,7 +153,7 @@ def test_authentication_templates_are_not_offered_or_sent(composer):
 @_wa_urls
 def test_a_names_fallback_starts_filled_in(composer):
     client, _, template, _ = composer
-    page = client.get("/whatsapp/campaigns/new/").content.decode()
+    page = client.get("/campaigns/new/").content.decode()
     key = f"{template.pk}__name"
     blank = page[page.index(f'data-blank="{key}"') :]
     blank = blank[: blank.index("</select>")]
@@ -179,7 +179,7 @@ def test_only_the_chosen_kind_of_answer_counts(
     # A customer detail with its fallback left empty still falls back to "there".
     with django_capture_on_commit_callbacks(execute=True):
         client.post(
-            "/whatsapp/campaigns/new/",
+            "/campaigns/new/",
             {**base, "name": "A", f"var__{key}": "first_name", f"fb__{key}": ""},
         )
     a = WhatsAppCampaign.objects.get(name="A")
@@ -188,7 +188,7 @@ def test_only_the_chosen_kind_of_answer_counts(
 
     # Fixed text left empty is a blank not filled in: nothing is sent.
     resp = client.post(
-        "/whatsapp/campaigns/new/",
+        "/campaigns/new/",
         {**base, "name": "B", f"var__{key}": "literal", f"lit__{key}": ""},
     )
     assert resp.status_code == 400

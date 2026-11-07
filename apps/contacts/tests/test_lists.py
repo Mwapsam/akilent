@@ -2,7 +2,7 @@
 
 Until now a ContactList could only be created through the public API — the
 dashboard's /contacts/ page had no way to make one, so
-/whatsapp/campaigns/new/ (and the email campaign flow) always found an empty
+/campaigns/new/ (and the email campaign flow) always found an empty
 list of lists no matter how many contacts existed. This is the minimal fix:
 name a list from the dashboard, then add contacts to it by tag or by search.
 """
@@ -163,7 +163,7 @@ def test_list_scoped_to_account(logged_in):
 @_wa_urls
 @pytest.mark.django_db
 def test_new_contact_list_flows_into_campaign_creation_list(logged_in):
-    """The bug this closes: /whatsapp/campaigns/new/ always said "no customer
+    """The bug this closes: /campaigns/new/ always said "no customer
     lists" because nothing created a ContactList from the dashboard."""
     from apps.whatsapp.models import MessageTemplate
 
@@ -183,7 +183,7 @@ def test_new_contact_list_flows_into_campaign_creation_list(logged_in):
         {"public_id": contact.public_id},
     )
 
-    resp = client.get("/whatsapp/campaigns/new/")
+    resp = client.get("/campaigns/new/")
     assert resp.status_code == 200
     assert b"You don't have any customer lists yet" not in resp.content
     assert b"Launch list" in resp.content

@@ -33,7 +33,7 @@ hx-trigger of its own, so it loads exactly once.
     <div class="card overflow-hidden lg:col-span-2">
       <div class="flex items-center justify-between card-pad pb-3">
         <h2 class="text-lg font-semibold text-ink">Upcoming sends</h2>
-        {% if CAMPAIGNS_ENABLED %}<a href="/email/campaigns/?status=scheduled"
+        {% if CAMPAIGNS_ENABLED %}<a href="/campaigns/?status=scheduled"
            class="inline-flex items-center min-h-6 text-sm text-accent hover:text-accent-strong">View all</a>{% endif %}
       </div>
       {% if upcoming_sends %}

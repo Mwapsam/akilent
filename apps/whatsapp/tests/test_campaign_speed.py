@@ -16,14 +16,18 @@ from apps.whatsapp.tests.test_campaign_results import (  # noqa: F401
 
 pytestmark = pytest.mark.django_db
 
-BUDGET = {"list": 15, "detail": 19, "new": 19}
+BUDGET = {
+    "list": 12,
+    "detail": 19,
+    "new": 19,
+}  # list 15 -> 12: one query for the tab counts (Phase C)
 
 
 def _urls(campaign):
     return {
-        "list": "/email/campaigns/?channel=whatsapp",
-        "detail": f"/whatsapp/campaigns/{campaign.pk}/",
-        "new": "/whatsapp/campaigns/new/",
+        "list": "/campaigns/?channel=whatsapp",
+        "detail": f"/campaigns/{campaign.pk}/",
+        "new": "/campaigns/new/",
     }
 
 

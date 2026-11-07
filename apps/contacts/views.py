@@ -247,7 +247,7 @@ def _activity(contact, events) -> list[dict]:
                 "kind": "campaign",
                 "title": f"Campaign · {r.campaign.name}",
                 "detail": outcome,
-                "url": f"/whatsapp/campaigns/{r.campaign_id}/",
+                "url": f"/campaigns/{r.campaign_id}/",
             }
         )
     for n in contact.notes.select_related("author")[:30]:

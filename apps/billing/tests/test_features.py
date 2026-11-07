@@ -398,5 +398,5 @@ def test_a_plan_without_whatsapp_does_not_give_it(account, plan):
 )
 def test_templates_work_without_campaigns_or_codes(owner_client, account):
     assert owner_client.get("/whatsapp/templates/new/").status_code == 200
-    resp = owner_client.get("/whatsapp/campaigns/new/")
+    resp = owner_client.get("/campaigns/new/")
     assert resp.status_code == 302 and resp.url == "/billing/locked/whatsapp_campaigns/"
