@@ -1,6 +1,6 @@
 from django import template
 
-from apps.billing.money import SYMBOLS, billing_currency, format_money
+from apps.billing.money import SYMBOLS, billing_currency, format_money, format_price
 
 register = template.Library()
 
@@ -9,6 +9,12 @@ register = template.Library()
 def money(amount, currency=None):
     """19 -> "$19.00" in the platform billing currency (or ``currency``)."""
     return format_money(amount, currency or None)
+
+
+@register.filter
+def price(amount, currency=None):
+    """A price on a pricing card: 194 -> "$194", 11.9 -> "$11.90" (money.format_price)."""
+    return format_price(amount, currency or None)
 
 
 @register.simple_tag

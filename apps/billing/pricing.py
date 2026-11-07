@@ -53,12 +53,30 @@ def multiplier_for(period: str) -> Decimal:
     return Decimal(str(override.get(period, DEFAULT_PERIOD_MULTIPLIERS[period])))
 
 
+CENT = Decimal("0.01")
+WHOLE = Decimal("1")
+
+
 def price_for(plan, period: str) -> Decimal:
-    """Total amount to charge for one full billing_period of `plan`."""
+    """Total amount to charge for one full billing_period of `plan`.
+
+    Monthly is the plan's price to the cent. A longer term is rounded to a whole currency
+    unit ($193.80 a year is charged as $194), so every page can say "billed $194 a year"
+    and that is exactly what checkout and every renewal charge."""
     months = PERIOD_MONTH_MULTIPLES[period]
-    return (plan.price_monthly * months * multiplier_for(period)).quantize(
-        Decimal("0.01"), rounding=ROUND_HALF_UP
-    )
+    total = plan.price_monthly * months * multiplier_for(period)
+    step = CENT if period == Subscription.MONTHLY else WHOLE
+    return total.quantize(step, rounding=ROUND_HALF_UP)
+
+
+def monthly_equivalent(plan, period: str) -> Decimal:
+    """What one term works out to per month, for pricing cards only ("$16/month, billed
+    $194 a year"); never charged. The monthly price itself is exact; a longer term's is
+    rounded to a whole unit, and the card always shows the exact total beside it."""
+    if period == Subscription.MONTHLY:
+        return price_for(plan, period)
+    months = PERIOD_MONTH_MULTIPLES[period]
+    return (price_for(plan, period) / months).quantize(WHOLE, rounding=ROUND_HALF_UP)
 
 
 def period_options() -> list[dict]:

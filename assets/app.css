@@ -543,9 +543,10 @@
     .input, .select, .textarea { font-size: 1rem; line-height: 1.5rem; }
   }
   .input::placeholder, .textarea::placeholder { color: var(--color-ink-subtle); }
-  .input:hover:not(:disabled):not(:focus),
-  .select:hover:not(:disabled):not(:focus),
-  .textarea:hover:not(:disabled):not(:focus) { border-color: var(--color-ink-subtle); }
+  /* Not on a field in error: hovering must not hide its red border. */
+  .input:hover:not(:disabled):not(:focus):not([aria-invalid="true"]),
+  .select:hover:not(:disabled):not(:focus):not([aria-invalid="true"]),
+  .textarea:hover:not(:disabled):not(:focus):not([aria-invalid="true"]) { border-color: var(--color-ink-subtle); }
   .input:focus, .select:focus, .textarea:focus { border-color: var(--color-focus-ring); }
   /* Disabled reads as unavailable; read-only reads as a value you can select
      and copy but not change. */

@@ -679,8 +679,8 @@ def pricing_table(offered, data=None) -> dict:
     ``(plan, channels)`` pairs as ``accounts.forms.signup_offer`` returns them:
 
     - ``cards``: per plan, the same three limits (those that differ between plans first), its
-      tagline and the monthly equivalent of the annual price (``pricing.price_for``, the price
-      checkout charges);
+      tagline, the annual price checkout charges (``pricing.price_for``, a whole amount) and
+      its monthly equivalent for display (``pricing.monthly_equivalent``);
     - ``included``: what every plan has: features and channels on every plan, and limits that
       are unlimited on all of them (the "All plans include" line);
     - ``rows``: the comparison table, only what differs between plans: a row per limit, channel,
@@ -690,10 +690,8 @@ def pricing_table(offered, data=None) -> dict:
 
     ``data`` is ``plan_data(plans)`` when the caller already has it. Like ``plan_card``, it's
     read from the plans themselves, so nothing is promised that a plan doesn't give."""
-    from decimal import ROUND_HALF_UP, Decimal
-
     from apps.billing.models import Subscription
-    from apps.billing.pricing import multiplier_for, price_for
+    from apps.billing.pricing import monthly_equivalent, multiplier_for, price_for
     from apps.core.channels import CHANNEL_FEATURE, feature_visible, limit_visible
 
     plans = [plan for plan, _ in offered]
@@ -771,9 +769,7 @@ def pricing_table(offered, data=None) -> dict:
                 "points": points(plan, prev),
                 "plus_from": prev,
                 "annual_total": annual,
-                "annual_monthly": (annual / 12).quantize(
-                    Decimal("0.01"), rounding=ROUND_HALF_UP
-                ),
+                "annual_monthly": monthly_equivalent(plan, Subscription.ANNUALLY),
             }
         )
 

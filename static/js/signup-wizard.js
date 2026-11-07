@@ -539,12 +539,21 @@
         var span = /^\d/.test(info.per) ? info.per : "one " + info.per;
         return this._money(total) + " for " + span;
       },
-      // For terms longer than a month: the monthly equivalent, e.g. "$41.65/mo".
-      perMonthLabel: function (p) {
+      // A card's headline: the chosen term per month, e.g. "$16" (the server's
+      // pricing.monthly_equivalent, so it never disagrees with the landing page).
+      monthlyLabel: function (p) {
+        if (!this.isPaid(p)) return "Free";
         var info = this.periodInfo;
-        var total = p && p.periodPrices && p.periodPrices[info.value];
-        if (!this.isPaid(p) || info.months <= 1 || !total) return "";
-        return this._money(total / info.months) + "/mo";
+        var monthly = p.periodMonthly && p.periodMonthly[info.value];
+        return this._money(monthly || p.priceMonthly);
+      },
+      // Under the headline: exactly what the term costs, e.g. "Billed $194 every year".
+      billedLabel: function (p) {
+        if (!this.isPaid(p)) return "";
+        var info = this.periodInfo;
+        if (info.months <= 1) return "Billed monthly";
+        var total = (p.periodPrices && p.periodPrices[info.value]) || p.priceMonthly;
+        return "Billed " + this._money(total) + " every " + info.per;
       },
     };
   }

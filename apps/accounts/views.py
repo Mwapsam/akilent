@@ -294,7 +294,7 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
     from apps.accounts.forms import signup_offer
     from apps.billing.models import Plan, Subscription
     from apps.billing.money import SYMBOLS, ZERO_DECIMAL, billing_currency
-    from apps.billing.pricing import period_options, price_for
+    from apps.billing.pricing import monthly_equivalent, period_options, price_for
 
     offered, channel_choices = signup_offer()
     offered_keys = [value for value, _, _ in channel_choices]
@@ -311,6 +311,11 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
                 # works it out before any account credit is taken off.
                 "periodPrices": {
                     period: float(price_for(p, period)) for period in periods
+                },
+                # Each term per month, for the card's headline price only (rounded for
+                # longer terms; the card shows the exact total beside it).
+                "periodMonthly": {
+                    period: float(monthly_equivalent(p, period)) for period in periods
                 },
                 "trialDays": p.trial_days,
                 "popular": p.slug == Plan.PROFESSIONAL,

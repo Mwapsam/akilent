@@ -78,7 +78,7 @@ def test_shows_what_checkout_will_charge_in_the_billing_currency(
     html = resp.content.decode()
     assert resp.status_code == 200
     assert "Starter" in html and "Annually" in html
-    assert "K193.80 / year" in html  # 19 x 12 x 0.85
+    assert "K194.00 / year" in html  # 19 x 12 x 0.85 = 193.80, charged in whole units
     assert (
         "$" not in html.split('aria-label="Payment summary"')[1].split("</section>")[0]
     )
@@ -130,7 +130,7 @@ def test_credit_comes_off_before_payment(
     credit.grant(account, Decimal("50"))
     html = _get(client, owner).content.decode()
     assert "\u2212$50.00" in html
-    assert "$143.80" in html  # 193.80 - 50
+    assert "$144.00" in html  # 194 - 50
 
 
 def test_credit_that_covers_it_all_pays_without_a_provider(

@@ -11,7 +11,7 @@ then the finish (closing call to action, developers, FAQ, footer, share and sear
 import json
 import re
 import struct
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 import pytest
@@ -122,9 +122,10 @@ def test_the_annual_price_is_what_checkout_charges(client, plans):
     pricing = _pricing(client)
     starter = next(p for p in plans if p.slug == "starter")
     yearly = price_for(starter, "annually")
-    monthly_equivalent = (yearly / 12).quantize(Decimal("0.01"))
-    assert f"${monthly_equivalent}" in pricing
-    assert f"Billed ${yearly:,} a year" in pricing
+    assert yearly == yearly.to_integral_value()  # a whole amount, shown as it's charged
+    per_month = (yearly / 12).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    assert f"<b>${per_month}</b>" in pricing
+    assert f"Billed ${yearly:,.0f} a year" in pricing
     assert 'href="/signup/?plan=starter&amp;period=annually"' in pricing
     assert 'href="/signup/?plan=starter"' in pricing
     # The switch is two radios before the cards, so it works without JavaScript.

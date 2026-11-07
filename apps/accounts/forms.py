@@ -94,7 +94,6 @@ class SignupForm(UserCreationForm):
     first_name = forms.CharField(max_length=150, required=True, label="First name")
     last_name = forms.CharField(max_length=150, required=True, label="Last name")
     company_name = forms.CharField(max_length=255, required=True, label="Company name")
-    # No country is asked for or checked here: a business signs up from anywhere.
 
     selected_channels = forms.MultipleChoiceField(
         choices=[(v, label) for v, label, _ in CHANNEL_CHOICES],

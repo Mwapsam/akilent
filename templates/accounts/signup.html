@@ -3,7 +3,7 @@
 {% block title %}Create your account — {{ site.app_name|default:"Akilent" }}{% endblock %}
 {% block content %}
 {{ wizard_config|json_script:"signup-wizard-config" }}
-<script src="{% static 'js/signup-wizard.js' %}?v=7"></script>
+<script src="{% static 'js/signup-wizard.js' %}?v=8"></script>
 
 <div class="min-h-viewport flex items-start justify-center px-4 py-12">
   <div class="relative w-full max-w-2xl" x-data="signupWizard()" x-cloak>
@@ -125,9 +125,12 @@
                 <span class="font-semibold text-ink" x-text="p.name"></span>
                 <span x-show="p.popular" class="text-xs uppercase tracking-wide tone-brand rounded px-1.5 py-0.5">Popular</span>
               </div>
-              <div class="mt-1 text-lg font-bold text-ink" x-text="priceLabel(p)"></div>
-              <div x-show="perMonthLabel(p)" class="text-xs text-ink-subtle">
-                <span x-text="perMonthLabel(p)"></span>
+              <div class="mt-1 flex items-baseline gap-1">
+                <span class="text-lg font-bold text-ink tabular-nums" x-text="monthlyLabel(p)"></span>
+                <span x-show="isPaid(p)" class="text-xs text-ink-subtle">/month</span>
+              </div>
+              <div x-show="isPaid(p)" class="text-xs text-ink-subtle">
+                <span x-text="billedLabel(p)"></span>
                 <span x-show="periodInfo.savePct > 0" class="text-teal-700 font-medium" x-text="' · save ' + periodInfo.savePct + '%'"></span>
               </div>
               <div x-show="p.trialDays" class="text-xs text-ink-subtle" x-text="p.trialDays + '-day free trial'"></div>

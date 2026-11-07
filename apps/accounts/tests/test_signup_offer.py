@@ -361,7 +361,7 @@ def test_landing_and_wizard_describe_a_plan_the_same_way(client, db, settings):
 
 @pytest.mark.django_db
 def test_wizard_shows_what_checkout_charges_for_each_term(client, plans, settings):
-    from apps.billing.pricing import price_for
+    from apps.billing.pricing import monthly_equivalent, price_for
 
     settings.EMAIL_ENABLED = True
     settings.WHATSAPP_ENABLED = True
@@ -377,6 +377,9 @@ def test_wizard_shows_what_checkout_charges_for_each_term(client, plans, setting
     card = next(p for p in cfg["plans"] if p["slug"] == Plan.STARTER)
     for period, amount in card["periodPrices"].items():
         assert amount == float(price_for(starter, period))
+        assert card["periodMonthly"][period] == float(
+            monthly_equivalent(starter, period)
+        )
     assert cfg["preselect"]["period"] == "monthly"
 
 
@@ -463,7 +466,7 @@ def test_a_partial_discount_override_keeps_the_other_terms(client, plans, settin
     save = {o["value"]: o["savePct"] for o in cfg["periods"]}
     assert save == {"monthly": 0, "quarterly": 5, "annually": 20, "biennial": 25}
     starter = Plan.objects.get(slug=Plan.STARTER)
-    assert price_for(starter, "annually") == Decimal("182.40")  # 19 x 12 x 0.80
+    assert price_for(starter, "annually") == Decimal("182")  # 19 x 12 x 0.80 = 182.40
 
     user = User.objects.create_user("p", "p@example.com", PW)
     acc = Account.objects.create(company_name="P")

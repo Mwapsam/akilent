@@ -27,8 +27,8 @@ from .models import (
     ProcessedWebhookEvent,
     Subscription,
 )
-from .money import format_money
-from .pricing import PERIOD_PER, period_options, price_for
+from .money import format_price
+from .pricing import PERIOD_PER, monthly_equivalent, period_options, price_for
 from .providers import InvalidSignature, ProviderError, registry
 from .services import activate_subscription
 
@@ -55,13 +55,19 @@ def pricing_page(request):
 
     # The same terms and discounts as signup and checkout (pricing.period_options).
     period_pricing = {o["value"]: o for o in period_options()}
-    # Each card shows exactly what checkout charges for each term (pricing.price_for, to
-    # the cent), not a figure rounded in the browser.
+    # Each card leads with the term's monthly equivalent and shows exactly what checkout
+    # charges for it under that (pricing.price_for), both worked out here, not in the browser.
     cards = []
     for p in plans:
         card = billing_api.plan_card(p, channels=channels)
         card["prices_json"] = json.dumps(
-            {value: format_money(price_for(p, value)) for value in period_pricing}
+            {
+                value: {
+                    "monthly": format_price(monthly_equivalent(p, value)),
+                    "total": format_price(price_for(p, value)),
+                }
+                for value in period_pricing
+            }
         )
         cards.append(card)
     # On a phone the compare table stacks into one card per feature (.table--cards), so each

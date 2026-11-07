@@ -137,11 +137,19 @@
         <p class="text-base font-semibold text-ink">
           {{ plan.name }}
         </p>
-        {% comment %}Exactly what checkout charges for the chosen term (views.pricing_page, pricing.price_for).{% endcomment %}
+        {% comment %}The chosen term per month, then exactly what checkout charges for it
+        (views.pricing_page: pricing.monthly_equivalent and pricing.price_for).{% endcomment %}
         <div class="mt-1 flex flex-wrap items-end gap-x-1">
-          <span class="text-3xl font-bold text-ink tabular-nums" x-text="prices[period]">{{ plan.price_monthly|money }}</span>
-          {% if plan.price_monthly > 0 %}<span class="text-sm text-ink-subtle mb-0.5" x-text="pricing[period].label.toLowerCase()">monthly</span>{% endif %}
+          <span class="text-3xl font-bold text-ink tabular-nums" x-text="prices[period].monthly">{{ plan.price_monthly|price }}</span>
+          {% if plan.price_monthly > 0 %}<span class="text-sm text-ink-subtle mb-0.5">/month</span>{% endif %}
         </div>
+        {% if plan.price_monthly > 0 %}
+          <p class="text-xs text-ink-subtle mt-1" x-show="period === 'monthly'">Billed monthly</p>
+          <p class="text-xs text-ink-subtle mt-1" x-show="period !== 'monthly'" x-cloak>
+            Billed <span class="font-medium text-ink-muted tabular-nums" x-text="prices[period].total"></span>
+            every <span x-text="pricing[period].per"></span><span x-show="pricing[period].savePct > 0" class="text-teal-700 font-medium" x-text="' · save ' + pricing[period].savePct + '%'"></span>
+          </p>
+        {% endif %}
         {% if plan.slug == 'trial' %}
           <p class="text-xs text-ink-subtle mt-1">{{ plan.trial_days }}-day free trial</p>
         {% endif %}

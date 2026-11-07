@@ -69,6 +69,17 @@ def covers(paid, paid_currency: str, expected: Decimal, expected_currency: str) 
     return amount >= Decimal(expected)
 
 
+def format_price(amount, currency: str | None = None) -> str:
+    """A price on a pricing card: format_money, except a whole amount drops its ".00"
+    ("$194", "$11.90"), the way the signup wizard writes prices. Receipts, checkout and
+    the pay page keep format_money."""
+    value = to_decimal(amount) or Decimal("0")
+    text = format_money(value, currency)
+    if value == value.to_integral_value() and ".00" in text:
+        text = text.replace(".00", "", 1)
+    return text
+
+
 def format_money(amount, currency: str | None = None) -> str:
     currency = (currency or billing_currency()).upper()
     value = to_decimal(amount) or Decimal("0")

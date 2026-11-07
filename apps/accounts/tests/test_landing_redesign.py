@@ -158,7 +158,7 @@ def test_plan_prices_follow_the_billing_currency(client, settings, plans):
     """Plans are priced in BILLING_CURRENCY, so the page never shows them as dollars."""
     settings.BILLING_CURRENCY = "ZMW"
     pricing = _pricing(_html(client))
-    assert "K49.00" in pricing and "$" not in pricing
+    assert "K49<" in pricing and "$" not in pricing
 
 
 def _journey(html):

@@ -11,8 +11,9 @@
 
   Monthly / annual: two radios before the cards; the one checked hides the other term's price,
   note and button with a sibling selector, so the switch works without JavaScript. The annual
-  price is pricing.price_for (what checkout charges) shown per month, and its button opens signup
-  with ?period=annually.
+  price leads per month (pricing.monthly_equivalent, rounded) with the exact yearly total
+  checkout charges under it (pricing.price_for), and its button opens signup with
+  ?period=annually.
 
   Enterprise lists only what can be set up on request today (custom limits and features for one
   workspace, annual billing, a walkthrough). Multiple numbers, invoicing and guided onboarding
@@ -59,10 +60,10 @@
               <h3 class="lp-h3">{{ plan.name }}</h3>
               {% if card.tagline %}<p class="lp-plan-for">{{ card.tagline }}</p>{% endif %}
             </div>
-            <p class="lp-price lp-when-m"><b>{{ plan.price_monthly|money }}</b><span class="lp-muted">/month</span></p>
+            <p class="lp-price lp-when-m"><b>{{ plan.price_monthly|price }}</b><span class="lp-muted">/month</span></p>
             {% if save > 0 %}
-            <p class="lp-price lp-when-a"><b>{{ card.annual_monthly|money }}</b><span class="lp-muted">/month</span></p>
-            <p class="lp-price-note"><span class="lp-when-m">or {{ card.annual_monthly|money }}/month billed yearly</span><span class="lp-when-a">Billed {{ card.annual_total|money }} a year</span></p>
+            <p class="lp-price lp-when-a"><b>{{ card.annual_monthly|price }}</b><span class="lp-muted">/month</span></p>
+            <p class="lp-price-note"><span class="lp-when-m">or {{ card.annual_monthly|price }}/month billed yearly</span><span class="lp-when-a">Billed {{ card.annual_total|price }} a year</span></p>
             {% else %}
             <p class="lp-price-note">Billed monthly</p>
             {% endif %}

@@ -22,8 +22,8 @@ from django.utils import timezone
 from apps.accounts.models import Account, Membership
 from apps.billing import payments
 from apps.billing.models import ManualPaymentRequest, Plan, Subscription
-from apps.billing.money import format_money
-from apps.billing.pricing import price_for
+from apps.billing.money import format_price
+from apps.billing.pricing import monthly_equivalent, price_for
 
 
 @pytest.fixture
@@ -52,7 +52,10 @@ def test_card_prices_are_what_checkout_charges(owner_client, plan):
     client, _ = owner_client
     prices = _card_prices(client.get("/billing/plans/").content.decode())
     for period, _label in Subscription.BILLING_PERIOD_CHOICES:
-        assert prices[period] == format_money(price_for(plan, period))
+        assert prices[period]["total"] == format_price(price_for(plan, period))
+        assert prices[period]["monthly"] == format_price(
+            monthly_equivalent(plan, period)
+        )
     assert "toFixed" not in client.get("/billing/plans/").content.decode()
 
 
