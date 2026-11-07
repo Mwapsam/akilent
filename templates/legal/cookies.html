@@ -19,11 +19,12 @@
 <ul>
   <li><strong>Session cookie</strong> — keeps you logged in during your session. Expires when your browser closes or after 8 hours, whichever comes first. Set on the <code>akilent.com</code> domain, HttpOnly and Secure.</li>
   <li><strong>CSRF token</strong> — protects form submissions against cross-site request forgery attacks. Set on the <code>akilent.com</code> domain.</li>
+  <li><strong>analytics_consent</strong> — remembers whether you accepted or declined analytics cookies, for one year.</li>
 </ul>
 
 <h3>Analytics cookies</h3>
 <p>
-  If Google Analytics is configured on your account, it sets cookies to measure usage patterns. These cookies do not identify you personally.
+  We use Google Analytics to see how our website is used, but only if you click <strong>Accept</strong> in the cookie bar. Until you do, and if you decline, Google Analytics isn't loaded and none of these cookies are set.
 </p>
 <ul>
   <li><strong>_ga, _ga_*, _gid</strong> — Google Analytics audience measurement. See <a href="https://policies.google.com/privacy" rel="noopener noreferrer">Google's privacy policy</a> for details.</li>
@@ -36,6 +37,9 @@
 
 <h2>How to control cookies</h2>
 <p>
+  To change your analytics choice, <a href="#" data-consent-reset>open the cookie bar again</a> and pick Accept or Decline. Declining stops new analytics cookies; your browser settings (below) remove ones already set.
+</p>
+<p>
   You can block or delete cookies through your browser settings. Note that blocking strictly necessary cookies will prevent you from logging in.
 </p>
 <ul>
@@ -44,6 +48,10 @@
   <li><a href="https://support.apple.com/en-gb/guide/safari/sfri11471/mac" rel="noopener noreferrer">Safari</a></li>
   <li><a href="https://support.microsoft.com/en-us/windows/delete-and-manage-cookies-168dab11-0753-043d-7c16-ede5947fc64d" rel="noopener noreferrer">Edge</a></li>
 </ul>
+
+{% comment %}The shell shows the bar to signed-out visitors; a signed-in one gets it here, so
+"open the cookie bar again" works for everyone.{% endcomment %}
+{% if user.is_authenticated %}{% include "components/cookie_consent.html" with shell="public" %}{% endif %}
 
 <h2>Changes to this policy</h2>
 <p>

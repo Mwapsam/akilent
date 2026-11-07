@@ -69,3 +69,6 @@ docs/design/qa/
 
 # Lighthouse CI reports (lighthouserc.json)
 .lighthouseci/
+
+# seed_signup_preview: values saved before copying production plans into a dev database
+/.signup-preview-backup.json

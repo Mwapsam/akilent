@@ -449,31 +449,9 @@
 
   {% block extra_js %}{% endblock %}
 {% if not request.shell_swap %}
-  {# Cookie notice — shown on public pages until dismissed. Uses a simple cookie flag so no JS #}
-  {# framework dependency; Alpine.js handles the show/hide without a full CMP library. #}
-  {% if not request.user.is_authenticated %}
-  <div
-    x-data="{ show: !document.cookie.split('; ').some(c => c === 'cookie_notice=1') }"
-    x-show="show"
-    x-transition
-    class="fixed bottom-0 left-0 right-0 z-(--z-banner) bg-surface border-t border-border px-4 pt-3 pb-[calc(0.75rem+var(--safe-bottom))] sm:px-6"
-    style="display:none"
-    role="region"
-    aria-label="Cookie notice"
-  >
-    <div class="max-w-5xl mx-auto flex flex-col sm:flex-row items-start sm:items-center gap-3">
-      <p class="text-sm text-ink-muted flex-1">
-        We use cookies to keep you logged in and to understand how the product is used.
-        <a href="{% url 'cookies' %}" class="underline text-accent ml-1">Cookie policy</a>
-      </p>
-      <button
-        @click="show=false; document.cookie='cookie_notice=1;path=/;max-age=31536000;SameSite=Lax' + (location.protocol === 'https:' ? ';Secure' : '')"
-        class="btn btn-secondary btn-sm shrink-0"
-        type="button"
-      >OK</button>
-    </div>
-  </div>
-  {% endif %}
+  {% comment %}Cookie choices on public pages: analytics only after Accept
+  (components/cookie_consent.html). The app itself shows no bar.{% endcomment %}
+  {% if not request.user.is_authenticated %}{% include "components/cookie_consent.html" with shell="app" %}{% endif %}
 {% if user.is_authenticated and REALTIME_SSE_ENABLED %}
 <div hidden aria-hidden="true" hx-get="/inbox/followups/badge/?toast=1" hx-trigger="sse:followup.due" hx-swap="none" data-auto-refresh></div>
 {% endif %}

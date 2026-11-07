@@ -1,0 +1,38 @@
+{% load static %}{% comment %}The analytics consent bar (static/js/consent.js). Hidden until the script finds no
+choice on record, so it never flashes for someone who already chose. Accept loads Google
+Analytics (analytics/google.html); Decline keeps it off. Necessary cookies (signing in,
+form protection) don't wait for a choice.
+Usage: include "components/cookie_consent.html" with shell="app" | "public" | "landing"
+{% endcomment %}
+<script defer src="{% static 'js/consent.js' %}"></script>
+{% if shell == "public" %}
+<div class="pub-cookie" role="region" aria-label="Cookie choices" data-consent-bar hidden>
+  <div class="pub-wrap pub-cookie-row">
+    <p>We use necessary cookies to keep you signed in. With your OK, we also use analytics cookies to see how the site is used. <a href="{% url 'cookies' %}">Cookie policy</a></p>
+    <button type="button" class="pub-cta pub-cta-quiet" data-consent="denied">Decline</button>
+    <button type="button" class="pub-cta" data-consent="granted">Accept</button>
+  </div>
+</div>
+{% elif shell == "landing" %}
+<div class="lp-cookie" role="region" aria-label="Cookie choices" data-consent-bar hidden>
+  <p>We use necessary cookies to keep you signed in. With your OK, we also use analytics cookies to see how the site is used. <a href="{% url 'cookies' %}" class="lp-link">Cookie policy</a></p>
+  <div class="lp-cookie-actions">
+    <button type="button" class="lp-btn lp-btn-sm lp-btn-outline" data-consent="denied">Decline</button>
+    <button type="button" class="lp-btn lp-btn-sm lp-btn-primary" data-consent="granted">Accept</button>
+  </div>
+</div>
+{% else %}
+<div class="fixed bottom-0 left-0 right-0 z-(--z-banner) bg-surface border-t border-border px-4 pt-3 pb-[calc(0.75rem+var(--safe-bottom))] sm:px-6"
+     role="region" aria-label="Cookie choices" data-consent-bar hidden>
+  <div class="max-w-5xl mx-auto flex flex-col sm:flex-row items-start sm:items-center gap-3">
+    <p class="text-sm text-ink-muted flex-1">
+      We use necessary cookies to keep you signed in. With your OK, we also use analytics cookies to see how the site is used.
+      <a href="{% url 'cookies' %}" class="underline text-accent ml-1">Cookie policy</a>
+    </p>
+    <div class="flex gap-2 shrink-0">
+      <button type="button" class="btn btn-ghost btn-sm" data-consent="denied">Decline</button>
+      <button type="button" class="btn btn-secondary btn-sm" data-consent="granted">Accept</button>
+    </div>
+  </div>
+</div>
+{% endif %}

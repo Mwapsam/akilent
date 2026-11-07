@@ -95,6 +95,8 @@ Help centre or Developers from the request path.
     .pub-cookie-row{ display:flex; flex-wrap:wrap; align-items:center; gap:.75rem; padding-top:.75rem; padding-bottom:.75rem; }
     .pub-cookie p{ flex:1 1 16rem; margin:0; font-size:.875rem; color:var(--color-ink-muted); }
     .pub-cookie a{ color:var(--color-teal-700); text-decoration:underline; }
+    .pub-cookie[hidden]{ display:none; }
+    .pub-cta-quiet{ background:transparent; color:var(--color-ink); border:1px solid var(--color-border-strong); }
 
     @media print{ .pub-header, .pub-footer, .pub-cookie{ display:none !important; } }
     @media (prefers-reduced-motion:reduce){
@@ -211,15 +213,9 @@ Help centre or Developers from the request path.
   </footer>
 
   {% if not user.is_authenticated %}
-  {% comment %}Cookie notice, same behaviour as base.html: a plain cookie flag, no consent library.{% endcomment %}
-  <div class="pub-cookie" role="region" aria-label="Cookie notice" style="display:none"
-       x-data="{ show: !document.cookie.split('; ').some(c => c === 'cookie_notice=1') }" x-show="show" x-transition>
-    <div class="pub-wrap pub-cookie-row">
-      <p>We use cookies to keep you signed in and to understand how the product is used. <a href="{% url 'cookies' %}">Cookie policy</a></p>
-      <button type="button" class="pub-cta"
-              @click="show=false; document.cookie='cookie_notice=1;path=/;max-age=31536000;SameSite=Lax' + (location.protocol === 'https:' ? ';Secure' : '')">OK</button>
-    </div>
-  </div>
+  {% comment %}Cookie choices, the same as base.html: analytics only after Accept. Signed-in
+  people get the bar only on the cookie policy, to change their choice.{% endcomment %}
+  {% include "components/cookie_consent.html" with shell="public" %}
   {% endif %}
 
 {% endwith %}

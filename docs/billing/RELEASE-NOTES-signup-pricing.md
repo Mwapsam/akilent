@@ -33,24 +33,35 @@ month", "every 3 months", "a year", "every 2 years"). The
   rows are created at that same amount, so the amount check in `payments.record_result`
   matches. New PayPal subscriptions get a new PayPal plan at the rounded price.
 - Checkouts already started keep the `amount_due` saved when they began.
-- Plan changes mid-term: unused time is valued per day from the current plan's
-  `price_for` (`services.unused_value`), so a term paid at the old amount ($121.38) is now
-  credited at the rounded one ($121). The difference is under one unit over a whole term.
-  It can never go negative or exceed the new price. `test_payments
-  .test_yearly_upgrade_mid_term_with_whole_unit_terms` covers a yearly upgrade at live
-  prices.
+- Plan changes mid-term: unused time is valued per day at what the customer was charged for
+  their current term (the latest paid payment for that plan and period, less any refund;
+  `services._term_price_paid`). Someone who paid $121.38 gets credit on $121.38, not on
+  today's $121. Today's price is used only when no payment is on record, such as a plan an
+  operator set by hand. Covered by `test_payments`: a yearly upgrade at live prices, credit
+  at the recorded amount, and a refunded term leaving nothing unused.
 
-## 2. Google Analytics loader (site-wide)
+## 2. Google Analytics: only after consent (site-wide)
 
-`templates/analytics/google.html` now sets up the `dataLayer`, `gtag('js')` and
-`gtag('config')` straight away. Only the gtag.js download still waits until the browser is
-idle. As a result, events sent before the script arrives (signup steps, `signup_created`)
-are queued behind the config instead of being lost. Each page still sends one `page_view`.
-`landing.js` sends only `cta_click`. There is no Consent Mode, and the cookie bar only
-records that it was dismissed, so nothing has to run before `config`.
+Decided 2026-11-07: Google Analytics loads only after the visitor clicks **Accept**.
 
-Not changed by this release: GA loads for every visitor behind a cookie bar that only
-informs. With USA/UK/EU positioning, that needs its own consent decision.
+- **Cookie bar.** The old informational bar ("OK", `cookie_notice=1`) is replaced by an
+  Accept / Decline bar (`components/cookie_consent.html`, `static/js/consent.js`). It now
+  appears on the landing page, which had none, on the public shell and on signed-out
+  `base.html` pages. The choice is kept for a year in the `analytics_consent` cookie
+  (`granted` / `denied`). Everyone sees the bar once more, because the old flag only meant
+  "dismissed".
+- **Loader.** `templates/analytics/google.html` still sets up `dataLayer` and the config at
+  once, so events from the page wait in order. gtag.js itself is fetched only when consent
+  is granted, either already on record or the moment Accept is clicked. Without that, nothing
+  is sent to Google.
+- **Signed-in app pages show no bar** (unchanged). Someone who never accepted on a public page
+  isn't tracked in the app. The cookie policy shows the bar to signed-in readers, so they can
+  change their choice.
+- **Cookie policy** (`legal/cookies.html`, updated 7 November 2026) now says analytics
+  cookies are set only after Accept. It lists `analytics_consent` as necessary and links to
+  "open the cookie bar again".
+
+Still open: Cloudflare Insights (performance beacon) is unchanged and isn't behind the bar.
 
 ## 3. Signup (Phase 1, already committed)
 

@@ -1,24 +1,30 @@
 {% if ga_id %}<script>
   (function () {
-    // The queue and its config are set up straight away, so events sent before gtag.js
-    // arrives (a signup step, a queued server event) wait in order behind the config;
-    // only the script itself waits for the browser to be idle.
+    // Nothing reaches Google until the visitor accepts analytics cookies (the consent bar,
+    // static/js/consent.js). The queue and its config are set up straight away, so events
+    // sent before then (a signup step, a queued server event) wait in order in the page;
+    // they are only sent if gtag.js loads, which needs the visitor's OK.
     window.dataLayer = window.dataLayer || [];
     window.gtag = function () { dataLayer.push(arguments); };
     gtag('js', new Date());
     gtag('config', '{{ ga_id }}');
     {% if ga_event %}gtag('event', '{{ ga_event.name|escapejs }}', { {% for key, value in ga_event.params.items %}'{{ key|escapejs }}': '{{ value|escapejs }}'{% if not forloop.last %}, {% endif %}{% endfor %} });{% endif %}
+    var started = false;
     function loadGA() {
+      if (started) return;
+      started = true;
       var s = document.createElement('script');
       s.async = true;
       s.src = 'https://www.googletagmanager.com/gtag/js?id={{ ga_id }}';
       document.head.appendChild(s);
     }
-    // Defer until the browser is idle so gtag never blocks initial render.
-    if ('requestIdleCallback' in window) {
-      requestIdleCallback(loadGA);
-    } else {
-      window.addEventListener('load', loadGA);
+    function whenIdle() {
+      // Defer until the browser is idle so gtag never blocks initial render.
+      if ('requestIdleCallback' in window) requestIdleCallback(loadGA);
+      else if (document.readyState === 'complete') loadGA();
+      else window.addEventListener('load', loadGA);
     }
+    if (/(?:^|; )analytics_consent=granted/.test(document.cookie)) whenIdle();
+    else window.addEventListener('akilent:analytics-consent', whenIdle);
   })();
 </script>{% endif %}

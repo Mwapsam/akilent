@@ -234,6 +234,8 @@ _LEGAL_PAGES = {
     "security": ("legal/security.html", "Security"),
 }
 _LEGAL_UPDATED = "24 October 2026"  # change with the text
+# A page whose text changed on its own date (the cookie policy: analytics only after Accept).
+_LEGAL_UPDATED_BY_PAGE = {"cookies": "7 November 2026"}
 # The Security page changes with the infrastructure (docs/ops/security-facts.md), not the legal text.
 _SECURITY_UPDATED = "7 November 2026"
 
@@ -249,7 +251,8 @@ def security_contact() -> str:
 
 def legal_page(request, slug):
     template, title = _LEGAL_PAGES[slug]
-    ctx = {"page_title": title, "updated": _LEGAL_UPDATED}
+    updated = _LEGAL_UPDATED_BY_PAGE.get(slug, _LEGAL_UPDATED)
+    ctx = {"page_title": title, "updated": updated}
     if slug == "security":
         ctx.update(
             updated=_SECURITY_UPDATED,
@@ -274,7 +277,7 @@ def legal_page(request, slug):
 
         html = render_to_string(template, ctx, request=request)
         body_md = extract_and_convert(html)
-        text = f"# {title}\n\n_Last updated {_LEGAL_UPDATED}_\n\n{body_md}"
+        text = f"# {title}\n\n_Last updated {ctx['updated']}_\n\n{body_md}"
         return markdown_response(text)
 
     return render(request, template, ctx)

@@ -68,13 +68,40 @@ def _in_paid_period(sub, now) -> bool:
     )
 
 
+def _term_price_paid(sub) -> Decimal:
+    """What one term of ``sub``'s plan and period cost the customer: the gross amount of the
+    latest paid payment for that plan and period less anything refunded from it, else
+    today's price_for (an operator-set plan, or a term paid before payments were recorded).
+    Gross, before credit and unused time, because those were the customer's own money too."""
+    from apps.billing.models import BillingPayment
+
+    paid = (
+        BillingPayment.objects.filter(
+            account_id=sub.account_id,
+            plan_id=sub.plan_id,
+            billing_period=sub.billing_period,
+            status=BillingPayment.SUCCEEDED,
+            gross_amount__gt=0,
+        )
+        .order_by("-paid_at", "-pk")
+        .values_list("gross_amount", "refunded_amount")
+        .first()
+    )
+    if paid is None:
+        return price_for(sub.plan, sub.billing_period)
+    gross, refunded = paid
+    return max(ZERO, gross - (refunded or ZERO))
+
+
 def unused_value(sub, plan, billing_period, now=None) -> Decimal:
     """What's left of the paid time on ``sub`` when it moves to a different ``plan`` or
     ``billing_period`` (zero when it's the same plan and period, which extends instead).
 
-    Valued per day at the current plan's price, so a period already extended by an early
-    renewal is valued in full. Only time somebody paid for counts: a plan an operator set by
-    hand records no provider.
+    Valued per day at what the customer was charged for their current plan and term (the
+    latest paid payment for it), so nobody is credited less than they paid when prices
+    change; today's price only when no payment is on record. A period already extended by
+    an early renewal is valued in full. Only time somebody paid for counts: a plan an
+    operator set by hand records no provider.
     """
     now = now or timezone.now()
     if (
@@ -87,8 +114,6 @@ def unused_value(sub, plan, billing_period, now=None) -> Decimal:
         return ZERO
     if not (sub.provider or sub.payment_method) or sub.plan.price_monthly <= 0:
         return ZERO
-    per_day = price_for(sub.plan, sub.billing_period) / Decimal(
-        period_days(sub.billing_period)
-    )
+    per_day = _term_price_paid(sub) / Decimal(period_days(sub.billing_period))
     days_left = Decimal((sub.current_period_end - now).total_seconds()) / Decimal(86400)
     return max(ZERO, quantize(per_day * days_left))

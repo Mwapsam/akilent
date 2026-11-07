@@ -867,3 +867,17 @@ html.js .lp-reveal.d1 { transition-delay: .04s; } html.js .lp-reveal.d2 { transi
 /* The final CTA follows the navy developer section: one gap between them, not two. */
 .lp-after-navy { padding-top: 0; }
 .lp-footer-base { align-items: center; }
+
+/* Cookie choices (components/cookie_consent.html): a light bar pinned to the bottom, Accept as
+   the one amber action. Hidden until consent.js finds no choice on record. */
+.lp-cookie {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+  display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1rem;
+  padding: .875rem max(1rem, calc((100vw - 72rem) / 2)) calc(.875rem + env(safe-area-inset-bottom));
+  background: var(--lp-white); color: var(--lp-ink);
+  border-top: 1px solid var(--lp-rule);
+  box-shadow: 0 -8px 24px -16px color-mix(in srgb, var(--lp-black) 25%, transparent);
+}
+.lp-cookie[hidden] { display: none; }
+.lp-cookie p { flex: 1 1 18rem; margin: 0; font-size: .875rem; line-height: 1.5; }
+.lp-cookie-actions { display: flex; gap: .5rem; }

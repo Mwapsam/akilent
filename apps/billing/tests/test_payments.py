@@ -195,3 +195,65 @@ def test_a_checkout_payment_sends_one_payment_confirmation(
         with django_capture_on_commit_callbacks(execute=True):
             payments.record_result("fake", fake_provider.paid(payment))  # replay
     notice.assert_called_once_with(account.pk, "paid", payment.pk)
+
+
+def _paid_yearly_term(account, plan, gross, **extra):
+    """A yearly payment recorded before prices were whole units (e.g. $121.38)."""
+    return BillingPayment.objects.create(
+        account=account,
+        reference=BillingPayment.new_reference(),
+        provider="fake",
+        plan=plan,
+        billing_period=Subscription.ANNUALLY,
+        currency="USD",
+        gross_amount=gross,
+        amount_due=gross,
+        status=BillingPayment.SUCCEEDED,
+        paid_at=timezone.now() - timedelta(days=182.5),
+        **extra,
+    )
+
+
+def _half_a_yearly_term_left(subscription, plan):
+    plan.price_monthly = D("11.90")
+    plan.save()
+    now = timezone.now()
+    subscription.status = Subscription.ACTIVE
+    subscription.provider = "fake"
+    subscription.billing_period = Subscription.ANNUALLY
+    subscription.current_period_start = now - timedelta(days=182.5)
+    subscription.current_period_end = now + timedelta(days=182.5)
+    subscription.save()
+
+
+@pytest.mark.django_db
+def test_unused_time_is_valued_at_what_the_customer_paid(
+    account, plan, subscription, fake_provider
+):
+    """Paid $121.38 for the year before prices were rounded: half of that comes back
+    ($60.69), not half of today's $121."""
+    from apps.billing.services import unused_value
+
+    _half_a_yearly_term_left(subscription, plan)
+    _paid_yearly_term(account, plan, D("121.38"))
+    growth = Plan.objects.create(slug="growth", name="Growth", price_monthly=D("25.90"))
+    value = unused_value(subscription, growth, Subscription.ANNUALLY)
+    assert abs(value - D("60.69")) <= D("0.02")
+
+
+@pytest.mark.django_db
+def test_a_refunded_term_leaves_nothing_unused(
+    account, plan, subscription, fake_provider
+):
+    from apps.billing.services import unused_value
+
+    _half_a_yearly_term_left(subscription, plan)
+    _paid_yearly_term(
+        account,
+        plan,
+        D("121.38"),
+        refund_state=BillingPayment.REFUND_FULL,
+        refunded_amount=D("121.38"),
+    )
+    growth = Plan.objects.create(slug="growth", name="Growth", price_monthly=D("25.90"))
+    assert unused_value(subscription, growth, Subscription.ANNUALLY) == D("0.00")
