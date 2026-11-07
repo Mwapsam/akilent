@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="color-scheme" content="light dark">
+<title>Something went wrong · Akilent</title>
+<!--
+  Django renders this page without a request or context (server_error uses a bare Template),
+  so it must not be able to fail itself: no extends, url, static, include or variables, inline
+  CSS with the brand colours as literals, and an inline logo.
+-->
+<style>
+  :root{ --bg:#F3F5F7; --card:#FFFFFF; --ink:#12182B; --muted:#46516B; --border:#E8EDF3; --btn:#35517D; --btn-ink:#FFFFFF; --dot:#0E1526; }
+  @media (prefers-color-scheme: dark){ :root{ --bg:#0E1526; --card:#161F35; --ink:#FAFBFC; --muted:#A8B2C4; --border:#26314A; --btn:#5B7BB0; --btn-ink:#FFFFFF; --dot:#FAFBFC; } }
+  *{ box-sizing:border-box; }
+  body{ margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:1.5rem 1rem;
+        background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; line-height:1.6; }
+  main{ width:100%; max-width:30rem; text-align:center; background:var(--card); border:1px solid var(--border); border-radius:1rem; padding:2.5rem 1.5rem; }
+  svg{ display:block; margin:0 auto 1.25rem; }
+  .dot{ fill:var(--dot); }
+  h1{ margin:0; font-size:1.5rem; line-height:1.25; letter-spacing:-.01em; }
+  p{ margin:.75rem 0 0; color:var(--muted); }
+  .actions{ display:flex; flex-wrap:wrap; justify-content:center; gap:.75rem; margin-top:1.75rem; }
+  a{ display:inline-block; padding:.625rem 1.125rem; border-radius:.75rem; font-weight:600; font-size:.9375rem; text-decoration:none; }
+  a.primary{ background:var(--btn); color:var(--btn-ink); }
+  a.secondary{ border:1px solid var(--border); color:var(--ink); }
+  a:focus-visible{ outline:2px solid var(--btn); outline-offset:2px; }
+</style>
+</head>
+<body>
+<main>
+  <svg width="48" height="48" viewBox="0 0 120 120" aria-hidden="true">
+    <path d="M60,22 L28,96" fill="none" stroke="#1FAF9C" stroke-width="15" stroke-linecap="round"/>
+    <path d="M60,22 L92,96" fill="none" stroke="#FFB020" stroke-width="15" stroke-linecap="round"/>
+    <circle class="dot" cx="60" cy="22" r="9.5"/>
+  </svg>
+  <h1>Something went wrong on our side</h1>
+  <p>It isn't anything you did. Try again in a minute. If it keeps happening, the Help centre has ways to reach us.</p>
+  <div class="actions">
+    <a class="primary" href="/">Go to the home page</a>
+    <a class="secondary" href="/help/">Visit the Help centre</a>
+  </div>
+</main>
+</body>
+</html>

@@ -543,6 +543,18 @@
     .input, .select, .textarea { font-size: 1rem; line-height: 1.5rem; }
   }
   .input::placeholder, .textarea::placeholder { color: var(--color-ink-subtle); }
+  /* Browser autofill paints its own pale yellow/blue (white on the dark theme) and ignores
+     background-color, so an inset shadow repaints the field in the theme's colours. On focus
+     the focus ring is part of the same shadow, or the autofill rule would hide it. */
+  .input:-webkit-autofill, .select:-webkit-autofill, .textarea:-webkit-autofill {
+    -webkit-text-fill-color: var(--color-ink);
+    caret-color: var(--color-ink);
+    box-shadow: 0 0 0 1000px var(--color-surface) inset;
+    transition: background-color 600000s 0s;
+  }
+  .input:-webkit-autofill:focus, .select:-webkit-autofill:focus, .textarea:-webkit-autofill:focus {
+    box-shadow: 0 0 0 1000px var(--color-surface) inset, 0 0 0 2px var(--color-focus-ring);
+  }
   /* Not on a field in error: hovering must not hide its red border. */
   .input:hover:not(:disabled):not(:focus):not([aria-invalid="true"]),
   .select:hover:not(:disabled):not(:focus):not([aria-invalid="true"]),

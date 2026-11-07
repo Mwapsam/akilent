@@ -560,15 +560,39 @@ def signup(request):
         return render(
             request,
             "accounts/signup.html",
-            {"form": form, "wizard_config": config},
+            _signup_context(form, config),
             status=400,
         )
 
     form = SignupForm()
     config = _build_signup_wizard_config(request)
-    return render(
-        request, "accounts/signup.html", {"form": form, "wizard_config": config}
+    return render(request, "accounts/signup.html", _signup_context(form, config))
+
+
+def _signup_context(form, config) -> dict:
+    """The signup page's context. ``ch`` and ``chat_names`` feed the wide-screen side panel
+    (accounts/_signup_aside.html), which only names channels that are on."""
+    ch = marketing_channels()
+    names = [
+        label
+        for key, label in (
+            ("whatsapp", "WhatsApp"),
+            ("instagram", "Instagram"),
+            ("facebook", "Facebook Page"),
+        )
+        if ch[key] == "live"
+    ]
+    chat_names = (
+        ", ".join(names[:-1]) + " and " + names[-1]
+        if len(names) > 1
+        else "".join(names)
     )
+    return {
+        "form": form,
+        "wizard_config": config,
+        "ch": ch,
+        "chat_names": chat_names,
+    }
 
 
 def after_signup_url(account) -> str:

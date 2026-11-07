@@ -14,5 +14,5 @@ Usage: include "accounts/_signup_field.html" with name="email" label="Work email
          :aria-invalid="fieldError('{{ name }}') ? 'true' : null"
          :aria-describedby="fieldError('{{ name }}') ? 'err_{{ name }}' : null"
          class="input">
-  <p id="err_{{ name }}" class="field-error" x-show="fieldError('{{ name }}')" x-text="fieldError('{{ name }}')"></p>
+  <p id="err_{{ name }}" class="field-error" x-show="fieldError('{{ name }}')" x-cloak x-text="fieldError('{{ name }}')"></p>
 </div>

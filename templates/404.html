@@ -1,0 +1,30 @@
+{% extends "public/_base.html" %}
+{% comment %}Django's page_not_found renders this with the request, so the public shell (and its
+links, sign-in state and cookie bar) works as on any public page. The 500 page can't rely on
+that and is self-contained (templates/500.html).{% endcomment %}
+{% block title %}Page not found · {{ site.app_name|default:"Akilent" }}{% endblock %}
+{% block extra_head %}
+<meta name="robots" content="noindex">
+<style>
+  .nf-wrap{ max-width:36rem; padding-block:5rem 4rem; text-align:center; }
+  .nf-code{ margin:0; font-size:.8125rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--color-ink-subtle); }
+  .nf-wrap h1{ margin:.5rem 0 0; font-size:clamp(1.75rem,4vw,2.25rem); line-height:1.15; font-weight:700; letter-spacing:-.02em; color:var(--color-ink); }
+  .nf-wrap p.nf-lead{ margin:.875rem auto 0; max-width:28rem; color:var(--color-ink-muted); line-height:1.6; }
+  .nf-actions{ display:flex; flex-wrap:wrap; justify-content:center; gap:.75rem; margin-top:2rem; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="pub-wrap nf-wrap">
+  <p class="nf-code">404</p>
+  <h1>We couldn't find that page</h1>
+  <p class="nf-lead">The link may be old, or the page may have moved. Check the address, or go on from one of these.</p>
+  <div class="nf-actions">
+    {% if user.is_authenticated %}
+      <a href="/dashboard/" class="btn btn-primary">Go to your dashboard</a>
+    {% else %}
+      <a href="/" class="btn btn-primary">Go to the home page</a>
+    {% endif %}
+    <a href="{% url 'help' %}" class="btn btn-secondary">Visit the Help centre</a>
+  </div>
+</div>
+{% endblock %}

@@ -107,3 +107,21 @@ deliberate release.
   name, which the email footer prints. No data migration: a stored code (`ZM`) shows as its
   name, and an old typed value that isn't a country stays as its own option, so saving the
   page never loses it.
+
+## 5. Signup polish (Phase 5, no migrations, safe to ship on its own)
+
+- **No blank screen before the scripts run.** The signup wizard used to be hidden until
+  Alpine started: an empty page, navy for anyone whose system is in dark mode. The step the
+  server picks now renders straight away (with its channel cards and Continue); only steps
+  and buttons that start hidden wait for Alpine.
+- **Side panel on wide screens:** a product screenshot, three lines from the claim register
+  (inbox, interested/follow-ups, orders) naming only channels that are on, and the Meta Tech
+  Provider line when a Meta channel is live. Hidden on phones and on the Package step.
+- **Phone stepper:** "Step 2 of 3 · Account" with a progress bar below `sm`; the labelled
+  dots from `sm` up.
+- **Autofill** keeps the theme's field colours (light and dark) instead of the browser's.
+- **Branded 404** on the public shell (home or dashboard, and Help centre), and a
+  self-contained **500** page (inline CSS, no template tags; exception added to the drift
+  guard). Only seen with `DEBUG=False`.
+- **Redirects:** `/login/` → `/auth/login/` and `/register/` → `/signup/`, permanent, query
+  string kept.

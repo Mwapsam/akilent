@@ -95,3 +95,17 @@ reason = "Instagram gradient and Facebook blue logo tiles: third-party brand col
 path = "publishing/composer/_styles.html"
 rule = "hex-style"
 reason = "Composer chrome that must match the platforms: Instagram/Facebook destination marks, Instagram's carousel dot blue in the preview, and white on photo overlays."
+
+# --- Server error page ----------------------------------------------------------------
+# Django renders 500.html with a bare Template and no request, after something has already
+# failed, so it can't load app.css or the tokens: its colours are literals on purpose
+# (apps/accounts/tests/test_signup_polish.py renders it with no context).
+[[exception]]
+path = "500.html"
+rule = "hex-style"
+reason = "Self-contained 500 page: no stylesheet or tokens can be relied on, so brand colours are inline literals."
+
+[[exception]]
+path = "500.html"
+rule = "viewport-height"
+reason = "Self-contained 500 page centres its card with min-height:100vh in inline CSS; the min-h-viewport utility is in app.css, which it doesn't load."

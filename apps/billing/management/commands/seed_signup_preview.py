@@ -22,6 +22,7 @@ command says so, and that one is yours to turn on.
 
 import json
 import re
+import urllib.parse
 import urllib.request
 from decimal import Decimal
 from pathlib import Path
@@ -66,7 +67,11 @@ class Command(BaseCommand):
         if options["file"]:
             html = Path(options["file"]).read_text(encoding="utf-8")
         else:
-            with urllib.request.urlopen(options["url"], timeout=20) as resp:  # noqa: S310
+            url = options["url"]
+            if urllib.parse.urlsplit(url).scheme not in ("http", "https"):
+                raise CommandError("--url must be an http(s) address.")
+            # Scheme checked just above, so no file:// or custom scheme gets through.
+            with urllib.request.urlopen(url, timeout=20) as resp:  # noqa: S310  # nosec B310
                 html = resp.read().decode("utf-8")
         self._apply(wizard_config(html))
 
@@ -104,7 +109,8 @@ class Command(BaseCommand):
                 },
             )
             billing_api.set_plan_channels(plan, data.get("channels", []))
-            keep, drop = set(), set()
+            keep: set[str] = set()
+            drop: set[str] = set()
             for name in cfg.get("included", []):
                 if name in by_name:
                     keep.add(by_name[name])

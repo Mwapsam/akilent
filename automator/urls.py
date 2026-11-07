@@ -3,6 +3,7 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.contrib.sitemaps.views import sitemap
 from django.urls import include, path
+from django.views.generic import RedirectView
 
 from apps.accounts.forms import LoginForm
 from apps.accounts.views import (
@@ -48,6 +49,15 @@ urlpatterns = [
             template_name="auth/login.html", authentication_form=LoginForm
         ),
         name="login",
+    ),
+    # Addresses people type or guess: kept for good, query string (?next=) included.
+    path(
+        "login/",
+        RedirectView.as_view(pattern_name="login", permanent=True, query_string=True),
+    ),
+    path(
+        "register/",
+        RedirectView.as_view(pattern_name="signup", permanent=True, query_string=True),
     ),
     path("auth/logout/", LogoutView.as_view(), name="logout"),
     path("auth/2fa/verify/", _2fa_verify, name="2fa-verify"),

@@ -1,0 +1,39 @@
+{% load static %}
+{% comment %}Signup's right-hand column on wide screens: what the account is for, in the words of
+docs/marketing/messaging.md (claim ids as on the landing page), and only for channels that are
+on (accounts.views.marketing_channels). Hidden on a phone and on the Package step, where the plan
+cards need the width.{% endcomment %}
+{% with app=site.app_name|default:"Akilent" %}
+<aside class="hidden lg:block w-80 shrink-0 pt-24 sticky top-12" x-show="step !== 'package'" aria-label="About {{ app }}">
+  {% if chat_names %}
+  <figure class="rounded-xl border border-border bg-surface shadow-card overflow-hidden">
+    <img src="{% static 'img/marketing/inbox.webp' %}" alt="The {{ app }} shared inbox, with conversations from every channel in one list"
+         width="1184" height="900" loading="lazy" decoding="async" class="block w-full h-auto">
+  </figure>
+  {% endif %}
+  <ul class="mt-6 space-y-3 text-sm text-ink-muted">
+    {% if chat_names %}
+    <li class="flex gap-2.5" data-claim="{% if ch.whatsapp == 'live' %}inbox{% endif %}{% if ch.instagram == 'live' %} instagram-dms{% endif %}{% if ch.facebook == 'live' %} facebook-inbox{% endif %}">
+      <span class="tone-teal-fg shrink-0" aria-hidden="true">✓</span>
+      <span>Answer {{ chat_names }} messages from one shared inbox.</span>
+    </li>
+    {% endif %}
+    <li class="flex gap-2.5" data-claim="interested follow-ups">
+      <span class="tone-teal-fg shrink-0" aria-hidden="true">✓</span>
+      <span>See who's interested and set follow-ups, so no sale slips away.</span>
+    </li>
+    <li class="flex gap-2.5" data-claim="orders">
+      <span class="tone-teal-fg shrink-0" aria-hidden="true">✓</span>
+      <span>Record every order, and mark it paid when the customer pays you.</span>
+    </li>
+  </ul>
+  {% if ch.whatsapp == "live" or ch.instagram == "live" or ch.facebook == "live" %}
+  {% comment %}Plain text, no Meta logo: Meta publishes no Tech Provider badge, and its brand
+  rules don't allow its marks to suggest endorsement (same as the landing hero).{% endcomment %}
+  <p class="mt-6 flex items-start gap-2 rounded-lg bg-surface-muted px-3 py-2.5 text-xs text-ink-subtle" data-claim="meta-tech-provider">
+    <svg class="w-4 h-4 shrink-0 text-ink-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>
+    <span><span class="font-medium text-ink-muted">Meta Tech Provider.</span> You connect your accounts through Meta's own sign-in.</span>
+  </p>
+  {% endif %}
+</aside>
+{% endwith %}
