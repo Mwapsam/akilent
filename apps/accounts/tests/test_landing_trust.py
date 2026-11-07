@@ -206,3 +206,18 @@ def test_logos_and_the_case_study_show_with_permission(
     # The case study's quote isn't repeated as a separate card.
     assert proof.count("We answer every chat now.") == 1
     assert 'class="lp-proof lp-proof-logos"' in _section(html, "hero")
+
+
+@pytest.mark.django_db
+def test_meta_tech_provider_is_stated_in_plain_text(client, plans, settings):
+    """Owner-confirmed (docs/ops/security-facts.md). Meta publishes no Tech Provider badge and its
+    brand rules forbid suggesting endorsement, so it's text only: no Meta or WhatsApp logo."""
+    settings.WHATSAPP_ENABLED = True
+    html = client.get("/").content.decode()
+    for part in (_section(html, "hero"), _section(html, "trust")):
+        assert 'data-claim="meta-tech-provider"' in part
+        assert "Meta Tech Provider" in part
+    footer = html.split('<footer class="lp-footer', 1)[1]
+    assert "Verified Meta Tech Provider" in footer
+    assert not re.search(r"<img[^>]+(meta|whatsapp)[^>]*>", html, re.I)
+    assert "verified Meta Tech Provider" in client.get("/security/").content.decode()

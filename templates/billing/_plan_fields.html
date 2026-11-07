@@ -14,6 +14,7 @@ Channels: every channel is sold the same way; a new package starts with all of t
 <div class="grid sm:grid-cols-2 gap-3">
   {% include "components/form_field.html" with name="name" label="Name" value=plan.name required=True %}
   {% include "components/form_field.html" with name="price_monthly" label="Price /mo (USD)" type="number" value=plan.price_monthly|default:0 %}
+  <div class="sm:col-span-2">{% include "components/form_field.html" with name="tagline" label="Who it's for (pricing card)" value=plan.tagline help="One line under the price on the landing page, e.g. For teams answering customers every day." %}</div>
   {% include "components/form_field.html" with name="trial_days" label="Trial days" type="number" value=plan.trial_days|default:0 %}
   {% include "components/form_field.html" with name="log_retention_days" label="Log retention (days)" type="number" value=plan.log_retention_days|default:0 %}
 </div>

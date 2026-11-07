@@ -577,9 +577,33 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
 .lp-trust-link .lp-h3::after { content: " →"; color: var(--lp-teal-ink); }
 
 /* --- Pricing ------------------------------------------------------------- */
-.plans { display: grid; gap: 1rem; grid-template-columns: 1fr; align-items: stretch; margin-top: 3.5rem; }
-@media (min-width: 640px) { .plans { grid-template-columns: repeat(2, 1fr); } }
-@media (min-width: 1100px) { .plans.n4 { grid-template-columns: repeat(4, 1fr); } .plans.n3 { grid-template-columns: repeat(3, 1fr); } }
+/* Monthly / annual: two visually hidden radios before the cards. The checked one hides the other
+   term's price, button and footnote (sibling selectors, so it works without JavaScript). */
+.lp-pricebox { margin-top: 2.5rem; }
+.lp-billing { display: flex; align-items: center; gap: .25rem; width: max-content; max-width: 100%; margin: 0 auto; padding: .25rem;
+  border: 1px solid var(--lp-rule-2); border-radius: 999px; background: var(--lp-white); }
+.lp-billing label { display: inline-flex; align-items: center; gap: .5rem; min-height: 44px; padding: 0 1.125rem; border-radius: 999px;
+  font-size: .9375rem; font-weight: 600; color: var(--lp-ink-2); cursor: pointer;
+  transition: background-color var(--duration-base) ease, color var(--duration-base) ease; }
+#bill-monthly:checked ~ .lp-billing label[for="bill-monthly"],
+#bill-annual:checked ~ .lp-billing label[for="bill-annual"] { background: var(--lp-navy); color: var(--lp-on-navy); }
+#bill-monthly:focus-visible ~ .lp-billing label[for="bill-monthly"],
+#bill-annual:focus-visible ~ .lp-billing label[for="bill-annual"] { outline: 2px solid var(--lp-teal-ink); outline-offset: 2px; }
+.lp-save { padding: .0625rem .5rem; border-radius: 999px; background: var(--lp-teal-soft); color: var(--lp-teal-ink); font-size: .75rem; font-weight: 700; }
+#bill-annual:checked ~ .plans .lp-when-m,
+#bill-monthly:checked ~ .plans .lp-when-a { display: none; }
+
+/* Plan cards, then Enterprise: stacked on phones, two across on tablets, one row on desktop. */
+.plans { display: grid; gap: 1rem; grid-template-columns: 1fr; align-items: stretch; margin-top: 2.5rem; }
+@media (min-width: 640px) { .plans { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1100px) {
+  .lp-plans-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .lp-plans-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .lp-plans-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .lp-plans-5 .lp-plan { padding: 1.5rem 1.25rem; }
+  .lp-plans-5 .lp-price b { font-size: 2.125rem; }
+  .lp-plans-5 .lp-plan-for { min-height: 4.2em; }
+}
 .lp-plan { position: relative; display: flex; flex-direction: column; border-radius: var(--lp-r-lg); background: var(--lp-white);
   border: 1px solid var(--lp-rule); padding: 1.75rem; box-shadow: var(--lp-shadow-1); }
 .lp-plan.featured { border: 0; background: linear-gradient(var(--lp-white), var(--lp-white)) padding-box,
@@ -597,6 +621,32 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
 .lp-soon-tag { margin-left: .25rem; padding: .0625rem .5rem; border-radius: 999px; background: var(--lp-brand-tint); color: var(--lp-ink-2); font-size: .75rem; font-weight: 600; }
 .lp-plan .lp-btn { margin-top: 1.75rem; width: 100%; }
 .lp-plan-foot { margin: .75rem 0 0; text-align: center; font-size: .875rem; color: var(--lp-ink-3); }
+.lp-plan-for { margin: .375rem 0 0; min-height: 2.8em; font-size: .9375rem; line-height: 1.4; color: var(--lp-ink-2); }
+.lp-plan-ent { background: var(--color-gray-50); box-shadow: none; }
+
+/* Under the cards: one line of what every plan includes, then Meta's fees. */
+.lp-included { margin: 2.25rem auto 0; max-width: 62rem; text-align: center; font-size: .9375rem; line-height: 1.7; color: var(--lp-ink-2); }
+.lp-included strong { margin-right: .375rem; color: var(--lp-ink); }
+.lp-fees { margin: .75rem auto 0; max-width: 46rem; text-align: center; font-size: .875rem; line-height: 1.6; color: var(--lp-ink-3); }
+
+/* The comparison table: collapsed by default; on a narrow screen it scrolls sideways inside its
+   own box (never the page), with the row names held at the left. */
+.lp-compare { margin: 2.5rem auto 0; border: 1px solid var(--lp-rule); border-radius: var(--lp-r-lg); background: var(--lp-white); overflow: hidden; }
+.lp-compare summary { list-style: none; display: flex; align-items: center; justify-content: center; gap: .75rem; min-height: 56px;
+  padding: 0 1.25rem; font-weight: 600; cursor: pointer; }
+.lp-compare summary::-webkit-details-marker { display: none; }
+.lp-compare summary:hover { color: var(--lp-teal-ink); }
+.lp-compare-scroll { overflow-x: auto; overscroll-behavior-x: contain; border-top: 1px solid var(--lp-rule); }
+.lp-compare-scroll:focus-visible { outline: 2px solid var(--lp-teal-ink); outline-offset: -2px; }
+.lp-compare table { width: 100%; min-width: 40rem; border-collapse: collapse; font-size: .9375rem; }
+.lp-compare th, .lp-compare td { padding: .75rem 1rem; border-bottom: 1px solid var(--lp-rule); text-align: center; font-variant-numeric: tabular-nums; }
+.lp-compare thead th { font-weight: 700; color: var(--lp-ink); }
+.lp-compare th[scope="row"] { position: sticky; left: 0; z-index: 1; text-align: left; font-weight: 500; color: var(--lp-ink-2); background: var(--lp-white); }
+.lp-compare-group th { padding-top: 1.5rem; text-align: left; font-size: .75rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--lp-ink-3); }
+.lp-compare tbody:last-child tr:last-child :is(th, td) { border-bottom: 0; }
+.lp-compare .lp-ico { width: 1.125rem; height: 1.125rem; color: var(--lp-teal-ink); vertical-align: middle; }
+.lp-compare .lp-soon-tag { margin: 0; white-space: nowrap; }
+.lp-no { color: var(--lp-ink-3); }
 
 /* --- Testimonials -------------------------------------------------------- */
 .lp-quotes { display: grid; gap: 1rem; margin-top: 3.5rem; }
@@ -627,11 +677,11 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
 .faq summary { list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 48px;
   padding: 1.375rem 0; cursor: pointer; font-size: 1.0625rem; font-weight: 600; letter-spacing: -0.01em; }
 .faq summary::-webkit-details-marker { display: none; }
-.faq summary .pm { position: relative; flex-shrink: 0; width: 1.75rem; height: 1.75rem; border-radius: 999px; border: 1px solid var(--lp-rule-2); }
-.faq summary .pm::before, .faq summary .pm::after { content: ""; position: absolute; left: 50%; top: 50%; width: .625rem; height: 1.5px;
+.lp-compare summary .pm, .faq summary .pm { position: relative; flex-shrink: 0; width: 1.75rem; height: 1.75rem; border-radius: 999px; border: 1px solid var(--lp-rule-2); }
+.lp-compare summary .pm::before, .lp-compare summary .pm::after, .faq summary .pm::before, .faq summary .pm::after { content: ""; position: absolute; left: 50%; top: 50%; width: .625rem; height: 1.5px;
   margin: -.75px 0 0 -.3125rem; background: var(--lp-ink-2); transition: transform .3s var(--lp-ease); }
-.faq summary .pm::after { transform: rotate(90deg); }
-.faq details[open] summary .pm::after { transform: rotate(0deg); }
+.lp-compare summary .pm::after, .faq summary .pm::after { transform: rotate(90deg); }
+.lp-compare[open] summary .pm::after, .faq details[open] summary .pm::after { transform: rotate(0deg); }
 .faq details p { margin: 0; padding: 0 2.75rem 1.5rem 0; color: var(--lp-ink-2); font-size: 1rem; line-height: 1.7; }
 .faq summary:hover { color: var(--lp-teal-ink); }
 
@@ -651,6 +701,18 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
 .lp-code pre { margin: 0; padding: 1.375rem 1.375rem; overflow-x: auto; font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
   font-size: .8125rem; line-height: 1.8; color: var(--lp-on-navy); }
 .tk { color: var(--lp-on-navy-lo); } .ts { color: var(--lp-teal-on-navy); } .tm { color: var(--color-amber-300); }
+/* Code sample tabs (landing.js). Without the script the row stays hidden and every sample shows,
+   one under another, each under its own title. */
+.lp-ctabs { display: flex; gap: .125rem; overflow-x: auto; }
+.lp-ctabs[hidden] { display: none; }
+.lp-ctabs button { min-height: 44px; padding: 0 .875rem; border: 0; border-radius: var(--lp-r-sm); background: transparent; font: inherit;
+  font-size: .8125rem; font-weight: 600; color: var(--lp-on-navy-lo); cursor: pointer; white-space: nowrap; }
+.lp-ctabs button:hover { color: var(--lp-on-navy); }
+.lp-ctabs button[aria-selected="true"] { background: color-mix(in srgb, var(--lp-white) 10%, transparent); color: var(--lp-on-navy); }
+.lp-ctabs button:focus-visible, .lp-cpanel:focus-visible { outline: 2px solid var(--lp-teal-on-navy); outline-offset: -2px; }
+.lp-cpanel + .lp-cpanel { border-top: 1px solid var(--lp-line); }
+.lp-cpanel-title { padding: 1rem 1.375rem 0; font-size: .8125rem; color: var(--lp-on-navy-lo); }
+.lp-cpanel pre { padding-top: .75rem; }
 
 /* --- Final CTA ----------------------------------------------------------- */
 .lp-final { position: relative; overflow: hidden; border-radius: var(--lp-r-xl); padding: clamp(3rem, 8vw, 6rem) clamp(1.5rem, 5vw, 4rem);
@@ -661,7 +723,10 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
 /* --- Footer -------------------------------------------------------------- */
 .lp-footer { border-top: 1px solid var(--lp-line); font-size: .9375rem; padding-bottom: env(safe-area-inset-bottom); }
 .lp-footer-grid { display: grid; gap: 2.5rem; padding-block: 4rem 3rem; }
-@media (min-width: 768px) { .lp-footer-grid { grid-template-columns: 1.6fr repeat(3, 1fr); } }
+.lp-footer-grid { grid-template-columns: repeat(2, 1fr); }
+.lp-footer-grid > :first-child { grid-column: 1 / -1; }
+@media (min-width: 1024px) { .lp-footer-grid { grid-template-columns: 1.6fr repeat(4, 1fr); } .lp-footer-grid > :first-child { grid-column: auto; } }
+.lp-footer .lp-social { display: flex; flex-wrap: wrap; gap: 0 1.25rem; margin-top: .5rem; }
 .lp-footer h2 { margin: 0 0 .75rem; font-size: .8125rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--lp-on-navy); }
 .lp-footer ul { list-style: none; margin: 0; padding: 0; }
 .lp-footer a { display: inline-flex; align-items: center; min-height: 44px; color: var(--lp-on-navy-mid); text-decoration: none; }

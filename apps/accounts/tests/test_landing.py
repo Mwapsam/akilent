@@ -5,8 +5,9 @@ import pytest
 from apps.billing.models import Plan
 from apps.core.models import SiteSettings
 
-# Claims the page used to make that nothing in the product backs up.
-UNBACKED = ("99.9%", "Enterprise", "Usage-based", "infrastructure layer")
+# Claims the page used to make that nothing in the product backs up. (Pricing's Enterprise card
+# is allowed: it lists only what can be set up on request today; test_landing_pricing checks it.)
+UNBACKED = ("99.9%", "Enterprise-grade", "Usage-based", "infrastructure layer")
 
 
 @pytest.fixture
@@ -156,6 +157,21 @@ def test_mobile_menu_is_a_real_button(client, plans):
 
 @pytest.mark.django_db
 def test_api_example_is_a_valid_request(client, plans):
-    html = _get(client)
-    # MessageCreateSerializer requires from_email and to_email.
-    assert '"from_email"' in html and '"to_email"' in html
+    """The email sample is the public JSON shape (``from``/``to``), so pasted as-is it passes
+    the same validation POST /api/v1/messages runs. (It used to show the serializer's internal
+    field names, which the endpoint doesn't read.)"""
+    import html as html_lib
+    import json
+    import re
+
+    from apps.api.serializers import MessageCreateSerializer
+
+    page = _get(client)
+    panel = page.split('id="code-email"', 1)[1].split("</pre>", 1)[0]
+    code = html_lib.unescape(re.sub(r"<[^>]+>", "", panel.split("<code>", 1)[1]))
+    assert code.startswith("POST /api/v1/messages")
+    body = json.loads(code[code.index("{") :])
+    serializer = MessageCreateSerializer(
+        data=MessageCreateSerializer.from_request_data(body)
+    )
+    assert serializer.is_valid(), serializer.errors

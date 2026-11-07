@@ -76,11 +76,10 @@
     spy();
   }
 
-  // Platform tabs (WAI-ARIA tabs). The row is hidden in the markup so that, without this script,
-  // every panel shows; here it appears and one panel stays open. A link to a panel's id (the old
-  // #content-studio) opens that tab.
-  var tablist = document.querySelector('.lp-ptabs');
-  if (tablist) {
+  // WAI-ARIA tabs: the platform tabs and the developers' code samples. Each row is hidden in the
+  // markup so that, without this script, every panel shows; here it appears and one panel stays
+  // open. Returns the tabs and their select function.
+  function setUpTabs(tablist) {
     var tabs = Array.prototype.slice.call(tablist.querySelectorAll('[role="tab"]'));
     var panelOf = function (tab) { return document.getElementById(tab.getAttribute('aria-controls')); };
     var select = function (tab, focus) {
@@ -103,6 +102,16 @@
         select(tabs[(to + tabs.length) % tabs.length], true);
       });
     });
+    return { tabs: tabs, select: select };
+  }
+  var codeTabs = document.querySelector('.lp-ctabs');
+  if (codeTabs) setUpTabs(codeTabs);
+
+  // Platform tabs. A link to a panel's id (the old #content-studio) opens that tab.
+  var tablist = document.querySelector('.lp-ptabs');
+  if (tablist) {
+    var platform = setUpTabs(tablist);
+    var tabs = platform.tabs, select = platform.select;
     var openFromHash = function () {
       var id = location.hash.slice(1);
       var tab = id && tabs.filter(function (t) { return t.getAttribute('aria-controls') === id; })[0];

@@ -1060,6 +1060,14 @@ def audit_log(request):
 
 # --- Settings -----------------------------------------------------------------------------------
 
+# (SiteSettings field, label) for the company's social profiles in the landing footer.
+SOCIAL_LINKS = (
+    ("linkedin_url", "LinkedIn"),
+    ("x_url", "X"),
+    ("instagram_url", "Instagram"),
+    ("facebook_url", "Facebook"),
+)
+
 
 @admin_required
 def settings_page(request):
@@ -1068,6 +1076,10 @@ def settings_page(request):
     if request.method == "POST":
         site.app_name = (request.POST.get("app_name") or "Akilent").strip() or "Akilent"
         site.support_email = (request.POST.get("support_email") or "").strip()
+        # Social links: only a full http(s) address is kept, so the footer never links to junk.
+        for field, _ in SOCIAL_LINKS:
+            url = (request.POST.get(field) or "").strip()
+            setattr(site, field, url if url.startswith(("https://", "http://")) else "")
         site.signups_enabled = "signups_enabled" in request.POST
         site.payments_enabled = "payments_enabled" in request.POST
         site.automation_events_enabled = "automation_events_enabled" in request.POST
@@ -1087,6 +1099,7 @@ def settings_page(request):
                 "app_name",
                 "logo",
                 "support_email",
+                *(field for field, _ in SOCIAL_LINKS),
                 "signups_enabled",
                 "payments_enabled",
                 "automation_events_enabled",
@@ -1127,6 +1140,9 @@ def settings_page(request):
         {
             "plans": Plan.objects.all().order_by("price_monthly"),
             "admins": User.objects.order_by("-is_superuser", "username"),
+            "social_links": [
+                (field, label, getattr(site, field)) for field, label in SOCIAL_LINKS
+            ],
             "mail": mail,
             "percents": {  # stored as fractions, typed as percentages
                 "bounce_warn": f"{mail.reputation_bounce_warn * 100:g}",

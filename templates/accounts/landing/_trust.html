@@ -57,6 +57,9 @@
         <div><h4 class="lp-h3">Nightly backups</h4><p class="lp-small" data-claim="backups">Encrypted every night, kept for 30 days and test-restored every week.</p></div>
       </a>
     </div>
-    <p class="lp-small lp-soft lp-plan-note" data-claim-exempt><a href="{% url 'security' %}" class="lp-link">Read how {{ app }} keeps your data safe</a></p>
+    {% if ch.whatsapp == "live" or ch.instagram == "live" or ch.facebook == "live" %}
+    <p class="lp-small lp-soft lp-plan-note" data-claim="meta-tech-provider">{{ app }} is a verified Meta Tech Provider: you connect your accounts through Meta's own sign-in.</p>
+    {% endif %}
+    <p class="lp-small lp-soft lp-plan-note lp-mt" data-claim-exempt><a href="{% url 'security' %}" class="lp-link">Read how {{ app }} keeps your data safe</a></p>
   </div>
 </section>

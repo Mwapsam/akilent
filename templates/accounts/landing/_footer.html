@@ -1,4 +1,11 @@
 {% load static %}
+{% comment %}
+  Footer: the company block (positioning line, contact, address, social profiles from Operator
+  Console → Settings), then Product, Use cases, Company and Trust. Only pages that exist are
+  linked: there is no About or Careers page yet, Status shows once STATUS_PAGE_URL is set.
+  "Verified Meta Tech Provider" is plain text: Meta publishes no badge, and its marks may not suggest
+  endorsement.
+{% endcomment %}
 <footer class="lp-footer lp-navy">
   <div class="lp-wrap lp-footer-grid">
     <div>
@@ -8,6 +15,15 @@
         {% if site.support_email %}<a href="mailto:{{ site.support_email }}">{{ site.support_email }}</a><br>{% endif %}
         Lusaka, Zambia
       </p>
+      <p class="lp-small lp-lo lp-mt" data-claim="meta-tech-provider">Verified Meta Tech Provider</p>
+      {% if site.linkedin_url or site.x_url or site.instagram_url or site.facebook_url %}
+      <ul class="lp-social" aria-label="{{ app }} on social media">
+        {% if site.linkedin_url %}<li><a href="{{ site.linkedin_url }}" rel="noopener me">LinkedIn</a></li>{% endif %}
+        {% if site.x_url %}<li><a href="{{ site.x_url }}" rel="noopener me">X</a></li>{% endif %}
+        {% if site.instagram_url %}<li><a href="{{ site.instagram_url }}" rel="noopener me">Instagram</a></li>{% endif %}
+        {% if site.facebook_url %}<li><a href="{{ site.facebook_url }}" rel="noopener me">Facebook</a></li>{% endif %}
+      </ul>
+      {% endif %}
     </div>
     <nav aria-label="Product">
       <h2>Product</h2>
@@ -17,8 +33,7 @@
         <li><a href="#platform">Platform</a></li>
         {% if ch.content %}<li><a href="#content-studio">Content Studio</a></li>{% endif %}
         <li><a href="#pricing">Pricing</a></li>
-        <li><a href="{% url 'help' %}">Help</a></li>
-        <li><a href="{% url 'docs' %}">Documentation</a></li>
+        <li><a href="{% url 'docs' %}">API documentation</a></li>
       </ul>
     </nav>
     {% if ch.whatsapp == "live" or ch.content == "live" %}
@@ -31,14 +46,22 @@
       </ul>
     </nav>
     {% endif %}
-    <nav aria-label="Legal">
-      <h2>Legal</h2>
+    <nav aria-label="Company">
+      <h2>Company</h2>
       <ul>
+        <li><a href="{% url 'demo' %}?topic=sales" data-cta="contact_sales" data-cta-location="footer">Contact sales</a></li>
+        <li><a href="{% url 'demo' %}" data-cta="book_demo" data-cta-location="footer">Book a demo</a></li>
+        <li><a href="{% url 'help' %}">Help centre</a></li>
+      </ul>
+    </nav>
+    <nav aria-label="Trust">
+      <h2>Trust</h2>
+      <ul>
+        <li><a href="{% url 'security' %}">Security</a></li>
+        {% if STATUS_PAGE_URL %}<li><a href="{{ STATUS_PAGE_URL }}" rel="noopener">Status</a></li>{% endif %}
         <li><a href="{% url 'privacy' %}">Privacy</a></li>
         <li><a href="{% url 'terms' %}">Terms</a></li>
         <li><a href="{% url 'data-deletion' %}">Data deletion</a></li>
-        <li><a href="{% url 'security' %}">Security</a></li>
-        {% if STATUS_PAGE_URL %}<li><a href="{{ STATUS_PAGE_URL }}" rel="noopener">Status</a></li>{% endif %}
       </ul>
     </nav>
   </div>

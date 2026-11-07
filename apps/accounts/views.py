@@ -827,7 +827,12 @@ def demo(request):
     return render(
         request,
         "public/demo.html",
-        {"form": form, "sent": request.GET.get("sent") == "1"},
+        {
+            "form": form,
+            "sent": request.GET.get("sent") == "1",
+            # "Contact sales" (pricing's Enterprise card) opens the same form under its own name.
+            "sales": request.GET.get("topic") == "sales",
+        },
     )
 
 
@@ -843,7 +848,13 @@ def landing(request):
     # Only plans signup can sell right now, so a "Choose" button never opens on nothing.
     offered, _ = signup_offer()
     plans = [p for p, _ in offered]
-    cards = [_plan_card(p, channels) for p, channels in offered]
+    # Each card is the plan's plan_card (what the signup wizard lists) plus what the landing
+    # card leads with: its tagline, the three limits that differ and the annual price.
+    pricing = billing_api.pricing_table(offered)
+    cards = [
+        {**_plan_card(p, channels), **extra}
+        for (p, channels), extra in zip(offered, pricing["cards"], strict=True)
+    ]
     # The hero's "N-day free trial" line links to a plain /signup/, so it shows what that gives.
     _, trial_days = billing_api.default_signup_trial()
     # len() counts pending messages without marking them read, so the page still shows them.
@@ -855,6 +866,7 @@ def landing(request):
         {
             "plans": plans,
             "cards": cards,
+            "pricing": pricing,
             "trial_days": trial_days,
             "ch": marketing_channels(),
             "testimonials": testimonials,

@@ -25,6 +25,8 @@ class Plan(models.Model):
     # just the seeded defaults referenced in code (signals, limits).
     slug = models.SlugField(max_length=50, unique=True)
     name = models.CharField(max_length=100)
+    # Who the plan is for, in one line under its price on the landing page's pricing card.
+    tagline = models.CharField(max_length=120, blank=True, default="")
     # The channels a plan sells are channel features in the matrix
     # (apps.core.channels.CHANNEL_FEATURE), like everything else it includes.
     price_monthly = models.DecimalField(

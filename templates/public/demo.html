@@ -4,7 +4,7 @@
   sales. No calendar. Works without JavaScript and is never boosted, so an error re-render keeps
   what was typed. Uses the app's compiled .card / .input / .btn; layout lives in the scoped styles.
 {% endcomment %}
-{% block title %}Book a demo · {{ site.app_name|default:"Akilent" }}{% endblock %}
+{% block title %}{% if sales %}Talk to sales{% else %}Book a demo{% endif %} · {{ site.app_name|default:"Akilent" }}{% endblock %}
 {% block extra_head %}
 <style>
   .demo-wrap{ max-width:44rem; padding-block:3.5rem 2rem; }
@@ -34,10 +34,10 @@
     </div>
   {% else %}
     <div class="demo-head">
-      <h1 id="demo-title">Book a demo</h1>
+      <h1 id="demo-title">{% if sales %}Talk to sales{% else %}Book a demo{% endif %}</h1>
       <p>Tell us a little about your team and we'll email you to set up a call. Questions about plans, invoices or higher limits go here too.</p>
     </div>
-    <form method="post" action="{% url 'demo' %}" class="demo-form" hx-boost="false" novalidate>
+    <form method="post" action="{% url 'demo' %}{% if sales %}?topic=sales{% endif %}" class="demo-form" hx-boost="false" novalidate>
       {% csrf_token %}
       {% if form.non_field_errors %}<div class="demo-alert" role="alert">{% for e in form.non_field_errors %}{{ e }}{% endfor %}</div>{% endif %}
       <div class="demo-row">

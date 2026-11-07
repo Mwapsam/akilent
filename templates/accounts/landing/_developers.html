@@ -1,30 +1,101 @@
-{% comment %} For developers: compact, after the business content. {% endcomment %}
+{% comment %}
+  For developers: what the public API does today, led by WhatsApp when that channel is live.
+  The code sample is tabs (landing.js: WAI-ARIA tabs); without JavaScript every sample shows,
+  one under another. Every request and payload is the real shape:
+  - POST /api/v1/whatsapp/campaigns (apps/api/whatsapp_campaign_views.py), approved templates only;
+  - POST /api/v1/events (apps/api/event_views.py): a business event such as order.paid, which
+    starts workflows with that trigger and is passed on to webhooks as event.received;
+  - the webhook body is {"event", "data"}, signed in X-Akilent-Signature (apps/email/webhooks.py);
+  - POST /api/v1/messages for email.
+  The API has no "send one WhatsApp message" call and no message.received webhook, so neither
+  is shown.
+{% endcomment %}
 <section id="developers" class="lp-navy lp-section" aria-labelledby="dev-title">
   <div class="lp-wrap lp-dev">
     <div class="lp-reveal">
       <p class="lp-eyebrow eyebrow">For developers</p>
       <h2 id="dev-title" class="lp-h2 lp-mt">Connect {{ app }} to your own systems</h2>
-      <p class="lp-body lp-mid lp-mt" data-claim="api webhooks">Have a website or app? Send messages from your own code and get updates back when they're delivered.</p>
+      <p class="lp-body lp-mid lp-mt" data-claim="api events-api webhooks">Start messages and follow-ups from your own code, tell {{ app }} what happened in your shop, and get signed updates back.</p>
       <ul class="lp-dev-list lp-body">
-        <li data-claim="api"><svg class="lp-ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>REST API</strong>: send email from your system</span></li>
-        <li data-claim="smtp"><svg class="lp-ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>SMTP</strong>: plug into software that already sends email</span></li>
-        <li data-claim="webhooks"><svg class="lp-ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>Signed webhooks</strong>: delivery, open and click events</span></li>
+        {% if ch.whatsapp == "live" %}
+        <li data-claim="whatsapp-api"><svg class="lp-ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>WhatsApp campaigns</strong>: send approved templates to a list or segment through the REST API</span></li>
+        {% endif %}
+        <li data-claim="events-api"><svg class="lp-ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>Business events</strong>: send "order.paid" from your shop and start the follow-up that goes with it</span></li>
+        <li data-claim="webhooks"><svg class="lp-ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>Signed webhooks</strong>: contact, workflow, campaign, message and business events, signed so you can check they came from {{ app }}</span></li>
         {% if ch.whatsapp == "live" %}<li data-claim="verification-codes"><svg class="lp-ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>WhatsApp verification codes</strong>: one-time login codes from your app</span></li>{% endif %}
+        <li data-claim="api smtp"><svg class="lp-ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span><strong>Email</strong>: send from your own domain through the REST API or SMTP</span></li>
       </ul>
-      <a href="{% url 'docs' %}" class="lp-btn lp-btn-ghost lp-mt-lg">Read the documentation</a>
+      <a href="{% url 'docs' %}" class="lp-btn lp-btn-ghost lp-mt-lg">Read the API documentation</a>
     </div>
+
     <div class="lp-code lp-reveal d1">
-      <div class="lp-code-head"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>Send an email from your system · REST API</span></div>
-      <pre aria-label="Example API request"><code><span class="tm">POST</span> /api/v1/messages
+      <div class="lp-code-head">
+        <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <div class="lp-ctabs" role="tablist" aria-label="Code samples" hidden>
+          {% if ch.whatsapp == "live" %}<button type="button" role="tab" id="ctab-whatsapp" aria-controls="code-whatsapp" aria-selected="false" tabindex="-1">WhatsApp</button>{% endif %}
+          <button type="button" role="tab" id="ctab-event" aria-controls="code-event" aria-selected="false" tabindex="-1">Order paid</button>
+          <button type="button" role="tab" id="ctab-webhook" aria-controls="code-webhook" aria-selected="false" tabindex="-1">Webhook</button>
+          <button type="button" role="tab" id="ctab-email" aria-controls="code-email" aria-selected="false" tabindex="-1">Email</button>
+        </div>
+      </div>
+
+      {% if ch.whatsapp == "live" %}
+      <div class="lp-cpanel" id="code-whatsapp" role="tabpanel" aria-labelledby="ctab-whatsapp" tabindex="0">
+        <div class="lp-cpanel-title">Send a WhatsApp campaign · REST API</div>
+        <pre aria-label="Example request: send a WhatsApp campaign"><code><span class="tm">POST</span> /api/v1/whatsapp/campaigns
 <span class="tk">Authorization:</span> Bearer ak_live_•••
-<span class="tk">Content-Type:</span> application/json
+<span class="tk">Idempotency-Key:</span> back-in-stock-0412
 
 {
-  <span class="tk">"from_email"</span>: <span class="ts">"orders@yourshop.com"</span>,
-  <span class="tk">"to_email"</span>:   <span class="ts">"customer@example.com"</span>,
-  <span class="tk">"subject"</span>:    <span class="ts">"Your order is ready"</span>,
-  <span class="tk">"text"</span>:       <span class="ts">"Your order is ready for collection."</span>
+  <span class="tk">"name"</span>:      <span class="ts">"Back in stock"</span>,
+  <span class="tk">"segment"</span>:   <span class="ts">"asked-about-sandals"</span>,
+  <span class="tk">"template"</span>:  <span class="ts">"back_in_stock"</span>,
+  <span class="tk">"variables"</span>: { <span class="tk">"name"</span>: <span class="ts">"contact.first_name"</span> }
 }</code></pre>
+      </div>
+      {% endif %}
+
+      <div class="lp-cpanel" id="code-event" role="tabpanel" aria-labelledby="ctab-event" tabindex="0">
+        <div class="lp-cpanel-title">Tell {{ app }} an order was paid · REST API</div>
+        <pre aria-label="Example request: send an order.paid event"><code><span class="tm">POST</span> /api/v1/events
+<span class="tk">Authorization:</span> Bearer ak_live_•••
+
+{
+  <span class="tk">"event"</span>:    <span class="ts">"order.paid"</span>,
+  <span class="tk">"customer"</span>: <span class="ts">"con_7f3a…"</span>,
+  <span class="tk">"data"</span>:     { <span class="tk">"order"</span>: <span class="ts">"1042"</span>, <span class="tk">"total"</span>: <span class="ts">"45.00"</span>, <span class="tk">"currency"</span>: <span class="ts">"USD"</span> }
+}</code></pre>
+      </div>
+
+      <div class="lp-cpanel" id="code-webhook" role="tabpanel" aria-labelledby="ctab-webhook" tabindex="0">
+        <div class="lp-cpanel-title">What your server receives · signed webhook</div>
+        <pre aria-label="Example signed webhook delivery"><code><span class="tm">POST</span> https://yourapp.com/hooks/akilent
+<span class="tk">X-Akilent-Event:</span>     event.received
+<span class="tk">X-Akilent-Signature:</span> t=1762502400,v1=5f2c…
+
+{
+  <span class="tk">"event"</span>: <span class="ts">"event.received"</span>,
+  <span class="tk">"data"</span>: {
+    <span class="tk">"id"</span>:      <span class="ts">"bev_91c4…"</span>,
+    <span class="tk">"event"</span>:   <span class="ts">"order.paid"</span>,
+    <span class="tk">"contact"</span>: <span class="ts">"con_7f3a…"</span>,
+    <span class="tk">"data"</span>:    { <span class="tk">"order"</span>: <span class="ts">"1042"</span>, <span class="tk">"total"</span>: <span class="ts">"45.00"</span> }
+  }
+}</code></pre>
+      </div>
+
+      <div class="lp-cpanel" id="code-email" role="tabpanel" aria-labelledby="ctab-email" tabindex="0">
+        <div class="lp-cpanel-title">Send an email from your system · REST API</div>
+        <pre aria-label="Example request: send an email"><code><span class="tm">POST</span> /api/v1/messages
+<span class="tk">Authorization:</span> Bearer ak_live_•••
+
+{
+  <span class="tk">"from"</span>:    <span class="ts">"orders@yourshop.com"</span>,
+  <span class="tk">"to"</span>:      <span class="ts">"customer@example.com"</span>,
+  <span class="tk">"subject"</span>: <span class="ts">"Your order is ready"</span>,
+  <span class="tk">"text"</span>:    <span class="ts">"Your order is ready for collection."</span>
+}</code></pre>
+      </div>
     </div>
   </div>
 </section>

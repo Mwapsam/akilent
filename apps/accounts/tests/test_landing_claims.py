@@ -31,6 +31,7 @@ CHECKED_SECTIONS = {
     "features",
     "trust",
     "faq",
+    "pricing",  # Enterprise and the Meta fees note; cards and the table come from the catalog
     "coming-soon",
     "developers",
     # Use-case pages (templates/public/for/).
@@ -109,11 +110,10 @@ class _Claims(HTMLParser):
         for a in chain:
             if "data-claim" in a or "data-claim-exempt" in a:
                 return True
-            if (
-                "section-head" in (a.get("class") or "").split()
-                or a.get("class") == "plans"
-            ):
-                return True  # section intros and plan cards (built from the catalog)
+            classes = (a.get("class") or "").split()
+            if {"section-head", "plans", "lp-catalog"} & set(classes):
+                # Section intros, plan cards and lines built from the plan catalog.
+                return True
         return False
 
 

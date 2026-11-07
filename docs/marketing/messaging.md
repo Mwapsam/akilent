@@ -207,13 +207,23 @@ Evidence is `path::text`: the file must exist and contain the text.
 | mfa | Capability | Two-step sign-in with an authenticator app, an email code or a passkey, with recovery codes | apps/accounts/models.py::class PasskeyCredential(Device) |
 | support-access | Mechanism | Akilent support can only view a workspace read-only, for up to an hour, and each view is logged | apps/core/middleware.py::class ViewAsReadOnlyMiddleware |
 | incident-response | Mechanism | Written security-incident runbook; affected customers are told directly | docs/ops/incidents/INC-006-security-incident.md::Notify affected pilot customers promptly and directly |
+| meta-tech-provider | Mechanism | Akilent is a verified Meta Tech Provider; businesses connect through Meta's own sign-in (Embedded Signup) | docs/ops/security-facts.md::Verified Meta Tech Provider (confirmed by owner) |
 | subprocessors | Mechanism | The service providers that process data for Akilent, listed on the Security page | templates/legal/security.html::id="subprocessors" |
 | trial | Capability | N-day free trial, no card required (N from the signup plan) | apps/billing/api.py::def default_signup_trial |
 | cancel | Capability | Cancel from Billing at any time | apps/billing/views.py::def cancel_subscription |
 | trial-end | Capability | Nothing is deleted when a trial ends | apps/billing/tasks.py::def expire_trials |
-| api | Mechanism | REST API to send email | apps/api/serializers.py::class MessageCreateSerializer |
+| annual-billing | Capability | Any paid plan can be billed yearly, at the discount checkout applies | apps/billing/pricing.py::Subscription.ANNUALLY: Decimal( |
+| payment-confirmation | Capability | Every payment is confirmed by email, with the plan and amount | apps/billing/tasks.py::small_print="Keep this email for your records." |
+| meta-fees | Mechanism | Meta bills WhatsApp message fees to the business directly; Akilent never resells or marks them up | apps/billing/limit_catalog.py::Akilent must not resell or mark that up |
+| any-country | Capability | Sign up from any country (country is free text; no allow-list) | apps/accounts/forms.py::country = forms.CharField(max_length=120, required=True) |
+| custom-limits | Mechanism | Enterprise: limits set for one workspace on request | apps/billing/models.py::class AccountLimitOverride( |
+| feature-overrides | Mechanism | Enterprise: features switched on for one workspace on request | apps/billing/models.py::class AccountFeatureOverride( |
+| demo | Capability | Book a demo / contact sales: one form that records the request and emails the team, who reply by email | apps/accounts/views.py::def demo(request) |
+| api | Mechanism | REST API to send email, start WhatsApp campaigns and record business events | apps/api/serializers.py::class MessageCreateSerializer |
 | smtp | Mechanism | SMTP sending | apps/email/models.py::class SmtpCredential( |
-| webhooks | Mechanism | Signed delivery, open and click webhooks | apps/email/webhooks.py::def build_signature_header |
+| webhooks | Mechanism | Signed webhooks for message, contact, campaign, workflow and business events | apps/email/webhooks.py::def build_signature_header |
+| whatsapp-api | Mechanism | WhatsApp campaigns from approved templates, sent to a list or segment through the REST API | apps/api/whatsapp_campaign_views.py::POST /v1/whatsapp/campaigns |
+| events-api | Mechanism | A business event sent to the API (such as order.paid) starts the workflows with that trigger | apps/automation/workflow_engine.py::def on_business_event |
 | verification-codes | Mechanism | WhatsApp one-time login codes from your app | apps/whatsapp/verification_codes.py::def |
 
 ## 11. Reviewing copy

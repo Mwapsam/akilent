@@ -48,22 +48,83 @@ def _resolve_og_image(relative_path):
         return ""
 
 
-def _default_structured_data():
+def _default_structured_data(request, description=""):
+    """WebSite and Organization on every public page; on the landing page also the product as a
+    SoftwareApplication, priced from the active paid plans (lowest to highest monthly price, in
+    the billing currency), so the structured data says what the pricing section says."""
     site_url = getattr(settings, "SITE_URL", "https://akilent.com").rstrip("/") + "/"
-    return [
+    organization = {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Akilent",
+        "url": site_url,
+        "logo": _resolve_og_image("img/brand/icon-color.svg"),
+    }
+    try:
+        from apps.core.models import SiteSettings
+
+        site = SiteSettings.load()
+        if site.support_email:
+            organization["email"] = site.support_email
+        profiles = [
+            url
+            for url in (
+                site.linkedin_url,
+                site.x_url,
+                site.instagram_url,
+                site.facebook_url,
+            )
+            if url
+        ]
+        if profiles:
+            organization["sameAs"] = profiles
+    except Exception:
+        pass
+    items = [
         {
             "@context": "https://schema.org",
             "@type": "WebSite",
             "name": "Akilent",
             "url": site_url,
         },
-        {
-            "@context": "https://schema.org",
-            "@type": "Organization",
-            "name": "Akilent",
-            "url": site_url,
-        },
+        organization,
     ]
+    if request.path == "/":
+        items.append(_software_application(site_url, description))
+    return items
+
+
+def _software_application(site_url, description):
+    app = {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Akilent",
+        "url": site_url,
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+    }
+    if description:
+        app["description"] = description
+    try:
+        from apps.billing.models import Plan
+        from apps.billing.money import billing_currency
+
+        prices = sorted(
+            Plan.objects.filter(is_active=True, price_monthly__gt=0).values_list(
+                "price_monthly", flat=True
+            )
+        )
+        if prices:
+            app["offers"] = {
+                "@type": "AggregateOffer",
+                "priceCurrency": billing_currency(),
+                "lowPrice": f"{prices[0]:.2f}",
+                "highPrice": f"{prices[-1]:.2f}",
+                "offerCount": len(prices),
+            }
+    except Exception:
+        pass
+    return app
 
 
 def resolve_seo_context(request):
@@ -109,10 +170,13 @@ def resolve_seo_context(request):
 
     if db_override and db_override.og_image:
         og_image = request.build_absolute_uri(db_override.og_image.url)
+        og_image_size = None
     else:
         og_image = _resolve_og_image(default_og_image_path)
+        # The default share image (static/img/seo/og-default.png) is drawn at 1200 x 630.
+        og_image_size = (1200, 630)
 
-    structured_data = _default_structured_data()
+    structured_data = _default_structured_data(request, description)
 
     seo = {
         "title": title,
@@ -121,6 +185,8 @@ def resolve_seo_context(request):
         "og_title": page_title or default_title,
         "og_description": description,
         "og_image": og_image,
+        "og_image_size": og_image_size,
+        "og_image_alt": f"{site_name}: {default_title}",
         "og_url": canonical_url,
         "site_name": site_name,
         "index": index,

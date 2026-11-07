@@ -11,6 +11,26 @@
         <summary>Which channels can I use?<span class="pm" aria-hidden="true"></span></summary>
         <p>{% if ch.whatsapp == "live" %}WhatsApp{% if ch.instagram == "live" %} and Instagram{% endif %} messages arrive in your shared inbox. {% endif %}{% if ch.email == "live" %}Email is for sending messages and campaigns from your own domain; replies don't come into the inbox. {% endif %}{% if ch.facebook == "live" %}Messages to your Facebook Page arrive there too, and you can publish posts to your Page. {% endif %}</p>
       </details>
+      <details data-claim="any-country">
+        <summary>Which countries can I use it in?<span class="pm" aria-hidden="true"></span></summary>
+        <p>You can sign up from any country; {{ app }} doesn't limit where your business is. {% if ch.whatsapp == "live" %}WhatsApp's own rules still apply: Meta decides which businesses can use WhatsApp business messaging.{% endif %}</p>
+      </details>
+      {% if ch.whatsapp == "live" %}
+      <details data-claim="meta-fees">
+        <summary>Who pays WhatsApp's message fees?<span class="pm" aria-hidden="true"></span></summary>
+        <p>Meta bills them directly to your WhatsApp Business account, at Meta's rates for each country. They aren't part of your {{ app }} plan, and {{ app }} never adds a markup. <a href="https://developers.facebook.com/docs/whatsapp/pricing" class="lp-link" rel="noopener">See Meta's pricing</a>.</p>
+      </details>
+      {% endif %}
+      <details data-claim="hosting encryption">
+        <summary>Where is my data stored?<span class="pm" aria-hidden="true"></span></summary>
+        <p>On Amazon Web Services, behind Cloudflare, encrypted in transit and at rest. The <a href="{% url 'security' %}" class="lp-link">Security page</a> covers hosting, backups and the providers that process data for us.</p>
+      </details>
+      {% if ch.whatsapp == "live" %}
+      <details data-claim="own-number">
+        <summary>Can I bring my existing WhatsApp number?<span class="pm" aria-hidden="true"></span></summary>
+        <p>Yes. You connect the number you already use through Meta's guided setup, and your customers keep messaging the same number. Once connected it works through {{ app }} instead of the WhatsApp Business app, so a number that's in the app today moves out of it.</p>
+      </details>
+      {% endif %}
       {% if ch.facebook %}
       <details data-claim="facebook-inbox facebook-comments">
         <summary>Do Facebook messages come into the inbox?<span class="pm" aria-hidden="true"></span></summary>
@@ -37,9 +57,13 @@
         <p>Not unless you allow it. AI is off until you switch it on, and then it suggests replies for your team to review and send. You can choose to let it answer a few simple questions, such as your opening hours, on its own. Every reply it sends is marked and logged.</p>
       </details>
       {% endif %}
+      <details data-claim="annual-billing payment-confirmation">
+        <summary>Do you offer annual billing or invoices?<span class="pm" aria-hidden="true"></span></summary>
+        <p>Yes to annual billing: choose Annually on any paid plan{% if pricing.annual_save_pct %} and save {{ pricing.annual_save_pct }}%{% endif %}. Every payment is confirmed by email, with the plan and the amount, for your records. Invoices against a purchase order aren't available yet.</p>
+      </details>
       <details data-claim="cancel">
         <summary>Can I cancel anytime?<span class="pm" aria-hidden="true"></span></summary>
-        <p>Yes. Plans are billed monthly, and an owner or admin can cancel from the Billing page at any time.</p>
+        <p>Yes. An owner or admin can cancel from the Billing page at any time. Your plan stays on until the end of the period you've paid for, and you won't be charged again.</p>
       </details>
       <details data-claim="trial-end">
         <summary>What happens after the trial?<span class="pm" aria-hidden="true"></span></summary>

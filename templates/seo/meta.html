@@ -9,12 +9,16 @@
 <meta property="og:title" content="{{ s.og_title }}">
 {% if s.og_description %}<meta property="og:description" content="{{ s.og_description }}">{% endif %}
 <meta property="og:url" content="{{ s.og_url }}">
-{% if s.og_image %}<meta property="og:image" content="{{ s.og_image }}">{% endif %}
+{% if s.og_image %}<meta property="og:image" content="{{ s.og_image }}">
+<meta property="og:image:alt" content="{{ s.og_image_alt }}">{% if s.og_image_size %}
+<meta property="og:image:width" content="{{ s.og_image_size.0 }}">
+<meta property="og:image:height" content="{{ s.og_image_size.1 }}">{% endif %}{% endif %}
 
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{{ s.og_title }}">
 {% if s.og_description %}<meta name="twitter:description" content="{{ s.og_description }}">{% endif %}
-{% if s.og_image %}<meta name="twitter:image" content="{{ s.og_image }}">{% endif %}
+{% if s.og_image %}<meta name="twitter:image" content="{{ s.og_image }}">
+<meta name="twitter:image:alt" content="{{ s.og_image_alt }}">{% endif %}
 
 {% for item_json in s.structured_data_items %}<script type="application/ld+json">{{ item_json|safe }}</script>
 {% endfor %}{% endif %}{% endwith %}

@@ -162,6 +162,7 @@ def _plan_form_fields(post):
         price = Decimal("0")
     return {
         "name": (post.get("name") or "").strip(),
+        "tagline": (post.get("tagline") or "").strip()[:120],
         "price_monthly": price,
         # Limits are set in /manage/plans/limits/ (PlanLimit), features in /manage/plans/features/.
         "trial_days": _int("trial_days"),

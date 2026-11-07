@@ -41,6 +41,11 @@ class SiteSettings(models.Model):
     app_name = models.CharField(max_length=100, default="Akilent")
     logo = models.ImageField(upload_to="branding/", blank=True, null=True)
     support_email = models.EmailField(blank=True, default="")
+    # The company's social profiles, linked from the landing page footer when set.
+    linkedin_url = models.URLField(blank=True, default="")
+    x_url = models.URLField(blank=True, default="")
+    instagram_url = models.URLField(blank=True, default="")
+    facebook_url = models.URLField(blank=True, default="")
 
     # Unused: WhatsApp follows the WHATSAPP_ENABLED server setting (URLs and workers are wired from
     # it at boot, so a database switch could only ever hide parts of screens). Kept for old rows.

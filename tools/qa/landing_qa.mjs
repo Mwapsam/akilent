@@ -147,6 +147,18 @@ for (const [w, h, mobile] of widths) {
   await shot(`landing-${w}x${h}-full`, true);
 }
 
+// On a phone the opened comparison table scrolls sideways inside its own box, never the page.
+await viewport(360, 740, true);
+await go("/", 1200);
+const cmp = await evaluate(`(() => {
+  const d = document.querySelector('.lp-compare');
+  if (!d) return { none: true };
+  d.open = true;
+  const box = d.querySelector('.lp-compare-scroll');
+  return { page: document.documentElement.scrollWidth - document.documentElement.clientWidth, inner: box.scrollWidth - box.clientWidth }; })()`);
+check("pricing.compare-scrolls-in-its-box", cmp.none || (cmp.page <= 0 && cmp.inner > 0), cmp);
+await viewport(1440, 900, false);
+
 // A real Enter (with its character), which is what activates a <button> or a <summary>.
 const pressEnter = async () => {
   await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: String.fromCharCode(13) });
@@ -254,8 +266,33 @@ st = await evaluate("['channels','how-it-works','content-studio','features','pri
 check("anchors.old-addresses", st.length === 0 || (st.length === 1 && st[0] === "content-studio" && !hasStudio), { missing: st });
 
 // Pricing buttons line up across the cards.
-st = await evaluate("[...document.querySelectorAll('.lp-plan .lp-btn')].map(b => Math.round(b.getBoundingClientRect().top - b.closest('.plans').getBoundingClientRect().top))");
+// Only the buttons on screen: the other billing term's buttons are display: none.
+st = await evaluate("[...document.querySelectorAll('.lp-plan .lp-btn')].filter(b => b.getClientRects().length).map(b => Math.round(b.getBoundingClientRect().top - b.closest('.plans').getBoundingClientRect().top))");
 check("pricing.buttons-aligned", st.length > 0 && Math.max(...st) - Math.min(...st) <= 1, st);
+
+// Monthly / annual: choosing Annually swaps every paid card's price and button (pure CSS).
+st = await evaluate(`(() => {
+  const vis = (el) => el.getClientRects().length > 0;
+  const annual = document.querySelector('label[for="bill-annual"]');
+  if (!annual) return { none: true };
+  annual.click();
+  const r = { annualPrices: [...document.querySelectorAll('.lp-price.lp-when-a')].filter(vis).length,
+    monthlyShown: [...document.querySelectorAll('.lp-when-m')].filter(vis).length,
+    annualLinks: [...document.querySelectorAll('.lp-plan .lp-btn')].filter(vis).filter((b) => b.href.includes('period=annually')).length };
+  document.querySelector('label[for="bill-monthly"]').click();
+  r.backToMonthly = [...document.querySelectorAll('.lp-when-a')].filter(vis).length === 0;
+  return r; })()`);
+check("pricing.annual-switch", st.none || (st.annualPrices > 0 && st.monthlyShown === 0 && st.annualLinks === st.annualPrices && st.backToMonthly), st);
+
+// Developers' code samples are tabs: arrow keys move between them, one panel open at a time.
+st = await evaluate(`(() => {
+  const tabs = [...document.querySelectorAll('.lp-ctabs [role="tab"]')];
+  if (!tabs.length) return { none: true };
+  tabs[0].focus();
+  tabs[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  return { first: tabs[0].getAttribute('aria-controls'), open: [...document.querySelectorAll('.lp-cpanel')].filter((p) => !p.hidden).map((p) => p.id),
+    focused: document.activeElement.getAttribute('aria-controls') }; })()`);
+check("developers.code-tabs-keyboard", st.none || (st.open.length === 1 && st.open[0] === st.focused && st.focused !== st.first), st);
 
 // Analytics: every call to action sends cta_click with its name and place (gtag stubbed; the
 // navigation itself is cancelled after the page's own handler has run).
@@ -284,6 +321,8 @@ await send("Emulation.setEmulatedMedia", { features: [] });
 await send("Emulation.setScriptExecutionDisabled", { value: true });
 await go("/", 1200);
 await send("Emulation.setScriptExecutionDisabled", { value: false });
+st = await evaluate("({ codeTabs: getComputedStyle(document.querySelector('.lp-ctabs')).display, codeHidden: [...document.querySelectorAll('.lp-cpanel')].filter(p => getComputedStyle(p).display === 'none').length, annualHidden: [...document.querySelectorAll('.lp-when-a')].every(e => getComputedStyle(e).display === 'none') })");
+check("nojs.code-samples-and-monthly-prices", st.codeTabs === "none" && st.codeHidden === 0 && st.annualHidden, st);
 st = await evaluate("({ js: document.documentElement.classList.contains('js'), hidden: [...document.querySelectorAll('.lp-reveal')].filter(e => getComputedStyle(e).opacity !== '1').length, tabs: getComputedStyle(document.querySelector('.lp-ptabs')).display, panels: [...document.querySelectorAll('.lp-panel')].filter(p => getComputedStyle(p).display === 'none').length, arts: document.querySelectorAll('.lp-step .lp-step-art').length === document.querySelectorAll('.lp-step').length, finalFrame: [...document.querySelectorAll('.lp-scene .k4, .lp-scene .k5')].every(e => getComputedStyle(e).opacity === '1') })");
 check("nojs.everything-visible", !st.js && st.hidden === 0 && st.tabs === "none" && st.panels === 0 && st.arts && st.finalFrame, st);
 

@@ -30,6 +30,15 @@
         </div>
         <p class="help">PNG or SVG, square works best. Leave empty to keep the current logo.</p>
       </div>
+      <fieldset class="mt-4">
+        <legend class="label">Social profiles</legend>
+        <p class="help mb-2">Linked from the landing page footer. Leave a box empty to hide that link.</p>
+        <div class="grid sm:grid-cols-2 gap-4">
+          {% for field, label, value in social_links %}
+            {% include "components/form_field.html" with name=field label=label type="url" value=value placeholder="https://" %}
+          {% endfor %}
+        </div>
+      </fieldset>
     </div>
 
     <div class="card card-pad">

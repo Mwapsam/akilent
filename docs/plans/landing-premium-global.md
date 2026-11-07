@@ -147,10 +147,78 @@ The claim register points at that file.
 - **Proof slots:**
   - Testimonials gained a logo and a case study, both editable in Operator Console → Testimonials.
   - The logo row, the hero's "Used by" logos and the case-study card show only for published testimonials that have a permission note. Nothing shows until then.
-- **Meta Tech Provider:** not shown. It needs the status confirmed and Meta's partner wording checked.
+- **Meta Tech Provider:** confirmed by you on 2026-11-07 and now shown as plain text, never with Meta's or WhatsApp's logo, in four places: the hero proof strip, the trust section, the footer and the Security page's access section. Meta publishes no Tech Provider badge, and its brand rules forbid implying endorsement.
 
 ### Needs you
 - **Status page:** create a hosted status page (for example Better Stack or UptimeRobot) and set the `STATUS_PAGE_URL` secret.
 - **Security contact:** set `SECURITY_CONTACT_EMAIL` (for example security@akilent.com) if reports shouldn't go to the support address.
 - **Privacy policy's provider list is out of date.** It names Flutterwave and Stripe, but not PayPal (the live billing provider) or Cloudflare. The Security page lists what is used today, so the two pages disagree until the privacy policy is updated. That is legal text, so I left it for you.
 - **Data region:** confirm it, so the Security page can name it.
+
+## Phase 3: pricing for a global buyer (built 2026-11-07)
+Plan names and prices are unchanged; only how they're shown changed. Everything in the section is read from the plans (`billing_api.pricing_table`, beside `plan_card`).
+
+- **Cards:**
+  - price;
+  - one line on who it's for (new `Plan.tagline`, edited in Operator Console → Plans; billing migration 0034 gives the four seeded plans a starting line);
+  - the three limits that differ between the plans on offer, then the button. Every plan has one WhatsApp number today, so that line only fills a third place when fewer than three limits differ.
+  - Buttons line up at the bottom, and the browser check confirms it.
+- **Monthly / annual:**
+  - Annual billing already worked end to end (signup `?period=annually`, `pricing.price_for`, PayPal), so the toggle is live.
+  - The annual price is the yearly charge shown per month, with "billed $X a year". The saving ("Save 15%") comes from the same multiplier checkout uses.
+  - It's two radios and CSS, so it works without JavaScript. With no annual discount configured, the toggle isn't shown.
+- **All plans include:** one line naming the features every plan on offer has.
+- **Comparison table ("Compare every plan"):**
+  - collapsed by default;
+  - rows for every limit, channel, feature and coming-soon item;
+  - on a phone it scrolls sideways inside its own box, never the page.
+- **Enterprise ("Custom", "Contact sales")** lists only what can be set up on request today:
+  - limits set for one workspace (`AccountLimitOverride`);
+  - features switched on for it (`AccountFeatureOverride`);
+  - annual billing;
+  - a walkthrough.
+- **Enterprise items left off** because they don't exist yet:
+  - multiple WhatsApp numbers (capped at 1 until per-number routing);
+  - single sign-on;
+  - audit-log export;
+  - an SLA;
+  - invoices and purchase orders;
+  - onboarding help.
+- **Meta's fees:** the note says "message fees", not "conversation fees", because Meta has charged per message since July 2025. It links to Meta's pricing page and shows only while WhatsApp is on.
+- **Contact sales and Book a demo:** both open the one demo form. `/demo/?topic=sales` titles it "Talk to sales".
+- **Currency:** prices still go through `BILLING_CURRENCY`, which is USD in production.
+
+## Phase 4: finish (built 2026-11-07)
+- **Closing band:** the positioning line, then "N-day free trial · No card required", then Start free trial (amber) and Book a demo.
+- **Developers:**
+  - The plan named "send a WhatsApp message" and the webhooks `message.received` and `order.paid`. None of those exists in the API today, so the code sample shows what does, as tabs:
+    - **WhatsApp** (when live): `POST /api/v1/whatsapp/campaigns`.
+    - **Order paid:** `POST /api/v1/events` with `order.paid`, which starts workflows with that trigger.
+    - **Webhook:** the signed delivery your server receives, `event.received` with `X-Akilent-Signature`.
+    - **Email:** `POST /api/v1/messages`.
+  - The email sample on the live page used `from_email`/`to_email`, which the endpoint doesn't read. It now uses `from`/`to`, and a test runs it through the real serializer.
+- **FAQ, new questions:**
+  - which countries;
+  - who pays WhatsApp's fees;
+  - where data is stored (no region named);
+  - bringing an existing number;
+  - annual billing or invoices: yes to annual and emailed payment confirmations, no invoices against purchase orders yet.
+  - "Can I cancel anytime?" now says the plan stays on until the paid period ends.
+- **Footer:**
+  - columns: Product, Use cases, Company (Contact sales, Book a demo, Help centre), Trust (Security, Status when set, Privacy, Terms, Data deletion);
+  - social links come from new site settings (core migration 0021, Operator Console → Settings) and show only when set;
+  - no About or Careers link, because neither page exists;
+  - "Verified Meta Tech Provider" sits in the company block.
+- **Share and search:**
+  - `static/img/seo/og-default.png` didn't exist, so every page's `og:image` pointed at a missing file. There is now a 1200 × 630 image; its source is `tools/og/og-default.html`, redrawn with `node tools/og/render.mjs`.
+  - `og:image:width`/`height`/`alt` and `twitter:image:alt` are added.
+  - Organization now carries the logo, support email and social profiles.
+  - The landing page adds SoftwareApplication with an AggregateOffer from the active paid plans.
+  - Canonical URL and sitemap were already in place.
+- **Top bar and phones:** both were already as the plan describes (Phases 0–1). The browser check covers the comparison table at 360 px.
+
+### Needs you (Phases 3–4)
+- **After deploy:** run `migrate` for billing 0034 (plan taglines) and core 0021 (social links).
+- **Plan taglines:** check each one under Operator Console → Plans.
+- **Social links:** add them under Operator Console → Settings → Branding.
+- **Enterprise:** when per-number routing, SSO, audit-log export or invoicing exist, add them to the Enterprise card and the claim register.

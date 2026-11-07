@@ -1,49 +1,111 @@
 {% comment %}
-  Pricing. Cards come from billing_api.plan_card for the channels offered, so what's shown is
-  what each plan gives. Each card links to /signup/?plan=.
-  Prices go through billing's money filter, as on the Plans page: exact, and in the billing
-  currency the plans are priced in (BILLING_CURRENCY), not a hard-coded "$".
+  Pricing for a global buyer. Cards, the "All plans include" line and the comparison table come
+  from billing_api.pricing_table and plan_card, read from the plans themselves, so what's shown
+  is what each plan gives. Prices go through billing's money filter, in BILLING_CURRENCY.
+
+  Monthly / annual: two radios before the cards; the one checked hides the other term's price,
+  button and footnote with a sibling selector, so the switch works without JavaScript. The annual
+  price is pricing.price_for (what checkout charges) shown per month, and its button opens signup
+  with ?period=annually.
+
+  Enterprise lists only what can be set up on request today (custom limits and features for one
+  workspace, annual billing, a walkthrough). Everything else stays off until it exists.
 {% endcomment %}
 {% load billing_money %}
-<section id="pricing" class="lp-light lp-section" aria-labelledby="pricing-title">
+<section id="pricing" class="lp-light lp-section lp-pricing" aria-labelledby="pricing-title">
   <div class="lp-wrap">
     <div class="lp-head section-head center lp-reveal">
       <p class="lp-eyebrow eyebrow">Pricing</p>
-      <h2 id="pricing-title" class="lp-h2">Simple monthly plans</h2>
-      <p class="lp-body lp-muted">Start with a free trial. Choose a plan when you're ready.</p>
+      <h2 id="pricing-title" class="lp-h2">Plans that grow with your team</h2>
+      <p class="lp-body lp-muted">Start with a free trial. Choose a plan when you're ready, and change it any time.</p>
     </div>
-    <div class="plans {% if cards|length >= 4 %}n4{% else %}n3{% endif %}">
-      {% for card in cards %}{% with plan=card.plan %}
-        <div class="lp-plan{% if plan.slug == 'professional' %} featured{% endif %} lp-reveal{% if forloop.counter0 >= 3 %} d3{% elif forloop.counter0 %} d{{ forloop.counter0 }}{% endif %}">
-          {% if plan.slug == 'professional' %}<span class="lp-plan-badge">Most popular</span>{% endif %}
-          <h3 class="lp-h3">{{ plan.name }}</h3>
-          <p class="lp-price">
+
+    {% with save=pricing.annual_save_pct %}
+    <div class="lp-pricebox">
+      {% if save > 0 %}
+      <input type="radio" name="billing" id="bill-monthly" value="monthly" class="sr-only lp-bill-input" checked>
+      <input type="radio" name="billing" id="bill-annual" value="annually" class="sr-only lp-bill-input">
+      <div class="lp-billing lp-reveal">
+        <label for="bill-monthly">Monthly</label>
+        <label for="bill-annual">Annually <span class="lp-save">Save {{ save }}%</span></label>
+      </div>
+      {% endif %}
+
+      <div class="plans lp-plans-{{ cards|length|add:1 }}">
+        {% for card in cards %}{% with plan=card.plan %}
+          <div class="lp-plan{% if plan.slug == 'professional' %} featured{% endif %} lp-reveal{% if forloop.counter0 >= 3 %} d3{% elif forloop.counter0 %} d{{ forloop.counter0 }}{% endif %}">
+            {% if plan.slug == 'professional' %}<span class="lp-plan-badge">Most popular</span>{% endif %}
+            <h3 class="lp-h3">{{ plan.name }}</h3>
+            {% if card.tagline %}<p class="lp-plan-for">{{ card.tagline }}</p>{% endif %}
             {% if plan.price_monthly > 0 %}
-              <b>{{ plan.price_monthly|money }}</b><span class="lp-muted">per month</span>
+              <p class="lp-price lp-when-m"><b>{{ plan.price_monthly|money }}</b><span class="lp-muted">per month</span></p>
+              {% if save > 0 %}<p class="lp-price lp-when-a"><b>{{ card.annual_monthly|money }}</b><span class="lp-muted">per month, billed {{ card.annual_total|money }} a year</span></p>{% endif %}
             {% else %}
-              <b>Free</b>{% if plan.trial_days %}<span class="lp-muted">for {{ plan.trial_days }} days</span>{% endif %}
+              <p class="lp-price"><b>Free</b>{% if plan.trial_days %}<span class="lp-muted">for {{ plan.trial_days }} days</span>{% endif %}</p>
             {% endif %}
-          </p>
+            <ul class="lp-limits">
+              {% for line in card.key_limits %}<li>{{ line }}</li>{% endfor %}
+            </ul>
+            <div class="lp-grow"></div>
+            {% if plan.price_monthly > 0 %}
+              <a href="/signup/?plan={{ plan.slug }}" data-cta="plan" data-cta-plan="{{ plan.slug }}" data-cta-location="pricing" class="lp-btn lp-when-m {% if plan.slug == 'professional' %}lp-btn-primary{% else %}lp-btn-outline{% endif %}">Choose {{ plan.name }}</a>
+              {% if save > 0 %}<a href="/signup/?plan={{ plan.slug }}&amp;period=annually" data-cta="plan" data-cta-plan="{{ plan.slug }}" data-cta-location="pricing_annual" class="lp-btn lp-when-a {% if plan.slug == 'professional' %}lp-btn-primary{% else %}lp-btn-outline{% endif %}">Choose {{ plan.name }}</a>{% endif %}
+              <p class="lp-plan-foot" data-claim="cancel">Cancel anytime</p>
+            {% else %}
+              <a href="/signup/?plan={{ plan.slug }}" data-cta="plan" data-cta-plan="{{ plan.slug }}" data-cta-location="pricing" class="lp-btn lp-btn-outline">{% if plan.trial_days %}Start free trial{% else %}Get started free{% endif %}</a>
+              <p class="lp-plan-foot" data-claim="trial">No card required</p>
+            {% endif %}
+          </div>
+        {% endwith %}{% endfor %}
+
+        <div class="lp-plan lp-plan-ent lp-reveal d3">
+          <h3 class="lp-h3">Enterprise</h3>
+          <p class="lp-plan-for">For larger teams that need limits and terms set for them.</p>
+          <p class="lp-price"><b>Custom</b></p>
           <ul class="lp-limits">
-            {% for line in card.limits %}<li>{{ line }}</li>{% endfor %}
+            <li data-claim="custom-limits">Limits set for your volume</li>
+            <li data-claim="feature-overrides">Features switched on for your workspace</li>
+            {% if save > 0 %}<li data-claim="annual-billing">Annual billing</li>{% endif %}
+            <li data-claim="demo">A walkthrough with our team before you start</li>
           </ul>
-          {% if card.features or card.coming_soon %}
-          <ul class="lp-feats">
-            {% for f in card.features %}
-              <li><svg class="lp-ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>{{ f.name }}</li>
-            {% endfor %}
-            {% for soon in card.coming_soon %}
-              <li class="soon"><svg class="lp-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg><span>{{ soon.name }} <span class="lp-soon-tag">Coming soon</span></span></li>
-            {% endfor %}
-          </ul>
-          {% endif %}
           <div class="lp-grow"></div>
-          <a href="/signup/?plan={{ plan.slug }}" data-cta="plan" data-cta-plan="{{ plan.slug }}" data-cta-location="pricing" class="lp-btn {% if plan.slug == 'professional' %}lp-btn-primary{% else %}lp-btn-outline{% endif %}">
-            {% if plan.price_monthly > 0 %}Choose {{ plan.name }}{% elif plan.trial_days %}Start free trial{% else %}Get started free{% endif %}
-          </a>
-          <p class="lp-plan-foot" data-claim="{% if plan.price_monthly > 0 %}cancel{% else %}trial{% endif %}">{% if plan.price_monthly > 0 %}Billed monthly · Cancel anytime{% else %}No card required{% endif %}</p>
+          <a href="{% url 'demo' %}?topic=sales" data-cta="contact_sales" data-cta-location="pricing" class="lp-btn lp-btn-outline">Contact sales</a>
+          <p class="lp-plan-foot" data-claim="demo">We reply by email</p>
         </div>
-      {% endwith %}{% endfor %}
+      </div>
     </div>
+    {% endwith %}
+
+    {% if pricing.included %}
+    <p class="lp-included lp-catalog lp-reveal"><strong>All plans include</strong> {{ pricing.included|join:" · " }}</p>
+    {% endif %}
+
+    {% if ch.whatsapp == "live" %}
+    <p class="lp-fees lp-reveal" data-claim="meta-fees">WhatsApp message fees are billed by Meta directly to your WhatsApp Business account, at Meta's rates for each country. {{ app }} never adds a markup. <a href="https://developers.facebook.com/docs/whatsapp/pricing" class="lp-link" rel="noopener">See Meta's pricing</a></p>
+    {% endif %}
+
+    <details class="lp-compare lp-catalog lp-reveal">
+      <summary>Compare every plan<span class="pm" aria-hidden="true"></span></summary>
+      <div class="lp-compare-scroll table-scroll" role="region" aria-label="Plan comparison" tabindex="0">
+        <table>
+          <caption class="sr-only">What each plan includes</caption>
+          <thead>
+            <tr><td></td>{% for card in cards %}<th scope="col">{{ card.plan.name }}</th>{% endfor %}</tr>
+          </thead>
+          {% regroup pricing.rows by group as groups %}
+          {% for g in groups %}
+          <tbody>
+            <tr class="lp-compare-group"><th scope="colgroup" colspan="{{ cards|length|add:1 }}">{{ g.grouper }}</th></tr>
+            {% for row in g.list %}
+            <tr>
+              <th scope="row">{{ row.label }}</th>
+              {% for cell in row.cells %}<td>{% if cell is True %}<svg class="lp-ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span class="sr-only">Included</span>{% elif cell is False %}<span class="lp-no" aria-hidden="true">–</span><span class="sr-only">Not included</span>{% elif cell == "soon" %}<span class="lp-soon-tag">Coming soon</span>{% else %}{{ cell }}{% endif %}</td>{% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+          {% endfor %}
+        </table>
+      </div>
+    </details>
   </div>
 </section>
