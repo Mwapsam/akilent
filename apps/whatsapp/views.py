@@ -23,6 +23,7 @@ from apps.whatsapp.campaigns import (
     campaign_delivery_stats,
     create_and_queue_campaign,
 )
+from apps.whatsapp.health import account_problem
 from apps.whatsapp.models import (
     MessageTemplate,
     MessageTemplateAsset,
@@ -947,8 +948,16 @@ def campaign_new(request):
                 error, step = _SEND_NOT_ALLOWED, 4
             else:
                 send_at, tz, when_error = _send_time(request.POST, account)
+                problem = account_problem(account)
                 if when_error:
                     error, step = when_error, 3
+                elif problem and request.POST.get("confirm_account_problem") != "1":
+                    # Warn, don't block: it may already be fixed in Meta. Sending needs the
+                    # owner to say so (Send's confirm, or the box without scripts).
+                    error, step = (
+                        f"{problem['reason']} Confirm to send anyway.",
+                        4,
+                    )
                 else:
                     try:
                         campaign = create_and_queue_campaign(
@@ -1010,6 +1019,7 @@ def campaign_new(request):
             "timezones": _timezone_options(state["send_tz"]),
             "test_phone": account.phone,
             "readiness": readiness(account),
+            "account_problem": account_problem(account),
         },
         status=400 if error else 200,
     )
@@ -1118,6 +1128,7 @@ def campaign_estimate(request):
             "send_tz": tz,
             "when_error": when_error,
             "can_send": _can_send(request, account),
+            "account_problem": account_problem(account),
         },
     )
 
@@ -1240,6 +1251,13 @@ def campaign_detail(request, pk: int):
         .order_by("-n")
     ]
     delivery = campaign_delivery_stats(campaign)
+    failure_groups = svc.failure_groups(campaign) if delivery["failed"] else []
+    # Retrying sends to the same account: while its last send failed for an account reason
+    # (billing, display name, connection) and nothing has gone through since, a retry would
+    # fail the same way, so the problem and its fix come first.
+    problem = (
+        account_problem(account) if any(g["fix"] for g in failure_groups) else None
+    )
 
     # Each row shows what happened to its message (the same outcome as the CSV
     # export), not the recipient row's own status: "queued" only means a message was
@@ -1255,12 +1273,22 @@ def campaign_detail(request, pk: int):
     else:
         outcome = ""
     page = Paginator(recipients, 50).get_page(request.GET.get("page"))
+    from apps.whatsapp.friendly_errors import failure
+
+    page.object_list = list(page.object_list)
+    for r in page.object_list:
+        if r.outcome == "failed":
+            r.reason, r.fix = failure(
+                r.message.error_code if r.message_id else "", r.error
+            )
 
     finished = campaign.status in WhatsAppCampaign.FINISHED
     context = {
         "account": account,
         "campaign": campaign,
-        "state": lifecycle_state(campaign),
+        "state": lifecycle_state(campaign, delivery),
+        "failure_groups": failure_groups,
+        "account_problem": problem,
         "editable": editable,
         "preview": preview,
         "remaining": remaining,
@@ -1273,7 +1301,7 @@ def campaign_detail(request, pk: int):
         "skip_copy": SKIP_REASON_COPY,
         "page": page,
         "outcome": outcome,
-        "timeline": timeline(campaign),
+        "timeline": timeline(campaign, delivery),
         "scheduled_local": local_label(campaign.scheduled_at, campaign.timezone),
         "can_send": can_send,
         "can_pause": can_send and svc.can_pause(campaign),

@@ -1032,7 +1032,7 @@ def recipients_with_outcome(campaign: WhatsAppCampaign):
     from django.db.models import Case, CharField, Value, When
 
     return (
-        campaign.recipients.select_related("contact")
+        campaign.recipients.select_related("contact", "message")
         .annotate(
             outcome=Case(
                 When(status=_Status.SKIPPED, then=Value("not_sent")),
@@ -1043,6 +1043,29 @@ def recipients_with_outcome(campaign: WhatsAppCampaign):
         )
         .order_by("pk")
     )
+
+
+def failure_groups(campaign: WhatsAppCampaign) -> list[dict]:
+    """The campaign's failed messages grouped by why, most first, in plain words:
+    ``[{"n", "reason", "fix"}]`` (``fix`` for an account problem, else None). One query."""
+    from django.db.models import Count, Min
+
+    from apps.whatsapp.friendly_errors import failure
+
+    rows = (
+        recipients_with_outcome(campaign)
+        .filter(outcome="failed")
+        .order_by()
+        .values("message__error_code")
+        .annotate(n=Count("id"), sample=Min("error"))
+    )
+    groups: dict[str, dict] = {}
+    for row in rows:
+        reason, fix = failure(row["message__error_code"], row["sample"])
+        reason = reason or "WhatsApp couldn't deliver it."
+        group = groups.setdefault(reason, {"n": 0, "reason": reason, "fix": fix})
+        group["n"] += row["n"]
+    return sorted(groups.values(), key=lambda g: -g["n"])
 
 
 def campaign_delivery_stats(campaign: WhatsAppCampaign) -> dict:

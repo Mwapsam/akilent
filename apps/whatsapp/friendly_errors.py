@@ -104,3 +104,23 @@ def account_level_fix(error_code: str | None) -> dict | None:
 
         url = reverse(url.removeprefix("akilent:"))
     return {"label": label, "url": url}
+
+
+def failure(
+    error_code: str | None, stored: str | None = None
+) -> tuple[str | None, dict | None]:
+    """Why a message didn't go, in plain words, and where to fix it when the cause is the
+    WhatsApp account itself (billing, display name, connection) rather than this message.
+
+    Worked out from the error code each time it's shown, not from the sentence stored when it
+    failed, so wording added since reaches old failures too. Where only the stored text was kept
+    and it starts with Meta's code ("131042: Business eligibility…"), that code is used."""
+    import re
+
+    code = (error_code or "").strip()
+    if not code and stored:
+        leading = re.match(r"\s*#?(\d{3,6})\b", stored)
+        code = leading.group(1) if leading else ""
+    if code:
+        return friendly_send_error(code), account_level_fix(code)
+    return (stored or None), None

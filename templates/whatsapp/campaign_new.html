@@ -92,6 +92,7 @@ and the send could only fail.{% endcomment %}
       <fieldset x-show="step === 1">
         <legend id="step-1-title" tabindex="-1" class="text-lg font-semibold text-ink mb-1">Who should get this?</legend>
         <p class="text-sm text-gray-600 mb-4">Choose a list or a segment. The numbers show who WhatsApp can reach.</p>
+        {% if account_problem %}<div class="mb-4">{% include "whatsapp/_account_problem.html" %}</div>{% endif %}
         {% if lists %}
         <h3 class="text-xs font-semibold uppercase tracking-wide text-ink-subtle mb-2">Lists</h3>
         <div class="space-y-3">
@@ -197,6 +198,7 @@ and the send could only fail.{% endcomment %}
           <label class="label" for="campaign-name">Campaign name <span class="font-normal text-ink-subtle">(only you see this)</span></label>
           <input id="campaign-name" name="name" class="input" value="{{ state.name }}" placeholder="e.g. December offer" maxlength="150" />
         </div>
+        {% if account_problem %}<div class="mt-4">{% include "whatsapp/_account_problem.html" with with_confirm=True %}</div>{% endif %}
         <div id="review-summary" class="mt-4"></div>
 
         <details class="card card-pad mt-4" x-data="{}">

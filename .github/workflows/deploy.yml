@@ -324,6 +324,11 @@ jobs:
               docker compose --profile prod run --rm web python manage.py migrate --noinput
               docker compose --profile prod run --rm web python manage.py collectstatic --noinput
               docker compose --profile prod up -d --remove-orphans
+              # nginx reads nginx/conf.d (a bind mount) only when it starts, and `up -d` leaves
+              # its container running when nothing but that config changed: check the new
+              # config, then reload it. A config that fails the check fails the release.
+              docker compose --profile prod exec -T nginx nginx -t
+              docker compose --profile prod exec -T nginx nginx -s reload
             }
 
             # Healthy once /healthz answers through gunicorn (up to 90s).

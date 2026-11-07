@@ -1,0 +1,53 @@
+"""Campaigns plan: query budgets for the list, a campaign's page and the composer.
+
+Measured 2026-11-06 (Phase A) with a billing failure on record, so the account-problem check
+is counted. Lower a number when a page gets faster; never raise one to make a change pass.
+"""
+
+import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
+
+from apps.whatsapp.tests.test_campaign_results import (  # noqa: F401
+    _campaign,
+    _wa_urls,
+    shop,
+)
+
+pytestmark = pytest.mark.django_db
+
+BUDGET = {"list": 15, "detail": 19, "new": 19}
+
+
+def _urls(campaign):
+    return {
+        "list": "/email/campaigns/?channel=whatsapp",
+        "detail": f"/whatsapp/campaigns/{campaign.pk}/",
+        "new": "/whatsapp/campaigns/new/",
+    }
+
+
+def _count(client, url):
+    client.get(url)  # warm per-process caches, as a real second visit would
+    with CaptureQueriesContext(connection) as ctx:
+        assert client.get(url).status_code == 200
+    return len(ctx.captured_queries)
+
+
+@_wa_urls
+@pytest.mark.parametrize("name", list(BUDGET))
+def test_each_campaign_page_stays_within_its_budget(shop, name):  # noqa: F811
+    client, account, template, clist = shop
+    campaign = _campaign(account, template, clist, ["failed", "read", "delivered"])
+    assert _count(client, _urls(campaign)[name]) <= BUDGET[name]
+
+
+@_wa_urls
+@pytest.mark.parametrize("name", list(BUDGET))
+def test_the_counts_dont_grow_with_campaigns_or_recipients(shop, name):  # noqa: F811
+    client, account, template, clist = shop
+    small = _campaign(account, template, clist, ["failed", "read"])
+    before = _count(client, _urls(small)[name])
+    for _ in range(5):
+        big = _campaign(account, template, clist, ["failed", "bad_number", "read"] * 4)
+    assert _count(client, _urls(big)[name]) == before

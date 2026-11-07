@@ -1169,6 +1169,7 @@
   .status-indicator[data-state="sending"]::before { @apply bg-amber-400 animate-pulse; }
   .status-indicator[data-state="sent"]::before { @apply bg-teal-500; }
   .status-indicator[data-state="failed"]::before { @apply bg-coral-500; }
+  .status-indicator[data-state="partly"]::before { @apply bg-amber-500; }
   .status-indicator[data-state="paused"]::before { @apply bg-gray-500; }
 
   /* Channel tag — icon + label in the channel colour. Never colour alone. */

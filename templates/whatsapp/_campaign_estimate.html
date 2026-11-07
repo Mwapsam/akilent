@@ -84,8 +84,12 @@ swapped-in copy lost, so the Send button showed from step 2.{% endcomment %}
 
   <div id="send-slot" hx-swap-oob="innerHTML">
     {% if can_send %}
+    {% comment %}With the account's own problem unfixed (health.account_problem), Send asks first and
+    then sends with confirm_account_problem=1, which the server needs (views.campaign_new).{% endcomment %}
     <button name="action" value="send" class="btn btn-primary btn-sm" {% if not est.will_receive or blanks_missing or when_error %}disabled{% endif %}
-            :aria-busy="busy" :disabled="busy{% if not est.will_receive or blanks_missing or when_error %} || true{% endif %}">
+            :aria-busy="busy" :disabled="busy{% if not est.will_receive or blanks_missing or when_error %} || true{% endif %}"
+            {% if account_problem %}data-account-problem-send
+            @click="if (!$el.dataset.ok) { $event.preventDefault(); $store.confirm.ask({ title: 'Send anyway?', message: '{{ account_problem.reason|escapejs }} Until it is fixed, these messages will likely fail.', confirmLabel: 'Send anyway', danger: true }).then(ok => { if (!ok) return; const i = document.createElement('input'); i.type = 'hidden'; i.name = 'confirm_account_problem'; i.value = '1'; $el.form.appendChild(i); $el.dataset.ok = '1'; $el.click(); }) }"{% endif %}>
       <span class="btn-spinner" x-show="busy"></span>
       {% include "components/icon.html" with name="send" class="w-4 h-4" %}
       {% if send_at %}Schedule for {{ send_at|timezone:send_tz|date:"D j M, H:i" }}{% else %}Send to {{ est.will_receive }} customer{{ est.will_receive|pluralize }}{% endif %}

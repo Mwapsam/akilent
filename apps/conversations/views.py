@@ -1049,13 +1049,10 @@ def _failure(meta: dict | None) -> tuple[str | None, dict | None]:
     Worked out from the stored error code each time it's shown, not from the sentence stored
     when it failed: wording added since (or a code stored in another shape) reaches old
     messages too, so a raw "(error 131042)" doesn't linger."""
-    from apps.whatsapp.friendly_errors import account_level_fix, friendly_send_error
+    from apps.whatsapp.friendly_errors import failure
 
     meta = meta or {}
-    code = meta.get("error_code")
-    if code:
-        return friendly_send_error(code), account_level_fix(code)
-    return meta.get("failure_reason") or None, None
+    return failure(meta.get("error_code"), meta.get("failure_reason"))
 
 
 def _message_json(m, conversation) -> dict:

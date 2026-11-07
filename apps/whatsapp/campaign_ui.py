@@ -67,18 +67,21 @@ EVENT_COPY = {
     "drafted": "Saved as a draft",
     "edited": "Draft updated",
     "scheduled": "Scheduled",
-    "sent": "Sent",
+    # Recipients chosen and their messages queued: not yet sent (see outcome_label).
+    "sent": "Messages prepared",
     "started": "Started sending",
     "paused": "Paused",
     "resumed": "Resumed",
     "cancelled": "Cancelled",
-    "completed": "Every message handed to WhatsApp",
+    # Replaced by what happened (outcome_label) wherever delivery is known.
+    "completed": "Every message queued for WhatsApp",
     "failed": "Stopped with a problem",
 }
 
 
-def timeline(campaign) -> list[dict]:
-    """The history entries as the detail page shows them, oldest first."""
+def timeline(campaign, stats: dict | None = None) -> list[dict]:
+    """The history entries as the detail page shows them, oldest first. With ``stats``
+    (delivery_stats_for), "completed" says what happened rather than that it was queued."""
     from django.utils.dateparse import parse_datetime
 
     out = []
@@ -86,6 +89,8 @@ def timeline(campaign) -> list[dict]:
         at = parse_datetime(entry.get("at") or "")
         when = parse_datetime(entry.get("when") or "") if entry.get("when") else None
         label = EVENT_COPY.get(entry.get("event", ""), entry.get("event", ""))
+        if entry.get("event") == "completed" and stats is not None:
+            label = outcome_label(stats)
         if when is not None:
             label = f"{label} for {local_label(when, campaign.timezone)}"
         out.append(
@@ -114,9 +119,40 @@ def local_label(dt, tz: str) -> str:
     return f"{local:%a} {local.day} {local:%b %Y, %H:%M}"
 
 
-def lifecycle_state(campaign) -> str:
-    """The design-spec status word (§2) for a campaign: draft/sending/sent/failed."""
-    return STATUS_STATE.get(campaign.status, "draft")
+def lifecycle_state(campaign, stats: dict | None = None) -> str:
+    """The design-spec status word (§2) for a campaign: draft/sending/sent/failed.
+
+    COMPLETED only means every message was queued. Given its delivery ``stats``
+    (campaigns.delivery_stats_for), a finished campaign says what happened instead:
+    sending (still in the queue or held for plan room), failed (nothing accepted), partly
+    (some accepted, some failed or unconfirmed), not_sent (nobody could be sent it) or sent."""
+    if campaign.status != WhatsAppCampaign.Status.COMPLETED or stats is None:
+        return STATUS_STATE.get(campaign.status, "draft")
+    accepted = stats["sent"] + stats["delivered"] + stats["read"]
+    trouble = stats["failed"] + stats["unconfirmed"]
+    if stats["pending"] or stats["held"]:
+        return "sending"
+    if not accepted and not trouble:
+        return "not_sent"
+    if not accepted:
+        return "failed"
+    return "partly" if trouble else "sent"
+
+
+def outcome_label(stats: dict) -> str:
+    """A finished campaign in one line: "Finished: 0 of 2 sent, 2 failed"."""
+    accepted = stats["sent"] + stats["delivered"] + stats["read"]
+    total = accepted + stats["failed"] + stats["unconfirmed"]
+    if stats["pending"] or stats["held"]:
+        return "Every message queued; results still coming in"
+    if not total:
+        return "Finished: nobody could be sent it"
+    parts = [f"Finished: {accepted} of {total} sent"]
+    if stats["failed"]:
+        parts.append(f"{stats['failed']} failed")
+    if stats["unconfirmed"]:
+        parts.append(f"{stats['unconfirmed']} not confirmed")
+    return ", ".join(parts)
 
 
 @dataclass

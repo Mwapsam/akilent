@@ -1,0 +1,19 @@
+{% comment %}The WhatsApp account's last send failed for a reason about the account (billing, display
+name, connection) and nothing has gone through since (health.account_problem): a campaign
+would likely fail the same way. Shown in the composer's first and last steps; it warns rather
+than blocks, since it may already be fixed in Meta. With scripts, Send asks first; without,
+the box below is the same question.{% endcomment %}
+<div class="alert alert-danger" role="alert" data-account-problem>
+  {% include "components/icon.html" with name="alert-triangle" %}
+  <div class="min-w-0">
+    <p class="font-medium">Messages from your WhatsApp account are failing</p>
+    <p class="mt-0.5">{{ account_problem.reason }}</p>
+    <p class="mt-2 flex flex-wrap items-center gap-3">
+      <a href="{{ account_problem.fix.url }}" class="btn btn-secondary btn-sm"{% if account_problem.fix.url|slice:":4" == "http" %} target="_blank" rel="noopener"{% endif %}>{{ account_problem.fix.label }}</a>
+      <span class="text-xs">Fixed it already? You can still send; the next message shows whether it works.</span>
+    </p>
+    {% if with_confirm %}
+    <noscript><label class="mt-2 flex items-center gap-2 text-sm"><input type="checkbox" name="confirm_account_problem" value="1"> Send anyway</label></noscript>
+    {% endif %}
+  </div>
+</div>

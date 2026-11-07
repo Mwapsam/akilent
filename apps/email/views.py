@@ -1741,7 +1741,7 @@ def campaigns_list(request):
         stats = delivery_stats_for([c.pk for c in whatsapp_campaigns])
         for c in whatsapp_campaigns:
             c.stats = stats[c.pk]  # type: ignore[attr-defined]
-            c.state = lifecycle_state(c)  # type: ignore[attr-defined]
+            c.state = lifecycle_state(c, c.stats)  # type: ignore[attr-defined]
             c.when_label = local_label(c.scheduled_at, c.timezone)  # type: ignore[attr-defined]
             c.delivered = c.stats["delivered"] + c.stats["read"]  # type: ignore[attr-defined]
             c.reached = c.delivered + c.stats["sent"]  # type: ignore[attr-defined]

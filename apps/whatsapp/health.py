@@ -41,6 +41,36 @@ def is_degraded(account) -> bool:
     )
 
 
+def account_problem(account) -> dict | None:
+    """The WhatsApp account can't send right now, as far as we know: the latest message that
+    settled failed for a reason about the account (billing, display name, connection), and
+    nothing has gone through since. ``{"reason", "fix", "at"}``, else None. One query.
+
+    Only as good as the last send: it may already be fixed in Meta, so screens warn and let
+    the owner go ahead rather than block."""
+    from apps.whatsapp.friendly_errors import account_level_fix, friendly_send_error
+
+    latest = (
+        OutboundMessage.objects.filter(
+            account=account,
+            status__in=[OutboundMessage.Status.SENT, OutboundMessage.Status.FAILED],
+        )
+        .order_by("-updated_at")
+        .values("status", "error_code", "updated_at")
+        .first()
+    )
+    if not latest or latest["status"] != OutboundMessage.Status.FAILED:
+        return None
+    fix = account_level_fix(latest["error_code"])
+    if fix is None:
+        return None
+    return {
+        "reason": friendly_send_error(latest["error_code"]),
+        "fix": fix,
+        "at": latest["updated_at"],
+    }
+
+
 def last_webhook_at(number):
     return (
         WebhookEventLog.objects.filter(

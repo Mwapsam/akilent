@@ -1,14 +1,15 @@
 {% comment %}Message-lifecycle status. Canonical vocabulary — see docs/design/akilent-ui-spec.md §2.
   {% include "components/status.html" with state=campaign.status %}
   {% include "components/status.html" with state="scheduled" badge=True %}
-state ∈ draft | scheduled | sending | sent | failed | paused | cancelled
+state ∈ draft | scheduled | sending | sent | partly | not_sent | failed | paused | cancelled
+(partly and not_sent: a finished WhatsApp campaign by what was delivered, campaign_ui.lifecycle_state)
 {% endcomment %}
 {% with s=state|default:"draft" %}
 {% if badge %}
-  <span class="badge {% if s == 'sent' %}badge-success{% elif s == 'scheduled' %}badge-info{% elif s == 'sending' %}badge-warning{% elif s == 'failed' %}badge-danger{% else %}badge-neutral{% endif %}">
-    {% if s == 'cancelled' %}{% include "components/icon.html" with name="x" class="w-3 h-3" %}{% elif s == 'paused' %}{% include "components/icon.html" with name="pause" class="w-3 h-3" %}{% endif %}{{ s|capfirst }}
+  <span class="badge {% if s == 'sent' %}badge-success{% elif s == 'scheduled' %}badge-info{% elif s == 'sending' or s == 'partly' %}badge-warning{% elif s == 'failed' %}badge-danger{% else %}badge-neutral{% endif %}">
+    {% if s == 'cancelled' %}{% include "components/icon.html" with name="x" class="w-3 h-3" %}{% elif s == 'paused' %}{% include "components/icon.html" with name="pause" class="w-3 h-3" %}{% endif %}{% if s == 'partly' %}Partly sent{% elif s == 'not_sent' %}Not sent{% else %}{{ s|capfirst }}{% endif %}
   </span>
 {% else %}
-  <span class="status-indicator" data-state="{{ s }}">{{ s|capfirst }}</span>
+  <span class="status-indicator" data-state="{{ s }}">{% if s == 'partly' %}Partly sent{% elif s == 'not_sent' %}Not sent{% else %}{{ s|capfirst }}{% endif %}</span>
 {% endif %}
 {% endwith %}
