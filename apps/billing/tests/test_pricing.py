@@ -57,3 +57,15 @@ def test_stripe_interval_mapping():
     assert stripe_interval("quarterly") == ("month", 3)
     assert stripe_interval("annually") == ("year", 1)
     assert stripe_interval("biennial") == ("year", 2)
+
+
+def test_each_term_is_worded_one_way():
+    from apps.billing.pricing import period_options
+
+    billed = {o["value"]: o["billed"] for o in period_options()}
+    assert billed == {
+        "monthly": "a month",
+        "quarterly": "every 3 months",
+        "annually": "a year",
+        "biennial": "every 2 years",
+    }

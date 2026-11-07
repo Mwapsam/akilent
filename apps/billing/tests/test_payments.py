@@ -86,6 +86,38 @@ def test_upgrade_takes_unused_time_off_the_price(
 
 
 @pytest.mark.django_db
+def test_yearly_upgrade_mid_term_with_whole_unit_terms(
+    account, plan, subscription, fake_provider
+):
+    """$11.90 Starter yearly ($121) with half the year left, moving to $25.90 yearly ($264):
+    the new term is the whole amount checkout advertises, the old one's unused half is
+    valued from the same whole-unit price, and the payment settles at what it says."""
+    plan.price_monthly = D("11.90")
+    plan.save()
+    now = timezone.now()
+    subscription.status = Subscription.ACTIVE
+    subscription.provider = "fake"
+    subscription.billing_period = Subscription.ANNUALLY
+    subscription.current_period_start = now - timedelta(days=182.5)
+    subscription.current_period_end = now + timedelta(days=182.5)
+    subscription.save()
+    growth = Plan.objects.create(slug="growth", name="Growth", price_monthly=D("25.90"))
+
+    payment = payments.create_payment(account, growth, "annually", provider="fake")
+    assert payment.gross_amount == D("264")  # 25.90 x 12 x 0.85 = 264.18
+    assert abs(payment.unused_time_value - D("60.50")) <= D("0.02")  # 121 / 365 x 182.5
+    assert payment.amount_due == payment.gross_amount - payment.unused_time_value
+    assert payment.amount_due > 0
+
+    payments.record_result("fake", fake_provider.paid(payment))
+    payment.refresh_from_db()
+    subscription.refresh_from_db()
+    assert payment.status == BillingPayment.SUCCEEDED
+    assert subscription.plan_id == growth.pk
+    assert subscription.billing_period == Subscription.ANNUALLY
+
+
+@pytest.mark.django_db
 def test_unused_time_after_an_early_renewal_is_valued_in_full(
     account, plan, subscription, fake_provider
 ):

@@ -398,3 +398,14 @@ def test_the_page_stays_cheap_for_signed_in_visitors(
     assert "onboarding" not in resp.context
     assert "locked_features" not in resp.context
     assert "Open dashboard" in resp.content.decode()
+
+
+@pytest.mark.django_db
+def test_start_free_trial_opens_signup_on_the_trial(client, plans):
+    html = client.get("/").content.decode()
+    trial = next(p for p in plans if p.price_monthly == 0 and p.trial_days)
+    for where in ("nav", "hero", "final"):
+        assert (
+            f'href="/signup/?plan={trial.slug}" data-cta-plan="{trial.slug}" '
+            in html.split(f'data-cta-location="{where}"')[0][-200:]
+        ), where

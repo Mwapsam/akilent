@@ -37,6 +37,15 @@ PERIOD_PER = {
     Subscription.BIENNIAL: "2 years",
 }
 
+# How a pricing card says how often a term is billed: "Billed $194 a year". One wording per
+# term, so the landing page, signup and Billing -> Plans never word the same term two ways.
+PERIOD_BILLED = {
+    Subscription.MONTHLY: "a month",
+    Subscription.QUARTERLY: "every 3 months",
+    Subscription.ANNUALLY: "a year",
+    Subscription.BIENNIAL: "every 2 years",
+}
+
 # (interval, interval_count) per Stripe's price.recurring API.
 STRIPE_INTERVAL = {
     Subscription.MONTHLY: ("month", 1),
@@ -92,6 +101,7 @@ def period_options() -> list[dict]:
                 "value": value,
                 "label": label,
                 "per": PERIOD_PER[value],
+                "billed": PERIOD_BILLED[value],
                 "months": int(PERIOD_MONTH_MULTIPLES[value]),
                 "multiplier": float(multiplier),
                 "savePct": round((1 - float(multiplier)) * 100),

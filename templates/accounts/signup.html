@@ -3,10 +3,10 @@
 {% block title %}Create your account — {{ site.app_name|default:"Akilent" }}{% endblock %}
 {% block content %}
 {{ wizard_config|json_script:"signup-wizard-config" }}
-<script src="{% static 'js/signup-wizard.js' %}?v=8"></script>
+<script src="{% static 'js/signup-wizard.js' %}?v=11"></script>
 
 <div class="min-h-viewport flex items-start justify-center px-4 py-12">
-  <div class="relative w-full max-w-2xl" x-data="signupWizard()" x-cloak>
+  <div class="relative w-full max-w-2xl transition-[max-width]" :class="step === 'package' && threeAcross ? 'lg:max-w-4xl' : ''" x-data="signupWizard()" x-cloak>
     <a href="/" class="absolute -top-6 right-0 btn btn-ghost btn-icon btn-sm" aria-label="Back to the {{ site.app_name|default:'Akilent' }} website">
       {% include "components/icon.html" with name="x" class="w-5 h-5" %}
     </a>
@@ -69,17 +69,29 @@
             Sign-ups are temporarily unavailable. Please check back soon.
           </div>
         {% endif %}
+        {% comment %}On a trial signup, a channel the trial doesn't give is still listed, dashed:
+        picking it opens every plan (the Package step) instead of failing later.{% endcomment %}
         <template x-for="c in channelCards" :key="c.value">
-          <button type="button" @click="toggleChannel(c.value)" role="checkbox" :aria-checked="hasChannel(c.value)"
-                  class="w-full text-left rounded-xl border px-4 py-4 flex items-center gap-3 transition"
-                  :class="hasChannel(c.value) ? 'border-brand-600 ring-2 ring-brand-100 tone-brand-bg' : 'border-border hover:border-gray-300'">
-            <span class="w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center text-white"
-                  :class="hasChannel(c.value) ? 'border-brand-600 bg-brand-600' : 'border-gray-300'">
-              <svg x-show="hasChannel(c.value)" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+          <button type="button" @click="pickChannel(c)" role="checkbox" :aria-checked="hasChannel(c.value)"
+                  :aria-disabled="c.outside ? 'true' : null"
+                  :aria-describedby="c.outside ? 'outside-' + c.value : null"
+                  class="choice-card px-4 py-4 flex items-center gap-3">
+            <span class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-surface-muted text-ink-muted" aria-hidden="true">
+              <template x-if="c.value === 'whatsapp'"><span>{% include "components/icon.html" with name="message-circle" class="w-5 h-5" %}</span></template>
+              <template x-if="c.value === 'instagram'"><span>{% include "components/icon.html" with name="instagram" class="w-5 h-5" %}</span></template>
+              <template x-if="c.value === 'facebook'"><span>{% include "components/icon.html" with name="facebook" class="w-5 h-5" %}</span></template>
+              <template x-if="c.value === 'email'"><span>{% include "components/icon.html" with name="mail" class="w-5 h-5" %}</span></template>
             </span>
-            <span class="min-w-0">
-              <span class="block font-medium text-ink" x-text="c.label"></span>
+            <span class="min-w-0 flex-1">
+              <span class="flex items-center gap-2">
+                <span class="font-medium text-ink" x-text="c.label"></span>
+                <span class="choice-card-tag">Selected</span>
+              </span>
               <span class="block text-xs text-ink-subtle" x-text="c.description"></span>
+              <span x-show="c.outside" :id="'outside-' + c.value" class="block text-xs text-ink-muted mt-0.5">Not in the free trial — pick it to see plans that include it</span>
+            </span>
+            <span class="choice-card-mark" aria-hidden="true">
+              <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
             </span>
           </button>
         </template>
@@ -92,56 +104,83 @@
       </div>
 
       {# ---- Package ---- #}
-      <div x-show="step === 'package'" x-cloak class="space-y-3">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <h2 x-ref="heading_package" tabindex="-1" class="text-sm font-normal text-ink-subtle focus:outline-none">
-            Plans that include <span class="font-medium text-ink-muted" x-text="channelLabel"></span>
-          </h2>
-          {% comment %}Billing term for paid plans. Longer terms cost less per month; the
-          amounts come from billing.pricing.price_for, the same as checkout.{% endcomment %}
-          <div x-show="showPeriods" x-cloak role="radiogroup" aria-label="Billing period"
-               class="inline-flex flex-wrap gap-1 rounded-xl border border-border p-1" style="background-color: var(--color-surface)">
-            <template x-for="o in cfg.periods" :key="o.value">
-              <button type="button" role="radio" :aria-checked="period === o.value" @click="selectPeriod(o.value)"
-                      class="rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
-                      :class="period === o.value ? 'tone-brand' : 'text-ink-subtle hover:text-ink'">
-                <span x-text="o.label"></span>
-                <span x-show="o.savePct > 0" class="ml-1 text-teal-700" x-text="'−' + o.savePct + '%'"></span>
-              </button>
-            </template>
-          </div>
+      <div x-show="step === 'package'" x-cloak class="space-y-4">
+        <h2 x-ref="heading_package" tabindex="-1" class="text-sm font-normal text-ink-subtle focus:outline-none">
+          Plans that include <span class="font-medium text-ink-muted" x-text="channelLabel"></span>
+        </h2>
+        {% comment %}Billing term for paid plans, on its own row so long channel names never push
+        it onto a line of its own. Scrolls sideways on a phone. The amounts come from
+        billing.pricing (price_for, monthly_equivalent), the same as checkout.{% endcomment %}
+        <div x-show="showPeriods" x-cloak role="radiogroup" aria-label="Billing period"
+             class="pill-scroll w-full sm:w-fit rounded-xl border border-border p-1" style="background-color: var(--color-surface)">
+          <template x-for="o in cfg.periods" :key="o.value">
+            <button type="button" role="radio" :aria-checked="period === o.value" @click="selectPeriod(o.value)"
+                    class="rounded-lg px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap"
+                    :class="period === o.value ? 'tone-brand' : 'text-ink-subtle hover:text-ink'">
+              <span x-text="o.label"></span>
+              <span x-show="o.savePct > 0" class="ml-1 text-teal-700" x-text="'−' + o.savePct + '%'"></span>
+            </button>
+          </template>
         </div>
         <template x-if="filteredPlans.length === 0">
           <div class="card card-pad text-sm text-ink-subtle">
             No packages are available for that selection yet. Go back and choose different channels.
           </div>
         </template>
-        <div class="grid sm:grid-cols-2 gap-3" role="radiogroup" aria-label="Choose a plan">
+        <div class="grid sm:grid-cols-2 gap-3" :class="threeAcross ? 'lg:grid-cols-3' : ''" role="radiogroup" aria-label="Choose a plan">
           <template x-for="p in filteredPlans" :key="p.slug">
             <button type="button" @click="selectPlan(p.slug)" role="radio" :aria-checked="plan === p.slug"
-                    class="text-left rounded-xl border p-4 transition"
-                    :class="plan === p.slug ? 'border-brand-600 ring-2 ring-brand-100' : 'border-border hover:border-gray-300'">
-              <div class="flex items-center justify-between">
-                <span class="font-semibold text-ink" x-text="p.name"></span>
-                <span x-show="p.popular" class="text-xs uppercase tracking-wide tone-brand rounded px-1.5 py-0.5">Popular</span>
+                    class="choice-card p-4 flex flex-col">
+              {% comment %}Name and tags share one line on every card, so no card's price sits lower
+              because it has a badge.{% endcomment %}
+              <div class="flex items-center justify-between gap-2">
+                <span class="min-w-0 flex items-center gap-2">
+                  <span class="font-semibold text-ink truncate" x-text="p.name"></span>
+                  <span x-show="p.popular" class="text-[0.6875rem] uppercase tracking-wide tone-brand rounded px-1.5 py-0.5 shrink-0">Popular</span>
+                </span>
+                <span class="flex items-center gap-2 shrink-0">
+                  <span class="choice-card-tag">Selected</span>
+                  <span class="choice-card-mark" aria-hidden="true">
+                    <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                  </span>
+                </span>
               </div>
-              <div class="mt-1 flex items-baseline gap-1">
-                <span class="text-lg font-bold text-ink tabular-nums" x-text="monthlyLabel(p)"></span>
+              <div class="mt-2 flex items-baseline gap-1">
+                <span class="text-xl font-bold text-ink tabular-nums" x-text="monthlyLabel(p)"></span>
                 <span x-show="isPaid(p)" class="text-xs text-ink-subtle">/month</span>
               </div>
-              <div x-show="isPaid(p)" class="text-xs text-ink-subtle">
-                <span x-text="billedLabel(p)"></span>
-                <span x-show="periodInfo.savePct > 0" class="text-teal-700 font-medium" x-text="' · save ' + periodInfo.savePct + '%'"></span>
+              <div class="text-xs text-ink-subtle min-h-[1rem]">
+                <template x-if="isPaid(p)">
+                  <span><span x-text="billedLabel(p)"></span><span x-show="periodInfo.savePct > 0" class="text-teal-700 font-medium" x-text="' · save ' + periodInfo.savePct + '%'"></span></span>
+                </template>
+                <template x-if="!isPaid(p)">
+                  <span x-text="p.trialDays ? p.trialDays + '-day free trial, no card needed' : 'Free, no card needed'"></span>
+                </template>
               </div>
-              <div x-show="p.trialDays" class="text-xs text-ink-subtle" x-text="p.trialDays + '-day free trial'"></div>
-              <ul class="mt-3 space-y-1 text-xs text-ink-subtle">
-                <template x-for="f in p.features" :key="f">
-                  <li class="flex items-start gap-1.5"><span class="text-brand-500">✓</span><span x-text="f"></span></li>
+              {% comment %}The same rows on every card (billing_api.signup_comparison): what a plan
+              doesn't give is greyed out, so a trial can't look like it gives more.{% endcomment %}
+              <ul class="mt-3 space-y-1.5 text-xs">
+                <template x-for="row in p.compare" :key="row.label">
+                  <li class="flex items-start gap-1.5" :class="row.ok ? 'text-ink-muted' : 'text-ink-subtle opacity-60'">
+                    <span aria-hidden="true" class="w-3 shrink-0 text-center" :class="row.ok ? 'tone-teal-fg' : ''" x-text="row.ok ? '✓' : '—'"></span>
+                    <span><span x-text="row.label"></span><span class="sr-only" x-text="row.ok ? '' : ' (not included)'"></span></span>
+                  </li>
                 </template>
               </ul>
             </button>
           </template>
         </div>
+        <p x-show="cfg.included && cfg.included.length && filteredPlans.length" class="text-xs text-ink-subtle">
+          All plans include <span x-text="cfg.included.join(', ')"></span>.
+        </p>
+        {% comment %}Plans the picked channels filtered out, and why, instead of quietly
+        dropping them.{% endcomment %}
+        <ul x-show="hiddenPlans.length" class="text-xs text-ink-subtle space-y-0.5">
+          <template x-for="h in hiddenPlans" :key="h.name">
+            <li><span class="font-medium text-ink-muted" x-text="h.name"></span> isn't shown: it doesn't include <span x-text="h.missing"></span>.
+              <button type="button" @click="goTo('channels')" class="text-accent hover:text-accent-strong font-medium">Change channels</button></li>
+          </template>
+        </ul>
       </div>
 
       {# ---- Your account ---- #}

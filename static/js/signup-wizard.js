@@ -260,14 +260,26 @@
         var slug = this.plan;
         return this.cfg.plans.filter(function (p) { return p.slug === slug; })[0] || null;
       },
-      // The server only sends channels that are on offer and that some plan gives. A
-      // trial signup offers the channels the trial gives.
+      // The server only sends channels that are on offer and that some plan gives. On a
+      // trial signup, the ones the trial doesn't give are marked `outside`: still listed,
+      // and picking one opens every plan instead.
       get channelCards() {
         var trial = this.trialPlan;
-        if (!trial) return this.cfg.channelChoices;
-        return this.cfg.channelChoices.filter(function (c) {
-          return trial.channels.indexOf(c.value) !== -1;
+        return this.cfg.channelChoices.map(function (c) {
+          return Object.assign({}, c, { outside: !!trial && trial.channels.indexOf(c.value) === -1 });
         });
+      },
+      pickChannel: function (c) {
+        if (c.outside) {
+          // Leave the trial for the full plan list; the plan is re-picked on Package.
+          this.entry = "plans";
+          if (!this.hasChannel(c.value)) this.channels = this.channels.concat([c.value]);
+          if (this.plan && !this._planInList(this.plan)) this.plan = "";
+          this._save();
+          this.announcement = c.label + " added. Choose a plan on the next step.";
+          return;
+        }
+        this.toggleChannel(c.value);
       },
       hasChannel: function (value) {
         return this.channels.indexOf(value) !== -1;
@@ -280,6 +292,25 @@
             return p.channels.indexOf(c) !== -1;
           });
         });
+      },
+      // Three plan cards to a row only when the rows come out full (3, 6, ...); four
+      // plans sit two by two rather than leaving one alone on a row.
+      get threeAcross() {
+        var n = this.filteredPlans.length;
+        return n >= 3 && n % 3 === 0;
+      },
+      // Plans the picked channels rule out, with the channels each one lacks, so the
+      // Package step can say why a plan isn't shown instead of dropping it quietly.
+      get hiddenPlans() {
+        var picks = this.channels;
+        var labels = {};
+        this.cfg.channelChoices.forEach(function (c) { labels[c.value] = c.label; });
+        return this.cfg.plans
+          .map(function (p) {
+            var missing = picks.filter(function (c) { return p.channels.indexOf(c) === -1; });
+            return { name: p.name, missing: missing.map(function (c) { return labels[c] || c; }).join(" or ") };
+          })
+          .filter(function (h) { return h.missing; });
       },
       get selectedPlan() {
         var slug = this.plan;
@@ -547,13 +578,14 @@
         var monthly = p.periodMonthly && p.periodMonthly[info.value];
         return this._money(monthly || p.priceMonthly);
       },
-      // Under the headline: exactly what the term costs, e.g. "Billed $194 every year".
+      // Under the headline: exactly what the term costs, e.g. "Billed $194 a year" (the
+      // wording is pricing.PERIOD_BILLED, the same on every pricing card).
       billedLabel: function (p) {
         if (!this.isPaid(p)) return "";
         var info = this.periodInfo;
         if (info.months <= 1) return "Billed monthly";
         var total = (p.periodPrices && p.periodPrices[info.value]) || p.priceMonthly;
-        return "Billed " + this._money(total) + " every " + info.per;
+        return "Billed " + this._money(total) + " " + (info.billed || "every " + info.per);
       },
     };
   }

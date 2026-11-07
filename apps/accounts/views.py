@@ -255,23 +255,6 @@ def _mark_email_verified(user):
     )
 
 
-def _plan_card(plan, channels) -> dict:
-    """``billing_api.plan_card`` for what the plan gives right now: ``channels`` are the
-    channels it gives on offer (forms.plan_channels), so a channel it doesn't cover, or
-    that isn't offered, isn't advertised. The landing page and the signup wizard both use
-    this, so the two never describe the same plan differently."""
-    from apps.billing import api as billing_api
-
-    return billing_api.plan_card(plan, channels=channels)
-
-
-def _plan_feature_bullets(plan, channels) -> list:
-    """Short marketing bullets for a plan card in the signup wizard, as plain strings for
-    the wizard's JSON config."""
-    card = _plan_card(plan, channels)
-    return card["limits"] + card["feature_names"]
-
-
 def _is_free_plan(card) -> bool:
     """Whether a wizard plan card (see _build_signup_wizard_config) costs nothing."""
     return card is not None and card["priceMonthly"] <= 0
@@ -292,12 +275,15 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
     from django.middleware.csrf import get_token
 
     from apps.accounts.forms import signup_offer
+    from apps.billing import api as billing_api
     from apps.billing.models import Plan, Subscription
     from apps.billing.money import SYMBOLS, ZERO_DECIMAL, billing_currency
     from apps.billing.pricing import monthly_equivalent, period_options, price_for
 
     offered, channel_choices = signup_offer()
     offered_keys = [value for value, _, _ in channel_choices]
+    # Every card compares the same rows: what differs between the plans on offer.
+    comparison = billing_api.signup_comparison(offered)
     periods = [value for value, _ in Subscription.BILLING_PERIOD_CHOICES]
     plans: list[dict[str, Any]] = sorted(
         (
@@ -319,7 +305,7 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
                 },
                 "trialDays": p.trial_days,
                 "popular": p.slug == Plan.PROFESSIONAL,
-                "features": _plan_feature_bullets(p, channels),
+                "compare": comparison["cards"][p.slug],
             }
             for p, channels in offered
         ),
@@ -403,6 +389,8 @@ def _build_signup_wizard_config(request, *, form_data=None, errors=None):
             "zeroDecimal": currency in ZERO_DECIMAL,
         },
         "plans": plans,
+        # What every plan has, said once under the cards instead of on each one.
+        "included": comparison["included"],
         "channelChoices": [
             {"value": v, "label": label, "description": desc}
             for v, label, desc in channel_choices
@@ -900,8 +888,9 @@ def landing(request):
         {**billing_api.plan_card(p, channels=channels, data=data), **extra}
         for (p, channels), extra in zip(offered, pricing["cards"], strict=True)
     ]
-    # The hero's "N-day free trial" line links to a plain /signup/, so it shows what that gives.
-    _, trial_days = billing_api.default_signup_trial()
+    # "Start free trial" opens signup on the plan a plain /signup/ starts on, by name, so the
+    # trial is chosen up front and the click is attributed to it (data-cta-plan).
+    trial_plan, trial_days = billing_api.default_signup_trial()
     # len() counts pending messages without marking them read, so the page still shows them.
     personal = request.user.is_authenticated or len(messages.get_messages(request)) > 0
     testimonials = list(Testimonial.shown())
@@ -913,6 +902,7 @@ def landing(request):
             "cards": cards,
             "pricing": pricing,
             "trial_days": trial_days,
+            "trial_slug": trial_plan.slug if trial_plan else "",
             "ch": marketing_channels(),
             "testimonials": testimonials,
             # Proof slots: logos and the case-study card come from the same permissioned

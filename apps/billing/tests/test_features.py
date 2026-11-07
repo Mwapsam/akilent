@@ -349,16 +349,24 @@ def test_pricing_is_built_from_the_catalog(owner_client, plan):
 
 
 @pytest.mark.django_db
-def test_signup_bullets_match_the_pricing_card(plan):
-    from apps.accounts.views import _plan_feature_bullets
+def test_signup_comparison_greys_what_a_plan_lacks(plan):
+    """One plan has insights, the other doesn't: both cards get the row, in the same place,
+    ticked on one and greyed on the other. What both have goes in ``included``."""
+    from apps.billing.models import Plan
 
+    other = Plan.objects.create(slug="other", name="Other", price_monthly=0)
     PlanFeature.objects.create(plan=plan, key="insights")
-    from apps.core.channels import enabled_channels
-
-    card = billing_api.plan_card(plan, channels=enabled_channels() - {"whatsapp"})
-    assert _plan_feature_bullets(plan, enabled_channels() - {"whatsapp"}) == card[
-        "limits"
-    ] + ["Detailed insights"]
+    PlanFeature.objects.get_or_create(plan=plan, key="email_templates")
+    PlanFeature.objects.get_or_create(plan=other, key="email_templates")
+    result = billing_api.signup_comparison([(plan, {"email"}), (other, {"email"})])
+    mine = {r["label"]: r["ok"] for r in result["cards"][plan.slug]}
+    theirs = {r["label"]: r["ok"] for r in result["cards"][other.slug]}
+    assert mine["Detailed insights"] is True and theirs["Detailed insights"] is False
+    assert [r["label"] for r in result["cards"][plan.slug]] == [
+        r["label"] for r in result["cards"][other.slug]
+    ]
+    templates = catalog.get("email_templates").name
+    assert templates in result["included"] and templates not in mine
 
 
 @pytest.mark.django_db

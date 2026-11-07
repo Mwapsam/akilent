@@ -336,23 +336,54 @@ def test_paid_signup_warns_when_verification_could_not_be_queued(
 
 
 @pytest.mark.django_db
-def test_landing_and_wizard_describe_a_plan_the_same_way(client, db, settings):
-    from apps.accounts.views import _plan_feature_bullets
+def test_wizard_cards_compare_the_same_rows(client, plans, settings):
+    """Every card lists the same rows; what a plan lacks is greyed (ok False), so the free
+    trial can't look like it gives more than Starter by listing more lines."""
     from apps.billing.models import PlanFeature
 
     settings.EMAIL_ENABLED = True
     settings.WHATSAPP_ENABLED = True
-    plan = Plan.objects.create(
-        slug=Plan.PROFESSIONAL,
-        name="Professional",
-        price_monthly=49,
-    )
-    billing_api.set_plan_channels(plan, ["whatsapp"])
-    PlanFeature.objects.get_or_create(plan=plan, key="email_campaigns")
-    PlanFeature.objects.get_or_create(plan=plan, key="whatsapp_campaigns")
-    card = client.get("/").context["cards"][0]
-    assert card["limits"] + card["feature_names"] == _plan_feature_bullets(
-        plan, {"whatsapp"}
+    trial, starter = plans
+    billing_api.set_plan_channels(starter, ["email", "whatsapp"])
+    PlanFeature.objects.get_or_create(plan=starter, key="email_campaigns")
+    cfg = _wizard_config(client.get(SIGNUP_URL + "?channels=email"))
+    cards = {p["slug"]: p["compare"] for p in cfg["plans"]}
+
+    # Same number of rows everywhere, and the same channel/feature rows in the same order
+    # (limit rows carry each plan's own number, e.g. "100" vs "1,000 conversations/mo").
+    def features_only(rows):
+        return [
+            r["label"]
+            for r in rows
+            if not r["label"][0].isdigit() and not r["label"].startswith("Unlimited")
+        ]
+
+    assert cards[Plan.TRIAL]
+    assert len({len(rows) for rows in cards.values()}) == 1
+    assert len({tuple(features_only(rows)) for rows in cards.values()}) == 1
+    starter_rows = {r["label"]: r["ok"] for r in cards[Plan.STARTER]}
+    trial_rows = {r["label"]: r["ok"] for r in cards[Plan.TRIAL]}
+    campaigns = billing_api.catalog.get("email_campaigns").name
+    if campaigns in starter_rows:
+        assert starter_rows[campaigns] is True
+        assert trial_rows.get(campaigns) in (False, True)  # same row on both cards
+    # Nothing on a card claims a feature its plan doesn't have.
+    for slug, rows in cards.items():
+        plan = Plan.objects.get(slug=slug)
+        keys = set(PlanFeature.objects.filter(plan=plan).values_list("key", flat=True))
+        for r in rows:
+            f = next(
+                (
+                    f
+                    for f in billing_api.catalog.matrix_features()
+                    if f.name == r["label"]
+                ),
+                None,
+            )
+            if f is not None and f.key not in billing_api.catalog.CHANNEL_FEATURES:
+                assert r["ok"] == (f.key in keys), (slug, r)
+    assert all(
+        "message history" not in r["label"] for rows in cards.values() for r in rows
     )
 
 

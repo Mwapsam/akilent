@@ -635,6 +635,71 @@ def _lower_first(name: str) -> str:
     return f"{first} {rest}".strip()
 
 
+# How many rows a signup plan card compares. Limits come first, then channels, then features.
+_SIGNUP_ROWS = 6
+
+
+def signup_comparison(offered, data=None) -> dict:
+    """What the signup wizard's plan cards compare, for ``offered`` as
+    ``accounts.forms.signup_offer`` returns it (plan, channels it gives on offer):
+
+    - ``cards``: per plan slug, the same rows in the same order: only what differs between
+      the plans on offer (limits, then channels, then features), each ``{"label", "ok"}``.
+      A plan without a feature still gets its row, greyed out, so a free trial can never
+      look like it gives more than a paid plan just by listing more lines.
+    - ``included``: what every plan has, for one "All plans include" line under the cards.
+
+    Message history isn't compared: Plan.log_retention_days isn't enforced (see _CARD_LIMITS).
+    Like plan_card, it's read from the plans themselves."""
+    from apps.core.channels import CHANNEL_FEATURE, feature_visible, limit_visible
+
+    plans = [plan for plan, _ in offered]
+    if data is None:
+        data = plan_data(plans)
+    gives = {plan.pk: set(channels) for plan, channels in offered}
+    shown = frozenset().union(*gives.values()) if gives else frozenset()
+    sellable = {f.key: f for f in catalog.matrix_features()}
+
+    def limit_value(plan, key) -> int:
+        return data[plan.pk]["values"].get(key, limit_catalog.get(key).default)
+
+    limit_rows = [
+        (key, label)
+        for key, label, _ in _PRICING_LIMITS
+        if limit_visible(key, shown) and len({limit_value(p, key) for p in plans}) > 1
+    ]
+    # (name, plans that have it) for every channel on offer and every other sellable feature.
+    have: list[tuple[str, set]] = [
+        (sellable[CHANNEL_FEATURE[ch]].name, {p.pk for p in plans if ch in gives[p.pk]})
+        for ch in CHANNEL_FEATURE
+        if ch in shown and CHANNEL_FEATURE[ch] in sellable
+    ]
+    have += [
+        (f.name, {p.pk for p in plans if f.key in data[p.pk]["keys"]})
+        for f in sellable.values()
+        if f.key not in catalog.CHANNEL_FEATURES and feature_visible(f.key, shown)
+    ]
+    everyone = {p.pk for p in plans}
+    differing = [(name, pks) for name, pks in have if pks and pks != everyone]
+    included = [name for name, pks in have if pks == everyone]
+
+    room = max(0, _SIGNUP_ROWS - len(limit_rows[:3]))
+    cards = {}
+    for plan in plans:
+        rows = [
+            {
+                "label": _limit_line(limit_value(plan, key), label),
+                "ok": limit_value(plan, key) != 0,
+            }
+            for key, label in limit_rows[:3]
+        ]
+        rows += [
+            {"label": name, "ok": plan.pk in pks} for name, pks in differing[:room]
+        ]
+        cards[plan.slug] = rows
+    return {"cards": cards, "included": included if plans else []}
+
+
 def plan_data(plans) -> dict:
     """Features, limits and coming-soon items for ``plans`` in three queries, keyed by plan id,
     for ``plan_card`` and ``pricing_table`` (one query per plan each, otherwise)."""
@@ -691,7 +756,12 @@ def pricing_table(offered, data=None) -> dict:
     ``data`` is ``plan_data(plans)`` when the caller already has it. Like ``plan_card``, it's
     read from the plans themselves, so nothing is promised that a plan doesn't give."""
     from apps.billing.models import Subscription
-    from apps.billing.pricing import monthly_equivalent, multiplier_for, price_for
+    from apps.billing.pricing import (
+        PERIOD_BILLED,
+        monthly_equivalent,
+        multiplier_for,
+        price_for,
+    )
     from apps.core.channels import CHANNEL_FEATURE, feature_visible, limit_visible
 
     plans = [plan for plan, _ in offered]
@@ -769,6 +839,7 @@ def pricing_table(offered, data=None) -> dict:
                 "points": points(plan, prev),
                 "plus_from": prev,
                 "annual_total": annual,
+                "annual_billed": PERIOD_BILLED[Subscription.ANNUALLY],
                 "annual_monthly": monthly_equivalent(plan, Subscription.ANNUALLY),
             }
         )

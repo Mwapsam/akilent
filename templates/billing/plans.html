@@ -147,7 +147,7 @@
           <p class="text-xs text-ink-subtle mt-1" x-show="period === 'monthly'">Billed monthly</p>
           <p class="text-xs text-ink-subtle mt-1" x-show="period !== 'monthly'" x-cloak>
             Billed <span class="font-medium text-ink-muted tabular-nums" x-text="prices[period].total"></span>
-            every <span x-text="pricing[period].per"></span><span x-show="pricing[period].savePct > 0" class="text-teal-700 font-medium" x-text="' · save ' + pricing[period].savePct + '%'"></span>
+            <span x-text="pricing[period].billed"></span><span x-show="pricing[period].savePct > 0" class="text-teal-700 font-medium" x-text="' · save ' + pricing[period].savePct + '%'"></span>
           </p>
         {% endif %}
         {% if plan.slug == 'trial' %}

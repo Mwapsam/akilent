@@ -50,7 +50,7 @@
           <a href="/dashboard/" class="lp-btn lp-btn-sm lp-btn-nav">Open dashboard</a>
         {% else %}
           <a href="/auth/login/" class="lp-signin">Sign in</a>
-          <a href="/signup/" class="lp-btn lp-btn-sm lp-btn-nav" data-cta="start_trial" data-cta-location="nav">Start free trial</a>
+          <a href="/signup/{% if trial_slug %}?plan={{ trial_slug }}{% endif %}" data-cta-plan="{{ trial_slug }}" class="lp-btn lp-btn-sm lp-btn-nav" data-cta="start_trial" data-cta-location="nav">Start free trial</a>
         {% endif %}
       </div>
 
@@ -71,7 +71,7 @@
             <a href="/dashboard/" class="lp-btn lp-btn-primary">Open dashboard</a>
           {% else %}
             <a href="/auth/login/" class="lp-mlink">Sign in</a>
-            <a href="/signup/" class="lp-btn lp-btn-primary" data-cta="start_trial" data-cta-location="menu">Start free trial</a>
+            <a href="/signup/{% if trial_slug %}?plan={{ trial_slug }}{% endif %}" data-cta-plan="{{ trial_slug }}" class="lp-btn lp-btn-primary" data-cta="start_trial" data-cta-location="menu">Start free trial</a>
           {% endif %}
         </div>
       </div>

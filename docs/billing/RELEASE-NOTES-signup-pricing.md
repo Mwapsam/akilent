@@ -5,15 +5,23 @@
 `billing.pricing.price_for` now rounds quarterly, annual and two-year totals to a whole unit
 (half up). Monthly prices keep their cents.
 
-| Starter at $19/month | Before   | After  |
-| -------------------- | -------- | ------ |
-| Quarterly (−5%)      | $54.15   | $54    |
-| Annually (−15%)      | $193.80  | $194   |
-| Every 2 years (−25%) | $342.00  | $342   |
+Production prices (live on akilent.com since commit c8d4dd9):
+
+| Plan (monthly)        | Yearly before | Yearly after | Shown per month |
+| --------------------- | ------------- | ------------ | --------------- |
+| Starter ($11.90)      | $121.38       | $121         | $10 (real $10.08) |
+| Professional ($25.90) | $264.18       | $264         | $22 (real $22.00) |
+| Business ($49.90)     | $508.98       | $509         | $42 (real $42.42) |
+
+Quarterly and two-year terms round the same way. For example, Starter quarterly goes from
+$33.92 to $34, and Starter every 2 years goes from $214.20 to $214.
 
 Pricing cards on the landing page, the signup wizard and Billing → Plans now lead with the
-monthly equivalent ("$16/month") and show the exact charged total under it ("Billed $194 a
-year"). The per-month figure (`pricing.monthly_equivalent`) is for display only. The
+monthly equivalent ("$10/month") and show the exact charged total under it ("Billed $121 a
+year"). The per-month figure (`pricing.monthly_equivalent`) is for display only and is rounded,
+so the cheapest plan shows the biggest gap ($10 for a real $10.08). The billed total beside it
+is always exact. Each term is worded one way on every card (`pricing.PERIOD_BILLED`: "a
+month", "every 3 months", "a year", "every 2 years"). The
 "save 15%" badges are still the multiplier's label, not worked out from the rounded totals.
 
 **Existing subscribers**
@@ -25,6 +33,12 @@ year"). The per-month figure (`pricing.monthly_equivalent`) is for display only.
   rows are created at that same amount, so the amount check in `payments.record_result`
   matches. New PayPal subscriptions get a new PayPal plan at the rounded price.
 - Checkouts already started keep the `amount_due` saved when they began.
+- Plan changes mid-term: unused time is valued per day from the current plan's
+  `price_for` (`services.unused_value`), so a term paid at the old amount ($121.38) is now
+  credited at the rounded one ($121). The difference is under one unit over a whole term.
+  It can never go negative or exceed the new price. `test_payments
+  .test_yearly_upgrade_mid_term_with_whole_unit_terms` covers a yearly upgrade at live
+  prices.
 
 ## 2. Google Analytics loader (site-wide)
 
