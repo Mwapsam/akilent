@@ -98,3 +98,45 @@ def test_whitespace_only_is_rejected(client, account):
 def test_tab_is_linked_from_settings(client, account):
     _login(client, account, Membership.Role.OWNER)
     assert b'href="/settings/business/"' in client.get("/settings/").content
+
+
+# ---- country is a select ----------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_country_is_a_select_showing_the_saved_country(client, account):
+    Account.objects.filter(pk=account.pk).update(country="ZM")  # stored as a code
+    _login(client, account, Membership.Role.OWNER)
+    body = client.get("/settings/business/").content.decode()
+    assert '<select id="id_country" name="country"' in body
+    assert '<option value="Zambia" selected>Zambia</option>' in body
+
+
+@pytest.mark.django_db
+def test_an_old_typed_country_is_kept_when_saving(client, account):
+    Account.objects.filter(pk=account.pk).update(country="Republic of Somewhere")
+    _login(client, account, Membership.Role.OWNER)
+    body = client.get("/settings/business/").content.decode()
+    assert "Republic of Somewhere</option>" in body
+    client.post("/settings/business/", {**ADDRESS, "country": "Republic of Somewhere"})
+    account.refresh_from_db()
+    assert account.country == "Republic of Somewhere"
+    assert account.has_postal_address
+
+
+@pytest.mark.django_db
+def test_a_country_not_on_the_list_is_refused(client, account):
+    _login(client, account, Membership.Role.OWNER)
+    resp = client.post("/settings/business/", {**ADDRESS, "country": "Atlantis"})
+    assert resp.status_code == 200
+    account.refresh_from_db()
+    assert account.country == ""
+
+
+def test_country_name_reads_codes_and_any_case():
+    from apps.accounts.forms import country_name
+
+    assert country_name("zm") == country_name("zambia") == "Zambia"
+    assert country_name("United Kingdom") == "United Kingdom"
+    assert country_name("Somewhere") == "Somewhere"
+    assert country_name("") == ""

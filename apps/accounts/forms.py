@@ -284,6 +284,31 @@ class PasswordResetForm(PasswordResetForm):  # type: ignore[no-redef]
             ) from exc
 
 
+def country_name(value: str) -> str:
+    """The English name for a stored country: a name in any case or an ISO code ("ZM") gives
+    "Zambia". Anything else is returned as it was, so a value typed before the select is kept."""
+    from django_countries import countries
+
+    value = (value or "").strip()
+    if not value:
+        return ""
+    code = value.upper() if value.upper() in countries else countries.by_name(value)
+    return countries.name(code) if code else value
+
+
+def country_choices(current: str = "") -> list[tuple[str, str]]:
+    """Select options for Account.country. The stored value is the English name, which the
+    email footer prints as is. A value that isn't a known country stays as its own option."""
+    from django_countries import countries
+
+    names = [name for _, name in countries]
+    choices = [("", "Choose a country")] + [(name, name) for name in names]
+    legacy = country_name(current)
+    if legacy and legacy not in names:
+        choices.insert(1, (legacy, legacy))
+    return choices
+
+
 class BusinessAddressForm(forms.ModelForm):
     """The business identity printed in every campaign email footer.
 
@@ -316,6 +341,10 @@ class BusinessAddressForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         for name in ("address_line1", "city", "country"):
             self.fields[name].required = True
+        self.fields["country"] = forms.ChoiceField(
+            label="Country", choices=country_choices(self.instance.country)
+        )
+        self.initial["country"] = country_name(self.instance.country)
 
     def clean(self):
         cleaned = super().clean()

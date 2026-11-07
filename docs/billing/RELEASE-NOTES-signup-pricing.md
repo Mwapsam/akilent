@@ -102,5 +102,8 @@ deliberate release.
 - The first-run tour and setup widget don't open on the code page; they start on the next
   page.
 
-**Not in this release:** the Country field in Settings → Business is still free text. A
-proper select needs a country list (e.g. `django-countries`), which hasn't been added.
+- **Country is a select** in Settings → Business (list from `django-countries`, a new
+  dependency: run `poetry install` on deploy). The column stays text and stores the English
+  name, which the email footer prints. No data migration: a stored code (`ZM`) shows as its
+  name, and an old typed value that isn't a country stays as its own option, so saving the
+  page never loses it.

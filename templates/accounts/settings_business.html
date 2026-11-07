@@ -31,7 +31,17 @@
       {% include "components/form_field.html" with name="city" label="City" required=True value=form.city.value error=form.city.errors|join:" " %}
       {% include "components/form_field.html" with name="state_region" label="State / region" value=form.state_region.value error=form.state_region.errors|join:" " %}
       {% include "components/form_field.html" with name="postal_code" label="Postal code" value=form.postal_code.value error=form.postal_code.errors|join:" " %}
-      {% include "components/form_field.html" with name="country" label="Country" required=True value=form.country.value error=form.country.errors|join:" " %}
+      <div>
+        <label class="label" for="id_country">Country <span class="tone-coral-fg" aria-hidden="true">*</span></label>
+        <select id="id_country" name="country" required autocomplete="country-name"
+                {% if form.country.errors %}aria-invalid="true" aria-describedby="err_country"{% endif %}
+                class="select{% if form.country.errors %} input-error{% endif %}">
+          {% for value, label in form.fields.country.choices %}
+            <option value="{{ value }}" {% if value == form.country.value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        {% if form.country.errors %}<p id="err_country" class="field-error">{{ form.country.errors|join:" " }}</p>{% endif %}
+      </div>
     </div>
     <p class="help">A registered office address or P.O. Box is fine.</p>
 
