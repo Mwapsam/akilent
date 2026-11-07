@@ -1,5 +1,7 @@
 {% comment %}Campaign progress + results. Polls itself every 5s while anything is still
-moving, and stops when the campaign is done (the response then has no trigger).{% endcomment %}
+moving, and stops when the campaign is done (the response then has no trigger). Once it has
+gone out: what it came to (campaign_ui.outcome_banner), then the funnel from the list to replies
+(campaign_ui.funnel). The poll's answer also carries the recipient tabs' counts, out of band.{% endcomment %}
 <div id="campaign-live"
      {% if in_progress %}hx-get="?part=live" hx-trigger="every 5s" hx-swap="outerHTML" data-auto-refresh{% endif %}>
   <div class="flex flex-wrap items-center gap-3 mb-4">
@@ -16,21 +18,39 @@ moving, and stops when the campaign is done (the response then has no trigger).{
   </div>
   {% endif %}
 
+  {% if banner and not in_progress %}
+  <div class="alert {% if banner.tone == 'danger' %}alert-danger{% elif banner.tone == 'warning' %}alert-warning{% elif banner.tone == 'success' %}alert-success{% else %}alert-info{% endif %} mb-4" role="status" data-campaign-banner="{{ banner.tone }}">
+    {% if banner.tone == 'success' %}{% include "components/icon.html" with name="check-circle" %}{% elif banner.tone == 'neutral' %}{% include "components/icon.html" with name="info" %}{% else %}{% include "components/icon.html" with name="alert-triangle" %}{% endif %}
+    <div class="min-w-0 flex-1">
+      <p class="font-medium">{{ banner.headline }}</p>
+      {% if banner.detail %}<p class="mt-0.5">{{ banner.detail }}</p>{% endif %}
+      {% if banner.fix %}<a href="{{ banner.fix.url }}" class="btn btn-secondary btn-sm mt-2"{% if banner.fix.url|slice:":4" == "http" %} target="_blank" rel="noopener"{% endif %} data-campaign-fix>{{ banner.fix.label }}</a>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
   {% if campaign.send_plan.limit %}
   <p class="alert alert-info mb-4 text-sm">{% include "components/icon.html" with name="clock" %}<span>Meta lets your number start conversations with {{ campaign.send_plan.limit }} customers a day, so this campaign is going out over several days. The rest are waiting their turn.</span></p>
   {% endif %}
-  <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
-    {% include "components/stat_card.html" with label="On the list" value=campaign.recipient_count icon="users" %}
-    {% include "components/stat_card.html" with label="Sent" value=reached icon="send" sub="Accepted by WhatsApp" %}
-    {% include "components/stat_card.html" with label="Delivered" value=delivery.delivered|add:delivery.read icon="check" tone="success" sub="Reached their phone" %}
-    {% include "components/stat_card.html" with label="Read" value=delivery.read icon="eye" tone="success" %}
-    {% include "components/stat_card.html" with label="Failed" value=delivery.failed icon="alert-triangle" tone="danger" %}
-  </div>
-  {% if delivery.held or delivery.unconfirmed or delivery.pending %}
-  <p class="mt-3 text-sm text-gray-600">
-    {% if delivery.pending %}<span class="mr-3">{{ delivery.pending }} still in the queue</span>{% endif %}
-    {% if delivery.held %}<span class="mr-3">{{ delivery.held }} waiting — your plan's monthly WhatsApp limit is reached (<a href="/billing/" class="text-accent hover:text-accent-strong">see plans</a>)</span>{% endif %}
-    {% if delivery.unconfirmed %}<span>{{ delivery.unconfirmed }} may not have been sent — WhatsApp didn't confirm, so we won't resend</span>{% endif %}
-  </p>
-  {% endif %}
+
+  <section class="card card-pad" aria-labelledby="funnel-title">
+    <h2 id="funnel-title" class="text-sm font-medium text-ink">From the list to replies</h2>
+    <dl class="sf sf--5 mt-3" data-campaign-funnel>
+      {% for step in funnel %}
+      <div class="sf-step">
+        <div class="sf-text"><dt>{{ step.label }}</dt><dd class="tabular-nums">{{ step.value }}</dd></div>
+        <span class="sf-track" aria-hidden="true"><span class="sf-fill" style="width: {{ step.pct }}%"></span></span>
+      </div>
+      {% endfor %}
+    </dl>
+    <p class="mt-3 text-xs text-ink-subtle">Sent: accepted by WhatsApp. Delivered: reached their phone. Replied: wrote to you within 3 days of their message.</p>
+    {% if delivery.held or delivery.unconfirmed or delivery.pending %}
+    <p class="mt-2 text-sm text-gray-600">
+      {% if delivery.pending %}<span class="mr-3">{{ delivery.pending }} still in the queue</span>{% endif %}
+      {% if delivery.held %}<span class="mr-3">{{ delivery.held }} waiting — your plan's monthly WhatsApp limit is reached (<a href="/billing/" class="text-accent hover:text-accent-strong">see plans</a>)</span>{% endif %}
+      {% if delivery.unconfirmed %}<span>{{ delivery.unconfirmed }} may not have been sent — WhatsApp didn't confirm, so we won't resend</span>{% endif %}
+    </p>
+    {% endif %}
+  </section>
 </div>
+{% if live_part %}{% for key, n in tab_counts.items %}<span id="rc-{{ key }}" class="text-ink-subtle tabular-nums" hx-swap-oob="true">{{ n }}</span>{% endfor %}{% endif %}

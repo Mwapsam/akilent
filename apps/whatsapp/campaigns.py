@@ -1126,7 +1126,8 @@ def recipients_with_outcome(campaign: WhatsAppCampaign):
 
 def failure_groups(campaign: WhatsAppCampaign) -> list[dict]:
     """The campaign's failed messages grouped by why, most first, in plain words:
-    ``[{"n", "reason", "fix"}]`` (``fix`` for an account problem, else None). One query."""
+    ``[{"n", "reason", "fix", "key"}]`` (``fix`` for an account problem, else None; ``key``
+    for ``failed_for_reason``, the error codes in the group). One query."""
     from django.db.models import Count, Min
 
     from apps.whatsapp.friendly_errors import failure
@@ -1142,9 +1143,28 @@ def failure_groups(campaign: WhatsAppCampaign) -> list[dict]:
     for row in rows:
         reason, fix = failure(row["message__error_code"], row["sample"])
         reason = reason or "WhatsApp couldn't deliver it."
-        group = groups.setdefault(reason, {"n": 0, "reason": reason, "fix": fix})
+        group = groups.setdefault(
+            reason, {"n": 0, "reason": reason, "fix": fix, "codes": []}
+        )
         group["n"] += row["n"]
+        group["codes"].append(row["message__error_code"] or _NO_CODE)
+    for group in groups.values():
+        group["key"] = "-".join(sorted(group.pop("codes")))
     return sorted(groups.values(), key=lambda g: -g["n"])
+
+
+_NO_CODE = "none"  # a failure stored without Meta's code (or without a message)
+
+
+def failed_for_reason(recipients, key: str):
+    """``recipients`` (recipients_with_outcome, failed) narrowed to one failure_groups ``key``."""
+    from django.db.models import Q
+
+    codes = [c for c in key.split("-") if c]
+    match = Q(message__error_code__in=[c for c in codes if c != _NO_CODE])
+    if _NO_CODE in codes:
+        match |= Q(message__isnull=True) | Q(message__error_code="")
+    return recipients.filter(match)
 
 
 def campaign_delivery_stats(campaign: WhatsAppCampaign) -> dict:

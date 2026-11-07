@@ -1332,18 +1332,20 @@
     clearTimeout(t.timer);
     if (t.skeleton) t.skeleton.remove();
     t.hidden.forEach(function (el) { el.hidden = false; });
-    if (restore && document.contains(t.nav)) setActiveTab(t.nav, t.prev);
+    if (restore && t.nav && document.contains(t.nav)) setActiveTab(t.nav, t.prev);
   }
   function showTabSkeleton(t, kind) {
     const tpl = document.getElementById("skeleton-" + kind);
-    if (!tpl || !document.contains(t.nav)) return;
-    let el = t.nav.nextElementSibling;
+    // From tabs: under the tabs. From any other link (t.nav null): the whole of #main.
+    const anchor = t.nav || document.getElementById("main");
+    if (!tpl || !anchor || !document.contains(anchor)) return;
+    let el = t.nav ? t.nav.nextElementSibling : anchor.firstElementChild;
     while (el) {
       if (!el.hidden) { el.hidden = true; t.hidden.push(el); }
       el = el.nextElementSibling;
     }
     t.skeleton = tpl.content.firstElementChild.cloneNode(true);
-    t.nav.after(t.skeleton);
+    if (t.nav) t.nav.after(t.skeleton); else anchor.appendChild(t.skeleton);
   }
   document.addEventListener("click", function (e) {
     if (e.target.closest && e.target.closest("[data-instant-tabs] a[href]") && window.performance && performance.mark) {
@@ -1355,7 +1357,15 @@
     endTabNav(true); // a newer navigation replaces the one still in flight
     const elt = e.detail.elt;
     const link = elt && elt.closest && elt.closest("[data-instant-tabs] a[href]");
-    if (!link) return;
+    if (!link) {
+      // A link elsewhere with data-skeleton (a campaign row): the page's shape after 150ms.
+      const other = elt && elt.closest && elt.closest("a[href][data-skeleton]");
+      if (!other) return;
+      const t = { nav: null, prev: null, timer: null, skeleton: null, hidden: [] };
+      t.timer = setTimeout(function () { if (tabNav === t) showTabSkeleton(t, other.dataset.skeleton); }, 150);
+      tabNav = t;
+      return;
+    }
     const nav = link.closest("[data-instant-tabs]");
     const prev = nav.querySelector('a[aria-current="page"]');
     if (prev === link) return;

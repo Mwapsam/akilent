@@ -286,6 +286,9 @@
 .sf-track { display: block; height: 6px; margin-top: .25rem; border-radius: 999px;
   background: color-mix(in srgb, var(--color-accent) 14%, transparent); overflow: hidden; }
 .sf-fill { display: block; height: 100%; border-radius: 999px; background: var(--color-accent); }
+/* A campaign's five steps (whatsapp/_campaign_live.html): list → sent → delivered → read → replied. */
+.sf--5 { grid-template-columns: repeat(5, minmax(0, 1fr)); max-width: none; }
+@media (max-width: 639px) { .sf--5 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; } }
 .sales-head { display: flex; flex-direction: column; gap: .75rem; }
 @media (min-width: 768px) { .sales-head { flex-direction: row; align-items: center; justify-content: space-between; } }
 @media (max-width: 639px) { .kpi { padding: .75rem; } .kpi-value { font-size: 1.375rem; line-height: 1.75rem; } }

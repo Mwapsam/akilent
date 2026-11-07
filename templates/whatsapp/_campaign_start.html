@@ -7,7 +7,7 @@ the composer with that message chosen).{% endcomment %}
   <div data-last-campaign>
     <p class="text-xs font-medium uppercase tracking-wide text-ink-subtle">Your last campaign</p>
     <p class="mt-1 flex flex-wrap items-center gap-2">
-      <a href="{% url 'whatsapp-campaign-detail' latest.pk %}" class="inline-flex min-h-11 items-center font-medium text-ink hover:text-accent">{{ latest.name }}</a>
+      <a href="{% url 'whatsapp-campaign-detail' latest.pk %}" data-skeleton="campaign" class="inline-flex min-h-11 items-center font-medium text-ink hover:text-accent">{{ latest.name }}</a>
       {% include "components/status.html" with state=latest.state badge=True %}
     </p>
     {% if latest.outcome or latest.fix %}

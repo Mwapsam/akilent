@@ -18,12 +18,13 @@ pytestmark = pytest.mark.django_db
 
 BUDGET = {
     "list": 16,
-    "detail": 19,
+    "detail": 20,
     "new": 19,
 }
 # list 15 -> 12: one query for the tab counts (Phase C). 12 -> 16 (Phase D, new content, not
 # a slowdown): replies, the last campaign's failure reasons, and for the tiles the workspace's
 # timezone and one query for 8 weeks of messages (15 with the start card in their place).
+# detail 19 -> 20 (Phase E): who replied, for the funnel.
 
 
 def _urls(campaign):

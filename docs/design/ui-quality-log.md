@@ -2316,3 +2316,26 @@ Plan: the Campaigns plan of 2026-11-06, Phase D. Phase C was committed by the us
 - **Before that (`whatsapp/_campaign_start.html`):** the last campaign's outcome with its fix ("Finished: 0 of 2 sent, 2 failed · Meta blocked … · Fix the payment method in Meta"), and up to three approved marketing or utility templates to start from, each opening the composer with it chosen (`?template_id=`). With none approved, it says how to get one. With no campaigns at all, the first-run checklist stays as it was.
 - **Speed:** the list's budget goes from 12 to 16 queries (15 with the start card). The 4 new queries are replies, the last campaign's failure reasons, and for the tiles the timezone and the 8-week query. None of them grow with campaigns or recipients (tested both ways). The latest campaign is taken from the loaded rows when it's there.
 - **Verification:** `test_campaign_list.py` (13): shares and rounding; rates from delivery; replies within 3 days only, once per person, none for a failed message or a skipped recipient; the columns and help tip; tiles with 3 campaigns (values, trend hover, the last campaign with its fix); this month in the workspace's own days (00:30 on 1 November in Lusaka); a week with nothing sent as a gap; the start card with its fix and starting points (authentication left out); a starting point opening the composer with it chosen; no approved message; drafts only. `campaigns_qa.mjs QA_LIST`: six widths in both themes, start card and tiles. No sideways scroll, no contrast failures, no overflow. Found and fixed: the last campaign's name link was 24 px tall on touch (now 44), and "0 of 0" and "Not sent" wrapped at 1280. The help tip's 24 px button is the shared component. The tiles run used a temporary third campaign in the dev workspace, deleted afterwards.
+
+### Entry 38: Campaigns Phase E, a campaign's page leads with what it came to (2026-11-07)
+Plan: the Campaigns plan of 2026-11-06, Phase E.
+
+- **The outcome first** (`campaign_ui.outcome_banner`, in `_campaign_live.html`). Once a campaign has gone out, a banner says what it came to:
+  - all failed: "2 of 2 failed", the biggest reason in plain words, and the account fix;
+  - partly sent: "Sent to 1 of 2, 1 failed" and the reason;
+  - all sent: "Sent to 3, 67% delivered";
+  - nobody reachable: "Nobody on the list could be sent it".
+
+  The fix shows only while `health.account_problem` holds, as Retry does since Phase A: once a message has gone through since, there's nothing to fix. There's no banner while it is still sending, where the progress line stays.
+- **The funnel** (`campaign_ui.funnel`) replaces the five equal tiles: On the list → Sent → Delivered → Read → Replied. It uses the Sales funnel's bars, each a share of the widest step, with a `.sf--5` variant that becomes two columns on phones. A line under it says what each step means. Replied is counted as on the list (within 3 days, `reply_counts_for`).
+- **The message** (`campaign_ui.message_with_sources`): the composer's WhatsApp-style preview with each blank showing where its value comes from (`{Customer's first name, or "there"}`), the fixed text itself, or `[name]` when unmapped. Shown for drafts too.
+- **Recipients:**
+  - the tabs show their counts (Everyone, Sent, Failed, Not sent);
+  - each failure reason has "Show these N" (or "Show who"), filtering the table through `campaigns.failed_for_reason` by the group's error codes (`key`; "none" for a failure stored without a code);
+  - while filtered, a line names the reason, with "Show every failure";
+  - a reason that isn't this campaign's is ignored;
+  - the filter survives pagination;
+  - the 5-second live poll now also updates the tab counts out of band, and stops when the campaign is done, as before. The live partial now sends `Vary: HX-Request, HX-Target` and `no-store`.
+- **Skeleton:** `skeleton-campaign` (title, banner, funnel, rows). `app.js` shows a skeleton for any link with `data-skeleton`, not only tabs, filling `#main` after 150 ms and restoring it if the navigation fails. Every link that opens a campaign carries `data-skeleton="campaign"`.
+- **Speed:** the detail budget goes from 19 to 20 queries; the one added is who replied, for the funnel.
+- **Verification:** `test_campaign_detail.py` (15): the banner for all failed, partly, all sent, after a later send (no fix) and while sending (none); the funnel's steps and shares, including replies and a reply before the message; the message's sources; the tab counts; the per-reason filter (two codes, an unknown reason, a code-less failure); the live poll's out-of-band counts, headers, and stopping; the skeleton link and template. `campaigns_qa.mjs QA_DETAIL`: six widths in both themes with no sideways scroll, no contrast failures, no overflow and no small targets among the new controls; the skeleton shows while the page is held back and is gone once it lands. The dev workspace has no finished campaign, so the banner was checked by the tests only.

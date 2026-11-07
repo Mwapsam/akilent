@@ -188,6 +188,96 @@ def rates(stats: dict, replied: int = 0) -> dict:
     }
 
 
+def outcome_banner(
+    state: str, stats: dict, groups: list, fix: dict | None = None
+) -> dict | None:
+    """What a campaign that has gone out came to, for the top of its page: ``{tone,
+    headline, detail, fix}``. ``groups`` are campaigns.failure_groups, most first: the banner
+    names the biggest reason. ``fix`` is the account problem's, only while it lasts
+    (health.account_problem): once a message has gone through since, there's nothing to fix.
+    None while it is still sending or before it went out (the progress line says that)."""
+    accepted = stats["sent"] + stats["delivered"] + stats["read"]
+    delivered = stats["delivered"] + stats["read"]
+    failed = stats["failed"]
+    total = sum(stats.values())
+    reason = groups[0]["reason"] if groups else ""
+    if state == "failed":
+        return {
+            "tone": "danger",
+            "headline": f"{failed} of {total} failed"
+            if failed
+            else f"None of the {total} messages was confirmed sent",
+            "detail": reason
+            or "WhatsApp didn't confirm these messages, so they may not have been sent.",
+            "fix": fix,
+        }
+    if state == "partly":
+        trouble = (
+            f"{failed} failed" if failed else f"{stats['unconfirmed']} not confirmed"
+        )
+        return {
+            "tone": "warning",
+            "headline": f"Sent to {accepted} of {total}, {trouble}",
+            "detail": reason,
+            "fix": fix,
+        }
+    if state == "sent":
+        return {
+            "tone": "success",
+            "headline": f"Sent to {accepted}, {percent(delivered, total)} delivered",
+            "detail": "",
+            "fix": None,
+        }
+    if state == "not_sent":
+        return {
+            "tone": "neutral",
+            "headline": "Nobody on the list could be sent it",
+            "detail": "The reasons are below.",
+            "fix": None,
+        }
+    return None
+
+
+def funnel(campaign, stats: dict, replied: int) -> list[dict]:
+    """On the list → sent → delivered → read → replied, each a share of the widest step
+    (the Sales funnel's look, publishing/_sales_row.html)."""
+    delivered = stats["delivered"] + stats["read"]
+    steps = [
+        ("On the list", campaign.recipient_count),
+        ("Sent", delivered + stats["sent"]),
+        ("Delivered", delivered),
+        ("Read", stats["read"]),
+        ("Replied", replied),
+    ]
+    top = max(n for _, n in steps) or 1
+    return [
+        {"label": label, "value": n, "pct": round(n * 100 / top)} for label, n in steps
+    ]
+
+
+def message_with_sources(campaign) -> dict:
+    """The campaign's message as the composer previews it, with each blank showing where its
+    value comes from ('{Customer's first name, or "there"}'), or the fixed text itself."""
+    from apps.automation import variables
+
+    labels = {source: label for _key, source, label, _fb in variables.CHOICES}
+    params = {}
+    for var in campaign.template.variables or []:
+        source = (campaign.variable_mapping or {}).get(var)
+        fallback = (campaign.variable_fallbacks or {}).get(var, "")
+        if isinstance(source, str) and source in labels:
+            params[var] = (
+                f'{{{labels[source]}, or "{fallback}"}}'
+                if fallback
+                else f"{{{labels[source]}}}"
+            )
+        elif source:
+            params[var] = str(source)
+        else:
+            params[var] = f"[{var}]"
+    return preview_parts(campaign.template, params)
+
+
 SUMMARY_WEEKS = 8
 
 

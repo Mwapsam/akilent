@@ -7,6 +7,8 @@
 //               through Lists (opened in place, as a boosted link) and back;
 //   QA_LIST=1   Phase D: the list's tiles or start card and result columns at six widths in
 //               both themes (sideways scroll, tap targets, contrast, sparkline hover);
+//   QA_DETAIL=1 Phase E: a finished campaign's page at six widths in both themes, and its
+//               skeleton when the page is slow to arrive;
 // Needs a dev server with WHATSAPP_ENABLED=True (QA_BASE, default :8001) and QA_UI_EMAIL /
 // QA_UI_PASSWORD in .env.
 import { spawn } from "node:child_process";
@@ -188,6 +190,54 @@ if (process.env.QA_LIST) {
   await go("/campaigns/?channel=whatsapp", 1500);
   out.push({ sparkHover: await evaluate(`[...document.querySelectorAll('.kpi-spark-hit title')].slice(-2).map(t => t.textContent)`),
     tip: await evaluate(`[...document.querySelectorAll('th')].map(t => t.innerText).find(t => t.startsWith('Replied'))`) });
+  console.log(JSON.stringify(out, null, 1));
+  process.exit(0);
+}
+
+// Phase E: a campaign's page at each width in both themes (banner, funnel, message, tab
+// counts; sideways scroll, tap targets, contrast), then the skeleton when the page is slow
+// to arrive after clicking its row in the list.
+if (process.env.QA_DETAIL) {
+  const out = [];
+  const NO_MOTION = `(() => { const s=document.createElement('style'); s.textContent='*,*::before,*::after{transition:none!important;animation:none!important}'; document.head.appendChild(s); })()`;
+  await viewport(1280, 800, false);
+  await go("/campaigns/?channel=whatsapp", 1500);
+  const href = await evaluate(`(() => { const a = [...document.querySelectorAll('tbody a[data-skeleton="campaign"]')].find(a => !/Not sent yet/.test(a.closest('tr').innerText)); return a && a.getAttribute('href'); })()`);
+  if (!href) { console.log("FAIL no campaign that went out in this workspace"); process.exit(1); }
+  const sizes = [[360, 740, true], [390, 844, true], [768, 1024, true], [1024, 768, false], [1280, 800, false], [1440, 900, false]];
+  for (const [w, h, touch] of sizes) {
+    await viewport(w, h, touch);
+    await go(href, 1500);
+    await evaluate(scanner); await evaluate(NO_MOTION);
+    for (const theme of ["light", "dark"]) {
+      const r = await evaluate(`(async () => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const s = await window.__uiScan({ max: 4 }); const q = (sel) => document.querySelector(sel);
+        const mine = [...document.querySelectorAll('[data-campaign-banner] a, [data-failure-groups] a, #recipients .tab, [data-failure-filter-on] a')].filter(e => e.offsetParent)
+          .map(e => { const b = e.getBoundingClientRect(); return { t: e.textContent.trim().slice(0, 24), h: Math.round(b.height) }; });
+        return { theme: ${JSON.stringify(theme)}, sideways: document.documentElement.scrollWidth > innerWidth + 1,
+          banner: q('[data-campaign-banner]') && q('[data-campaign-banner]').innerText.replace(/\\s+/g, ' ').slice(0, 110),
+          funnel: [...document.querySelectorAll('[data-campaign-funnel] .sf-step')].map(s => s.innerText.replace(/\\s+/g, ' ').trim()),
+          message: q('[data-campaign-message] .wa-bubble') && q('[data-campaign-message] .wa-bubble').innerText.slice(0, 80),
+          tabs: [...document.querySelectorAll('#recipients .tab')].map(t => t.innerText.replace(/\\s+/g, ' ').trim()),
+          ownSmall: innerWidth < 1024 ? mine.filter(m => m.h < 44) : undefined,
+          contrastFail: s.contrast.failing, contrastEx: s.contrast.failing ? s.contrast.examples : undefined, overflow: s.overflow.count }; })()`);
+      out.push({ w, ...r });
+      if (w === 390 || w === 1280) await shot0(`detail-${w}-${theme}`);
+    }
+    await evaluate("document.documentElement.dataset.theme = 'light'");
+  }
+  // Slow to arrive: the campaign's shape shows instead of the list after 150ms, and goes when
+  // the page lands.
+  await viewport(1280, 800, false);
+  await go("/campaigns/?channel=whatsapp", 1500);
+  rules = [{ match: (r) => r.method === "GET" && new URL(r.url).pathname === href, act: { delay: 1500 } }];
+  await clickSel(`tbody a[href="${href}"][data-skeleton="campaign"]`);
+  await sleep(600);
+  const during = await evaluate(`({ skeleton: !!document.querySelector('#main [data-page-skeleton]'), listShown: !!(document.querySelector('#main table') || {}).offsetParent })`);
+  await shot0("detail-skeleton-1280");
+  await sleep(2500);
+  const after = await evaluate(`({ path: location.pathname, skeleton: !!document.querySelector('[data-page-skeleton]'), funnel: !!document.querySelector('[data-campaign-funnel]') })`);
+  out.push({ skeleton: { during, after } });
   console.log(JSON.stringify(out, null, 1));
   process.exit(0);
 }

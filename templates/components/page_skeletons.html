@@ -28,3 +28,15 @@ assets/app.css; layout is inline so no new utility classes are needed.{% endcomm
     <div class="skeleton" style="height: 2.5rem; width: 8rem"></div>
   </div>
 </template>
+<template id="skeleton-campaign">
+  <div role="status" aria-label="Loading" data-page-skeleton style="display: grid; gap: 1rem">
+    <div class="skeleton-text" style="width: 12rem; height: 1.75rem"></div>
+    <div class="skeleton" style="height: 4rem"></div>
+    <div class="skeleton-card" style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .75rem">
+      {% for i in "12345" %}<div><div class="skeleton-text" style="width: 70%"></div><div class="skeleton" style="height: 6px"></div></div>{% endfor %}
+    </div>
+    <div class="skeleton-card" style="padding: 0">
+      {% for i in "12345" %}<div class="skeleton-table-row"><span style="flex: 1"></span><span style="width: 5rem"></span><span style="width: 10rem"></span></div>{% endfor %}
+    </div>
+  </div>
+</template>

@@ -71,7 +71,7 @@
     {% if whatsapp_latest %}
     <div class="kpi" data-kpi="latest">
       <p class="kpi-label">Last campaign</p>
-      <p class="kpi-value-more truncate"><a href="{% url 'whatsapp-campaign-detail' whatsapp_latest.pk %}" class="inline-flex min-h-11 max-w-full items-center hover:text-accent"><span class="truncate">{{ whatsapp_latest.name }}</span></a></p>
+      <p class="kpi-value-more truncate"><a href="{% url 'whatsapp-campaign-detail' whatsapp_latest.pk %}" data-skeleton="campaign" class="inline-flex min-h-11 max-w-full items-center hover:text-accent"><span class="truncate">{{ whatsapp_latest.name }}</span></a></p>
       <p class="mt-1">{% include "components/status.html" with state=whatsapp_latest.state badge=True %}</p>
       {% if whatsapp_latest.outcome %}<p class="kpi-note mt-1">{{ whatsapp_latest.outcome }}</p>{% endif %}
       {% if whatsapp_latest.fix %}<a href="{{ whatsapp_latest.fix.fix.url }}" class="cs-link text-xs mt-1"{% if whatsapp_latest.fix.fix.url|slice:":4" == "http" %} target="_blank" rel="noopener"{% endif %} data-campaign-fix>{{ whatsapp_latest.fix.reason }} · {{ whatsapp_latest.fix.fix.label }}</a>{% endif %}
@@ -99,7 +99,7 @@
         {% for c in whatsapp_campaigns %}
         <tr>
           <td data-label="Campaign">
-            <a href="{% url 'whatsapp-campaign-detail' c.pk %}" class="font-medium text-accent hover:text-accent-strong">{{ c.name }}</a>
+            <a href="{% url 'whatsapp-campaign-detail' c.pk %}" data-skeleton="campaign" class="font-medium text-accent hover:text-accent-strong">{{ c.name }}</a>
             <span class="block text-xs text-ink-subtle">{{ c.audience_name|default:"Retry of failed messages" }} · {% if c.status == 'scheduled' %}goes out {{ c.when_label }}{% else %}{{ c.started_at|default:c.created_at|date:"j M, H:i" }}{% endif %}</span>
           </td>
           <td data-label="Status" class="whitespace-nowrap">{% include "components/status.html" with state=c.state badge=True %}</td>
@@ -112,7 +112,7 @@
           <td data-label="Failed" class="tabular-nums" title="{{ c.rates.failed }} of {{ c.rates.prepared }}">{{ c.rates.pct.failed|default:"—" }}</td>
           <td data-label="Replied" class="tabular-nums" title="{{ c.rates.replied }} of {{ c.rates.prepared }}">{{ c.rates.pct.replied|default:"—" }}</td>
           {% endif %}
-          <td class="text-right"><a href="{% url 'whatsapp-campaign-detail' c.pk %}" class="btn btn-ghost btn-sm">View</a></td>
+          <td class="text-right"><a href="{% url 'whatsapp-campaign-detail' c.pk %}" data-skeleton="campaign" class="btn btn-ghost btn-sm">View</a></td>
         </tr>
         {% endfor %}
       </tbody>

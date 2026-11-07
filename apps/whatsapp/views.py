@@ -1207,8 +1207,11 @@ def campaign_detail(request, pk: int):
     from apps.whatsapp.campaign_ui import (
         SKIP_REASON_COPY,
         estimate,
+        funnel,
         lifecycle_state,
         local_label,
+        message_with_sources,
+        outcome_banner,
         timeline,
     )
 
@@ -1279,9 +1282,17 @@ def campaign_detail(request, pk: int):
     # export), not the recipient row's own status: "queued" only means a message was
     # handed to the send queue, which can still fail, wait or go unconfirmed.
     outcome = request.GET.get("outcome") or ""
+    reason: dict | None = None
     recipients = svc.recipients_with_outcome(campaign)
     if outcome == "failed":
         recipients = recipients.filter(outcome="failed")
+        # One of the failure groups ("Show these"), by its key.
+        reason = next(
+            (g for g in failure_groups if g["key"] == request.GET.get("reason")),
+            None,
+        )
+        if reason:
+            recipients = svc.failed_for_reason(recipients, reason["key"])
     elif outcome == "not_sent":
         recipients = recipients.filter(outcome="not_sent")
     elif outcome == "sent":
@@ -1299,10 +1310,26 @@ def campaign_detail(request, pk: int):
             )
 
     finished = campaign.status in WhatsAppCampaign.FINISHED
+    state = lifecycle_state(campaign, delivery)
+    replied = 0 if editable else svc.reply_counts_for([campaign.pk])[campaign.pk]
+    reached = delivery["sent"] + delivery["delivered"] + delivery["read"]
     context = {
         "account": account,
         "campaign": campaign,
-        "state": lifecycle_state(campaign, delivery),
+        "state": state,
+        "banner": outcome_banner(
+            state, delivery, failure_groups, problem["fix"] if problem else None
+        ),
+        "funnel": funnel(campaign, delivery, replied),
+        "message": message_with_sources(campaign),
+        # The recipient tabs' counts; the live part refreshes them out of band.
+        "tab_counts": {
+            "everyone": campaign.recipient_count,
+            "sent": reached,
+            "failed": delivery["failed"],
+            "not_sent": campaign.skipped_count,
+        },
+        "reason": reason,
         "failure_groups": failure_groups,
         "account_problem": problem,
         "editable": editable,
@@ -1312,7 +1339,7 @@ def campaign_detail(request, pk: int):
         if campaign.recipient_count
         else 100,
         "delivery": delivery,
-        "reached": delivery["sent"] + delivery["delivered"] + delivery["read"],
+        "reached": reached,
         "skip_breakdown": skip_breakdown,
         "skip_copy": SKIP_REASON_COPY,
         "page": page,
@@ -1331,7 +1358,13 @@ def campaign_detail(request, pk: int):
         or (campaign.status == _S.COMPLETED and delivery["pending"] > 0),
     }
     if request.headers.get("HX-Request") and request.GET.get("part") == "live":
-        return render(request, "whatsapp/_campaign_live.html", context)
+        from apps.core.htmx import partial_response
+
+        return partial_response(
+            render(
+                request, "whatsapp/_campaign_live.html", {**context, "live_part": True}
+            )
+        )
     return render(request, "whatsapp/campaign_detail.html", context)
 
 

@@ -96,6 +96,23 @@
 {% include "whatsapp/_campaign_live.html" %}
 {% endif %}
 
+{% comment %}The message as the composer previewed it, each blank showing where its value comes
+from (campaign_ui.message_with_sources), so what went out can be read without reopening it.{% endcomment %}
+<section class="card card-pad mt-6" aria-labelledby="message-title" data-campaign-message>
+  <h2 id="message-title" class="text-base font-semibold text-ink">Message</h2>
+  <p class="mt-0.5 text-xs text-ink-subtle">{{ campaign.template.label }}{% if campaign.template.variables %} · each customer's own details go in the blanks{% endif %}</p>
+  <div class="wa-preview wa-chat wa-chat--compact rounded-2xl p-3 pl-4 mt-3">
+    <div class="wa-bubble px-3 py-2 text-[0.9rem] leading-snug">
+      {% if message.header %}<p class="font-semibold mb-1">{{ message.header }}</p>{% endif %}
+      <p class="whitespace-pre-line break-words">{{ message.body }}</p>
+      {% if message.footer %}<p class="wa-muted mt-1 text-xs">{{ message.footer }}</p>{% endif %}
+    </div>
+    {% for b in message.buttons %}
+      <div class="wa-bubble wa-bubble--button mt-1 px-3 py-2 text-sm font-medium">{{ b }}</div>
+    {% endfor %}
+  </div>
+</section>
+
 {% if failure_groups and not editable %}
 {% comment %}Why messages failed, grouped and in plain words (campaigns.failure_groups), with where
 to fix it when it's about the WhatsApp account rather than the customer.{% endcomment %}
@@ -105,7 +122,10 @@ to fix it when it's about the WhatsApp account rather than the customer.{% endco
     {% for g in failure_groups %}
     <li class="py-3 flex flex-wrap items-start justify-between gap-3">
       <p class="min-w-0 flex-1 text-ink"><span class="font-semibold tabular-nums">{{ g.n }}</span> × {{ g.reason }}</p>
-      {% if g.fix %}<a href="{{ g.fix.url }}" class="btn btn-secondary btn-sm"{% if g.fix.url|slice:":4" == "http" %} target="_blank" rel="noopener"{% endif %}>{{ g.fix.label }}</a>{% endif %}
+      <span class="flex flex-wrap gap-2">
+        {% if g.fix %}<a href="{{ g.fix.url }}" class="btn btn-secondary btn-sm"{% if g.fix.url|slice:":4" == "http" %} target="_blank" rel="noopener"{% endif %}>{{ g.fix.label }}</a>{% endif %}
+        <a href="?outcome=failed&amp;reason={{ g.key|urlencode }}#recipients" class="btn btn-ghost btn-sm" data-failure-filter="{{ g.key }}">Show {% if g.n == 1 %}who{% else %}these {{ g.n }}{% endif %}</a>
+      </span>
     </li>
     {% endfor %}
   </ul>
@@ -140,12 +160,18 @@ to fix it when it's about the WhatsApp account rather than the customer.{% endco
   <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
     <h2 id="recipients-title" class="text-lg font-semibold text-ink">Recipients</h2>
     <div class="tabs" role="tablist" aria-label="Filter recipients">
-      <a href="?#recipients" role="tab" class="tab{% if not outcome %} tab-active{% endif %}" aria-selected="{% if not outcome %}true{% else %}false{% endif %}">Everyone</a>
-      <a href="?outcome=sent#recipients" role="tab" class="tab{% if outcome == 'sent' %} tab-active{% endif %}" aria-selected="{% if outcome == 'sent' %}true{% else %}false{% endif %}">Sent</a>
-      <a href="?outcome=failed#recipients" role="tab" class="tab{% if outcome == 'failed' %} tab-active{% endif %}" aria-selected="{% if outcome == 'failed' %}true{% else %}false{% endif %}">Failed</a>
-      <a href="?outcome=not_sent#recipients" role="tab" class="tab{% if outcome == 'not_sent' %} tab-active{% endif %}" aria-selected="{% if outcome == 'not_sent' %}true{% else %}false{% endif %}">Not sent</a>
+      <a href="?#recipients" role="tab" class="tab{% if not outcome %} tab-active{% endif %}" aria-selected="{% if not outcome %}true{% else %}false{% endif %}">Everyone <span id="rc-everyone" class="text-ink-subtle tabular-nums">{{ tab_counts.everyone }}</span></a>
+      <a href="?outcome=sent#recipients" role="tab" class="tab{% if outcome == 'sent' %} tab-active{% endif %}" aria-selected="{% if outcome == 'sent' %}true{% else %}false{% endif %}">Sent <span id="rc-sent" class="text-ink-subtle tabular-nums">{{ tab_counts.sent }}</span></a>
+      <a href="?outcome=failed#recipients" role="tab" class="tab{% if outcome == 'failed' %} tab-active{% endif %}" aria-selected="{% if outcome == 'failed' %}true{% else %}false{% endif %}">Failed <span id="rc-failed" class="text-ink-subtle tabular-nums">{{ tab_counts.failed }}</span></a>
+      <a href="?outcome=not_sent#recipients" role="tab" class="tab{% if outcome == 'not_sent' %} tab-active{% endif %}" aria-selected="{% if outcome == 'not_sent' %}true{% else %}false{% endif %}">Not sent <span id="rc-not_sent" class="text-ink-subtle tabular-nums">{{ tab_counts.not_sent }}</span></a>
     </div>
   </div>
+  {% if reason %}
+  <p class="mb-3 flex flex-wrap items-center gap-2 text-sm text-ink-muted" data-failure-filter-on>
+    <span>Showing the {{ reason.n }} who failed because: {{ reason.reason }}</span>
+    <a href="?outcome=failed#recipients" class="btn btn-ghost btn-sm">Show every failure</a>
+  </p>
+  {% endif %}
   {% if page %}
   <div class="table-wrap">
     <table class="table table--cards">
