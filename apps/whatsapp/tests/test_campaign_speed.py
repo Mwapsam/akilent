@@ -17,14 +17,19 @@ from apps.whatsapp.tests.test_campaign_results import (  # noqa: F401
 pytestmark = pytest.mark.django_db
 
 BUDGET = {
-    "list": 16,
-    "detail": 20,
-    "new": 19,
+    "list": 15,
+    "detail": 19,
+    "new": 17,
+    "settings": 13,
 }
 # list 15 -> 12: one query for the tab counts (Phase C). 12 -> 16 (Phase D, new content, not
 # a slowdown): replies, the last campaign's failure reasons, and for the tiles the workspace's
 # timezone and one query for 8 weeks of messages (15 with the start card in their place).
 # detail 19 -> 20 (Phase E): who replied, for the funnel.
+# Phase G: list 16 -> 15 (the email plan check only on the Email tab); detail 20 -> 19 (one
+# count by status and skip reason, one "still waiting" check for Pause and Cancel, with the
+# workspace's timezone added for local times); new 19 -> 17 (readiness from the templates
+# already loaded); settings measured at 13.
 
 
 def _urls(campaign):
@@ -32,6 +37,7 @@ def _urls(campaign):
         "list": "/campaigns/?channel=whatsapp",
         "detail": f"/campaigns/{campaign.pk}/",
         "new": "/campaigns/new/",
+        "settings": "/campaigns/settings/",
     }
 
 

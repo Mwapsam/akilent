@@ -170,7 +170,7 @@ def test_tiles_count_this_month_in_the_workspaces_own_days(shop):  # noqa: F811
         "django.utils.timezone.now",
         return_value=datetime.datetime(2026, 11, 7, 10, 0, tzinfo=lusaka),
     ):
-        tiles = {t["key"]: t for t in campaign_ui.summary(account)}
+        tiles = {t["key"]: t for t in campaign_ui.summary(account)["tiles"]}
     assert tiles["sent"]["value"] == 3
     assert tiles["delivered"]["value"] == "100%"
     week = [s for s in tiles["sent"]["trend"]["slots"] if s["value"]]

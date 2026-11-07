@@ -1679,6 +1679,7 @@ _TILES_FROM = 3
 @login_required
 def campaigns_list(request):
 
+    from apps.accounts.business_hours import workspace_timezone
     from apps.billing.limits import LimitChecker
     from apps.email.models import BulkEmailCampaign
 
@@ -1696,7 +1697,10 @@ def campaigns_list(request):
     # The middleware only lets this page through with email off when WhatsApp is on.
     channel = (request.GET.get("channel") or "email") if email_enabled else "whatsapp"
 
-    bulk_enabled = LimitChecker(account).has_feature("bulk_email")
+    # Only the Email tab uses it (a read of the subscription the WhatsApp tab doesn't need).
+    bulk_enabled = channel != "whatsapp" and LimitChecker(account).has_feature(
+        "bulk_email"
+    )
 
     status = request.GET.get("status") or "all"
     campaigns = _scoped(BulkEmailCampaign.objects, request, account)
@@ -1777,7 +1781,23 @@ def campaigns_list(request):
             latest = wa_all.exclude(status__in=not_out).first()
         ids = [c.pk for c in whatsapp_campaigns]
         stats = delivery_stats_for(set(ids) | ({latest.pk} if latest else set()))
-        replies = reply_counts_for(ids)
+        if not whatsapp_any:
+            whatsapp_readiness = readiness(account)
+        went_out = whatsapp_tab_counts["sending"] + whatsapp_tab_counts["finished"]
+        # Who replied: the tiles' query counts it for every message in their 8 weeks, so a
+        # campaign that started inside them needs no count of its own.
+        replies: dict = {}
+        if went_out >= _TILES_FROM:
+            tiles = summary(account)
+            whatsapp_summary = tiles["tiles"]
+            replies = {
+                c.pk: tiles["replies"].get(c.pk, 0)
+                for c in whatsapp_campaigns
+                if c.started_at and c.started_at >= tiles["since"]
+            }
+        elif whatsapp_any or whatsapp_readiness.ready:  # type: ignore[union-attr]
+            whatsapp_starts = starting_points(template_options(account))
+        replies.update(reply_counts_for([pk for pk in ids if pk not in replies]))
         for c in whatsapp_campaigns:
             c.stats = stats[c.pk]  # type: ignore[attr-defined]
             c.state = lifecycle_state(c, c.stats)  # type: ignore[attr-defined]
@@ -1798,13 +1818,6 @@ def campaigns_list(request):
                 ),
                 None,
             )
-        if not whatsapp_any:
-            whatsapp_readiness = readiness(account)
-        went_out = whatsapp_tab_counts["sending"] + whatsapp_tab_counts["finished"]
-        if went_out >= _TILES_FROM:
-            whatsapp_summary = summary(account)
-        elif whatsapp_any or whatsapp_readiness.ready:  # type: ignore[union-attr]
-            whatsapp_starts = starting_points(template_options(account))
 
     return render(
         request,
@@ -1833,6 +1846,8 @@ def campaigns_list(request):
             "whatsapp_summary": whatsapp_summary,
             "whatsapp_starts": whatsapp_starts,
             "whatsapp_latest": latest,
+            # The rows' times in the workspace's own zone (read once per request).
+            "wa_zone": workspace_timezone(account) if whatsapp_enabled else "UTC",
         },
     )
 

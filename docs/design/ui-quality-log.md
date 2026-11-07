@@ -2352,3 +2352,35 @@ Plan: the Campaigns plan of 2026-11-06, Phase F.
   - `campaigns_qa.mjs QA_BLANKS` now drives the segmented control. Its preview text had been losing every "s" (an unescaped `\s` in a template literal), now fixed.
   - New `QA_WIZARD`: six widths in both themes, with no sideways scroll, no contrast failures and no overflow. The segmented items were 30 px on touch, now 44. Search with no match shows none and says so, and Review shows the cost and opens the test field.
   - The search run used three temporary approved templates in the dev workspace, deleted afterwards.
+
+### Entry 40: Campaigns Phase G, look, speed and small screens (2026-11-07)
+Plan: the Campaigns plan of 2026-11-06, Phase G (the last before H).
+
+- **Look:**
+  - every Campaigns page (list, a campaign, the composer, Sending hours) has Content Studio's header (`.cs-head`, `campaigns/_title.html`): the page's name in the shared title size under a small "Campaigns" crumb (none on the list itself), the subtitle under it, and through `.cs-head` the shared heading sizes and flat cards below;
+  - Sending hours' on/off is the shared `.switch` (`role="switch"`, a 44 px row), with the times in the shared input style.
+- **Local times:** the campaign page's "sent …"/"created …" and History, and the list's row times, were printed with `|date` on an aware time, which shows the server's UTC (the Phase B bug again). They now read in the workspace's zone; 22:30 UTC on 6 Nov reads 7 Nov, 00:30 in Lusaka. The campaign page's subtitle names the template readably.
+- **Speed: query budgets lowered** (`test_campaign_speed.py`):
+  - list 16 → 15: the email plan check only on the Email tab;
+  - campaign 20 → 19: one count by status and skip reason replaces two, and Pause and Cancel share one "still waiting" check, with the workspace's timezone added;
+  - composer 19 → 17: readiness from the templates already loaded, so an account whose only approved template is a one-time code isn't "ready";
+  - Sending hours given a budget of 13.
+- **Speed: server time with 50 campaigns × 500 recipients** (25,000 messages, 40 replies per campaign; SQLite on the dev box; a throwaway script, deleted). The machine was noisy for part of the run, so the before/after comparison was taken in a single run.
+
+  | Page | Server time |
+  |---|---|
+  | list | 245 ms (was 422 ms) |
+  | a campaign | 47 ms |
+  | a campaign filtered by reason | 37 ms |
+  | composer | 36 ms |
+  | live part | 41 ms |
+
+  All are under the 300 ms target. What changed on the list:
+  - **Per-day function gone:** the tiles grouped 8 weeks of messages by local day with a date function per row (a Python call per message on SQLite). They now count 9 ranges (8 weeks and this month) with plain comparisons worked out in the workspace's zone (`campaigns.activity_in_ranges`).
+  - **One reply check, not two:** the list's Replied column reuses the tiles' reply counts for campaigns that started inside their 8 weeks, and counts only older campaigns on their own (`summary` returns `replies` and `since`). In the same run, the tiles query went from 244 to ~165 ms, and the 121 ms reply count disappears for recent campaigns.
+  - **Remaining cost:** the reply check (an `EXISTS` per message). Buckets alone take 24 ms.
+- **Phones:** checked, not changed. The composer's step bar already reads "Step 2 of 4" below 640 px, its preview already stacks under the step, and the list and recipient tables are cards (`table--cards`).
+- **Verification:**
+  - **Tests:** `test_campaign_look.py` (5): the header on every page; the switch; local times on the campaign and the list; replies reading the same inside and outside the tiles' weeks; a one-time-code template alone not being ready. Budgets for four pages.
+  - **Browser sweep** (`campaigns_qa.mjs`): `QA_SETTINGS` (new: the switch, its 48 px row, the times hiding when off, navy Save), `QA_LIST`, `QA_DETAIL`, `QA_WIZARD`, `QA_BLANKS` and `QA_PATHS`. Six widths in both themes, with no sideways scroll, no contrast failures, no overflow and no small targets among Campaigns' own controls.
+  - **`area_scan /campaigns`:** 6 pages at 360 and 1280 in both themes, 0 issues. Under Git Bash it needs `MSYS_NO_PATHCONV=1` and Windows paths; otherwise `/campaigns` becomes a Windows path and nothing is scanned.

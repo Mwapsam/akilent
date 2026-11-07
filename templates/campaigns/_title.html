@@ -1,0 +1,8 @@
+{% comment %}A Campaigns page's title, as Content Studio's (publishing/_cs_title.html): the page's name in
+large type under a small "Campaigns" crumb that leads back to the list. The list itself has
+no crumb. Used inside .cs-head, which also gives what follows the shared heading sizes and cards.
+  {% include "campaigns/_title.html" with title=campaign.name crumb=True %}{% endcomment %}
+<div class="cs-title">
+  {% if crumb %}<a href="{% url 'email-campaigns' %}?channel=whatsapp" class="cs-crumb">Campaigns</a>{% endif %}
+  <h1 class="cs-h1 sm:truncate"{% if crumb %} title="{{ title }}"{% endif %}>{{ title }}</h1>
+</div>

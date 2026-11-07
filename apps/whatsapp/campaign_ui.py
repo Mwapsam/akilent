@@ -281,10 +281,12 @@ def message_with_sources(campaign) -> dict:
 SUMMARY_WEEKS = 8
 
 
-def summary(account) -> list[dict]:
+def summary(account) -> dict:
     """The list page's tiles: what campaign messages did this month, each with its trend over
-    the last ``SUMMARY_WEEKS`` weeks, in the workspace's own days. One query (plus the
-    workspace's timezone). Replies are as reply_counts_for counts them."""
+    the last ``SUMMARY_WEEKS`` weeks, in the workspace's own days. ``{"tiles", "replies",
+    "since"}``: ``replies`` is who replied per campaign, counted over every message since
+    ``since``, so a campaign that started after it needs no count of its own
+    (reply_counts_for). One query (plus the workspace's timezone)."""
     from collections import Counter
     from datetime import datetime, time, timedelta
 
@@ -292,24 +294,37 @@ def summary(account) -> list[dict]:
 
     from apps.accounts.business_hours import workspace_zone
     from apps.core.charts import kpi_spark
-    from apps.whatsapp.campaigns import REPLY_DAYS, daily_activity
+    from apps.whatsapp.campaigns import REPLY_DAYS, activity_in_ranges
 
     zone = workspace_zone(account)
     today = djtz.localtime(djtz.now(), zone).date()
     month_start = today.replace(day=1)
     week0 = today - timedelta(days=today.weekday() + 7 * (SUMMARY_WEEKS - 1))
-    since = datetime.combine(min(month_start, week0), time.min, tzinfo=zone)
+
+    def local_midnight(day):
+        return datetime.combine(day, time.min, tzinfo=zone)
+
+    since = local_midnight(min(month_start, week0))
+    ranges = {
+        f"w{i}": (
+            local_midnight(week0 + timedelta(weeks=i)),
+            local_midnight(week0 + timedelta(weeks=i + 1)),
+        )
+        for i in range(SUMMARY_WEEKS)
+    }
+    ranges["month"] = (local_midnight(month_start), None)
 
     month: Counter = Counter()
     weeks: list[Counter] = [Counter() for _ in range(SUMMARY_WEEKS)]
-    for row in daily_activity(account, since, zone):
-        week = (row["day"] - week0).days // 7
-        into = [weeks[week]] if 0 <= week < SUMMARY_WEEKS else []
-        if row["day"] >= month_start:
-            into.append(month)
-        for c in into:
-            c[row["bucket"]] += row["n"]
-            c["replied"] += row["n"] if row["replied"] else 0
+    replies: Counter = Counter()
+    for row in activity_in_ranges(account, since, ranges):
+        if row["replied"]:
+            replies[row["campaign_id"]] += row["n"]
+        for c, n in [(weeks[i], row[f"w{i}"]) for i in range(SUMMARY_WEEKS)] + [
+            (month, row["month"])
+        ]:
+            c[row["bucket"]] += n
+            c["replied"] += n if row["replied"] else 0
 
     def facts(c: Counter) -> dict:
         prepared = sum(n for key, n in c.items() if key != "replied")
@@ -328,7 +343,7 @@ def summary(account) -> list[dict]:
         for d in (week0 + timedelta(weeks=i) for i in range(SUMMARY_WEEKS))
     ]
     rate = [percent(f["delivered"], f["prepared"]) for f in w]
-    return [
+    tiles = [
         {
             "key": "sent",
             "label": "Sent this month",
@@ -361,6 +376,7 @@ def summary(account) -> list[dict]:
             "trend": kpi_spark([f["replied"] for f in w], labels),
         },
     ]
+    return {"tiles": tiles, "replies": dict(replies), "since": since}
 
 
 def starting_points(templates, n: int = 3) -> list:
@@ -425,21 +441,28 @@ class Readiness:
         ]
 
 
-def readiness(account) -> Readiness:
+def readiness(account, templates: list | None = None) -> Readiness:
+    """``templates``: template_options, when the page has them already (two queries fewer)."""
     from apps.contacts.models import ContactList
     from apps.whatsapp.models import WhatsAppBusinessNumber
 
-    approved = MessageTemplate.objects.filter(
-        account=account, approval_status=MessageTemplate.ApprovalStatus.APPROVED
-    )
+    if templates is not None:
+        has_template = bool(templates)
+        has_text_template = any(t.sendable for t in templates)  # type: ignore[attr-defined]
+    else:
+        approved = MessageTemplate.objects.filter(
+            account=account, approval_status=MessageTemplate.ApprovalStatus.APPROVED
+        )
+        has_template = approved.exists()
+        has_text_template = approved.filter(
+            header_format=MessageTemplate.HeaderFormat.TEXT
+        ).exists()
     return Readiness(
         number_connected=WhatsAppBusinessNumber.objects.filter(
             account=account, is_active=True
         ).exists(),
-        has_template=approved.exists(),
-        has_text_template=approved.filter(
-            header_format=MessageTemplate.HeaderFormat.TEXT
-        ).exists(),
+        has_template=has_template,
+        has_text_template=has_text_template,
         has_ready_list=ContactList.objects.filter(
             account=account, contacts__phone__isnull=False
         ).exists(),

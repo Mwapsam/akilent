@@ -9,6 +9,7 @@
 //               both themes (sideways scroll, tap targets, contrast, sparkline hover);
 //   QA_WIZARD=1 Phase F: the template list, the blank's segmented choice, the test send and
 //               Review's cost, at six widths in both themes;
+//   QA_SETTINGS=1 Phase G: Sending hours with the shared switch, at six widths in both themes;
 //   QA_DETAIL=1 Phase E: a finished campaign's page at six widths in both themes, and its
 //               skeleton when the page is slow to arrive;
 // Needs a dev server with WHATSAPP_ENABLED=True (QA_BASE, default :8001) and QA_UI_EMAIL /
@@ -286,6 +287,41 @@ if (process.env.QA_WIZARD) {
   out.push({ review: await evaluate(`({ cost: (document.querySelector('[data-review-cost]') || {}).innerText, testOpen: document.querySelector('[data-test-send]').open,
     testField: !!(document.querySelector('#test-phone') || {}).offsetParent })`) });
   await shot0("wizard-4-1280");
+  console.log(JSON.stringify(out, null, 1));
+  process.exit(0);
+}
+
+// Phase G: Sending hours at six widths in both themes: the shared switch (role, 44px row),
+// the times hidden when it's off, the navy Save; sideways scroll and contrast. The switch is
+// only toggled on the page; Save is never pressed (and POSTs are intercepted anyway).
+if (process.env.QA_SETTINGS) {
+  const out = [];
+  const NO_MOTION = `(() => { const s=document.createElement('style'); s.textContent='*,*::before,*::after{transition:none!important;animation:none!important}'; document.head.appendChild(s); })()`;
+  const sizes = [[360, 740, true], [390, 844, true], [768, 1024, true], [1024, 768, false], [1280, 800, false], [1440, 900, false]];
+  for (const [w, h, touch] of sizes) {
+    await viewport(w, h, touch);
+    await go("/campaigns/settings/", 1300);
+    await evaluate(scanner); await evaluate(NO_MOTION);
+    for (const theme of ["light", "dark"]) {
+      const r = await evaluate(`(async () => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const s = await window.__uiScan({ max: 4 }); const sw = document.querySelector('input.switch[name=enabled]');
+        const row = sw && sw.closest('label').getBoundingClientRect(); const save = document.querySelector('form button.btn');
+        return { theme: ${JSON.stringify(theme)}, sideways: document.documentElement.scrollWidth > innerWidth + 1,
+          title: (document.querySelector('.cs-h1') || {}).textContent, crumb: (document.querySelector('.cs-crumb') || {}).textContent,
+          switchRole: sw && sw.getAttribute('role'), rowH: row && Math.round(row.height), save: save && save.className,
+          contrastFail: s.contrast.failing, contrastEx: s.contrast.failing ? s.contrast.examples : undefined, overflow: s.overflow.count }; })()`);
+      out.push({ w, ...r });
+      if (w === 390 || w === 1280) await shot0(`settings-${w}-${theme}`);
+    }
+    await evaluate("document.documentElement.dataset.theme = 'light'");
+  }
+  await viewport(1280, 800, false);
+  await go("/campaigns/settings/", 1300);
+  const times = () => evaluate(`!!(document.querySelector('#win-start') || {}).offsetParent`);
+  const before = await times();
+  await clickSel("input.switch[name=enabled]"); await sleep(200);
+  const afterToggle = await times();
+  out.push({ toggle: { timesShownBefore: before, timesShownAfter: afterToggle } });
   console.log(JSON.stringify(out, null, 1));
   process.exit(0);
 }

@@ -391,20 +391,26 @@ def _waiting_messages(campaign):
     )
 
 
-def can_pause(campaign) -> bool:
+def has_waiting_messages(campaign) -> bool:
+    """A finished fan-out whose messages haven't all left the send queue yet."""
+    return campaign.status == _Camp.COMPLETED and _waiting_messages(campaign).exists()
+
+
+def can_pause(campaign, waiting: bool | None = None) -> bool:
+    """``waiting``: has_waiting_messages, when the caller already knows it."""
     if campaign.status in WhatsAppCampaign.ACTIVE:
         return True
     # Fan-out finishes long before a big list has drained out of the send
     # queue; pausing then still holds back the messages not yet sent.
-    return campaign.status == _Camp.COMPLETED and _waiting_messages(campaign).exists()
+    return has_waiting_messages(campaign) if waiting is None else waiting
 
 
-def can_cancel(campaign) -> bool:
+def can_cancel(campaign, waiting: bool | None = None) -> bool:
     return campaign.status in (
         _Camp.SCHEDULED,
         _Camp.PAUSED,
         *WhatsAppCampaign.ACTIVE,
-    ) or (campaign.status == _Camp.COMPLETED and _waiting_messages(campaign).exists())
+    ) or (has_waiting_messages(campaign) if waiting is None else waiting)
 
 
 def pause_campaign(campaign, *, user=None) -> bool:
@@ -1081,13 +1087,21 @@ def reply_counts_for(campaign_ids) -> dict:
     return out
 
 
-def daily_activity(account, since, zone) -> list:
+def activity_in_ranges(account, since, ranges: dict) -> list:
     """The account's campaign messages since ``since`` (by when they went to WhatsApp, or were
-    prepared if not yet), grouped by local day: ``[{"day", "bucket", "replied", "n"}]``.
-    One query, for the list page's tiles."""
-    from django.db.models import Count, Q
-    from django.db.models.functions import Coalesce, TruncDate
+    prepared if not yet), grouped by campaign, delivery bucket and whether they were replied to,
+    with how many fall in each of ``ranges`` (``{name: (start, end or None)}``):
+    ``[{"campaign_id", "bucket", "replied", name: n, ...}]``. One query, for the list's tiles.
 
+    Ranges are plain comparisons on the time, worked out in the workspace's zone by the caller,
+    so no date function runs per row (on SQLite one is a Python call for each message)."""
+    from django.db.models import Count, Q
+    from django.db.models.functions import Coalesce
+
+    counts = {
+        name: Count("id", filter=Q(when__gte=start) & (Q(when__lt=end) if end else Q()))
+        for name, (start, end) in ranges.items()
+    }
     return list(
         WhatsAppCampaignRecipient.objects.filter(
             Q(status=_Status.QUEUED) | Q(status=_Status.FAILED),
@@ -1096,13 +1110,9 @@ def daily_activity(account, since, zone) -> list:
         )
         .annotate(when=Coalesce("message__sent_at", "message__created_at"))
         .filter(when__gte=since)
-        .annotate(
-            bucket=_delivery_bucket(),
-            replied=_replied(),
-            day=TruncDate("when", tzinfo=zone),
-        )
-        .values("day", "bucket", "replied")
-        .annotate(n=Count("id"))
+        .annotate(bucket=_delivery_bucket(), replied=_replied())
+        .values("campaign_id", "bucket", "replied")
+        .annotate(n=Count("id"), **counts)
     )
 
 

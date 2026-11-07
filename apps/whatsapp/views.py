@@ -29,6 +29,7 @@ from apps.whatsapp.models import (
     MessageTemplateAsset,
     WebhookEventLog,
     WhatsAppCampaign,
+    WhatsAppCampaignRecipient,
 )
 from apps.whatsapp.providers import WhatsAppProviderError, get_whatsapp_provider
 from apps.whatsapp.starter_templates import STARTER_CATEGORIES
@@ -1051,7 +1052,7 @@ def campaign_new(request):
             "can_send": can_send,
             "timezones": _timezone_options(state["send_tz"]),
             "test_phone": account.phone,
-            "readiness": readiness(account),
+            "readiness": readiness(account, templates),
             "account_problem": account_problem(account),
         },
         status=400 if error else 200,
@@ -1223,6 +1224,7 @@ def campaign_detail(request, pk: int):
     from django.core.paginator import Paginator
     from django.db.models import Count
 
+    from apps.accounts.business_hours import workspace_timezone
     from apps.whatsapp import campaigns as svc
     from apps.whatsapp.campaign_ui import (
         SKIP_REASON_COPY,
@@ -1275,6 +1277,13 @@ def campaign_detail(request, pk: int):
 
     processed = campaign.queued_count + campaign.skipped_count
     remaining = max(campaign.recipient_count - processed, 0)
+    # One count by status and skip reason: why some weren't sent, and how many failed
+    # (what Retry sends again: campaigns.failed_count).
+    by_status = list(
+        campaign.recipients.order_by()
+        .values("status", "skip_reason")
+        .annotate(n=Count("id"))
+    )
     skip_breakdown = [
         {
             "key": row["skip_reason"],
@@ -1284,11 +1293,14 @@ def campaign_detail(request, pk: int):
             ],
             "why": SKIP_REASON_COPY.get(row["skip_reason"], ("", ""))[1],
         }
-        for row in campaign.recipients.exclude(skip_reason="")
-        .values("skip_reason")
-        .annotate(n=Count("id"))
-        .order_by("-n")
+        for row in sorted(by_status, key=lambda r: -r["n"])
+        if row["skip_reason"]
     ]
+    failed_recipients = sum(
+        row["n"]
+        for row in by_status
+        if row["status"] == WhatsAppCampaignRecipient.Status.FAILED
+    )
     delivery = campaign_delivery_stats(campaign)
     failure_groups = svc.failure_groups(campaign) if delivery["failed"] else []
     # Retrying sends to the same account: while its last send failed for an account reason
@@ -1330,6 +1342,7 @@ def campaign_detail(request, pk: int):
             )
 
     finished = campaign.status in WhatsAppCampaign.FINISHED
+    waiting = can_send and svc.has_waiting_messages(campaign)  # asked once for both
     state = lifecycle_state(campaign, delivery)
     replied = 0 if editable else svc.reply_counts_for([campaign.pk])[campaign.pk]
     reached = delivery["sent"] + delivery["delivered"] + delivery["read"]
@@ -1366,11 +1379,12 @@ def campaign_detail(request, pk: int):
         "outcome": outcome,
         "timeline": timeline(campaign, delivery),
         "scheduled_local": local_label(campaign.scheduled_at, campaign.timezone),
+        "zone": workspace_timezone(account),
         "can_send": can_send,
-        "can_pause": can_send and svc.can_pause(campaign),
+        "can_pause": can_send and svc.can_pause(campaign, waiting),
         "can_resume": can_send and campaign.status == _S.PAUSED,
-        "can_cancel": can_send and svc.can_cancel(campaign),
-        "failed_n": svc.failed_count(campaign) if finished else 0,
+        "can_cancel": can_send and svc.can_cancel(campaign, waiting),
+        "failed_n": failed_recipients if finished else 0,
         # How long a message held by the plan limit waits before it's dropped
         # (apps.whatsapp.campaigns.cancel_stale_campaign_holds).
         "hold_max_hours": settings.WHATSAPP_CAMPAIGN_HOLD_MAX_HOURS,

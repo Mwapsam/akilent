@@ -1,14 +1,11 @@
 {% extends "base.html" %}
+{% load tz %}
 {% block title %}Campaigns — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
 
-<header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
-  <div class="min-w-0">
-    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Campaigns</h1>
-    {% comment %}Says only the channels that are switched on: "by email" was a promise while email was off.{% endcomment %}
-    <p class="mt-1 text-sm text-ink-muted">Reach a group of customers with a message{% if email_enabled and whatsapp_enabled %} — by email or WhatsApp{% elif whatsapp_enabled %} on WhatsApp{% elif email_enabled %} by email{% endif %}.</p>
-  </div>
+<header class="cs-head !mb-1">
+  {% include "campaigns/_title.html" with title="Campaigns" %}
   <div class="flex flex-wrap items-center gap-2">
     {% if channel == 'whatsapp' %}
     {% if whatsapp_campaigns_usable and whatsapp_campaigns %}
@@ -31,6 +28,8 @@
     {% endif %}
   </div>
 </header>
+{% comment %}Says only the channels that are switched on: "by email" was a promise while email was off.{% endcomment %}
+<p class="mb-6 text-sm text-ink-muted">Reach a group of customers with a message{% if email_enabled and whatsapp_enabled %} — by email or WhatsApp{% elif whatsapp_enabled %} on WhatsApp{% elif email_enabled %} by email{% endif %}.</p>
 
 
 {% if whatsapp_enabled and email_enabled %}
@@ -100,7 +99,7 @@
         <tr>
           <td data-label="Campaign">
             <a href="{% url 'whatsapp-campaign-detail' c.pk %}" data-skeleton="campaign" class="font-medium text-accent hover:text-accent-strong">{{ c.name }}</a>
-            <span class="block text-xs text-ink-subtle">{{ c.audience_name|default:"Retry of failed messages" }} · {% if c.status == 'scheduled' %}goes out {{ c.when_label }}{% else %}{{ c.started_at|default:c.created_at|date:"j M, H:i" }}{% endif %}</span>
+            <span class="block text-xs text-ink-subtle">{{ c.audience_name|default:"Retry of failed messages" }} · {% if c.status == 'scheduled' %}goes out {{ c.when_label }}{% else %}{{ c.started_at|default:c.created_at|timezone:wa_zone|date:"j M, H:i" }}{% endif %}</span>
           </td>
           <td data-label="Status" class="whitespace-nowrap">{% include "components/status.html" with state=c.state badge=True %}</td>
           {% if c.state == 'draft' or c.state == 'scheduled' %}

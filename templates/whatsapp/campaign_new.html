@@ -2,14 +2,10 @@
 {% block title %}{% if draft %}Edit campaign{% else %}New WhatsApp campaign{% endif %} — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
-<header class="mb-6">
-  <nav class="mb-1 flex items-center gap-1.5 text-xs text-ink-subtle" aria-label="Breadcrumb">
-    <a href="/campaigns/?channel=whatsapp" class="hover:text-ink">Campaigns</a>
-    <span aria-hidden="true">/</span><span class="text-ink">{% if draft %}{{ draft.name }}{% else %}New WhatsApp campaign{% endif %}</span>
-  </nav>
-  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">{% if draft %}Edit campaign{% else %}New WhatsApp campaign{% endif %}</h1>
-  <p class="mt-1 text-sm text-gray-600">Send one approved message to everyone on a list or in a segment. You'll see exactly who gets it before you send.</p>
+<header class="cs-head !mb-1">
+  {% if draft %}{% include "campaigns/_title.html" with title=draft.name|default:"Edit campaign" crumb=True %}{% else %}{% include "campaigns/_title.html" with title="New WhatsApp campaign" crumb=True %}{% endif %}
 </header>
+<p class="mb-6 text-sm text-ink-muted">Send one approved message to everyone on a list or in a segment. You'll see exactly who gets it before you send.</p>
 
 {% if error %}
 <div class="alert alert-danger mb-4" role="alert">{% include "components/icon.html" with name="alert-circle" %}<span>{{ error }}</span></div>
