@@ -160,6 +160,7 @@ jobs:
           BACKUP_AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY || secrets.AWS_SECRET_ACCESS_KEY }}
           SEO_ALLOW_INDEXING: ${{ secrets.SEO_ALLOW_INDEXING }}
           GOOGLE_ANALYTICS_ID: ${{ secrets.GOOGLE_ANALYTICS_ID }}
+          SALES_NOTIFY_EMAIL: ${{ secrets.SALES_NOTIFY_EMAIL }}
           INSTAGRAM_APP_ID: ${{ secrets.INSTAGRAM_APP_ID }}
           INSTAGRAM_APP_SECRET: ${{ secrets.INSTAGRAM_APP_SECRET }}
           INSTAGRAM_GRAPH_VERSION: ${{ secrets.INSTAGRAM_GRAPH_VERSION }}
@@ -198,7 +199,7 @@ jobs:
             PAYPAL_MERCHANT_ID,PAYPAL_CURRENCIES,PAYPAL_SUBSCRIPTIONS,
             OLLAMA_API_KEY,AI_PROVIDER_BACKEND,AI_MODEL,AI_TIMEOUT_SECONDS,AI_DAILY_CALL_LIMIT,OLLAMA_BASE_URL,
             AI_MODEL_FAST,ANTHROPIC_API_KEY,OPENAI_API_KEY,OPENAI_BASE_URL,AI_AUTONOMY_ENABLED,
-            BACKUP_S3_BUCKET,BACKUP_AWS_ACCESS_KEY_ID,BACKUP_AWS_SECRET_ACCESS_KEY,SEO_ALLOW_INDEXING,GOOGLE_ANALYTICS_ID,
+            BACKUP_S3_BUCKET,BACKUP_AWS_ACCESS_KEY_ID,BACKUP_AWS_SECRET_ACCESS_KEY,SEO_ALLOW_INDEXING,GOOGLE_ANALYTICS_ID,SALES_NOTIFY_EMAIL,
             INSTAGRAM_APP_ID,INSTAGRAM_APP_SECRET,INSTAGRAM_GRAPH_VERSION,INSTAGRAM_VERIFY_TOKEN,
             HUBSPOT_CLIENT_ID,HUBSPOT_CLIENT_SECRET,SYSTEM_EMAIL_PROVIDER_BACKEND,
             FACEBOOK_VERIFY_TOKEN,DEPLOY_SHA,RELEASED_FEATURES
@@ -301,6 +302,7 @@ jobs:
             BACKUP_AWS_SECRET_ACCESS_KEY=$BACKUP_AWS_SECRET_ACCESS_KEY
             SEO_ALLOW_INDEXING=$SEO_ALLOW_INDEXING
             GOOGLE_ANALYTICS_ID=$GOOGLE_ANALYTICS_ID
+            SALES_NOTIFY_EMAIL=$SALES_NOTIFY_EMAIL
             DJANGO_ENV=production
             INSTAGRAM_APP_ID=$INSTAGRAM_APP_ID
             INSTAGRAM_APP_SECRET=$INSTAGRAM_APP_SECRET
@@ -377,3 +379,22 @@ jobs:
           aws cloudfront create-invalidation \
             --distribution-id "${{ secrets.CLOUDFRONT_ID }}" \
             --paths "/*"
+
+      # Cloudflare keeps the logged-out landing page for up to ten minutes (Cache-Control
+      # s-maxage from apps/accounts/views.py:landing, plus a cache rule set in the Cloudflare
+      # dashboard). Purge it so a release shows at once. Without the two secrets the step only
+      # warns: a stale page for ten minutes is not worth a failed deploy.
+      - name: Purge the landing page from Cloudflare
+        env:
+          CF_ZONE: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          SITE_URL: ${{ vars.PUBLIC_SITE_URL || 'https://akilent.com' }}
+        run: |
+          if [ -z "$CF_ZONE" ] || [ -z "$CF_TOKEN" ]; then
+            echo "::warning::CLOUDFLARE_ZONE_ID / CLOUDFLARE_API_TOKEN not set; landing page not purged"
+            exit 0
+          fi
+          curl -fsS -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE/purge_cache" \
+            -H "Authorization: Bearer $CF_TOKEN" -H "Content-Type: application/json" \
+            --data "{\"files\":[\"$SITE_URL/\"]}" \
+            || echo "::warning::Cloudflare purge failed; the landing page may be stale for up to ten minutes"

@@ -47,12 +47,11 @@ def test_whatsapp_hero_only_when_whatsapp_is_on(client, settings, plans):
     settings.WHATSAPP_ENABLED = True
     html = hero(_get(client))
     assert "WhatsApp" in html
-    assert 'data-art="inbox"' in html
+    assert 'data-art="scene"' in html
 
     settings.WHATSAPP_ENABLED = False
     html = hero(_get(client))
     assert "WhatsApp" not in html
-    assert 'data-art="inbox"' not in html and 'data-art="customer"' in html
 
 
 @pytest.mark.django_db

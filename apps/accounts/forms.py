@@ -8,7 +8,7 @@ from django.contrib.auth.forms import (
 )
 from django.contrib.auth.models import User
 
-from apps.accounts.models import Account, Invitation
+from apps.accounts.models import Account, DemoRequest, Invitation
 
 if TYPE_CHECKING:
     from apps.billing.models import Plan
@@ -359,3 +359,36 @@ class BusinessAddressForm(forms.ModelForm):
             if name in cleaned and not cleaned[name]:
                 self.add_error(name, "This field is required.")
         return cleaned
+
+
+class DemoRequestForm(forms.ModelForm):
+    """The public "Book a demo" form. ``website`` is a honeypot: people never see it, bots fill it."""
+
+    channels = forms.MultipleChoiceField(
+        choices=DemoRequest.CHANNELS,
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+        label="Channels you use with customers",
+    )
+    website = forms.CharField(required=False, label="Leave this empty")
+
+    class Meta:
+        model = DemoRequest
+        fields = ["name", "email", "company", "team_size", "channels", "message"]
+        labels = {"team_size": "Team size", "message": "What would you like to see?"}
+        widgets = {
+            "message": forms.Textarea(attrs={"rows": 4}),
+            "team_size": forms.Select(),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        team_size = self.fields["team_size"]
+        assert isinstance(team_size, forms.ChoiceField)
+        team_size.choices = [("", "Choose…"), *DemoRequest.TEAM_SIZES]
+        self.fields["name"].widget.attrs["autocomplete"] = "name"
+        self.fields["email"].widget.attrs["autocomplete"] = "email"
+        self.fields["company"].widget.attrs["autocomplete"] = "organization"
+
+    def is_bot(self) -> bool:
+        return bool(self.cleaned_data.get("website"))

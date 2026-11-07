@@ -12,12 +12,12 @@ is clean and the dark-mode token test only looks at backgrounds.
 """
 
 import re
-from pathlib import Path
 
 import pytest
-from django.conf import settings
 
-CSS = (Path(settings.BASE_DIR) / "assets" / "app.css").read_text(encoding="utf-8")
+from apps.core.tests.css_source import app_css_source
+
+CSS = app_css_source()
 AA_BODY_TEXT = 4.5
 
 DECL = re.compile(r"(--[\w-]+)\s*:\s*([^;}]+)\s*;")

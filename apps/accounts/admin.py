@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from apps.accounts.models import Account, Invitation, Membership
+from apps.accounts.models import Account, DemoRequest, Invitation, Membership
 
 
 class MembershipInline(admin.TabularInline):
@@ -40,3 +40,10 @@ class InvitationAdmin(admin.ModelAdmin):
     search_fields = ("email", "account__company_name")
     raw_id_fields = ("account", "invited_by")
     readonly_fields = ("token", "created_at")
+
+
+@admin.register(DemoRequest)
+class DemoRequestAdmin(admin.ModelAdmin):
+    list_display = ("created_at", "name", "company", "email", "team_size")
+    search_fields = ("name", "company", "email")
+    readonly_fields = ("created_at", "source")

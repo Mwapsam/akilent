@@ -8,6 +8,8 @@ from pathlib import Path
 import pytest
 from django.conf import settings
 
+from apps.core.tests.css_source import app_css_source
+
 ROOT = Path(settings.BASE_DIR)
 TEMPLATES = ROOT / "templates"
 
@@ -22,7 +24,7 @@ def test_the_drift_baseline_is_zero_everywhere():
 
 
 def test_code_blocks_have_their_own_fixed_tokens():
-    css = _read("assets", "app.css")
+    css = app_css_source()
     for token in ("--code-bg:", "--code-fg:", "--code-line:"):
         assert token in css
     docs = _read("templates", "docs", "_layout.html")

@@ -32,6 +32,8 @@ def rules(path):
 def main():
     built_path, committed_path = sys.argv[1], sys.argv[2]
     built, committed = rules(built_path), rules(committed_path)
+    # static/css/<name> is built from assets/<name> (app.css, landing.css).
+    name = pathlib.Path(committed_path).name
 
     if built == committed:
         same_bytes = (
@@ -39,7 +41,7 @@ def main():
             == pathlib.Path(committed_path).read_bytes()
         )
         note = "" if same_bytes else " (byte order differs - platform build, harmless)"
-        print("Compiled CSS matches assets/app.css." + note)
+        print(f"Compiled CSS matches assets/{name}." + note)
         return 0
 
     from collections import Counter
@@ -47,8 +49,8 @@ def main():
     missing = Counter(built) - Counter(committed)  # rebuild has it, commit doesn't
     extra = Counter(committed) - Counter(built)  # commit has it, rebuild doesn't
 
-    print("::error file=static/css/app.css::Compiled CSS is out of date. Run:")
-    print("  tools/tailwindcss -i assets/app.css -o static/css/app.css --minify")
+    print(f"::error file=static/css/{name}::Compiled CSS is out of date. Run:")
+    print(f"  tools/tailwindcss -i assets/{name} -o static/css/{name} --minify")
     print("")
     for label, bag in (
         ("MISSING from the committed CSS", missing),

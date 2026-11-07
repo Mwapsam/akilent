@@ -2,7 +2,7 @@
 
 The product pictures are drawn in HTML/CSS (templates/accounts/landing/art/). They must say
 they're illustrations, describe themselves to screen readers, and only ever show channels that
-are switched on. The design lives in static/css/landing.css.
+are switched on. The design lives in assets/landing.css (built to static/css/landing.css).
 """
 
 import re
@@ -75,28 +75,37 @@ def _hero(html):
 
 @pytest.mark.django_db
 @pytest.mark.parametrize(
-    "on, absent",
+    "on, art, absent",
     [
-        (("instagram", "facebook"), ["WhatsApp", "Email", "email", "@"]),
-        (("instagram",), ["WhatsApp", "Facebook", "Email", "email"]),
-        (("email",), ["WhatsApp", "Instagram", "Facebook", "sell through chats"]),
-        ((), ["WhatsApp", "Instagram", "Facebook", "Email", "email", "chats"]),
+        (("instagram", "facebook"), "scene", ["WhatsApp", "Email", "email", "@"]),
+        (("instagram",), "scene", ["WhatsApp", "Facebook", "Email", "email"]),
+        (("email",), "customer", ["WhatsApp", "Instagram", "Facebook", "Works with"]),
+        (
+            (),
+            "customer",
+            ["WhatsApp", "Instagram", "Facebook", "Email", "email", "chats"],
+        ),
     ],
 )
-def test_the_hero_names_only_channels_that_are_on(client, settings, plans, on, absent):
-    """Badge, lead and the customer-record illustration all follow the channels."""
+def test_the_hero_names_only_channels_that_are_on(
+    client, settings, plans, on, art, absent
+):
+    """Lead, proof strip and illustration all follow the channels: the inbox scene with a chat
+    channel on, the customer record without one."""
     _only(settings, *on)
     hero = _hero(_html(client))
-    assert 'data-art="customer"' in hero
+    assert f'data-art="{art}"' in hero
     for word in absent:
         assert word not in hero, word
 
 
 @pytest.mark.django_db
-def test_the_hero_badge_is_a_registered_claim(client, settings, plans):
+def test_the_hero_leads_with_the_positioning_line(client, settings, plans):
+    """docs/marketing/messaging.md §1: one global line, a registered claim."""
     _only(settings, "whatsapp")
     hero = _hero(_html(client))
-    assert '<span class="lp-badge" data-claim="lost-enquiries">' in hero
+    assert '<h1 id="hero-title" class="lp-display" data-claim="positioning">' in hero
+    assert "The customer conversation platform for teams that" in hero
 
 
 @pytest.mark.django_db
@@ -124,6 +133,8 @@ def test_no_screenshots_and_no_coming_soon_strip(client, plans):
 def test_the_design_is_its_own_stylesheet(client, plans):
     html = _html(client)
     assert "css/landing.css" in html
+    # Not the dashboard's stylesheet: the landing build carries the tokens it needs.
+    assert "css/app.css" not in html
     assert "<style" not in html
     assert 'class="lp"' in html
 
@@ -192,12 +203,15 @@ def test_the_journey_follows_the_channels(client, settings, plans, on, steps, ab
         assert word not in journey, word
     for name, body in _figures(journey):
         assert 'aria-label="Illustration' in body, name
-    # The step map in the heading links to exactly the steps shown.
-    assert re.findall(r'href="#step-([a-z]+)"', journey) == steps
+    # Each step carries its own picture in the markup (the stacked list without JavaScript;
+    # landing.js moves them into the pinned frame on wide screens).
+    assert journey.count('<div class="lp-step-art">') == len(steps)
 
 
 def _studio(html):
-    return html.split('<section id="content-studio"', 1)[1].split("</section>", 1)[0]
+    """The Content Studio panel of the Platform section (the old #content-studio address)."""
+    panel = html.split('<div class="lp-panel" id="content-studio"', 1)[1]
+    return panel.split('<div class="lp-panel"', 1)[0]
 
 
 @pytest.mark.django_db
@@ -213,12 +227,12 @@ def _studio(html):
 def test_content_studio_backs_its_headline_and_follows_the_channels(
     client, settings, plans, on, measure, absent
 ):
-    """The measure card backs "measurable results" (post results with the WhatsApp chat
+    """The panel's last point is how a post is measured (post results with the WhatsApp chat
     link, else reach and engagement), and the composer names only channels that are on."""
     _only(settings, *on)
     studio = _studio(_html(client))
-    card = studio.split('class="lp-sfeat measure"', 1)[1].split("</li>", 1)[0]
-    assert f'data-claim="{measure}"' in card
+    points = re.findall(r'<li data-claim="([^"]+)">', studio)
+    assert points[-1] == measure
     for word in absent:
         assert word not in studio, word
     if "instagram" in on and "facebook" in on:

@@ -1,0 +1,19 @@
+{% comment %}Illustration (Platform, Automations): a workflow that starts on a new lead, waits a day
+and reminds the team to follow up (automation.workflow_engine), with the test run that sends
+nothing (automation.simulate). The reminder goes to the team, never the customer.{% endcomment %}
+<figure class="lp-art" data-art="flow" data-claim-exempt>
+  <div role="img" aria-label="Illustration: a workflow that starts when a new lead arrives, waits one day and reminds the team to follow up, with a test run that sends nothing.">
+    <div class="lp-window" aria-hidden="true">
+      <div class="lp-bar"><i></i><i></i><i></i><b>Workflow</b></div>
+      <div class="lp-flow lp-flow-lg">
+        <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg><span><strong>When a new lead arrives</strong><em>Trigger</em></span></div>
+        <span class="arrow"></span>
+        <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span><strong>Wait 1 day</strong><em>Delay</em></span></div>
+        <span class="arrow"></span>
+        <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span><strong>Remind the team to follow up</strong><em>Action</em></span></div>
+      </div>
+      <div class="lp-order-foot"><span>Test run finished · nothing was sent</span><span class="lp-chip lp-chip-teal">Ready</span></div>
+    </div>
+  </div>
+  <figcaption class="lp-art-cap">Illustration of a workflow.</figcaption>
+</figure>

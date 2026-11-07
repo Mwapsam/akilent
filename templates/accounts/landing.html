@@ -7,8 +7,10 @@
   {% seo_meta %}
   {% google_analytics %}
   <link rel="preload" href="{% static 'fonts/inter-variable.woff2' %}" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="{% static 'css/app.css' %}">
-  {% comment %}The landing page's own design (static/css/landing.css): app tokens only, lp- classes.{% endcomment %}
+  {% comment %}The page's one script: deferred, so it never holds up the first paint.{% endcomment %}
+  <script defer src="{% static 'js/landing.js' %}"></script>
+  {% comment %}The landing page's own stylesheet, built from assets/landing.css on the app's shared
+  tokens (assets/tokens.css). It does not load the dashboard's app.css.{% endcomment %}
   <link rel="stylesheet" href="{% static 'css/landing.css' %}">
   <link rel="icon" type="image/svg+xml" href="{% static 'img/brand/icon-color.svg' %}">
 </head>
@@ -33,18 +35,19 @@
       <nav class="lp-nav" aria-label="Primary">
         <a href="#channels">Channels</a>
         <a href="#how-it-works">How it works</a>
-        {% if ch.content %}<a href="#content-studio">Content Studio</a>{% endif %}
-        <a href="#features">Features</a>
+        <a href="#platform">Platform</a>
         <a href="#pricing">Pricing</a>
         <a href="{% url 'help' %}">Help</a>
       </nav>
 
+      {% comment %}One style for the header's button at every scroll position: the hero's own button
+      is the one amber action on the first screen.{% endcomment %}
       <div class="lp-actions">
         {% if user.is_authenticated %}
           <a href="/dashboard/" class="lp-btn lp-btn-sm lp-btn-nav">Open dashboard</a>
         {% else %}
           <a href="/auth/login/" class="lp-signin">Sign in</a>
-          <a href="/signup/" class="lp-btn lp-btn-sm lp-btn-nav">Start free trial</a>
+          <a href="/signup/" class="lp-btn lp-btn-sm lp-btn-nav" data-cta="start_trial" data-cta-location="nav">Start free trial</a>
         {% endif %}
       </div>
 
@@ -58,15 +61,14 @@
         <div class="inner">
           <a href="#channels" class="lp-mlink">Channels</a>
           <a href="#how-it-works" class="lp-mlink">How it works</a>
-          {% if ch.content %}<a href="#content-studio" class="lp-mlink">Content Studio</a>{% endif %}
-          <a href="#features" class="lp-mlink">Features</a>
+          <a href="#platform" class="lp-mlink">Platform</a>
           <a href="#pricing" class="lp-mlink">Pricing</a>
           <a href="{% url 'help' %}" class="lp-mlink">Help</a>
           {% if user.is_authenticated %}
             <a href="/dashboard/" class="lp-btn lp-btn-primary">Open dashboard</a>
           {% else %}
             <a href="/auth/login/" class="lp-mlink">Sign in</a>
-            <a href="/signup/" class="lp-btn lp-btn-primary">Start free trial</a>
+            <a href="/signup/" class="lp-btn lp-btn-primary" data-cta="start_trial" data-cta-location="menu">Start free trial</a>
           {% endif %}
         </div>
       </div>
@@ -77,8 +79,7 @@
     {% include "accounts/landing/_hero.html" %}
     {% include "accounts/landing/_channels.html" %}
     {% include "accounts/landing/_journey.html" %}
-    {% if ch.content %}{% include "accounts/landing/_studio.html" %}{% endif %}
-    {% include "accounts/landing/_features.html" %}
+    {% include "accounts/landing/_platform.html" %}
     {% include "accounts/landing/_trust.html" %}
     {% include "accounts/landing/_pricing.html" %}
     {% if testimonials %}{% include "accounts/landing/_proof.html" %}{% endif %}
@@ -90,63 +91,5 @@
   {% include "accounts/landing/_footer.html" %}
 
 {% endwith %}
-  <script>
-    (function(){
-      var io = 'IntersectionObserver' in window;
-      // Sections rise in once as they come into view (landing.css: html.js .lp-reveal). The
-      // hidden start state is switched on here, with the observer that reveals it, and first,
-      // so nothing below can leave a section invisible.
-      var reveals = document.querySelectorAll('.lp-reveal');
-      if(io){
-        document.documentElement.classList.add('js');
-        var rio = new IntersectionObserver(function(entries){
-          entries.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('in'); rio.unobserve(e.target); } });
-        }, { rootMargin: '0px 0px -8% 0px', threshold: .08 });
-        reveals.forEach(function(el){ rio.observe(el); });
-      }
-      var header = document.querySelector('.lp-header');
-      var menuButton = document.getElementById('menu-button');
-      if(!header || !menuButton) return;
-      // Mobile menu: a real button with aria-expanded; closes on a link choice or Escape.
-      function setMenu(open){
-        header.classList.toggle('menu-open', open);
-        menuButton.setAttribute('aria-expanded', open ? 'true' : 'false');
-      }
-      menuButton.addEventListener('click', function(){ setMenu(menuButton.getAttribute('aria-expanded') !== 'true'); });
-      // Collapse instantly on a link choice: a panel still animating shut would shift the page
-      // under the smooth scroll and land it past the section.
-      document.querySelectorAll('#mobile-nav a').forEach(function(a){
-        a.addEventListener('click', function(){
-          header.classList.add('instant'); setMenu(false);
-          void header.offsetHeight; header.classList.remove('instant');
-        });
-      });
-      document.addEventListener('keydown', function(e){
-        if(e.key === 'Escape' && header.classList.contains('menu-open')){ setMenu(false); menuButton.focus(); }
-      });
-      // Solid header once scrolled; the nav button turns amber once the hero's button is off screen.
-      function onScroll(){ header.classList.toggle('solid', window.scrollY > 8); }
-      onScroll(); window.addEventListener('scroll', onScroll, { passive: true });
-      var heroCtas = document.getElementById('hero-ctas');
-      if(heroCtas && io){
-        new IntersectionObserver(function(entries){ header.classList.toggle('cta-live', !entries[0].isIntersecting); },
-          { rootMargin: '-68px 0px 0px 0px' }).observe(heroCtas);
-      } else { header.classList.add('cta-live'); }
-      // The section in view is marked in the primary nav.
-      var links = document.querySelectorAll('nav[aria-label="Primary"] a[href^="#"]');
-      if(!io || !links.length) return;
-      var nio = new IntersectionObserver(function(entries){
-        entries.forEach(function(entry){
-          if(!entry.isIntersecting) return;
-          links.forEach(function(a){
-            var on = a.getAttribute('href') === '#' + entry.target.id;
-            a.classList.toggle('active', on);
-            if(on){ a.setAttribute('aria-current', 'true'); } else { a.removeAttribute('aria-current'); }
-          });
-        });
-      }, { rootMargin: '-45% 0px -50% 0px' });
-      links.forEach(function(a){ var s = document.querySelector(a.getAttribute('href')); if(s) nio.observe(s); });
-    })();
-  </script>
 </body>
 </html>

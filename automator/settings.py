@@ -305,6 +305,9 @@ BASE_DOMAIN = os.getenv(
 # --- SEO ---
 
 SITE_URL = os.getenv("SITE_URL", "https://akilent.com")
+# Where /demo/ ("Book a demo", "Contact sales") requests are emailed. Empty: the site's support
+# address (SiteSettings.support_email); the request is saved either way.
+SALES_NOTIFY_EMAIL = os.getenv("SALES_NOTIFY_EMAIL", "")
 
 # Origins where system (Akilent-owned) chatbots may be deployed.
 # SITE_URL is always implicitly included; add additional Akilent-controlled

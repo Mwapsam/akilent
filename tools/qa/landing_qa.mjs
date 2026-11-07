@@ -1,6 +1,8 @@
 // Landing page browser QA: screenshots at 360 to 1440 (and phone landscape), no sideways
 // scroll, the contrast and touch-target scan on the settled page, keyboard (skip link, menu +
-// Esc, FAQ), reduced motion and no-JavaScript. Logged out; other hosts blocked.
+// Esc, FAQ, platform tabs), the first paint, reveals, scroll-spy, the header button, the hero
+// loop, the pinned "How it works" scene, pricing buttons, analytics events, the OS dark setting,
+// reduced motion, no-JavaScript and console errors. Logged out; other hosts blocked.
 // Usage: node tools/qa/landing_qa.mjs <repoRoot> <outDir>
 import { spawn } from "node:child_process";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
@@ -93,6 +95,13 @@ ws.addEventListener("message", async (ev) => {
   } catch (e) { process.stderr.write("fetch handler: " + e.message + "\n"); }
 });
 
+// Console errors and uncaught exceptions anywhere in the run fail the "console" check at the end.
+const consoleErrors = [];
+ws.addEventListener("message", (ev) => {
+  const msg = JSON.parse(ev.data);
+  if (msg.method === "Runtime.exceptionThrown") consoleErrors.push(msg.params.exceptionDetails.exception?.description || msg.params.exceptionDetails.text);
+  if (msg.method === "Runtime.consoleAPICalled" && msg.params.type === "error") consoleErrors.push(msg.params.args.map((a) => a.value || a.description).join(" "));
+});
 await send("Page.enable"); await send("Runtime.enable");
 // Always the current scripts and styles: a cached copy would test old code.
 await send("Network.enable"); await send("Network.setCacheDisabled", { cacheDisabled: true });
@@ -162,20 +171,121 @@ await sleep(300);
 st = { open: await evaluate("document.querySelector('#faq details').open"), ring: await evaluate("getComputedStyle(document.activeElement).outlineStyle") };
 check("keyboard.faq-enter", st.open === true && st.ring !== "none", st);
 
-// Reduced motion: nothing hidden waiting for an animation.
-await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
+// ---- Desktop behaviour (1280 x 800) ----
 await viewport(1280, 800, false);
+// The headline is in the first paint: no reveal on it, nothing animating it, fully opaque.
+const domReady = once("Page.domContentEventFired");
+await send("Page.navigate", { url: BASE + "/" });
+await domReady;
+st = await evaluate("(() => { const h = document.querySelector('h1'); const cs = getComputedStyle(h); return { opacity: cs.opacity, anim: cs.animationName, reveal: !!h.closest('.lp-reveal'), heroReveals: document.querySelectorAll('#hero .lp-reveal').length }; })()");
+check("hero.first-paint", st.opacity === "1" && st.anim === "none" && !st.reveal && st.heroReveals === 0, st);
+await sleep(1500);
+// Jump, don't glide: the page scrolls smoothly, and a check mid-glide reads the wrong section.
+await evaluate("document.documentElement.style.scrollBehavior = 'auto'");
+
+// Reveals never leave a block faded: at each section, every block a quarter in view is opaque.
+const anchors = ["channels", "how-it-works", "platform", "trust", "pricing", "faq", "developers"];
+const faded = [];
+for (const id of anchors) {
+  await evaluate(`document.getElementById(${JSON.stringify(id)}).scrollIntoView()`);
+  await sleep(450);
+  const f = await evaluate("[...document.querySelectorAll('.lp-reveal')].filter(e => { const r = e.getBoundingClientRect(); const seen = Math.min(r.bottom, innerHeight) - Math.max(r.top, 0); return r.height && seen / Math.min(r.height, innerHeight) >= .25 && getComputedStyle(e).opacity !== '1'; }).map(e => e.className)");
+  if (f.length) faded.push({ id, f });
+}
+check("motion.no-faded-blocks", faded.length === 0, faded);
+
+// Scroll-spy names the section in view, and nothing over the sections without a nav link.
+const spy = {};
+for (const id of ["channels", "how-it-works", "platform", "pricing", "trust", "faq"]) {
+  await evaluate(`window.scrollTo(0, document.getElementById(${JSON.stringify(id)}).getBoundingClientRect().top + scrollY - 40)`);
+  await sleep(250);
+  spy[id] = await evaluate("(document.querySelector('nav[aria-label=Primary] a.active') || {}).hash || ''");
+}
+check("nav.scroll-spy", spy.channels === "#channels" && spy["how-it-works"] === "#how-it-works" && spy.platform === "#platform"
+  && spy.pricing === "#pricing" && spy.trust === "" && spy.faq === "", spy);
+
+// The header button keeps one style from the top of the page to the bottom.
+const navStyle = "(() => { const b = document.querySelector('.lp-btn-nav'); const cs = getComputedStyle(b); return cs.backgroundColor + '|' + cs.color + '|' + cs.borderColor; })()";
+await evaluate("window.scrollTo(0, 0)"); await sleep(200);
+const navTop = await evaluate(navStyle);
+const navAlong = [];
+for (const id of anchors) { await evaluate(`document.getElementById(${JSON.stringify(id)}).scrollIntoView()`); await sleep(150); navAlong.push(await evaluate(navStyle)); }
+check("nav.one-button-style", navAlong.every((v) => v === navTop), { navTop, differs: navAlong.filter((v) => v !== navTop) });
+
+// The hero loop plays while the scene is on screen and stops when it isn't.
+await evaluate("window.scrollTo(0, 0)");
+await sleep(5200);
+const playing = await evaluate("document.querySelector('.lp-scene').classList.contains('play')");
+await evaluate("window.scrollTo(0, document.body.scrollHeight)");
+await sleep(600);
+const stopped = await evaluate("(() => { const c = document.querySelector('.lp-scene').classList; return !c.contains('play') && !['s1','s2','s3','s4','s5'].some(k => c.contains(k)); })()");
+check("hero.loop-stops-off-screen", playing && stopped, { playing, stopped });
+
+// How it works: pinned on desktop, one picture at a time, the one for the step in the middle.
+const pinned = [];
+const stepIds = await evaluate("[...document.querySelectorAll('.lp-step')].map(s => s.id)");
+for (const id of stepIds) {
+  await evaluate(`(() => { const s = document.getElementById(${JSON.stringify(id)}); scrollTo(0, s.getBoundingClientRect().top + scrollY - innerHeight / 2 + s.offsetHeight / 2); })()`);
+  await sleep(700);
+  pinned.push(await evaluate(`(() => { const how = document.querySelector('.lp-how'); const shown = [...document.querySelectorAll('.lp-how-stage > .lp-step-art')].filter(a => getComputedStyle(a).opacity === '1'); const stage = document.querySelector('.lp-how-stage'); return { id: ${JSON.stringify(id)}, pinned: how.classList.contains('is-pinned'), shown: shown.length, active: (document.querySelector('.lp-step.is-active') || {}).id, stageTop: stage ? Math.round(stage.getBoundingClientRect().top) : null, inView: !!stage && stage.getBoundingClientRect().top >= 0 && stage.getBoundingClientRect().bottom <= innerHeight }; })()`));
+}
+// The frame scrolls in with the first step and out with the last; at every step it is whole on screen.
+check("how.pinned-scene", pinned.every((x) => x.pinned && x.shown === 1 && x.active === x.id && x.inView), pinned);
+const howHeight = await evaluate("Math.round(document.getElementById('how-it-works').getBoundingClientRect().height)");
+// Was 2,610px before the pinned scene; the plan aims for about 1,400.
+check("how.height", howHeight <= 1600, { howHeight });
+
+// Platform tabs: one panel open; arrow keys move between tabs; #content-studio opens its tab.
+await evaluate("document.querySelector('.lp-ptabs [role=tab]').focus()");
+await key("ArrowRight", "ArrowRight", 39);
+await sleep(100);
+st = await evaluate("({ tablist: !document.querySelector('.lp-ptabs').hidden, open: [...document.querySelectorAll('.lp-panel')].filter(p => !p.hidden).map(p => p.id), focused: document.activeElement.getAttribute('aria-controls'), selected: document.querySelector('[role=tab][aria-selected=true]').getAttribute('aria-controls') })");
+check("platform.tabs-keyboard", st.tablist && st.open.length === 1 && st.open[0] === st.focused && st.selected === st.focused, st);
+const hasStudio = await evaluate("!!document.getElementById('content-studio')");
+if (hasStudio) {
+  await go("/?from=qa#content-studio", 900);
+  await evaluate("document.documentElement.style.scrollBehavior = 'auto'");
+  st = await evaluate("({ open: [...document.querySelectorAll('.lp-panel')].filter(p => !p.hidden).map(p => p.id), top: Math.round(document.querySelector('.lp-ptabs').getBoundingClientRect().top) })");
+  check("platform.old-anchor-content-studio", st.open.length === 1 && st.open[0] === "content-studio" && st.top >= 0 && st.top < 200, st);
+}
+st = await evaluate("['channels','how-it-works','content-studio','features','pricing','faq','developers'].filter(id => !document.getElementById(id))");
+check("anchors.old-addresses", st.length === 0 || (st.length === 1 && st[0] === "content-studio" && !hasStudio), { missing: st });
+
+// Pricing buttons line up across the cards.
+st = await evaluate("[...document.querySelectorAll('.lp-plan .lp-btn')].map(b => Math.round(b.getBoundingClientRect().top - b.closest('.plans').getBoundingClientRect().top))");
+check("pricing.buttons-aligned", st.length > 0 && Math.max(...st) - Math.min(...st) <= 1, st);
+
+// Analytics: every call to action sends cta_click with its name and place (gtag stubbed; the
+// navigation itself is cancelled after the page's own handler has run).
+await evaluate("window.__ev = []; window.gtag = (...a) => window.__ev.push(a); window.addEventListener('click', e => e.preventDefault())");
+for (const sel of ["#hero [data-cta=start_trial]", "#hero [data-cta=book_demo]", ".lp-plan [data-cta=plan]", ".lp-final [data-cta=book_demo]", ".lp-header [data-cta=start_trial]"]) await clickSel(sel);
+st = await evaluate("window.__ev.map(a => [a[0], a[1], a[2].cta, a[2].location, a[2].plan || ''].join(':'))");
+check("analytics.cta-click", st.length === 5 && st.every((e) => e.startsWith("event:cta_click:")) && st.some((e) => /:plan:pricing:\w/.test(e)), st);
+
+// The OS dark setting changes nothing: the page has one palette, and it passes contrast.
+await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: "dark" }] });
 await go("/", 1200);
-st = await evaluate("({ hidden: [...document.querySelectorAll('.lp-reveal')].filter(e => getComputedStyle(e).opacity !== '1').length, anim: [...document.querySelectorAll('.lp-float, .lp-window')].filter(e => getComputedStyle(e).animationName !== 'none').length })");
-check("motion.reduced", st.hidden === 0 && st.anim === 0, st);
+await settle();
+const dark = await scan();
+check("contrast.os-dark", dark.contrast === 0, dark.ex);
+await send("Emulation.setEmulatedMedia", { features: [] });
+
+// Reduced motion: nothing hidden waiting for an animation, no loop, no pinned scene.
+await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
+await go("/", 1200);
+await sleep(4500);
+st = await evaluate("({ hidden: [...document.querySelectorAll('.lp-reveal')].filter(e => getComputedStyle(e).opacity !== '1').length, anim: [...document.querySelectorAll('.lp-float, .lp-window')].filter(e => getComputedStyle(e).animationName !== 'none').length, loop: document.querySelector('.lp-scene').classList.contains('play'), pinned: document.querySelector('.lp-how').classList.contains('is-pinned') })");
+check("motion.reduced", st.hidden === 0 && st.anim === 0 && !st.loop && !st.pinned, st);
 await send("Emulation.setEmulatedMedia", { features: [] });
 
 // No JavaScript: everything is visible (the hidden start state is only under html.js).
 await send("Emulation.setScriptExecutionDisabled", { value: true });
 await go("/", 1200);
 await send("Emulation.setScriptExecutionDisabled", { value: false });
-st = await evaluate("({ js: document.documentElement.classList.contains('js'), hidden: [...document.querySelectorAll('.lp-reveal')].filter(e => getComputedStyle(e).opacity !== '1').length })");
-check("nojs.everything-visible", !st.js && st.hidden === 0, st);
+st = await evaluate("({ js: document.documentElement.classList.contains('js'), hidden: [...document.querySelectorAll('.lp-reveal')].filter(e => getComputedStyle(e).opacity !== '1').length, tabs: getComputedStyle(document.querySelector('.lp-ptabs')).display, panels: [...document.querySelectorAll('.lp-panel')].filter(p => getComputedStyle(p).display === 'none').length, arts: document.querySelectorAll('.lp-step .lp-step-art').length === document.querySelectorAll('.lp-step').length, finalFrame: [...document.querySelectorAll('.lp-scene .k4, .lp-scene .k5')].every(e => getComputedStyle(e).opacity === '1') })");
+check("nojs.everything-visible", !st.js && st.hidden === 0 && st.tabs === "none" && st.panels === 0 && st.arts && st.finalFrame, st);
+
+check("console.no-errors", consoleErrors.length === 0, consoleErrors.slice(0, 5));
 
 writeFileSync(join(outDir, "landing_qa_results.json"), JSON.stringify({ results }, null, 1));
 console.log(JSON.stringify({ pass: results.filter((r) => r.pass).length, fail: results.filter((r) => !r.pass).map((r) => r.id) }));

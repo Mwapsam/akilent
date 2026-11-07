@@ -66,3 +66,6 @@ packages/*/.phpunit.cache/
 
 # UI quality programme screenshots: local evidence only, not committed
 docs/design/qa/
+
+# Lighthouse CI reports (lighthouserc.json)
+.lighthouseci/

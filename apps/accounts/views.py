@@ -18,6 +18,7 @@ from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.cache import add_never_cache_headers, patch_cache_control
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.views.decorators.cache import never_cache
@@ -773,6 +774,66 @@ def use_case(request, slug):
     )
 
 
+DEMO_REQUESTS_PER_HOUR = 5  # per client address
+
+
+def _demo_notify(req) -> None:
+    """Email a new demo request to sales: SALES_NOTIFY_EMAIL, else the site's support address.
+    The request is already saved, so a missing address or a failed send only logs."""
+    from apps.core.models import SiteSettings
+    from apps.email.services.send import send_system_email
+
+    to = settings.SALES_NOTIFY_EMAIL or SiteSettings.load().support_email
+    if not to:
+        logger.warning("Demo request %s saved; no SALES_NOTIFY_EMAIL to notify", req.pk)
+        return
+    channels = ", ".join(dict(req.CHANNELS).get(c, c) for c in req.channels) or "-"
+    body = (
+        f"Name: {req.name}\nWork email: {req.email}\nCompany: {req.company}\n"
+        f"Team size: {req.get_team_size_display()}\nChannels: {channels}\n\n"
+        f"{req.message or '-'}\n"
+    )
+    try:
+        send_system_email(
+            to, f"Demo request: {req.company}", text_body=body, sender_label="Sales"
+        )
+    except Exception:
+        logger.exception("Demo request %s saved; notification email failed", req.pk)
+
+
+@never_cache
+def demo(request):
+    """Book a demo / contact sales: one real form that saves the request and emails sales."""
+    from apps.accounts.forms import DemoRequestForm
+    from apps.logs.observability import _client_ip
+
+    form = DemoRequestForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        if form.is_bot():
+            return redirect(f"{reverse('demo')}?sent=1")
+        key = f"demo-requests:{_client_ip(request) or 'unknown'}"
+        count = cache.get(key, 0)
+        if count >= DEMO_REQUESTS_PER_HOUR:
+            form.add_error(
+                None, "Too many requests from here. Please try again in an hour."
+            )
+        else:
+            cache.set(key, count + 1, timeout=3600)
+            req = form.save(commit=False)
+            req.source = (request.META.get("HTTP_REFERER") or "")[:200]
+            req.save()
+            _demo_notify(req)
+            return redirect(f"{reverse('demo')}?sent=1")
+    return render(
+        request,
+        "public/demo.html",
+        {"form": form, "sent": request.GET.get("sent") == "1"},
+    )
+
+
+LANDING_EDGE_TTL = 600  # seconds Cloudflare may serve the logged-out landing page
+
+
 def landing(request):
     """Public marketing landing page."""
     from apps.accounts.forms import signup_offer
@@ -785,6 +846,8 @@ def landing(request):
     cards = [_plan_card(p, channels) for p, channels in offered]
     # The hero's "N-day free trial" line links to a plain /signup/, so it shows what that gives.
     _, trial_days = billing_api.default_signup_trial()
+    # len() counts pending messages without marking them read, so the page still shows them.
+    personal = request.user.is_authenticated or len(messages.get_messages(request)) > 0
     resp = render(
         request,
         "accounts/landing.html",
@@ -803,6 +866,14 @@ def landing(request):
         '</docs/>; rel="service-doc", '
         '</api/schema>; rel="describedby"; type="application/vnd.oai.openapi+json;version=3.0"'
     )
+    # The logged-out page is the same for everyone, so Cloudflare may keep it for ten minutes
+    # (its cache rule also skips any request carrying the sessionid or messages cookie, and
+    # deploy.yml purges "/"). A signed-in page ("Open dashboard") or one showing a message
+    # is personal and is never stored.
+    if personal:
+        add_never_cache_headers(resp)  # no-store, private
+    else:
+        patch_cache_control(resp, public=True, max_age=0, s_maxage=LANDING_EDGE_TTL)
     return resp
 
 

@@ -14,9 +14,12 @@ anyway, so this test enforces a rule the spec already states.
 import re
 from pathlib import Path
 
+import pytest
 from django.conf import settings
 
-COMPILED_CSS = Path(settings.BASE_DIR) / "static" / "css" / "app.css"
+COMPILED = [
+    Path(settings.BASE_DIR) / "static" / "css" / n for n in ("app.css", "landing.css")
+]
 TEMPLATES_DIR = Path(settings.BASE_DIR) / "templates"
 
 # oklab(<number> ... - a precomputed literal. "color-mix(in oklab, ...)" is fine:
@@ -30,11 +33,12 @@ ARBITRARY_HEX_WITH_OPACITY = re.compile(
 )
 
 
-def test_compiled_css_has_no_precomputed_oklab_literals():
-    css = COMPILED_CSS.read_text(encoding="utf-8")
+@pytest.mark.parametrize("compiled", COMPILED, ids=lambda p: p.name)
+def test_compiled_css_has_no_precomputed_oklab_literals(compiled):
+    css = compiled.read_text(encoding="utf-8")
     hits = PRECOMPUTED_OKLAB.findall(css)
     assert not hits, (
-        f"{len(hits)} precomputed oklab() literal(s) in static/css/app.css. "
+        f"{len(hits)} precomputed oklab() literal(s) in static/css/{compiled.name}. "
         "These differ between the Windows and Linux Tailwind builds and will "
         "break the CI build guard. Replace the arbitrary hex colour that "
         "produced them with the equivalent theme token."

@@ -7,7 +7,7 @@ class StaticPagesSitemap(Sitemap):
     priority = 0.8
 
     def items(self):
-        return ["landing", "help", "privacy", "terms", "docs"]
+        return ["landing", "demo", "help", "privacy", "terms", "docs"]
 
     def location(self, item):
         if item == "landing":

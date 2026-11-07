@@ -1,43 +1,50 @@
 {% comment %}
-  Hero. Primary angle: lost enquiries (docs/marketing/messaging.md §1). The sentence under the
-  headline names only channels offered to new customers (ch.* is "live"). The picture is an
-  illustration of real behaviour (art/_inbox.html), labelled as one; without WhatsApp it shows
-  the customer-record version (art/_customer.html). Badge, lead and art only name channels that are on.
+  Hero. The headline is the positioning line (docs/marketing/messaging.md §1); the sentence under
+  it names only channels offered to new customers (ch.* is "live"). It renders in the first paint:
+  no reveal class here, and the scene below draws its final frame before any script runs.
+  The scene (art/_hero_scene.html) is an illustration of real behaviour, labelled as one; with no
+  chat channel on it is the customer-record version (art/_customer.html).
 {% endcomment %}
+{% with chat=ch.whatsapp|default:ch.instagram|default:ch.facebook %}
 <section id="hero" class="lp-hero lp-navy" aria-labelledby="hero-title">
   <div class="lp-aurora" aria-hidden="true"><span></span></div>
   <div class="lp-grid-bg" aria-hidden="true"></div>
-  <div class="lp-wrap lp-hero-grid">
-    <div class="lp-hero-copy">
-      {% if ch.whatsapp or ch.instagram or ch.facebook %}
-      <span class="lp-badge" data-claim="lost-enquiries"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg></i>For businesses that sell through chats</span>
-      {% endif %}
-      <h1 id="hero-title" class="lp-display" data-claim="lost-enquiries">Stop losing customers <span class="lp-grad">in your inbox.</span></h1>
-      {% if ch.whatsapp == "live" %}
-        <p class="lp-lead lp-mid" data-claim="inbox{% if ch.instagram == 'live' %} instagram-dms{% endif %} follow-ups orders{% if ch.content == 'live' %} content-studio{% endif %}">{% if ch.instagram == "live" %}WhatsApp and Instagram messages{% else %}Your WhatsApp conversations{% endif %} in one shared inbox, follow-up reminders that don't depend on memory, and orders recorded when customers are ready to buy.{% if ch.content == "live" %} Plan and publish your posts from the same place.{% endif %}</p>
-      {% elif ch.instagram == "live" or ch.facebook == "live" %}
-        <p class="lp-lead lp-mid" data-claim="{% if ch.instagram == 'live' %}instagram-dms{% endif %}{% if ch.facebook == 'live' %} facebook-inbox{% endif %} follow-ups orders{% if ch.content == 'live' %} content-studio{% endif %}">{% if ch.instagram == "live" and ch.facebook == "live" %}Instagram DMs and Facebook Page messages{% elif ch.instagram == "live" %}Your Instagram DMs{% else %}Your Facebook Page messages{% endif %} in one shared inbox, follow-up reminders that don't depend on memory, and orders recorded when customers are ready to buy.{% if ch.content == "live" %} Plan and publish your posts from the same place.{% endif %}</p>
-      {% elif ch.email == "live" %}
-        <p class="lp-lead lp-mid" data-claim="email-sending follow-ups customers orders">Email your customers from your own address, and keep follow-up reminders, customer records and orders in one place.</p>
-      {% else %}
-        <p class="lp-lead lp-mid" data-claim="follow-ups customers orders">Follow-up reminders, customer records and orders, kept together in one place.</p>
-      {% endif %}
-      <div class="lp-ctas" id="hero-ctas">
-        <a href="/signup/" class="lp-btn lp-btn-primary">Start free trial<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
-        <a href="#how-it-works" class="lp-btn lp-btn-ghost">See how it works</a>
-      </div>
-      {% if trial_days %}
-      <p class="lp-note" data-claim="trial">
-        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>{{ trial_days }}-day free trial</span>
-        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>No card required</span>
-      </p>
-      {% endif %}
+  <div class="lp-wrap lp-hero-copy">
+    <h1 id="hero-title" class="lp-display" data-claim="positioning">The customer conversation platform for teams that <span class="lp-grad">sell through chat</span></h1>
+    {% if chat %}
+      <p class="lp-lead lp-mid" data-claim="{% if ch.whatsapp == 'live' %}inbox{% endif %}{% if ch.instagram == 'live' %} instagram-dms{% endif %}{% if ch.facebook == 'live' %} facebook-inbox{% endif %} interested follow-ups orders">Answer {% if ch.whatsapp == "live" %}WhatsApp{% if ch.instagram == "live" and ch.facebook == "live" %}, Instagram and Facebook Page{% elif ch.instagram == "live" %} and Instagram{% elif ch.facebook == "live" %} and Facebook Page{% endif %}{% elif ch.instagram == "live" %}Instagram{% if ch.facebook == "live" %} and Facebook Page{% endif %}{% else %}Facebook Page{% endif %} messages from one shared inbox. Track who's interested, set follow-ups and record every order, so no sale slips away.</p>
+    {% elif ch.email == "live" %}
+      <p class="lp-lead lp-mid" data-claim="email-sending follow-ups customers orders">Email your customers from your own address, and keep follow-up reminders, customer records and orders in one place.</p>
+    {% else %}
+      <p class="lp-lead lp-mid" data-claim="follow-ups customers orders">Follow-up reminders, customer records and orders, kept together in one place.</p>
+    {% endif %}
+    <div class="lp-ctas" id="hero-ctas">
+      <a href="/signup/" class="lp-btn lp-btn-primary" data-cta="start_trial" data-cta-location="hero">Start free trial<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+      <a href="{% url 'demo' %}" class="lp-btn lp-btn-ghost" data-cta="book_demo" data-cta-location="hero">Book a demo</a>
     </div>
-
-    {% if ch.whatsapp == "live" %}
-      {% include "accounts/landing/art/_inbox.html" %}
+    {% if trial_days %}
+    <p class="lp-note" data-claim="trial">
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>{{ trial_days }}-day free trial</span>
+      <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>No card required</span>
+    </p>
+    {% endif %}
+    {% comment %}Proof strip: the channels that are on. Customer logos join it once there are real
+    ones with permission; nothing stands in for them until then.{% endcomment %}
+    {% if chat %}
+    <p class="lp-proof" data-claim="{% if ch.whatsapp == 'live' %}inbox{% endif %}{% if ch.instagram == 'live' %} instagram-dms{% endif %}{% if ch.facebook == 'live' %} facebook-inbox{% endif %}">
+      <span class="lp-proof-label">Works with</span>
+      {% if ch.whatsapp == "live" %}<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>WhatsApp</span>{% endif %}
+      {% if ch.instagram == "live" %}<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/></svg>Instagram</span>{% endif %}
+      {% if ch.facebook == "live" %}<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>Facebook Pages</span>{% endif %}
+    </p>
+    {% endif %}
+  </div>
+  <div class="lp-wrap lp-hero-stage">
+    {% if chat %}
+      {% include "accounts/landing/art/_hero_scene.html" %}
     {% else %}
       {% include "accounts/landing/art/_customer.html" %}
     {% endif %}
   </div>
 </section>
+{% endwith %}

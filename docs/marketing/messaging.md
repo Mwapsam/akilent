@@ -13,7 +13,9 @@ We sell outcomes, not a feature list. A business buys Akilent for one of two rea
 | **Primary: lost enquiries** | "Stop losing customers in your inbox." | Businesses whose WhatsApp/Instagram messages get missed, answered late or never followed up |
 | **Secondary: social media that sells** | "Turn your social media activity into measurable results." | Businesses that post on Instagram/Facebook but can't tell which posts bring customers |
 
-The landing headline stays channel-independent ("Turn customer conversations into opportunities you don't miss"). The sentences under it name only the channels that are on.
+**Positioning line (2026-11-07, global):** "The customer conversation platform for teams that sell through chat." It is the landing headline and, as later phases land, the meta description, share image and footer tagline. It names no country, currency or payment method: the story reads the same in London, Lagos, São Paulo or Jakarta. Illustrations use varied names and $ amounts, and mobile money appears only as one payment option among several.
+
+The landing headline stays channel-independent. The sentences under it name only the channels that are on.
 
 ## 2. Four pillars
 
@@ -149,6 +151,7 @@ Evidence is `path::text`: the file must exist and contain the text.
 
 | id | Type | Claim (as the page states it) | Evidence |
 |---|---|---|---|
+| positioning | Outcome | The customer conversation platform for teams that sell through chat | (positioning; supported by inbox, interested, follow-ups and orders) |
 | outcome | Outcome | Turn customer conversations into opportunities you don't miss | (aspirational; supported by the capabilities below) |
 | promise | Outcome | Turn customer conversations and social media activity into sales, from one place | (aspirational; supported by the journey claims below) |
 | lost-enquiries | Outcome | Stop losing customers in your inbox | (aspirational; supported by inbox, follow-ups and missed) |

@@ -11,8 +11,10 @@ from pathlib import Path
 import pytest
 from django.conf import settings
 
+from apps.core.tests.css_source import app_css_source
+
 ROOT = Path(settings.BASE_DIR)
-CSS = (ROOT / "assets" / "app.css").read_text(encoding="utf-8")
+CSS = app_css_source()
 TEMPLATES = ROOT / "templates"
 
 

@@ -19,7 +19,7 @@ from pathlib import Path
 
 from django.conf import settings
 
-CSS = Path(settings.BASE_DIR) / "assets" / "app.css"
+from apps.core.tests.css_source import app_css_source
 
 # A background fed from a low (light-only) ramp step, inside a component rule.
 LIGHT_RAMP_BG = re.compile(
@@ -28,7 +28,7 @@ LIGHT_RAMP_BG = re.compile(
 
 
 def _component_layer():
-    source = CSS.read_text(encoding="utf-8")
+    source = app_css_source()
     return source[source.index("@layer components") :]
 
 
@@ -47,7 +47,7 @@ def test_no_component_fills_from_a_light_only_ramp_step():
 
 
 def test_tone_tokens_are_defined_and_overridden_for_dark():
-    source = CSS.read_text(encoding="utf-8")
+    source = app_css_source()
     families = ["brand", "amber", "teal", "coral", "neutral", "info"]
     for family in families:
         assert f"--tone-{family}-bg:" in source, f"--tone-{family}-bg is not defined"

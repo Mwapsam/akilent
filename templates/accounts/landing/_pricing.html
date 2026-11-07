@@ -38,7 +38,7 @@
           </ul>
           {% endif %}
           <div class="lp-grow"></div>
-          <a href="/signup/?plan={{ plan.slug }}" class="lp-btn {% if plan.slug == 'professional' %}lp-btn-primary{% else %}lp-btn-outline{% endif %}">
+          <a href="/signup/?plan={{ plan.slug }}" data-cta="plan" data-cta-plan="{{ plan.slug }}" data-cta-location="pricing" class="lp-btn {% if plan.slug == 'professional' %}lp-btn-primary{% else %}lp-btn-outline{% endif %}">
             {% if plan.price_monthly > 0 %}Choose {{ plan.name }}{% elif plan.trial_days %}Start free trial{% else %}Get started free{% endif %}
           </a>
           <p class="lp-plan-foot" data-claim="{% if plan.price_monthly > 0 %}cancel{% else %}trial{% endif %}">{% if plan.price_monthly > 0 %}Billed monthly · Cancel anytime{% else %}No card required{% endif %}</p>

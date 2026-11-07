@@ -1,0 +1,92 @@
+{% extends "public/_base.html" %}
+{% comment %}
+  Book a demo / contact sales (accounts.views.demo). One real form: it saves the request and emails
+  sales. No calendar. Works without JavaScript and is never boosted, so an error re-render keeps
+  what was typed. Uses the app's compiled .card / .input / .btn; layout lives in the scoped styles.
+{% endcomment %}
+{% block title %}Book a demo · {{ site.app_name|default:"Akilent" }}{% endblock %}
+{% block extra_head %}
+<style>
+  .demo-wrap{ max-width:44rem; padding-block:3.5rem 2rem; }
+  .demo-head h1{ margin:0; font-size:clamp(1.75rem,4vw,2.25rem); line-height:1.15; font-weight:700; letter-spacing:-.02em; color:var(--color-ink); }
+  .demo-head p{ margin:.75rem 0 0; color:var(--color-ink-muted); line-height:1.6; }
+  .demo-form{ display:grid; gap:1.25rem; margin-top:2rem; }
+  .demo-row{ display:grid; gap:1.25rem; }
+  @media (min-width:640px){ .demo-row{ grid-template-columns:1fr 1fr; } }
+  .demo-form fieldset{ border:0; margin:0; padding:0; }
+  .demo-form legend{ padding:0; }
+  .demo-checks{ display:flex; flex-wrap:wrap; gap:.5rem 1.25rem; }
+  .demo-checks label{ display:inline-flex; align-items:center; gap:.5rem; min-height:44px; color:var(--color-ink); }
+  .demo-error{ margin:.375rem 0 0; font-size:.875rem; color:var(--tone-coral-fg); }
+  .demo-alert{ padding:.75rem 1rem; border-radius:var(--radius-control); border:1px solid var(--color-border); background:var(--tone-coral-bg); color:var(--tone-coral-fg); }
+  .demo-hp{ position:absolute; left:-10000px; width:1px; height:1px; overflow:hidden; }
+  .demo-actions{ display:flex; flex-wrap:wrap; align-items:center; gap:1rem; }
+  .demo-actions p{ margin:0; font-size:.875rem; color:var(--color-ink-muted); }
+</style>
+{% endblock %}
+{% block content %}
+<section class="pub-wrap demo-wrap" aria-labelledby="demo-title">
+  {% if sent %}
+    <div class="card card-pad demo-head" role="status">
+      <h1 id="demo-title">Thanks, we've got your request</h1>
+      <p>We'll email you to arrange a time. Want to look around first? The free trial needs no card.</p>
+      <p><a href="/signup/" class="btn btn-primary">Start free trial</a></p>
+    </div>
+  {% else %}
+    <div class="demo-head">
+      <h1 id="demo-title">Book a demo</h1>
+      <p>Tell us a little about your team and we'll email you to set up a call. Questions about plans, invoices or higher limits go here too.</p>
+    </div>
+    <form method="post" action="{% url 'demo' %}" class="demo-form" hx-boost="false" novalidate>
+      {% csrf_token %}
+      {% if form.non_field_errors %}<div class="demo-alert" role="alert">{% for e in form.non_field_errors %}{{ e }}{% endfor %}</div>{% endif %}
+      <div class="demo-row">
+        <div>
+          <label class="label" for="{{ form.name.id_for_label }}">Name</label>
+          <input class="input" type="text" name="name" id="{{ form.name.id_for_label }}" value="{{ form.name.value|default:'' }}" maxlength="120" required autocomplete="name"{% if form.name.errors %} aria-invalid="true" aria-describedby="err-name"{% endif %}>
+          {% if form.name.errors %}<p class="demo-error" id="err-name">{{ form.name.errors.0 }}</p>{% endif %}
+        </div>
+        <div>
+          <label class="label" for="{{ form.email.id_for_label }}">Work email</label>
+          <input class="input" type="email" name="email" id="{{ form.email.id_for_label }}" value="{{ form.email.value|default:'' }}" required autocomplete="email"{% if form.email.errors %} aria-invalid="true" aria-describedby="err-email"{% endif %}>
+          {% if form.email.errors %}<p class="demo-error" id="err-email">{{ form.email.errors.0 }}</p>{% endif %}
+        </div>
+      </div>
+      <div class="demo-row">
+        <div>
+          <label class="label" for="{{ form.company.id_for_label }}">Company</label>
+          <input class="input" type="text" name="company" id="{{ form.company.id_for_label }}" value="{{ form.company.value|default:'' }}" maxlength="160" required autocomplete="organization"{% if form.company.errors %} aria-invalid="true" aria-describedby="err-company"{% endif %}>
+          {% if form.company.errors %}<p class="demo-error" id="err-company">{{ form.company.errors.0 }}</p>{% endif %}
+        </div>
+        <div>
+          <label class="label" for="{{ form.team_size.id_for_label }}">Team size</label>
+          <select class="select" name="team_size" id="{{ form.team_size.id_for_label }}" required{% if form.team_size.errors %} aria-invalid="true" aria-describedby="err-team"{% endif %}>
+            {% for value, label in form.fields.team_size.choices %}<option value="{{ value }}"{% if form.team_size.value == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select>
+          {% if form.team_size.errors %}<p class="demo-error" id="err-team">{{ form.team_size.errors.0 }}</p>{% endif %}
+        </div>
+      </div>
+      <fieldset>
+        <legend class="label">Channels you use with customers</legend>
+        <div class="demo-checks">
+          {% for value, label in form.fields.channels.choices %}
+            <label><input type="checkbox" name="channels" value="{{ value }}"{% if value in form.channels.value %} checked{% endif %}>{{ label }}</label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <div>
+        <label class="label" for="{{ form.message.id_for_label }}">What would you like to see? <span>(optional)</span></label>
+        <textarea class="textarea" name="message" id="{{ form.message.id_for_label }}" rows="4">{{ form.message.value|default:'' }}</textarea>
+      </div>
+      <div class="demo-hp" aria-hidden="true">
+        <label for="id_website">Leave this empty</label>
+        <input type="text" name="website" id="id_website" tabindex="-1" autocomplete="off">
+      </div>
+      <div class="demo-actions">
+        <button type="submit" class="btn btn-primary">Request a demo</button>
+        <p>We only use these details to reply to you.</p>
+      </div>
+    </form>
+  {% endif %}
+</section>
+{% endblock %}

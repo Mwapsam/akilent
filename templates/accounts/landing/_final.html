@@ -11,8 +11,8 @@
         {% endif %}
         <p class="lp-lead lp-mid" data-claim="trial">Create your account today{% if trial_days %} and try it free for {{ trial_days }} days, no card required{% endif %}.</p>
         <div class="lp-ctas">
-          <a href="/signup/" class="lp-btn lp-btn-primary">Start free trial<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
-          <a href="#pricing" class="lp-btn lp-btn-ghost">See pricing</a>
+          <a href="/signup/" class="lp-btn lp-btn-primary" data-cta="start_trial" data-cta-location="final">Start free trial<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          <a href="{% url 'demo' %}" class="lp-btn lp-btn-ghost" data-cta="book_demo" data-cta-location="final">Book a demo</a>
         </div>
       </div>
     </div>

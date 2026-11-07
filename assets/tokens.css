@@ -1,0 +1,375 @@
+/* ---------------------------------------------------------------------------
+   Shared design tokens: the one source for the app (assets/app.css) and the
+   public landing page (assets/landing.css). Both entries import this file, so
+   the landing page uses the app's colours, type, radius and shadows without
+   loading the dashboard's stylesheet.
+--------------------------------------------------------------------------- */
+
+/* ---------------------------------------------------------------------------
+   Design tokens — brand color system (see docs/brand-colors.md)
+   Overrides Tailwind's gray/green/red/amber/blue ramps with brand-tinted
+   equivalents so every existing utility migrates from this one file.
+   Everything below is consumable as utilities (bg-brand-600, shadow-card …)
+   and as CSS variables.
+--------------------------------------------------------------------------- */
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  /* Brand ramp (primary) — Night Ops Navy. Anchor: brand-950 #0E1526. */
+  --color-brand-50: #F0F4FA;
+  --color-brand-100: #DEE7F2;
+  --color-brand-200: #C3D2E6;
+  --color-brand-300: #9BB2D1;
+  --color-brand-400: #6E8AB4;
+  --color-brand-500: #4C6A99;
+  --color-brand-600: #35517D;
+  --color-brand-700: #263E63;
+  --color-brand-800: #1A2C4A;
+  --color-brand-900: #131F36;
+  --color-brand-950: #0E1526;
+
+  /* Neutral scale — overrides Tailwind gray-* with navy-tinted neutrals.
+     gray-600 is the AA floor for meaningful text on white. */
+  --color-gray-50: #FAFBFC;
+  --color-gray-100: #F3F5F7;
+  --color-gray-200: #E8EDF3;
+  --color-gray-300: #DCE1E8;
+  --color-gray-400: #A8B2C4;
+  --color-gray-500: #838EA3;
+  --color-gray-600: #657089;
+  --color-gray-700: #46516B;
+  --color-gray-800: #26314A;
+  --color-gray-900: #161F35;
+  --color-gray-950: #0E1526;
+
+  /* Transmit Teal — WhatsApp channel + success. Anchor: teal-500 #1FAF9C.
+     teal-500 fails AA under white text; use teal-700+ behind white. */
+  --color-teal-50: #EDFAF7;
+  --color-teal-100: #D3F3EC;
+  --color-teal-200: #A9E7DB;
+  --color-teal-300: #74D4C4;
+  --color-teal-400: #43BFAC;
+  --color-teal-500: #1FAF9C;
+  --color-teal-600: #178F80;
+  --color-teal-700: #12766A;
+  --color-teal-800: #115E55;
+  --color-teal-900: #114D47;
+  --color-teal-950: #062E2A;
+
+  /* green-* mirrors teal so existing success greens migrate. */
+  --color-green-50: #EDFAF7;
+  --color-green-100: #D3F3EC;
+  --color-green-200: #A9E7DB;
+  --color-green-300: #74D4C4;
+  --color-green-400: #43BFAC;
+  --color-green-500: #1FAF9C;
+  --color-green-600: #178F80;
+  --color-green-700: #12766A;
+  --color-green-800: #115E55;
+  --color-green-900: #114D47;
+  --color-green-950: #062E2A;
+
+  /* Signal Amber — email channel + primary CTAs. Anchor: amber-400 #FFB020.
+     Never pair amber fills with white text; use ink. */
+  --color-amber-50: #FFF8EB;
+  --color-amber-100: #FEEEC7;
+  --color-amber-200: #FDDE8A;
+  --color-amber-300: #FFCA4D;
+  --color-amber-400: #FFB020;
+  --color-amber-500: #F5A312;
+  --color-amber-600: #E0930A;
+  --color-amber-700: #B26F06;
+  --color-amber-800: #8C5508;
+  --color-amber-900: #74450C;
+  --color-amber-950: #452605;
+
+  /* Alert Coral — errors/destructive only, never decorative.
+     Anchor: coral-500 #E8604A; white text needs coral-600+. */
+  --color-coral-50: #FDF1EF;
+  --color-coral-100: #FBDED9;
+  --color-coral-200: #F7BFB5;
+  --color-coral-300: #F1957F;
+  --color-coral-400: #EF8069;
+  --color-coral-500: #E8604A;
+  --color-coral-600: #CC4530;
+  --color-coral-700: #A93A28;
+  --color-coral-800: #8B3324;
+  --color-coral-900: #732E22;
+  --color-coral-950: #3F150D;
+
+  /* red-* mirrors coral so existing error reds migrate. */
+  --color-red-50: #FDF1EF;
+  --color-red-100: #FBDED9;
+  --color-red-200: #F7BFB5;
+  --color-red-300: #F1957F;
+  --color-red-400: #EF8069;
+  --color-red-500: #E8604A;
+  --color-red-600: #CC4530;
+  --color-red-700: #A93A28;
+  --color-red-800: #8B3324;
+  --color-red-900: #732E22;
+  --color-red-950: #3F150D;
+
+  /* Info blue — professional, non-brand (informational states only). */
+  --color-blue-50: #EFF4FB;
+  --color-blue-100: #DEE9F7;
+  --color-blue-200: #BFD3EF;
+  --color-blue-300: #94B4E3;
+  --color-blue-400: #5E8BD9;
+  --color-blue-500: #3D6ECC;
+  --color-blue-600: #2F58AB;
+  --color-blue-700: #274687;
+  --color-blue-800: #223A6B;
+  --color-blue-900: #1D2F52;
+  --color-blue-950: #131E36;
+
+  /* Semantic aliases. */
+  --color-ink: #12182B;
+  --color-whatsapp: #1FAF9C;
+  --color-email: #FFB020;
+
+  /* Semantic surface/border/text tokens (light theme). Canvas = Paper.
+     These are the ONLY tokens the dark theme overrides (see :root blocks
+     below @theme) — the color ramps above stay identical in both themes.
+     Screens must consume these (bg-surface, border-border, text-ink …) rather
+     than literal bg-white / text-gray-900 so dark mode comes for free. */
+  --color-surface: #ffffff;
+  --color-surface-muted: #FAFBFC;
+  --color-canvas: #F3F5F7;
+  --color-border: #E8EDF3;
+  --color-border-strong: #DCE1E8;
+  /* Hairlines inside a surface (list rows, dividers). Follows --color-border, so the
+     dark theme needs no override. */
+  --color-surface-subtle: var(--color-border);
+
+  /* Chart tokens.
+     Series colours are a *categorical* palette: they say which series, not how
+     much, so they are assigned in fixed order and never cycled. A 3rd series
+     folds into "Other" rather than inventing a hue — a generated one is
+     indistinguishable from an existing one to a colourblind reader.
+
+     Both pairs below were validated, not chosen by eye: OKLCH lightness band,
+     chroma floor, CVD separation (deutan/protan/tritan), normal-vision
+     separation, and >= 3:1 against their own surface. Dark is *selected*, not a
+     flip — its steps are picked against #161F35, which is why series-1 lifts a
+     step while series-2 stays put.
+
+     Status colours are reserved for state and are never reused as "series 3";
+     they always ship with a label, never colour alone. */
+  --chart-series-1: var(--color-blue-600);
+  --chart-series-2: var(--color-teal-600);
+  --chart-good: var(--color-teal-600);
+  --chart-critical: var(--color-coral-600);
+  /* Recessive by design: the data is the subject, the scaffolding is not. */
+  --chart-grid: var(--color-border);
+  --chart-axis: var(--color-ink-subtle);
+  /* The de-emphasis grey for the emphasis form (one series in colour, the
+     rest pushed back) and for an empty track. */
+  --chart-muted: var(--color-border-strong);
+
+  /* Semantic text + interaction tokens (theme-aware — see dark overrides).
+     ink       = primary body / headings
+     ink-muted = secondary text, form labels, nav labels  (AA on both themes)
+     ink-subtle= tertiary / placeholder / decorative
+     hover     = neutral hover fill for ghost buttons, nav links, menu rows */
+  --color-ink-muted: #46516B;   /* gray-700 */
+  --color-ink-subtle: #657089;  /* gray-600 — AA floor on white */
+
+  /* Link / accent text on a plain surface. The brand ramp does NOT flip with
+     the theme, so text-accent measured 2.05:1 on the dark surface - and
+     its hover step was worse at 1.52:1. These lift on dark instead. */
+  --color-accent: var(--color-brand-600);
+  --color-accent-strong: var(--color-brand-700);
+  --color-hover: #F3F5F7;       /* gray-100 */
+
+  /* Elevation (navy-tinted). */
+  --shadow-card: 0 1px 2px 0 rgb(14 21 38 / 0.04), 0 1px 3px 0 rgb(14 21 38 / 0.06);
+  --shadow-pop: 0 4px 6px -2px rgb(14 21 38 / 0.05), 0 12px 16px -4px rgb(14 21 38 / 0.1);
+  --shadow-modal: 0 8px 8px -4px rgb(14 21 38 / 0.04), 0 20px 24px -4px rgb(14 21 38 / 0.12);
+
+  /* Tinted surfaces (tiles, chips, callouts). Mixed against the surface token
+     so they follow the theme instead of staying light. */
+  --tone-brand-bg: color-mix(in srgb, var(--color-brand-500) 8%, var(--color-surface));
+  --tone-brand-border: color-mix(in srgb, var(--color-brand-500) 22%, var(--color-surface));
+  --tone-brand-fg: var(--color-brand-700);
+  --tone-brand-strong: var(--color-brand-800);
+
+  --tone-amber-bg: color-mix(in srgb, var(--color-amber-400) 14%, var(--color-surface));
+  --tone-amber-border: color-mix(in srgb, var(--color-amber-400) 34%, var(--color-surface));
+  --tone-amber-fg: var(--color-amber-800);
+  --tone-amber-strong: var(--color-amber-900);
+
+  --tone-teal-bg: color-mix(in srgb, var(--color-teal-500) 10%, var(--color-surface));
+  --tone-teal-border: color-mix(in srgb, var(--color-teal-500) 26%, var(--color-surface));
+  --tone-teal-fg: var(--color-teal-700);
+  --tone-teal-strong: var(--color-teal-800);
+
+  --tone-neutral-bg: color-mix(in srgb, var(--color-gray-500) 10%, var(--color-surface));
+  --tone-neutral-border: color-mix(in srgb, var(--color-gray-500) 24%, var(--color-surface));
+  --tone-neutral-fg: var(--color-ink-subtle);
+
+  --tone-info-bg: color-mix(in srgb, var(--color-blue-500) 10%, var(--color-surface));
+  --tone-info-border: color-mix(in srgb, var(--color-blue-500) 26%, var(--color-surface));
+  --tone-info-fg: var(--color-blue-700);
+
+  --tone-coral-bg: color-mix(in srgb, var(--color-coral-500) 10%, var(--color-surface));
+  --tone-coral-border: color-mix(in srgb, var(--color-coral-500) 26%, var(--color-surface));
+  /* coral-700, not 600: 600 measured 4.31:1 on the canvas, where field errors
+     and failure lines sit outside a card. */
+  --tone-coral-fg: var(--color-coral-700);
+
+  /* The automation canvas tells node types apart by hue, and webhook's is
+     the one accent outside the brand palette. Declared here so it follows
+     the theme like every other tone rather than staying a light chip. */
+  --tone-purple-bg: color-mix(in srgb, var(--color-purple-500) 10%, var(--color-surface));
+  --tone-purple-border: color-mix(in srgb, var(--color-purple-500) 26%, var(--color-surface));
+  --tone-purple-fg: var(--color-purple-700);
+
+  /* Z-index layers.
+
+     Dropdown sits ABOVE sticky, not below it. The scale started out copied
+     from Bootstrap, where dropdown (1000) is under sticky (1020) — which only
+     works there because a dropdown is assumed to live inside the sticky bar
+     and ride its stacking context. Ours do not: help tips, {% dropdown %}
+     menus and the conversation composer's saved-reply popover all open from
+     page content, in the root stacking context. At 1000 they opened *behind*
+     the sticky topbar and behind the "Finish setup" widget — the composer
+     popover opens upward into the bottom-right corner, which is exactly where
+     that widget is pinned. 1030 keeps them clear of both and still below a
+     drawer (1040), which should cover a dropdown. */
+  --z-dropdown: 1030;
+  --z-sticky: 1020;
+  --z-drawer: 1040;
+  --z-modal: 1050;
+  --z-toast: 1080;
+
+  /* Banners pinned to the viewport edge (cookie notice). Below the toast so a
+     toast raised while the notice is open still reads on top. */
+  --z-banner: 1060;
+
+  /* Motion. Durations follow the spec: colour/opacity fast, layout base. */
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 300ms;
+
+  /* Radii. Controls are xl, small controls lg, surfaces 2xl (Tailwind's
+     scale); named here so components and docs agree on which is which. */
+  --radius-control: 0.75rem;
+  --radius-control-sm: 0.5rem;
+  --radius-surface: 1rem;
+
+  /* Text on an amber fill. Fixed in both themes: amber stays amber in the dark
+     theme, so --color-ink (which flips to near-white) measured 1.77:1 on the
+     primary button there. #12182B on amber-400 is 9.6:1. */
+  --color-on-amber: var(--color-ink-fixed);
+  /* Ink that never flips with the theme: fixed-palette surfaces (the marketing landing
+     page, text on amber) use it where --color-ink would turn near-white in dark mode. */
+  --color-ink-fixed: #12182B;
+  /* Code blocks are dark in both themes (docs, API samples): fixed, never flipped. */
+  --code-bg: #0B111F;
+  --code-fg: #E7ECF5;
+  --code-line: #1C2640;
+
+  /* Keyboard focus. 2px outline, 3:1 against what it sits on (WCAG 1.4.11).
+     brand-600 is 8:1 on white but 2.3:1 on the dark canvas, so the dark
+     theme lifts it (see the dark blocks). */
+  --color-focus-ring: var(--color-brand-600);
+
+  --shadow-tooltip: 0 4px 6px -2px rgb(14 21 38 / 0.08), 0 8px 12px -4px rgb(14 21 38 / 0.12);
+}
+
+/* Self-hosted variable font — swap to avoid invisible text / CLS. */
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/static/fonts/inter-variable.woff2") format("woff2");
+}
+
+/* ---------------------------------------------------------------------------
+   Dark theme — overrides ONLY the semantic surface/border/text/shadow tokens.
+   Values from docs/brand-colors.md §6 (navy ink scale — never #000).
+   Resolution order:
+     - OS "dark" preference applies unless the user explicitly picked "light"
+     - an explicit [data-theme="dark"] always wins (set by Alpine.store('theme'))
+   base.html applies data-theme before first paint to avoid a flash.
+--------------------------------------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-surface: #161F35;        /* ink-2 — raised panels / cards */
+    --color-surface-muted: #1C2640;  /* ink-3 — wells, table headers  */
+    --color-canvas: #0E1526;         /* Night Ops Navy page ground     */
+    --color-border: #26314A;         /* hairline                       */
+    --color-border-strong: #46516B;
+    --chart-series-1: var(--color-blue-500);
+    --chart-series-2: var(--color-teal-600);
+    --chart-good: var(--color-teal-500);
+    --chart-critical: var(--color-coral-400);
+    --chart-grid: var(--color-border);
+    --chart-axis: var(--color-ink-subtle);
+    --chart-muted: var(--color-border-strong);
+    --color-ink: #FAFBFC;
+    --color-ink-muted: #A8B2C4;      /* gray-400 — secondary text      */
+    --color-ink-subtle: #838EA3;     /* gray-500 — tertiary            */
+    --color-hover: #1C2640;          /* ink-3 — neutral hover fill     */
+    --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.24), 0 1px 3px 0 rgb(0 0 0 / 0.32);
+    --shadow-pop: 0 4px 6px -2px rgb(0 0 0 / 0.3), 0 12px 16px -4px rgb(0 0 0 / 0.44);
+    --shadow-modal: 0 8px 8px -4px rgb(0 0 0 / 0.3), 0 20px 24px -4px rgb(0 0 0 / 0.5);
+
+    /* On dark the tint stays (it is mixed against the dark surface), but the
+       foreground has to lift off it. */
+    --tone-brand-fg: var(--color-brand-200);
+    --tone-brand-strong: #FFFFFF;
+    --tone-amber-fg: var(--color-amber-200);
+    --tone-amber-strong: var(--color-amber-100);
+    --tone-teal-fg: var(--color-teal-200);
+    --tone-teal-strong: var(--color-teal-100);
+    --tone-coral-fg: var(--color-coral-300);
+    --tone-neutral-fg: var(--color-ink-muted);
+    --tone-info-fg: var(--color-blue-200);
+    --tone-purple-fg: var(--color-purple-200);
+    --color-accent: var(--color-brand-200);
+    --color-accent-strong: var(--color-brand-100);
+    --color-focus-ring: var(--color-brand-400);   /* 5.2:1 on the canvas */
+  }
+}
+:root[data-theme="dark"] {
+  --color-surface: #161F35;
+  --color-surface-muted: #1C2640;
+  --color-canvas: #0E1526;
+  --color-border: #26314A;
+  --color-border-strong: #46516B;
+  --chart-series-1: var(--color-blue-500);
+  --chart-series-2: var(--color-teal-600);
+  --chart-good: var(--color-teal-500);
+  --chart-critical: var(--color-coral-400);
+  --chart-grid: var(--color-border);
+  --chart-axis: var(--color-ink-subtle);
+  --chart-muted: var(--color-border-strong);
+  --color-ink: #FAFBFC;
+  --color-ink-muted: #A8B2C4;
+  --color-ink-subtle: #838EA3;
+  --color-hover: #1C2640;
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.24), 0 1px 3px 0 rgb(0 0 0 / 0.32);
+  --shadow-pop: 0 4px 6px -2px rgb(0 0 0 / 0.3), 0 12px 16px -4px rgb(0 0 0 / 0.44);
+  --shadow-modal: 0 8px 8px -4px rgb(0 0 0 / 0.3), 0 20px 24px -4px rgb(0 0 0 / 0.5);
+
+  /* On dark the tint stays (it is mixed against the dark surface), but the
+     foreground has to lift off it. */
+  --tone-brand-fg: var(--color-brand-200);
+  --tone-brand-strong: #FFFFFF;
+  --tone-amber-fg: var(--color-amber-200);
+  --tone-amber-strong: var(--color-amber-100);
+  --tone-teal-fg: var(--color-teal-200);
+  --tone-teal-strong: var(--color-teal-100);
+  --tone-coral-fg: var(--color-coral-300);
+  --tone-neutral-fg: var(--color-ink-muted);
+  --tone-info-fg: var(--color-blue-200);
+  --tone-purple-fg: var(--color-purple-200);
+  --color-accent: var(--color-brand-200);
+  --color-accent-strong: var(--color-brand-100);
+  --color-focus-ring: var(--color-brand-400);
+}

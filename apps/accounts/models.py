@@ -521,3 +521,40 @@ class PasskeyRegistrationChallenge(models.Model):
         import base64
 
         return base64.b64decode(self.challenge)
+
+
+class DemoRequest(models.Model):
+    """A "Book a demo" / "Contact sales" request from the public site (/demo/).
+
+    Saved first, then emailed to the sales address (accounts.views.demo), so a failed email
+    never loses a request. Seen in the Django admin.
+    """
+
+    TEAM_SIZES = [
+        ("1", "Just me"),
+        ("2-5", "2 to 5"),
+        ("6-20", "6 to 20"),
+        ("21-100", "21 to 100"),
+        ("100+", "More than 100"),
+    ]
+    CHANNELS = [
+        ("whatsapp", "WhatsApp"),
+        ("instagram", "Instagram"),
+        ("facebook", "Facebook Page"),
+        ("email", "Email"),
+    ]
+
+    name = models.CharField(max_length=120)
+    email = models.EmailField("work email")
+    company = models.CharField(max_length=160)
+    team_size = models.CharField(max_length=8, choices=TEAM_SIZES)
+    channels = models.JSONField(default=list, blank=True)
+    message = models.TextField(blank=True, default="")
+    source = models.CharField(max_length=200, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.name} ({self.company})"

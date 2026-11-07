@@ -1,0 +1,117 @@
+{% comment %}
+  Platform: the four pillars (messaging.md §2) as tabs, each with its illustration and three
+  points. It replaces the old Features and Content Studio sections, whose addresses still work:
+  #features is the anchor at the top, #content-studio is the Content Studio panel (landing.js
+  opens that tab when the address names it). Without JavaScript the tab row stays hidden and every
+  panel shows, one under the other. Every line maps to a register claim; pictures are illustrations.
+{% endcomment %}
+{% with chat=ch.whatsapp|default:ch.instagram|default:ch.facebook %}
+<section id="platform" class="lp-light lp-section lp-platform" aria-labelledby="platform-title">
+  <span id="features" class="lp-anchor" aria-hidden="true"></span>
+  <div class="lp-wrap">
+    <div class="lp-head section-head center lp-reveal">
+      <p class="lp-eyebrow eyebrow">Platform</p>
+      <h2 id="platform-title" class="lp-h2">Everything that keeps a customer moving</h2>
+      <p class="lp-body lp-muted">One place for the conversation, the follow-up and the sale.</p>
+    </div>
+
+    <div class="lp-ptabs" role="tablist" aria-label="Platform" hidden>
+      <button type="button" role="tab" id="ptab-talk" aria-controls="platform-talk" aria-selected="true">{% if chat %}Inbox{% else %}Customers{% endif %}</button>
+      {% if ch.content %}<button type="button" role="tab" id="ptab-studio" aria-controls="content-studio" aria-selected="false" tabindex="-1">Content Studio</button>{% endif %}
+      <button type="button" role="tab" id="ptab-auto" aria-controls="platform-automations" aria-selected="false" tabindex="-1">Automations</button>
+      <button type="button" role="tab" id="ptab-sales" aria-controls="platform-sales" aria-selected="false" tabindex="-1">Sales</button>
+    </div>
+
+    <div class="lp-panels">
+      <div class="lp-panel" id="platform-talk" role="tabpanel" aria-labelledby="ptab-talk" tabindex="0">
+        <div class="lp-panel-copy">
+          {% if chat %}
+          <h3 class="lp-h3">Inbox</h3>
+          <p class="lp-lead lp-muted" data-claim="{% if ch.whatsapp == 'live' %}inbox{% endif %}{% if ch.instagram == 'live' %} instagram-dms{% endif %}{% if ch.facebook == 'live' %} facebook-inbox{% endif %}">Every chat in one shared inbox, answered by the right person.</p>
+          <ul class="lp-ticks">
+            <li data-claim="assign customers">Each chat assigned to a teammate, with the customer's details and history beside it</li>
+            {% if ch.whatsapp == "live" %}
+            <li data-claim="auto-replies keywords business-hours">Greetings, closed-hours replies and keyword answers</li>
+            {% else %}
+            <li data-claim="{% if ch.instagram == 'live' %}instagram-comments{% endif %}{% if ch.facebook == 'live' %} facebook-comments{% endif %}">Comments on your posts answered by rule, publicly or privately</li>
+            {% endif %}
+            <li data-claim="ai ai-knowledge">AI answers from your own business information, only if you switch it on</li>
+          </ul>
+          {% else %}
+          <h3 class="lp-h3">Customers</h3>
+          <p class="lp-lead lp-muted" data-claim="customers">Customer details, tags and history kept together.</p>
+          <ul class="lp-ticks">
+            {% if ch.email == "live" %}<li data-claim="email-sending">Email customers from your own business address</li>{% endif %}
+            <li data-claim="follow-ups">Follow-up reminders for the team</li>
+            <li data-claim="ai">AI help, only if you switch it on</li>
+          </ul>
+          {% endif %}
+        </div>
+        <div class="lp-panel-art lp-stage-panel light">
+          {% if chat %}{% include "accounts/landing/art/_thread.html" %}{% else %}{% include "accounts/landing/art/_customer.html" %}{% endif %}
+        </div>
+      </div>
+
+      {% if ch.content %}
+      <div class="lp-panel" id="content-studio" role="tabpanel" aria-labelledby="ptab-studio" tabindex="0">
+        <div class="lp-panel-copy">
+          <h3 class="lp-h3">Content Studio</h3>
+          <p class="lp-lead lp-muted" data-claim="content-planning post-scheduling">Plan, write and schedule your posts for {% if ch.instagram == "live" and ch.facebook == "live" %}Instagram and your Facebook Page{% elif ch.instagram == "live" %}Instagram{% else %}your Facebook Page{% endif %} from one place.</p>
+          <ul class="lp-ticks">
+            {% if ch.instagram == "live" and ch.facebook == "live" %}
+            <li data-claim="content-studio">Write a post once, with its own version for Instagram and for your Facebook Page</li>
+            {% elif ch.instagram == "live" %}
+            <li data-claim="instagram-publishing">Publish and schedule your posts to Instagram</li>
+            {% else %}
+            <li data-claim="facebook-publishing">Publish and schedule your posts to your Facebook Page</li>
+            {% endif %}
+            <li data-claim="ai-captions post-review">AI caption drafts, and an owner's approval before a post goes out if you want it</li>
+            {% if ch.whatsapp == "live" %}
+            <li data-claim="post-chat-link post-results">A WhatsApp chat link on each post, and the chats, leads and paid orders it brought in</li>
+            {% else %}
+            <li data-claim="post-metrics">Each post's reach and engagement from {% if ch.instagram == "live" and ch.facebook == "live" %}Instagram and Facebook{% elif ch.instagram == "live" %}Instagram{% else %}your Facebook Page{% endif %}</li>
+            {% endif %}
+          </ul>
+        </div>
+        <div class="lp-panel-art lp-stage-panel light">{% include "accounts/landing/art/_composer.html" %}</div>
+      </div>
+      {% endif %}
+
+      <div class="lp-panel" id="platform-automations" role="tabpanel" aria-labelledby="ptab-auto" tabindex="0">
+        <div class="lp-panel-copy">
+          <h3 class="lp-h3">Automations</h3>
+          <p class="lp-lead lp-muted" data-claim="follow-ups">Follow-ups that don't depend on anyone's memory.</p>
+          <ul class="lp-ticks">
+            <li data-claim="workflows">Workflows that run when a message, a new lead or a paid order arrives</li>
+            <li data-claim="workflow-testing">Try an automation before customers do; nothing is sent</li>
+            {% if ch.whatsapp == "live" %}
+            <li data-claim="missed">A nudge for the team when a conversation goes unanswered</li>
+            {% else %}
+            <li data-claim="followup-due">Your team is told when a follow-up is due</li>
+            {% endif %}
+          </ul>
+        </div>
+        <div class="lp-panel-art lp-stage-panel light">{% include "accounts/landing/art/_flow.html" %}</div>
+      </div>
+
+      <div class="lp-panel" id="platform-sales" role="tabpanel" aria-labelledby="ptab-sales" tabindex="0">
+        <div class="lp-panel-copy">
+          <h3 class="lp-h3">Sales</h3>
+          <p class="lp-lead lp-muted" data-claim="interested orders">From interest to a paid order, with nothing lost in between.</p>
+          <ul class="lp-ticks">
+            <li data-claim="interested orders">Track who's interested, record the order and mark it paid when the customer pays you</li>
+            <li data-claim="campaigns{% if ch.whatsapp == 'live' %} segments{% endif %}">{% if ch.whatsapp == "live" %}WhatsApp and email campaigns to a segment{% else %}Email campaigns to your customers{% endif %}</li>
+            {% if ch.results %}
+            <li data-claim="post-results attribution">Chats, leads and paid orders per post, counted from explicit evidence only</li>
+            {% else %}
+            <li data-claim="insights">Business Health: what your conversations turned into, week by week</li>
+            {% endif %}
+          </ul>
+        </div>
+        <div class="lp-panel-art lp-stage-panel light">{% include "accounts/landing/art/_sales.html" %}</div>
+      </div>
+    </div>
+    <p class="lp-small lp-soft lp-plan-note" data-claim-exempt>Some features depend on your plan. <a href="#pricing" class="lp-link">See pricing</a>.</p>
+  </div>
+</section>
+{% endwith %}

@@ -22,7 +22,9 @@ _ROW = re.compile(
 
 # Sections whose paragraphs, list items and FAQ answers are product statements.
 CHECKED_SECTIONS = {
+    "hero",
     "channels",
+    "platform",  # holds the Inbox, Content Studio, Automations and Sales panels
     "content-studio",
     "how-it-works",
     "features",

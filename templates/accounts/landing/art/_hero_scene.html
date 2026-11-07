@@ -1,0 +1,58 @@
+{% comment %}
+  Illustration (hero): the shared inbox at work, in the app's own parts (conversation list, thread,
+  AI draft, details panel). Real behaviour only:
+  - a customer's message arrives on a chat channel that is on;
+  - AI drafts the reply (apps/ai, only when switched on) and the assigned teammate sends it;
+  - the customer is marked interested (crm.set_lead_status);
+  - an order is recorded (commerce.create_order);
+  - a follow-up reminder is set; it reminds the team and never messages the customer.
+  Sample names and amounts. The markup is the final frame: without JavaScript, or under reduced
+  motion, that is what shows. static/js/landing.js replays it as a short loop (k1…k5 appear at
+  steps 1…5; .k-old is the state step 3 replaces), only while it is on screen.
+{% endcomment %}
+<figure class="lp-art lp-scene" data-art="scene" data-claim-exempt>
+  <div role="img" aria-label="Illustration: a customer asks about a canvas tote in the shared inbox. AI drafts a reply that the assigned teammate sends, the customer is marked interested, a $45 order is recorded and a follow-up reminder is set for the team.">
+    <div class="lp-window lp-scene-win" aria-hidden="true">
+      <div class="lp-bar"><i></i><i></i><i></i><b>Inbox</b></div>
+      <div class="lp-scene-grid">
+        <div class="lp-inbox-list">
+          <div class="lp-row on kr"><span class="lp-av t sm">AO</span><span><strong>Amara Okafor</strong><em>Do you have the canvas tote in black?</em></span><i class="lp-unread"></i></div>
+          <div class="lp-row"><span class="lp-av sm">LM</span><span><strong>Lucas Martin</strong><em>Thanks, it arrived today!</em></span></div>
+          <div class="lp-row"><span class="lp-av a sm">PS</span><span><strong>Priya Shah</strong><em>Can I change the delivery date?</em></span></div>
+          <div class="lp-row"><span class="lp-av sm">SC</span><span><strong>Sofia Costa</strong><em>Perfect, see you then.</em></span></div>
+          <div class="lp-row"><span class="lp-av t sm">KI</span><span><strong>Kenji Ito</strong><em>Is there a size guide?</em></span></div>
+        </div>
+        <div class="lp-convo">
+          <div class="lp-convo-head">
+            <span class="who"><span class="lp-av t">AO</span><span><strong>Amara Okafor</strong><em>Assigned to Maya</em></span></span>
+            {% if ch.whatsapp == "live" %}<span class="lp-chip lp-chip-teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>WhatsApp</span>
+            {% elif ch.instagram == "live" %}<span class="lp-chip lp-chip-teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/></svg>Instagram</span>
+            {% else %}<span class="lp-chip lp-chip-teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>Facebook Page</span>{% endif %}
+          </div>
+          <div class="lp-thread">
+            <div class="lp-bub in k1">Hi! Do you have the canvas tote in black?<small>09:12</small></div>
+            <div class="lp-bub out k2">Yes, the black canvas tote is in stock. It's $45 and ships tomorrow.<small><span class="lp-ai">AI draft</span> · Sent by Maya · 09:13</small></div>
+            <div class="lp-bub in k3">Great, I'll take it.<small>09:15</small></div>
+            <span class="lp-sys k3">Maya marked Amara as interested</span>
+          </div>
+        </div>
+        <div class="lp-details">
+          <div class="lp-details-who">
+            <span class="lp-av t">AO</span>
+            <span><strong>Amara Okafor</strong><em>Customer</em></span>
+            <span class="lp-swap"><span class="lp-chip lp-chip-ink k-old">New</span><span class="lp-chip lp-chip-brand k3">Interested</span></span>
+          </div>
+          <div class="lp-dcard k4">
+            <span class="lp-tile"><svg class="lp-ico" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></span>
+            <span><strong>Order · $45 recorded</strong><em>Canvas tote · Black</em></span>
+          </div>
+          <div class="lp-dcard remind k5">
+            <span class="lp-tile"><svg class="lp-ico" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M5 3 2 6M22 6l-3-3"/></svg></span>
+            <span><strong>Follow up Thursday, 10:00</strong><em>A reminder for your team</em></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <figcaption class="lp-art-cap">Illustration of the {{ app }} inbox.</figcaption>
+</figure>
