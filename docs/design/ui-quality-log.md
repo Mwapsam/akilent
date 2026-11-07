@@ -2294,3 +2294,15 @@ Plan: the Campaigns plan of 2026-11-06, Phase B.
   - the choice reads "Fixed text, the same for everyone".
 - **Harness:** new `tools/qa/campaigns_qa.mjs` (the Inbox harness's plumbing, every POST intercepted). `QA_BLANKS`: a name shows only its fallback ("there", required), fixed text only its box and warning, and back again; the preview fills in after a change.
 - **Verification:** `test_campaign_composer.py` (7): the start time, Send now in step 3 and Review (closed and open), the message after sending, authentication templates neither offered nor sendable, the fallback filled in, and only the chosen kind of answer counting. Full suite with no failures; ruff, format, mypy and migrations clean.
+
+### Entry 36: Campaigns Phase C, one address and honest wording (2026-11-07)
+Plan: the Campaigns plan of 2026-11-06, Phase C. Phases A and B were committed by the user (70b7dac, 5058110).
+
+- **One address, `/campaigns/` (`apps/core/campaign_urls.py`):** the list, `new/`, `estimate/`, `test/`, `settings/`, `lists/`, `<pk>/`, `<pk>/export.csv` and `<pk>/<action>/`. URL names are unchanged, so every `{% url %}` and `reverse()` lands there; 17 hard-coded links in templates and views now point there too.
+  - **Old addresses** (`/email/campaigns/`, `/whatsapp/campaigns/…`) redirect with the query string kept: 301 for a GET, 308 for anything else, so a form posted to an old address still posts. The email composer and email campaign pages keep their `/email/campaigns/…` addresses, and the public API keeps `/api/v1/whatsapp/campaigns/`.
+  - **Switched off:** the WhatsApp pages 404 while WhatsApp is off (they were hidden by ChannelGateMiddleware under `/whatsapp/`), and the list 404s with neither email nor WhatsApp on, as `/email/campaigns/` did.
+  - **Sidebar:** Campaigns matches `campaigns`.
+- **"by email or WhatsApp":** the list's line names only the channels that are on ("…on WhatsApp" while email is off).
+- **Lists in Campaigns' context:** the same page at `/campaigns/lists/` (from the list and the composer) keeps Campaigns in the sidebar and goes "← Campaigns"; at `/contacts/lists/` it stays under Customers.
+- **Tab counts:** one aggregate query for all of them (it was one per tab plus one), and Finished now shows its count. The list's budget drops from 15 to 12 queries.
+- **Verification:** `test_campaign_paths.py` (12): every page under `/campaigns/`, six old addresses redirecting, a POST to an old address (308), the WhatsApp pages off with WhatsApp, the wording with email off and on, Finished's count, and Lists from Campaigns and from Customers. Existing tests moved to the new addresses (the API and nav-resolution tests keep theirs). `campaigns_qa.mjs QA_PATHS`: old addresses land on `/campaigns/`, and the sidebar stays on Campaigns through Lists (boosted) and back. Full suite: only `test_import_5000_contacts` failed, the load test known to fail on a clean checkout; ruff, format, mypy and migrations clean.

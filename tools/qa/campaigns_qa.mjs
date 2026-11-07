@@ -3,6 +3,8 @@
 // Usage: node tools/qa/campaigns_qa.mjs <repoRoot> <outDir>
 //   QA_BLANKS=1 Phase B: "Fill in the blanks" shows the text box only for fixed text, and the
 //               fallback (filled in, required) only for a customer detail;
+//   QA_PATHS=1  Phase C: old addresses land on /campaigns/, and the sidebar stays on Campaigns
+//               through Lists (opened in place, as a boosted link) and back;
 // Needs a dev server with WHATSAPP_ENABLED=True (QA_BASE, default :8001) and QA_UI_EMAIL /
 // QA_UI_PASSWORD in .env.
 import { spawn } from "node:child_process";
@@ -147,6 +149,28 @@ if (process.env.QA_BLANKS) {
   await sleep(1500); // the preview re-reads after a change (hx-trigger on the form)
   out.preview = await evaluate(`(() => { const p = document.querySelector('#estimate'); return p ? p.innerText.replace(/\s+/g, ' ').slice(0, 160) : null; })()`);
   await shot0("blanks-1280");
+  console.log(JSON.stringify(out, null, 1));
+  process.exit(0);
+}
+
+if (process.env.QA_PATHS) {
+  const out = {};
+  await viewport(1280, 900, false);
+  const active = () => evaluate(`[...document.querySelectorAll('nav a.nav-link-active')].map(a => a.textContent.trim())`);
+  await go("/email/campaigns/?channel=whatsapp", 1500);
+  out.oldList = { path: await evaluate("location.pathname + location.search"), active: await active() };
+  await go("/whatsapp/campaigns/new/", 1500);
+  out.oldNew = { path: await evaluate("location.pathname"), active: await active() };
+  await go("/campaigns/?channel=whatsapp", 1500);
+  const lists = await evaluate(`!!document.querySelector('a[href="/campaigns/lists/"]')`);
+  if (lists) {
+    await clickSel('a[href="/campaigns/lists/"]'); await sleep(1800);
+    out.lists = { path: await evaluate("location.pathname"), active: await active(),
+      back: await evaluate(`(document.querySelector('main a[href="/campaigns/"]') || {}).textContent`) };
+    await clickSel('main a[href="/campaigns/"]'); await sleep(1800);
+    out.backToList = { path: await evaluate("location.pathname"), active: await active() };
+  } else out.lists = "no Lists button (no WhatsApp campaign in this workspace)";
+  await shot0("paths-1280");
   console.log(JSON.stringify(out, null, 1));
   process.exit(0);
 }
