@@ -55,10 +55,46 @@
   <a href="{% url 'whatsapp-campaign-settings' %}" class="btn btn-ghost btn-sm">{% include "components/icon.html" with name="clock" class="w-4 h-4" %} Sending hours</a>
   </div>
   {% endif %}
+
+  {% comment %}This month at a glance, from campaigns that went out (campaign_ui.summary); until
+  there are enough for a trend, how the last one went and where to start the next.{% endcomment %}
+  {% if whatsapp_summary %}
+  <section aria-label="Campaign messages this month" class="kpi-row mb-4" data-campaign-tiles>
+    {% for k in whatsapp_summary %}
+    <div class="kpi" data-kpi="{{ k.key }}">
+      <p class="kpi-label">{{ k.label }}{% if k.key == "replied" %} {% include "components/help_tip.html" with text="Customers who wrote to you within 3 days of their campaign message. It counts replies, not why they wrote." %}{% endif %}</p>
+      <p class="kpi-value tabular-nums">{{ k.value }}</p>
+      <p class="kpi-note">{{ k.note }}</p>
+      {% if k.trend.end %}{% include "publishing/_kpi_spark.html" with trend=k.trend label=k.spark_label %}{% endif %}
+    </div>
+    {% endfor %}
+    {% if whatsapp_latest %}
+    <div class="kpi" data-kpi="latest">
+      <p class="kpi-label">Last campaign</p>
+      <p class="kpi-value-more truncate"><a href="{% url 'whatsapp-campaign-detail' whatsapp_latest.pk %}" class="inline-flex min-h-11 max-w-full items-center hover:text-accent"><span class="truncate">{{ whatsapp_latest.name }}</span></a></p>
+      <p class="mt-1">{% include "components/status.html" with state=whatsapp_latest.state badge=True %}</p>
+      {% if whatsapp_latest.outcome %}<p class="kpi-note mt-1">{{ whatsapp_latest.outcome }}</p>{% endif %}
+      {% if whatsapp_latest.fix %}<a href="{{ whatsapp_latest.fix.fix.url }}" class="cs-link text-xs mt-1"{% if whatsapp_latest.fix.fix.url|slice:":4" == "http" %} target="_blank" rel="noopener"{% endif %} data-campaign-fix>{{ whatsapp_latest.fix.reason }} · {{ whatsapp_latest.fix.fix.label }}</a>{% endif %}
+    </div>
+    {% endif %}
+  </section>
+  {% elif whatsapp_any %}
+  {% include "whatsapp/_campaign_start.html" with latest=whatsapp_latest starts=whatsapp_starts %}
+  {% endif %}
+
   {% if whatsapp_campaigns %}
   <div class="table-wrap">
     <table class="table table--cards">
-      <thead><tr><th>Campaign</th><th>Status</th><th>Sent to</th><th>Delivered</th><th>Read</th><th>Failed</th><th>Not sent</th><th></th></tr></thead>
+      {% comment %}Every share is of the messages the campaign prepared, so a row's columns read
+      side by side. Replied is a fact from message times (campaigns.reply_counts_for).{% endcomment %}
+      <thead><tr>
+        <th>Campaign</th><th>Status</th><th>Sent</th>
+        <th><span title="Reached the customer's phone, of the messages prepared">Delivered</span></th>
+        <th><span title="Opened by the customer, of the messages prepared">Read</span></th>
+        <th><span title="WhatsApp couldn't send it, of the messages prepared">Failed</span></th>
+        <th>Replied {% include "components/help_tip.html" with text="Customers who wrote to you within 3 days of their campaign message, of the messages prepared. It counts replies, not why they wrote." %}</th>
+        <th></th>
+      </tr></thead>
       <tbody>
         {% for c in whatsapp_campaigns %}
         <tr>
@@ -66,15 +102,15 @@
             <a href="{% url 'whatsapp-campaign-detail' c.pk %}" class="font-medium text-accent hover:text-accent-strong">{{ c.name }}</a>
             <span class="block text-xs text-ink-subtle">{{ c.audience_name|default:"Retry of failed messages" }} · {% if c.status == 'scheduled' %}goes out {{ c.when_label }}{% else %}{{ c.started_at|default:c.created_at|date:"j M, H:i" }}{% endif %}</span>
           </td>
-          <td data-label="Status">{% include "components/status.html" with state=c.state badge=True %}</td>
+          <td data-label="Status" class="whitespace-nowrap">{% include "components/status.html" with state=c.state badge=True %}</td>
           {% if c.state == 'draft' or c.state == 'scheduled' %}
-          <td data-label="Sent to" class="text-ink-subtle" colspan="5">Not sent yet</td>
+          <td data-label="Sent" class="text-ink-subtle" colspan="5">Not sent yet</td>
           {% else %}
-          <td data-label="Sent to" class="tabular-nums">{{ c.reached }}<span class="text-ink-subtle"> / {{ c.recipient_count }}</span></td>
-          <td data-label="Delivered" class="tabular-nums">{{ c.delivered }}</td>
-          <td data-label="Read" class="tabular-nums">{{ c.stats.read }}</td>
-          <td data-label="Failed" class="tabular-nums">{{ c.stats.failed }}</td>
-          <td data-label="Not sent" class="tabular-nums">{{ c.skipped_count }}</td>
+          <td data-label="Sent" class="tabular-nums whitespace-nowrap" title="{{ c.rates.sent }} accepted by WhatsApp of {{ c.recipient_count }} on the list{% if c.skipped_count %}; {{ c.skipped_count }} not sent{% endif %}">{{ c.rates.sent }}<span class="text-ink-subtle"> of {{ c.recipient_count }}</span></td>
+          <td data-label="Delivered" class="tabular-nums" title="{{ c.rates.delivered }} of {{ c.rates.prepared }}">{{ c.rates.pct.delivered|default:"—" }}</td>
+          <td data-label="Read" class="tabular-nums" title="{{ c.rates.read }} of {{ c.rates.prepared }}">{{ c.rates.pct.read|default:"—" }}</td>
+          <td data-label="Failed" class="tabular-nums" title="{{ c.rates.failed }} of {{ c.rates.prepared }}">{{ c.rates.pct.failed|default:"—" }}</td>
+          <td data-label="Replied" class="tabular-nums" title="{{ c.rates.replied }} of {{ c.rates.prepared }}">{{ c.rates.pct.replied|default:"—" }}</td>
           {% endif %}
           <td class="text-right"><a href="{% url 'whatsapp-campaign-detail' c.pk %}" class="btn btn-ghost btn-sm">View</a></td>
         </tr>

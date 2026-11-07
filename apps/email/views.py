@@ -1671,6 +1671,11 @@ def _render_composer(request, account, *, form_data=None, errors=None, status=20
     )
 
 
+# Campaigns that went out before the list shows tiles with trends; fewer get a card for the
+# last one and somewhere to start instead.
+_TILES_FROM = 3
+
+
 @login_required
 def campaigns_list(request):
 
@@ -1711,10 +1716,26 @@ def campaigns_list(request):
     whatsapp_any = False
     wa_tab = ""
     whatsapp_tab_counts: dict = {}
+    whatsapp_summary: list = []
+    whatsapp_starts: list = []
+    latest = None
     if whatsapp_enabled:
         from apps.billing import api as billing_api
-        from apps.whatsapp.campaign_ui import lifecycle_state, local_label, readiness
-        from apps.whatsapp.campaigns import delivery_stats_for
+        from apps.whatsapp.campaign_ui import (
+            lifecycle_state,
+            local_label,
+            outcome_label,
+            rates,
+            readiness,
+            starting_points,
+            summary,
+            template_options,
+        )
+        from apps.whatsapp.campaigns import (
+            delivery_stats_for,
+            failure_groups,
+            reply_counts_for,
+        )
         from apps.whatsapp.models import WhatsAppCampaign
 
         whatsapp_campaigns_usable = billing_api.usable(account, "whatsapp_campaigns")
@@ -1744,15 +1765,46 @@ def campaigns_list(request):
         whatsapp_campaigns = list(
             wa_qs.select_related("template", "contact_list", "segment")[:50]
         )
-        stats = delivery_stats_for([c.pk for c in whatsapp_campaigns])
+        # The latest campaign that went out: the "last campaign" tile, or the card that
+        # stands in for the tiles while there are too few campaigns for a trend.
+        # On All the rows are newest first, so it's usually already loaded.
+        not_out = (_S.DRAFT, _S.SCHEDULED)
+        latest = next(
+            (c for c in whatsapp_campaigns if not wa_tab and c.status not in not_out),
+            None,
+        )
+        if latest is None and whatsapp_any:
+            latest = wa_all.exclude(status__in=not_out).first()
+        ids = [c.pk for c in whatsapp_campaigns]
+        stats = delivery_stats_for(set(ids) | ({latest.pk} if latest else set()))
+        replies = reply_counts_for(ids)
         for c in whatsapp_campaigns:
             c.stats = stats[c.pk]  # type: ignore[attr-defined]
             c.state = lifecycle_state(c, c.stats)  # type: ignore[attr-defined]
             c.when_label = local_label(c.scheduled_at, c.timezone)  # type: ignore[attr-defined]
-            c.delivered = c.stats["delivered"] + c.stats["read"]  # type: ignore[attr-defined]
-            c.reached = c.delivered + c.stats["sent"]  # type: ignore[attr-defined]
+            c.rates = rates(c.stats, replies[c.pk])  # type: ignore[attr-defined]
+        if latest is not None:
+            latest.state = lifecycle_state(latest, stats[latest.pk])  # type: ignore[attr-defined]
+            latest.outcome = (  # type: ignore[attr-defined]
+                outcome_label(stats[latest.pk]) if latest.status == _S.COMPLETED else ""
+            )
+            latest.fix = next(  # type: ignore[attr-defined]
+                (
+                    g
+                    for g in (
+                        failure_groups(latest) if stats[latest.pk]["failed"] else []
+                    )
+                    if g["fix"]
+                ),
+                None,
+            )
         if not whatsapp_any:
             whatsapp_readiness = readiness(account)
+        went_out = whatsapp_tab_counts["sending"] + whatsapp_tab_counts["finished"]
+        if went_out >= _TILES_FROM:
+            whatsapp_summary = summary(account)
+        elif whatsapp_any or whatsapp_readiness.ready:  # type: ignore[union-attr]
+            whatsapp_starts = starting_points(template_options(account))
 
     return render(
         request,
@@ -1778,6 +1830,9 @@ def campaigns_list(request):
             "whatsapp_any": whatsapp_any,
             "whatsapp_tab": wa_tab,
             "whatsapp_tab_counts": whatsapp_tab_counts,
+            "whatsapp_summary": whatsapp_summary,
+            "whatsapp_starts": whatsapp_starts,
+            "whatsapp_latest": latest,
         },
     )
 

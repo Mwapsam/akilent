@@ -5,6 +5,8 @@
 //               fallback (filled in, required) only for a customer detail;
 //   QA_PATHS=1  Phase C: old addresses land on /campaigns/, and the sidebar stays on Campaigns
 //               through Lists (opened in place, as a boosted link) and back;
+//   QA_LIST=1   Phase D: the list's tiles or start card and result columns at six widths in
+//               both themes (sideways scroll, tap targets, contrast, sparkline hover);
 // Needs a dev server with WHATSAPP_ENABLED=True (QA_BASE, default :8001) and QA_UI_EMAIL /
 // QA_UI_PASSWORD in .env.
 import { spawn } from "node:child_process";
@@ -149,6 +151,43 @@ if (process.env.QA_BLANKS) {
   await sleep(1500); // the preview re-reads after a change (hx-trigger on the form)
   out.preview = await evaluate(`(() => { const p = document.querySelector('#estimate'); return p ? p.innerText.replace(/\s+/g, ' ').slice(0, 160) : null; })()`);
   await shot0("blanks-1280");
+  console.log(JSON.stringify(out, null, 1));
+  process.exit(0);
+}
+
+// Phase D: the list at each width in both themes: tiles (3+ campaigns out) or the start card,
+// the result columns, no sideways scroll, tap targets, contrast, and the sparkline's hover.
+if (process.env.QA_LIST) {
+  const out = [];
+  const NO_MOTION = `(() => { const s=document.createElement('style'); s.textContent='*,*::before,*::after{transition:none!important;animation:none!important}'; document.head.appendChild(s); })()`;
+  const sizes = [[360, 740, true], [390, 844, true], [768, 1024, true], [1024, 768, false], [1280, 800, false], [1440, 900, false]];
+  for (const [w, h, touch] of sizes) {
+    await viewport(w, h, touch);
+    await go("/campaigns/?channel=whatsapp", 1500);
+    await evaluate(scanner); await evaluate(NO_MOTION);
+    for (const theme of ["light", "dark"]) {
+      const r = await evaluate(`(async () => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const s = await window.__uiScan({ max: 4 });
+        const tiles = document.querySelector('[data-campaign-tiles]'); const start = document.querySelector('[data-campaign-start]');
+        const own = [...document.querySelectorAll('[data-campaign-tiles] a, [data-campaign-tiles] button, [data-campaign-start] a, [data-campaign-start] button')]
+          .filter(e => e.offsetParent).map(e => { const b = e.getBoundingClientRect(); return { t: (e.textContent || e.getAttribute('aria-label') || '').trim().slice(0, 30), w: Math.round(b.width), h: Math.round(b.height) }; });
+        return { theme: ${JSON.stringify(theme)}, sideways: document.documentElement.scrollWidth > innerWidth + 1,
+          view: tiles ? 'tiles' : start ? 'start' : 'none',
+          tiles: tiles ? [...tiles.querySelectorAll('.kpi')].map(k => k.dataset.kpi + ': ' + k.querySelector('.kpi-value, .kpi-value-more').textContent.trim()) : undefined,
+          starts: start ? [...start.querySelectorAll('[data-campaign-start-template]')].length : undefined,
+          head: [...document.querySelectorAll('thead th')].map(t => t.textContent.trim()).filter(Boolean),
+          row: (document.querySelector('tbody tr') || {}).innerText?.replace(/\\s+/g, ' ').slice(0, 120),
+          ownSmall: innerWidth < 1024 ? own.filter(o => o.h < 44) : undefined,
+          under44: s.targets.under44, contrastFail: s.contrast.failing, contrastEx: s.contrast.failing ? s.contrast.examples : undefined, overflow: s.overflow.count }; })()`);
+      out.push({ w, ...r });
+      if (w === 390 || w === 1280) await shot0(`list-${w}-${theme}`);
+    }
+    await evaluate("document.documentElement.dataset.theme = 'light'");
+  }
+  await viewport(1280, 800, false);
+  await go("/campaigns/?channel=whatsapp", 1500);
+  out.push({ sparkHover: await evaluate(`[...document.querySelectorAll('.kpi-spark-hit title')].slice(-2).map(t => t.textContent)`),
+    tip: await evaluate(`[...document.querySelectorAll('th')].map(t => t.innerText).find(t => t.startsWith('Replied'))`) });
   console.log(JSON.stringify(out, null, 1));
   process.exit(0);
 }

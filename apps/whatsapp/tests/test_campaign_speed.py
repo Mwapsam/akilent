@@ -17,10 +17,13 @@ from apps.whatsapp.tests.test_campaign_results import (  # noqa: F401
 pytestmark = pytest.mark.django_db
 
 BUDGET = {
-    "list": 12,
+    "list": 16,
     "detail": 19,
     "new": 19,
-}  # list 15 -> 12: one query for the tab counts (Phase C)
+}
+# list 15 -> 12: one query for the tab counts (Phase C). 12 -> 16 (Phase D, new content, not
+# a slowdown): replies, the last campaign's failure reasons, and for the tiles the workspace's
+# timezone and one query for 8 weeks of messages (15 with the start card in their place).
 
 
 def _urls(campaign):
@@ -50,8 +53,20 @@ def test_each_campaign_page_stays_within_its_budget(shop, name):  # noqa: F811
 @pytest.mark.parametrize("name", list(BUDGET))
 def test_the_counts_dont_grow_with_campaigns_or_recipients(shop, name):  # noqa: F811
     client, account, template, clist = shop
-    small = _campaign(account, template, clist, ["failed", "read"])
+    for _ in range(3):  # enough for the list's tiles, so both counts take the same path
+        small = _campaign(account, template, clist, ["failed", "read"])
     before = _count(client, _urls(small)[name])
     for _ in range(5):
         big = _campaign(account, template, clist, ["failed", "bad_number", "read"] * 4)
     assert _count(client, _urls(big)[name]) == before
+
+
+@_wa_urls
+def test_the_start_card_doesnt_grow_with_recipients(shop):  # noqa: F811
+    """Before the tiles: the last campaign and the starting points, whatever their size."""
+    client, account, template, clist = shop
+    small = _campaign(account, template, clist, ["failed", "read"])
+    before = _count(client, _urls(small)["list"])
+    small.delete()
+    big = _campaign(account, template, clist, ["failed", "bad_number", "read"] * 20)
+    assert _count(client, _urls(big)["list"]) == before

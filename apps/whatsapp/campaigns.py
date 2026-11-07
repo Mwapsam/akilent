@@ -1032,6 +1032,80 @@ def delivery_stats_for(campaign_ids) -> dict:
     return out
 
 
+REPLY_DAYS = 3
+
+
+def _replied():
+    """Whether the recipient wrote back within ``REPLY_DAYS`` of their campaign message
+    reaching WhatsApp: an inbound message from the same WhatsApp contact in that time.
+
+    A fact from message times, not a claim that the campaign caused the reply (crediting
+    chats and sales needs a tracked code: plan Phase H). A reply within the window of two
+    campaigns counts for both. Uses MessageLog's (contact, timestamp, direction) index."""
+    from datetime import timedelta
+
+    from django.db.models import DateTimeField, Exists, ExpressionWrapper, OuterRef
+
+    from apps.whatsapp.models import MessageLog
+
+    sent = OuterRef("message__message_log__timestamp")
+    return Exists(
+        MessageLog.objects.filter(
+            contact=OuterRef("message__contact"),
+            direction=MessageLog.Direction.INBOUND,
+            timestamp__gt=sent,
+            timestamp__lte=ExpressionWrapper(
+                sent + timedelta(days=REPLY_DAYS), output_field=DateTimeField()
+            ),
+        )
+    )
+
+
+def reply_counts_for(campaign_ids) -> dict:
+    """``{campaign_id: recipients who replied}`` (see ``_replied``) in one grouped query."""
+    from django.db.models import Count
+
+    ids = list(campaign_ids)
+    out = dict.fromkeys(ids, 0)
+    if not ids:
+        return out
+    rows = (
+        WhatsAppCampaignRecipient.objects.filter(
+            _replied(), campaign_id__in=ids, status=_Status.QUEUED
+        )
+        .values("campaign_id")
+        .annotate(n=Count("id"))
+    )
+    for row in rows:
+        out[row["campaign_id"]] = row["n"]
+    return out
+
+
+def daily_activity(account, since, zone) -> list:
+    """The account's campaign messages since ``since`` (by when they went to WhatsApp, or were
+    prepared if not yet), grouped by local day: ``[{"day", "bucket", "replied", "n"}]``.
+    One query, for the list page's tiles."""
+    from django.db.models import Count, Q
+    from django.db.models.functions import Coalesce, TruncDate
+
+    return list(
+        WhatsAppCampaignRecipient.objects.filter(
+            Q(status=_Status.QUEUED) | Q(status=_Status.FAILED),
+            campaign__account=account,
+            message__isnull=False,
+        )
+        .annotate(when=Coalesce("message__sent_at", "message__created_at"))
+        .filter(when__gte=since)
+        .annotate(
+            bucket=_delivery_bucket(),
+            replied=_replied(),
+            day=TruncDate("when", tzinfo=zone),
+        )
+        .values("day", "bucket", "replied")
+        .annotate(n=Count("id"))
+    )
+
+
 def recipients_with_outcome(campaign: WhatsAppCampaign):
     """Every recipient with ``outcome``: not_sent · waiting · or its delivery bucket."""
     from django.db.models import Case, CharField, Value, When

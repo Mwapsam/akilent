@@ -1,0 +1,45 @@
+{% comment %}Stands in for the list's tiles while too few campaigns have gone out for a trend
+(email/views.py _TILES_FROM): how the last one went, with its fix when it failed for a reason
+about the account, and up to three approved templates to start the next one from (each opens
+the composer with that message chosen).{% endcomment %}
+<section class="card card-pad mb-4 space-y-5" data-campaign-start aria-label="Your campaigns so far">
+  {% if latest %}
+  <div data-last-campaign>
+    <p class="text-xs font-medium uppercase tracking-wide text-ink-subtle">Your last campaign</p>
+    <p class="mt-1 flex flex-wrap items-center gap-2">
+      <a href="{% url 'whatsapp-campaign-detail' latest.pk %}" class="inline-flex min-h-11 items-center font-medium text-ink hover:text-accent">{{ latest.name }}</a>
+      {% include "components/status.html" with state=latest.state badge=True %}
+    </p>
+    {% if latest.outcome or latest.fix %}
+    <p class="mt-1 text-sm text-ink-muted">{{ latest.outcome }}{% if latest.fix %}{% if latest.outcome %} · {% endif %}{{ latest.fix.reason }}{% endif %}</p>
+    {% endif %}
+    {% if latest.fix %}
+    <a href="{{ latest.fix.fix.url }}" class="btn btn-secondary btn-sm mt-3"{% if latest.fix.fix.url|slice:":4" == "http" %} target="_blank" rel="noopener"{% endif %} data-campaign-fix>{{ latest.fix.fix.label }}</a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if starts %}
+  <div data-campaign-starts>
+    <h2 class="text-sm font-semibold text-ink">Start from a message</h2>
+    <ul class="mt-2 grid gap-3 sm:grid-cols-3">
+      {% for t in starts %}
+      <li>
+        <a href="{% url 'whatsapp-campaign-new' %}?template_id={{ t.pk }}" class="campaign-start" data-campaign-start-template="{{ t.pk }}">
+          <span class="flex items-center justify-between gap-2">
+            <span class="font-medium text-ink truncate">{{ t.label }}</span>
+            <span class="badge badge-neutral shrink-0">{{ t.get_category_display }}</span>
+          </span>
+          <span class="campaign-start-body">{{ t.preview }}</span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% elif latest %}
+  <div data-campaign-starts-empty>
+    <p class="text-sm text-ink-muted">Campaigns send messages Meta has approved. Write a template and it appears here once it's approved.</p>
+    <a href="/whatsapp/templates/new/" class="btn btn-secondary btn-sm mt-3">Write a template</a>
+  </div>
+  {% endif %}
+</section>

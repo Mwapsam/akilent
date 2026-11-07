@@ -155,6 +155,139 @@ def outcome_label(stats: dict) -> str:
     return ", ".join(parts)
 
 
+def percent(n: int, of: int) -> str | None:
+    """``n`` as a share of ``of`` for a table cell: "96%", never "0%" for a few or "100%" for
+    nearly all; None with nothing to share out."""
+    if not of:
+        return None
+    p = n * 100 / of
+    if 0 < p < 1:
+        return "<1%"
+    if 99 < p < 100:
+        return "99%"
+    return f"{round(p)}%"
+
+
+def rates(stats: dict, replied: int = 0) -> dict:
+    """A campaign's results for the list: counts, and each as a share of the messages it
+    prepared (``stats`` from delivery_stats_for, ``replied`` from reply_counts_for), so a
+    row's Delivered and Failed can be read side by side."""
+    prepared = sum(stats.values())
+    delivered = stats["delivered"] + stats["read"]
+    counts = {
+        "delivered": delivered,
+        "read": stats["read"],
+        "failed": stats["failed"],
+        "replied": replied,
+    }
+    return {
+        "prepared": prepared,
+        "sent": delivered + stats["sent"],
+        **counts,
+        "pct": {key: percent(n, prepared) for key, n in counts.items()},
+    }
+
+
+SUMMARY_WEEKS = 8
+
+
+def summary(account) -> list[dict]:
+    """The list page's tiles: what campaign messages did this month, each with its trend over
+    the last ``SUMMARY_WEEKS`` weeks, in the workspace's own days. One query (plus the
+    workspace's timezone). Replies are as reply_counts_for counts them."""
+    from collections import Counter
+    from datetime import datetime, time, timedelta
+
+    from django.utils import timezone as djtz
+
+    from apps.accounts.business_hours import workspace_zone
+    from apps.core.charts import kpi_spark
+    from apps.whatsapp.campaigns import REPLY_DAYS, daily_activity
+
+    zone = workspace_zone(account)
+    today = djtz.localtime(djtz.now(), zone).date()
+    month_start = today.replace(day=1)
+    week0 = today - timedelta(days=today.weekday() + 7 * (SUMMARY_WEEKS - 1))
+    since = datetime.combine(min(month_start, week0), time.min, tzinfo=zone)
+
+    month: Counter = Counter()
+    weeks: list[Counter] = [Counter() for _ in range(SUMMARY_WEEKS)]
+    for row in daily_activity(account, since, zone):
+        week = (row["day"] - week0).days // 7
+        into = [weeks[week]] if 0 <= week < SUMMARY_WEEKS else []
+        if row["day"] >= month_start:
+            into.append(month)
+        for c in into:
+            c[row["bucket"]] += row["n"]
+            c["replied"] += row["n"] if row["replied"] else 0
+
+    def facts(c: Counter) -> dict:
+        prepared = sum(n for key, n in c.items() if key != "replied")
+        delivered = c["delivered"] + c["read"]
+        return {
+            "prepared": prepared,
+            "sent": delivered + c["sent"],
+            "delivered": delivered,
+            "replied": c["replied"],
+        }
+
+    m = facts(month)
+    w = [facts(c) for c in weeks]
+    labels = [
+        f"{d.day} {d:%b}"
+        for d in (week0 + timedelta(weeks=i) for i in range(SUMMARY_WEEKS))
+    ]
+    rate = [percent(f["delivered"], f["prepared"]) for f in w]
+    return [
+        {
+            "key": "sent",
+            "label": "Sent this month",
+            "value": m["sent"],
+            "note": f"of {m['prepared']} message{'s' if m['prepared'] != 1 else ''} prepared",
+            "spark_label": "Sent in the week",
+            "trend": kpi_spark([f["sent"] for f in w], labels),
+        },
+        {
+            "key": "delivered",
+            "label": "Delivery rate",
+            "value": percent(m["delivered"], m["prepared"]) or "—",
+            "note": f"{m['delivered']} delivered this month",
+            "spark_label": "Delivered in the week",
+            "trend": kpi_spark(
+                [
+                    f["delivered"] * 100 / f["prepared"] if f["prepared"] else None
+                    for f in w
+                ],
+                labels,
+                [r or "nothing sent" for r in rate],
+            ),
+        },
+        {
+            "key": "replied",
+            "label": "Replies",
+            "value": m["replied"],
+            "note": f"within {REPLY_DAYS} days of their message, this month",
+            "spark_label": "Replies in the week",
+            "trend": kpi_spark([f["replied"] for f in w], labels),
+        },
+    ]
+
+
+def starting_points(templates, n: int = 3) -> list:
+    """Up to ``n`` approved marketing or utility templates a first campaign could start from
+    (``templates`` from template_options), each with its text and blanks named."""
+    picks = [
+        t
+        for t in templates
+        if t.sendable  # type: ignore[attr-defined]
+        and t.category
+        in (MessageTemplate.Category.MARKETING, MessageTemplate.Category.UTILITY)
+    ][:n]
+    for t in picks:
+        t.preview = render_body(t, {v: f"[{v}]" for v in (t.variables or [])})  # type: ignore[attr-defined]
+    return picks
+
+
 @dataclass
 class Readiness:
     number_connected: bool

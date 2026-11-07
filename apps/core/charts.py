@@ -183,6 +183,43 @@ def sparkline(
     )
 
 
+def kpi_spark(
+    values: Sequence[float | None],
+    labels: Sequence[str],
+    shown: Sequence[str] | None = None,
+) -> dict:
+    """A tile's trend for templates/publishing/_kpi_spark.html (viewBox 0 0 100 28): a line
+    through the slots, the latest reading marked, and one hover column per slot saying
+    ``labels[i]: shown[i]`` (the value itself when ``shown`` is None).
+
+    A slot with no reading (None, such as a delivery rate in a week nothing was sent) is left
+    out of the line rather than drawn as 0. One reading has no direction, so with fewer than
+    two there is no line and ``end`` is None (the hover columns stay)."""
+    n = len(values)
+    step = 100 / max(1, n - 1)
+    top = max((v for v in values if v is not None), default=0) or 1
+    pts = [
+        (round(i * step, 2), round(26 - v / top * 24, 2))
+        for i, v in enumerate(values)
+        if v is not None
+    ]
+    if len(pts) < 2:
+        pts = []
+    return {
+        "points": " ".join(f"{x},{y}" for x, y in pts),
+        "end": pts[-1] if pts else None,
+        "slots": [
+            {
+                "x": round(i * 100 / max(1, n), 2),
+                "w": round(100 / max(1, n), 2),
+                "label": labels[i],
+                "value": shown[i] if shown is not None else v,
+            }
+            for i, v in enumerate(values)
+        ],
+    }
+
+
 @dataclass
 class LineChart:
     """A plotted multi-series chart plus everything its axes need."""

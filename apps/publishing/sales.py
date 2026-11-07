@@ -100,28 +100,13 @@ class _Trend:
     def spark(self, metric: str, tz) -> dict:
         from django.utils import timezone as djtz
 
-        values = self.values[metric]
-        top = max(values) or 1
-        pts = [
-            (round(i * 100 / (self.n - 1), 2), round(26 - v / top * 24, 2))
-            for i, v in enumerate(values)
-        ]
-        slots = []
-        for i, v in enumerate(values):
+        from apps.core.charts import kpi_spark
+
+        labels = []
+        for i in range(self.n):
             day = djtz.localtime(self.start + self.width * i, tz)
-            slots.append(
-                {
-                    "x": round(i * 100 / self.n, 2),
-                    "w": round(100 / self.n, 2),
-                    "label": f"{day.day} {day:%b}",
-                    "value": v,
-                }
-            )
-        return {
-            "points": " ".join(f"{x},{y}" for x, y in pts),
-            "end": pts[-1],
-            "slots": slots,
-        }
+            labels.append(f"{day.day} {day:%b}")
+        return kpi_spark(self.values[metric], labels)
 
 
 def _funnel(counts: dict) -> list[dict]:
