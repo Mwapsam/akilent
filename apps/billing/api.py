@@ -626,6 +626,15 @@ def plan_card(plan: Plan, *, channels=None, data=None) -> dict:
     }
 
 
+def _lower_first(name: str) -> str:
+    """ "Team members" -> "team members", but "WhatsApp numbers" and "AI actions per day" keep
+    their capitals (only a plain capitalised first word is lowered)."""
+    first, _, rest = name.partition(" ")
+    if first.istitle() and first not in ("Instagram", "Facebook", "Email"):
+        first = first.lower()
+    return f"{first} {rest}".strip()
+
+
 def plan_data(plans) -> dict:
     """Features, limits and coming-soon items for ``plans`` in three queries, keyed by plan id,
     for ``plan_card`` and ``pricing_table`` (one query per plan each, otherwise)."""
@@ -706,10 +715,52 @@ def pricing_table(offered, data=None) -> dict:
     differing = [k for k in candidates if differs([limit_value(p, k) for p in plans])]
     card_keys = (differing + [k for k in candidates if k not in differing])[:3]
 
+    sellable = catalog.matrix_features()
+    channel_keys = {CHANNEL_FEATURE[ch] for ch in CHANNEL_FEATURE if ch in shown}
+    feature_names = {
+        f.key: f.name
+        for f in sellable
+        if f.key in channel_keys
+        or (f.key not in catalog.CHANNEL_FEATURES and feature_visible(f.key, shown))
+    }
+
+    def points(plan, prev) -> list[str]:
+        """What a card lists: for the first paid plan, its main limits and channels; for each
+        one after, only what it adds to the plan before ("Everything in Starter, plus:")."""
+        mine = data[plan.pk]["keys"]
+        if prev is None:
+            lines = [
+                _limit_line(limit_value(plan, k), labels[k]) for k in card_keys[:2]
+            ]
+            channels = [
+                n for k, n in feature_names.items() if k in channel_keys and k in mine
+            ]
+            # Channels every plan has go in "All plans include" instead.
+            on_all = all(
+                k in data[p.pk]["keys"] for p in paid for k in channel_keys if k in mine
+            )
+            if channels and not on_all:
+                lines.append("Channels: " + ", ".join(channels))
+            return lines
+        theirs = data[prev.pk]["keys"]
+        lines = [
+            _limit_line(limit_value(plan, k), labels[k])
+            for k in candidates
+            if limit_value(plan, k) != limit_value(prev, k)
+        ]
+        lines += [
+            f"Adds {n}" if k in channel_keys else n
+            for k, n in feature_names.items()
+            if k in mine and k not in theirs
+        ]
+        return lines[:5]
+
     multiplier = multiplier_for(Subscription.ANNUALLY)
+    paid = [plan for plan in plans if plan.price_monthly > 0]
     cards = []
     for plan, _channels in offered:
         annual = price_for(plan, Subscription.ANNUALLY)
+        prev = paid[paid.index(plan) - 1] if plan in paid and paid.index(plan) else None
         cards.append(
             {
                 "plan": plan,
@@ -717,6 +768,8 @@ def pricing_table(offered, data=None) -> dict:
                 "key_limits": [
                     _limit_line(limit_value(plan, k), labels[k]) for k in card_keys
                 ],
+                "points": points(plan, prev),
+                "plus_from": prev,
                 "annual_total": annual,
                 "annual_monthly": (annual / 12).quantize(
                     Decimal("0.01"), rounding=ROUND_HALF_UP
@@ -724,15 +777,14 @@ def pricing_table(offered, data=None) -> dict:
             }
         )
 
-    sellable = catalog.matrix_features()
-    channel_keys = {CHANNEL_FEATURE[ch] for ch in CHANNEL_FEATURE if ch in shown}
     rows: list[dict] = []
     included: list[str] = []
+    unlimited: list[str] = []
 
     def add(group: str, label: str, cells: list, same: str) -> None:
         if differs(cells):
             rows.append({"group": group, "label": label, "cells": cells})
-        elif same:
+        elif same and same not in included:
             included.append(same)
 
     for f in sellable:
@@ -750,10 +802,11 @@ def pricing_table(offered, data=None) -> dict:
             label += " per month"
         elif spec.period == limit_catalog.DAY and "day" not in label.lower():
             label += " per day"
-        same = ""
-        if values and values[0] == limit_catalog.UNLIMITED:
-            same = f"Unlimited {label[0].lower()}{label[1:]}"
-        add("Limits", label, [limit_text(v) for v in values], same)
+        if values and not differs(values) and values[0] == limit_catalog.UNLIMITED:
+            # One bold line above the grid: "Unlimited team members and customers".
+            unlimited.append(_lower_first(spec.name))
+            continue
+        add("Limits", label, [limit_text(v) for v in values], "")
     for f in sellable:
         if f.key in catalog.CHANNEL_FEATURES or not feature_visible(f.key, shown):
             continue
@@ -774,7 +827,13 @@ def pricing_table(offered, data=None) -> dict:
         )
     return {
         "cards": cards,
+        "paid_count": len(paid),
         "included": included,
+        # Team members and customers first: what a buyer asks about.
+        "unlimited": sorted(
+            unlimited,
+            key=lambda n: {"team members": 0, "customers stored": 1}.get(n, 2),
+        ),
         "rows": rows,
         "annual_save_pct": round((1 - float(multiplier)) * 100),
     }

@@ -77,7 +77,7 @@
 /* Arial sized to Inter's metrics: until the font file arrives, lines break in the same places. */
 @font-face { font-family: "Inter Fallback"; src: local("Arial"); size-adjust: 107.12%; ascent-override: 90.44%;
   descent-override: 22.52%; line-gap-override: 0%; }
-.lp { margin: 0; background: var(--lp-navy); color: var(--lp-on-navy); font-family: "Inter Variable", "Inter Fallback", var(--font-sans);
+.lp { margin: 0; overflow-x: clip; background: var(--lp-navy); color: var(--lp-on-navy); font-family: "Inter Variable", "Inter Fallback", var(--font-sans);
   -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; font-feature-settings: "cv11", "ss01"; }
 .lp *, .lp *::before, .lp *::after { box-sizing: border-box; }
 html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background: var(--lp-navy); }
@@ -241,7 +241,9 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
 
 /* --- Illustrations: shared frame ---------------------------------------- */
 .lp-art { position: relative; margin: 0; }
-.lp-art-cap { margin-top: .875rem; font-size: .8125rem; color: var(--lp-ink-3); text-align: center; }
+/* Captions stay in the markup for screen readers but aren't shown: on screen they read like
+   wireframe notes. Each picture's role="img" carries the full description. */
+.lp-art-cap { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .lp-navy .lp-art-cap, .lp-hero .lp-art-cap { color: var(--lp-on-navy-lo); }
 .lp-window { position: relative; overflow: hidden; border-radius: var(--lp-r-lg); background: var(--lp-white); color: var(--lp-ink);
   border: 1px solid var(--lp-rule); box-shadow: var(--lp-shadow-2); }
@@ -376,6 +378,9 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
 .lp-card { position: relative; border-radius: var(--lp-r-lg); background: var(--lp-white); border: 1px solid var(--lp-rule);
   padding: 1.75rem; box-shadow: var(--lp-shadow-1); transition: transform .35s var(--lp-ease), box-shadow .35s ease, border-color .35s ease; }
 .lp-card:hover { transform: translateY(-2px); box-shadow: var(--lp-shadow-2); border-color: var(--lp-rule-2); }
+/* Softer cards: a lighter edge and a faint shadow rather than a hard outline. */
+.lp-light :is(.lp-card, .lp-plan:not(.featured):not(.lp-plan-ent)) { border-color: color-mix(in srgb, var(--lp-rule) 70%, transparent);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--lp-navy) 4%, transparent), 0 8px 24px -12px color-mix(in srgb, var(--lp-navy) 10%, transparent); }
 .lp-channel { display: flex; flex-direction: column; gap: .75rem; }
 .lp-channel-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .5rem; }
 .lp-channel .lp-small { color: var(--lp-ink-2); }
@@ -552,7 +557,7 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
   .lp-ptabs button { border-radius: var(--lp-r-sm); }
 }
 .lp-panels { display: grid; gap: 4.5rem; margin-top: 3rem; }
-.lp-panel { display: grid; gap: 2.5rem; align-items: center; border-radius: var(--lp-r-lg); }
+.lp-panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2.5rem; align-items: center; border-radius: var(--lp-r-lg); }
 .lp-panel[hidden] { display: none; }
 @media (min-width: 1024px) { .lp-panel { grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: 4rem; } }
 .lp-panel-copy .lp-h3 { font-size: 1.5rem; letter-spacing: -0.02em; }
@@ -598,70 +603,105 @@ html:has(.lp) { scroll-behavior: smooth; scroll-padding-top: 5.5rem; background:
 .lp-trust-link { transition: border-color var(--duration-base) ease, transform var(--duration-base) var(--lp-ease); }
 .lp-trust-link:hover { border-color: var(--lp-rule-2); transform: translateY(-2px); }
 .lp-trust-link .lp-h3::after { content: " →"; color: var(--lp-teal-ink); }
+/* Trust sits on a dark band between Platform and Pricing. */
+.lp-band { background: radial-gradient(60rem 30rem at 50% 0%, color-mix(in srgb, var(--color-teal-400) 10%, transparent), transparent 70%), var(--lp-navy); }
+.lp-navy .lp-trust > :is(div, a) { background-color: color-mix(in srgb, var(--lp-white) 4%, transparent); border-color: var(--lp-line); }
+.lp-navy .lp-trust .lp-small { color: var(--lp-on-navy-mid); }
+.lp-navy .lp-trust-row { color: var(--lp-on-navy-lo); }
+.lp-navy .lp-trust-link:hover { border-color: var(--lp-line-2); }
+.lp-navy .lp-trust-link .lp-h3::after { color: var(--lp-teal-on-navy); }
+.lp-navy .lp-soft { color: var(--lp-on-navy-lo); }
 
 /* --- Pricing ------------------------------------------------------------- */
-/* Monthly / annual: two visually hidden radios before the cards. The checked one hides the other
-   term's price, button and footnote (sibling selectors, so it works without JavaScript). */
+/* Above the cards: the free trial (a way to start, not a plan to compare) and the Monthly /
+   Annual switch. The switch is two visually hidden radios before the cards; the checked one
+   hides the other term's price, note and button (sibling selectors, so it works without
+   JavaScript). */
 .lp-pricebox { margin-top: 2.5rem; }
-.lp-billing { display: flex; align-items: center; gap: .25rem; width: max-content; max-width: 100%; margin: 0 auto; padding: .25rem;
+.lp-pricing-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 1rem 2rem; }
+.lp-trial-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .375rem .625rem; text-align: center; margin: 0; font-size: .9375rem; color: var(--lp-ink-2); }
+.lp-trial-line .lp-ico { width: 1.125rem; height: 1.125rem; color: var(--lp-teal-ink); }
+.lp-trial-line a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 600; color: var(--lp-ink); }
+.lp-billing { display: flex; align-items: center; gap: .25rem; width: max-content; max-width: 100%; padding: .25rem;
   border: 1px solid var(--lp-rule-2); border-radius: 999px; background: var(--lp-white); }
 .lp-billing label { display: inline-flex; align-items: center; gap: .5rem; min-height: 44px; padding: 0 1.125rem; border-radius: 999px;
   font-size: .9375rem; font-weight: 600; color: var(--lp-ink-2); cursor: pointer;
   transition: background-color var(--duration-base) ease, color var(--duration-base) ease; }
-#bill-monthly:checked ~ .lp-billing label[for="bill-monthly"],
-#bill-annual:checked ~ .lp-billing label[for="bill-annual"] { background: var(--lp-navy); color: var(--lp-on-navy); }
-#bill-monthly:focus-visible ~ .lp-billing label[for="bill-monthly"],
-#bill-annual:focus-visible ~ .lp-billing label[for="bill-annual"] { outline: 2px solid var(--lp-teal-ink); outline-offset: 2px; }
+#bill-monthly:checked ~ .lp-pricing-bar label[for="bill-monthly"],
+#bill-annual:checked ~ .lp-pricing-bar label[for="bill-annual"] { background: var(--lp-navy); color: var(--lp-on-navy); }
+#bill-monthly:focus-visible ~ .lp-pricing-bar label[for="bill-monthly"],
+#bill-annual:focus-visible ~ .lp-pricing-bar label[for="bill-annual"] { outline: 2px solid var(--lp-teal-ink); outline-offset: 2px; }
 .lp-save { padding: .0625rem .5rem; border-radius: 999px; background: var(--lp-teal-soft); color: var(--lp-teal-ink); font-size: .75rem; font-weight: 700; }
 #bill-annual:checked ~ .plans .lp-when-m,
 #bill-monthly:checked ~ .plans .lp-when-a { display: none; }
 
-/* Plan cards, then Enterprise: stacked on phones, two across on tablets, one row on desktop. */
-.plans { display: grid; gap: 1rem; grid-template-columns: 1fr; align-items: stretch; margin-top: 2.5rem; }
+/* The cards: every one has the same structure, so names, prices and buttons line up across the
+   row: name and who it's for (fixed height), price, a reserved note line, the button, then what
+   the plan adds. Stacked on phones (Professional first), two across on tablets, one row from
+   1100px. */
+.plans { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); align-items: stretch; margin-top: 2rem; }
 @media (min-width: 640px) { .plans { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 1100px) {
   .lp-plans-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .lp-plans-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .lp-plans-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-  .lp-plans-5 .lp-plan { padding: 1.5rem 1.25rem; }
-  .lp-plans-5 .lp-price b { font-size: 2.125rem; }
-  .lp-plans-5 .lp-plan-for { min-height: 4.2em; }
 }
-.lp-plan { position: relative; display: flex; flex-direction: column; border-radius: var(--lp-r-lg); background: var(--lp-white);
-  border: 1px solid var(--lp-rule); padding: 1.75rem; box-shadow: var(--lp-shadow-1); }
-.lp-plan.featured { border: 0; background: linear-gradient(var(--lp-white), var(--lp-white)) padding-box,
-  linear-gradient(140deg, var(--color-teal-400), var(--color-brand-400)) border-box; border: 2px solid transparent; box-shadow: var(--lp-shadow-2); }
-.lp-plan-badge { position: absolute; top: -.8125rem; left: 1.75rem; padding: .25rem .75rem; border-radius: 999px; background: var(--lp-navy);
+@media (max-width: 639px) { .lp-plan.featured { order: -1; } }
+.lp-plan { position: relative; display: flex; flex-direction: column; padding: 1.75rem 1.5rem; border: 1px solid var(--lp-rule);
+  border-radius: var(--lp-r-lg); background: var(--lp-white); }
+.lp-plan.featured { border-color: color-mix(in srgb, var(--color-teal-500) 45%, transparent);
+  background: color-mix(in srgb, var(--color-teal-50) 70%, var(--lp-white)); box-shadow: var(--lp-shadow-2); }
+.lp-plan-badge { position: absolute; top: -.8125rem; left: 1.5rem; padding: .25rem .75rem; border-radius: 999px; background: var(--lp-navy);
   color: var(--lp-on-navy); font-size: .75rem; font-weight: 600; letter-spacing: .02em; }
-.lp-price { margin: .875rem 0 0; display: flex; align-items: baseline; gap: .375rem; flex-wrap: wrap; }
-.lp-price b { font-size: 2.75rem; line-height: 1; font-weight: 700; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
-.lp-limits { margin: 1.5rem 0 0; padding: 0; list-style: none; border-top: 1px solid var(--lp-rule); }
-.lp-limits li { padding: .6875rem 0; border-bottom: 1px solid var(--lp-rule); font-size: .9375rem; }
-.lp-feats { margin: 1.25rem 0 0; padding: 0; list-style: none; display: grid; gap: .625rem; }
-.lp-feats li { display: flex; gap: .5rem; align-items: flex-start; font-size: .9375rem; }
-.lp-feats .lp-ico { width: 1.125rem; height: 1.125rem; color: var(--lp-teal-ink); margin-top: .125rem; }
-.lp-feats li.soon { color: var(--lp-ink-3); }
+.lp-plan-top { min-height: 5.25rem; }
+.lp-plan-for { margin: .375rem 0 0; font-size: .9375rem; line-height: 1.45; color: var(--lp-ink-2); }
+.lp-price { margin: 1rem 0 0; display: flex; align-items: baseline; gap: .25rem; }
+.lp-price b { font-size: 2.5rem; line-height: 1; font-weight: 700; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+.lp-price-note { min-height: 1.4em; margin: .5rem 0 0; font-size: .8125rem; color: var(--lp-ink-3); }
+.lp-plan .lp-btn { margin-top: 1.25rem; width: 100%; padding-inline: .75rem; }
+.lp-plan-foot { margin: .5rem 0 0; text-align: center; font-size: .8125rem; color: var(--lp-ink-3); }
+.lp-plan-plus { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--lp-rule); }
+.lp-plan-plus-head { margin: 0 0 .75rem; font-size: .8125rem; font-weight: 600; color: var(--lp-ink); }
+.lp-points { display: grid; gap: .625rem; margin: 0; padding: 0; list-style: none; }
+.lp-points li { display: flex; gap: .5rem; align-items: flex-start; font-size: .9375rem; line-height: 1.4; color: var(--lp-ink-2); }
+.lp-points .lp-ico { width: 1.125rem; height: 1.125rem; margin-top: .0625rem; color: var(--lp-teal-ink); }
 .lp-soon-tag { margin-left: .25rem; padding: .0625rem .5rem; border-radius: 999px; background: var(--lp-brand-tint); color: var(--lp-ink-2); font-size: .75rem; font-weight: 600; }
-.lp-plan .lp-btn { margin-top: 1.75rem; width: 100%; }
-.lp-plan-foot { margin: .75rem 0 0; text-align: center; font-size: .875rem; color: var(--lp-ink-3); }
-.lp-plan-for { margin: .375rem 0 0; min-height: 2.8em; font-size: .9375rem; line-height: 1.4; color: var(--lp-ink-2); }
-.lp-plan-ent { background: var(--color-gray-50); box-shadow: none; }
+/* Enterprise: the dark card that ends the row. */
+.lp-plan-ent { border-color: var(--lp-navy); background: var(--lp-navy); color: var(--lp-on-navy); }
+.lp-plan-ent .lp-plan-for, .lp-plan-ent .lp-points li { color: var(--lp-on-navy-mid); }
+.lp-plan-ent .lp-price-note, .lp-plan-ent .lp-plan-foot { color: var(--lp-on-navy-lo); }
+.lp-plan-ent .lp-plan-plus { border-top-color: var(--lp-line); }
+.lp-plan-ent .lp-plan-plus-head { color: var(--lp-on-navy); }
+.lp-plan-ent .lp-points .lp-ico { color: var(--lp-teal-on-navy); }
+.lp-btn-light { color: var(--lp-navy); background: var(--lp-white); }
+.lp-btn-light:hover { background: var(--color-gray-100); }
 
-/* Under the cards: one line of what every plan includes, then Meta's fees. */
-.lp-included { margin: 2.25rem auto 0; max-width: 62rem; text-align: center; font-size: .9375rem; line-height: 1.7; color: var(--lp-ink-2); }
-.lp-included strong { margin-right: .375rem; color: var(--lp-ink); }
-.lp-fees { margin: .75rem auto 0; max-width: 46rem; text-align: center; font-size: .875rem; line-height: 1.6; color: var(--lp-ink-3); }
+/* What every plan has: one bold line, then a grid with ticks. */
+.lp-included { margin: 3rem auto 0; max-width: 62rem; }
+.lp-included-head { display: flex; flex-wrap: wrap; justify-content: center; gap: .25rem .75rem; margin: 0; text-align: center; font-size: 1rem; color: var(--lp-ink); }
+.lp-included-head span { font-weight: 600; color: var(--lp-ink-2); }
+.lp-included-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr)); gap: .75rem 1.5rem; margin: 1.5rem 0 0; padding: 0; list-style: none; }
+.lp-included-grid li { display: flex; gap: .5rem; align-items: flex-start; font-size: .9375rem; color: var(--lp-ink-2); }
+.lp-included-grid .lp-ico { width: 1.125rem; height: 1.125rem; margin-top: .0625rem; color: var(--lp-teal-ink); }
+.lp-fees { display: flex; gap: .5rem; justify-content: center; align-items: flex-start; margin: 1.75rem auto 0; max-width: 46rem; font-size: .8125rem; line-height: 1.6; color: var(--lp-ink-3); }
+.lp-fees .lp-ico { width: 1rem; height: 1rem; margin-top: .1875rem; }
 
-/* The comparison table: collapsed by default; on a narrow screen it scrolls sideways inside its
-   own box (never the page), with the row names held at the left. */
-.lp-compare { margin: 2.5rem auto 0; border: 1px solid var(--lp-rule); border-radius: var(--lp-r-lg); background: var(--lp-white); overflow: hidden; }
-.lp-compare summary { list-style: none; display: flex; align-items: center; justify-content: center; gap: .75rem; min-height: 56px;
-  padding: 0 1.25rem; font-weight: 600; cursor: pointer; }
+/* The comparison table: a centred text button; once open, the plan names stay at the top while
+   you scroll down it (wide screens), and on a phone it scrolls sideways inside its own box. */
+.lp-compare { margin: 2rem auto 0; }
+.lp-compare summary { list-style: none; display: flex; align-items: center; justify-content: center; gap: .375rem; width: max-content; min-height: 44px;
+  margin: 0 auto; padding: 0 .75rem; font-weight: 600; color: var(--lp-ink); cursor: pointer; text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1px; }
 .lp-compare summary::-webkit-details-marker { display: none; }
 .lp-compare summary:hover { color: var(--lp-teal-ink); }
-.lp-compare-scroll { overflow-x: auto; overscroll-behavior-x: contain; border-top: 1px solid var(--lp-rule); }
-.lp-compare-scroll:focus-visible { outline: 2px solid var(--lp-teal-ink); outline-offset: -2px; }
-.lp-compare table { width: 100%; min-width: 40rem; border-collapse: collapse; font-size: .9375rem; }
+.lp-compare summary .lp-ico { width: 1.125rem; height: 1.125rem; transition: transform var(--duration-base) ease; }
+.lp-compare[open] summary .lp-ico { transform: rotate(180deg); }
+.lp-compare-scroll { margin-top: 1rem; overflow-x: auto; overscroll-behavior-x: contain; border: 1px solid var(--lp-rule); border-radius: var(--lp-r-lg); background: var(--lp-white); }
+.lp-compare-scroll:focus-visible { outline: 2px solid var(--lp-teal-ink); outline-offset: 2px; }
+@media (min-width: 768px) {
+  .lp-compare-scroll { overflow: visible; }
+  .lp-compare thead th, .lp-compare thead td { position: sticky; top: var(--lp-header-h); z-index: 2; background: var(--lp-white); box-shadow: inset 0 -1px 0 var(--lp-rule); }
+}
+.lp-compare table { width: 100%; min-width: 40rem; border-collapse: separate; border-spacing: 0; font-size: .9375rem; }
 .lp-compare th, .lp-compare td { padding: .75rem 1rem; border-bottom: 1px solid var(--lp-rule); text-align: center; font-variant-numeric: tabular-nums; }
 .lp-compare thead th { font-weight: 700; color: var(--lp-ink); }
 .lp-compare th[scope="row"] { position: sticky; left: 0; z-index: 1; text-align: left; font-weight: 500; color: var(--lp-ink-2); background: var(--lp-white); }

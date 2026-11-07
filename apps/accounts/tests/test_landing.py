@@ -36,8 +36,11 @@ def test_renders_without_unbacked_claims(client, settings, plans, whatsapp):
     html = _get(client)
     for phrase in UNBACKED:
         assert phrase not in html, phrase
+    # Paid plans are cards; the free plan is the trial line above them.
     for plan in plans:
-        assert plan.name in html
+        if plan.price_monthly > 0:
+            assert plan.name in html
+    assert "Try it free for 14 days" in html
 
 
 @pytest.mark.django_db

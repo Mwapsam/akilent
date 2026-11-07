@@ -78,30 +78,43 @@ def _pricing(client):
 
 
 @pytest.mark.django_db
-def test_cards_lead_with_who_its_for_and_the_limits_that_differ(client, plans):
+def test_cards_share_one_structure_and_list_what_each_plan_adds(client, plans):
+    # Automations from Professional up, so Professional adds them to Starter.
+    PlanFeature.objects.filter(plan=plans[1], key="automations").delete()
     pricing = _pricing(client)
-    cards = pricing.split('<div class="lp-plan')[1:]
-    starter = next(c for c in cards if ">Starter<" in c)
-    assert "For starter teams." in starter
-    limits = re.findall(r"<li>([^<]+)</li>", starter.split('class="lp-limits"', 1)[1])
-    # Limits that differ between plans come first; every plan has one WhatsApp number, so that
-    # line only fills a place. Message history isn't advertised: nothing enforces it.
-    assert limits[0] == "1,000 conversations/mo"
-    assert "1 WhatsApp number" in limits and len(limits) == 3
-    assert "message history" not in pricing
-    # Every card shows the same three limits, so the lines match across cards.
-    shapes = {
-        tuple(
-            re.sub(r"^[\d,]+ |^Unlimited ", "", line).rstrip("s")
-            for line in re.findall(
-                r"<li>([^<]+)</li>",
-                c.split('class="lp-limits"', 1)[1].split("</ul>", 1)[0],
-            )
-        )
+    cards = re.split(r'<div class="lp-plan[ "]', pricing)[1:]
+    names = [
+        re.search(r'<h3 class="lp-h3">([^<]+)</h3>', c).group(1)
         for c in cards
-        if 'class="lp-limits"' in c and "lp-plan-ent" not in c[:40]
-    }
-    assert len(shapes) == 1, shapes
+        if "<h3" in c
+    ]
+    # The free plan is a line above the cards, not a card: three paid plans and Enterprise.
+    assert names == ["Starter", "Professional", "Business", "Enterprise"]
+    assert "Try it free for 14 days · No card required" in pricing
+    assert 'href="/signup/?plan=trial"' in pricing
+    starter = next(c for c in cards if ">Starter<" in c)
+    pro = next(c for c in cards if ">Professional<" in c)
+    assert "For starter teams." in starter
+    # The button sits straight under the price, before the list, on every card.
+    for card in (starter, pro):
+        assert (
+            card.index("lp-price") < card.index("lp-btn") < card.index("lp-plan-plus")
+        )
+
+    def points(card):
+        return re.findall(r"</svg>([^<]+)</li>", card.split('class="lp-points"', 1)[1])
+
+    assert "Includes:" in starter and "1,000 conversations/mo" in points(starter)
+    # Each card after the first lists only what it adds.
+    assert "Everything in Starter, plus:" in pro
+    assert "5,000 conversations/mo" in points(pro) and "Automations" in points(pro)
+    assert "1 WhatsApp number" not in points(pro)
+    # Message history isn't advertised: nothing enforces it.
+    assert "message history" not in pricing
+    # Professional is the one amber button.
+    assert pricing.count("lp-btn-primary") == pricing.count(
+        'data-cta-plan="professional"'
+    )
 
 
 @pytest.mark.django_db
@@ -111,7 +124,7 @@ def test_the_annual_price_is_what_checkout_charges(client, plans):
     yearly = price_for(starter, "annually")
     monthly_equivalent = (yearly / 12).quantize(Decimal("0.01"))
     assert f"${monthly_equivalent}" in pricing
-    assert f"billed ${yearly:,} a year" in pricing
+    assert f"Billed ${yearly:,} a year" in pricing
     assert 'href="/signup/?plan=starter&amp;period=annually"' in pricing
     assert 'href="/signup/?plan=starter"' in pricing
     # The switch is two radios before the cards, so it works without JavaScript.
@@ -134,9 +147,14 @@ def test_without_an_annual_discount_there_is_no_switch(client, plans, settings):
 @pytest.mark.django_db
 def test_all_plans_include_only_what_every_plan_has(client, plans):
     pricing = _pricing(client)
-    line = pricing.split('class="lp-included', 1)[1].split("</p>", 1)[0]
-    assert "All plans include" in line and "WhatsApp campaigns" in line
-    assert "Automations" not in line
+    block = pricing.split('class="lp-included', 1)[1].split("</div>", 1)[0]
+    grid = re.findall(r"</svg>([^<]+)</li>", block)
+    assert "All plans include" in block and "WhatsApp campaigns" in grid
+    assert "Automations" not in grid
+    # No duplicates, and names keep their capitals ("WhatsApp", "AI").
+    assert len(grid) == len(set(grid))
+    assert "whatsApp" not in block and "aI " not in block
+    assert "Unlimited team members" in block
 
 
 @pytest.mark.django_db
@@ -170,9 +188,7 @@ def test_the_comparison_table_lists_only_what_differs(client, plans):
 @pytest.mark.django_db
 def test_enterprise_offers_only_what_exists_today(client, plans):
     pricing = _pricing(client)
-    ent = pricing.split('class="lp-plan lp-plan-ent', 1)[1].split(
-        "</div>\n      </div>", 1
-    )[0]
+    ent = pricing.split('class="lp-plan lp-plan-ent', 1)[1].split("</ul>", 1)[0]
     assert "Custom" in ent
     assert 'href="/demo/?topic=sales"' in ent and "Contact sales" in ent
     for claim in ("custom-limits", "feature-overrides", "annual-billing", "demo"):

@@ -125,7 +125,10 @@ const shot = async (name, full) => {
   writeFileSync(join(shots, name + ".jpg"), Buffer.from((await send("Page.captureScreenshot", { format: "jpeg", quality: 70, ...(full ? { clip, captureBeyondViewport: true } : {}) })).data, "base64"));
 };
 // Reveal everything (as scrolling would) so the scan and the full-page shot see the settled page.
+// Sections below the fold are drawn lazily (content-visibility: auto); a reveal that starts in a
+// section that isn't drawn never runs its transition, so draw them all before revealing.
 const settle = async () => {
+  await evaluate("document.querySelectorAll('.lp-section').forEach(s => { s.style.contentVisibility = 'visible'; })");
   await evaluate("(async () => { const h = document.documentElement.scrollHeight; for (let y = 0; y < h; y += 500) { window.scrollTo(0, y); await new Promise(r => setTimeout(r, 40)); } document.querySelectorAll('.lp-reveal').forEach(e => e.classList.add('in')); window.scrollTo(0, 0); })()");
   await sleep(1300);
 };
