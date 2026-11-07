@@ -55,6 +55,11 @@ def _check_sendable(template) -> None:
         raise CampaignError(
             "This template isn't approved by Meta yet — only an approved template can be sent as a campaign."
         )
+    if template.category == MessageTemplate.Category.AUTHENTICATION:
+        raise CampaignError(
+            "This is a one-time code (authentication) template, and Meta doesn't allow those "
+            "in campaigns. Choose a marketing or utility template."
+        )
     if template.header_format != MessageTemplate.HeaderFormat.TEXT:
         raise CampaignError(
             "This template has a picture, video or document at the top, which "

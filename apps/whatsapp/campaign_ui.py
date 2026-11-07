@@ -254,10 +254,14 @@ def list_options(account) -> list:
 
 
 def template_options(account) -> list:
+    """The templates a campaign can send: approved, and never Authentication (one-time
+    codes), which Meta doesn't allow in broadcasts (campaigns._check_sendable refuses one)."""
     templates = list(
         MessageTemplate.objects.filter(
             account=account, approval_status=MessageTemplate.ApprovalStatus.APPROVED
-        ).order_by("name")
+        )
+        .exclude(category=MessageTemplate.Category.AUTHENTICATION)
+        .order_by("name")
     )
     for t in templates:
         t.sendable = t.header_format == MessageTemplate.HeaderFormat.TEXT  # type: ignore[attr-defined]

@@ -809,7 +809,10 @@ def _composer_state(request, account, templates, src=None):
             key = f"{t.pk}__{b['name']}"
             picks[key] = src.get(f"var__{key}") or b["default"]
             lits[key] = src.get(f"lit__{key}") or ""
-            fbs[key] = src.get(f"fb__{key}") or ""
+            # Filled in from the start ("there" for a name), so it's never left blank unseen.
+            fbs[key] = src.get(f"fb__{key}") or wa_variables.default_fallback(
+                picks[key]
+            )
     audience, _list, _segment = _audience_from(src, account)
     return {
         "audience": audience,
@@ -990,9 +993,19 @@ def campaign_new(request):
                                 "change or cancel it until then.",
                             )
                         else:
+                            from apps.whatsapp.campaign_ui import local_label
+                            from apps.whatsapp.delivery import forecast
+
+                            pace = forecast(account, campaign.recipient_count)
                             messages.success(
                                 request,
-                                "Your campaign is on its way. Results appear below as they arrive.",
+                                (
+                                    "Your campaign is ready. Your sending hours are closed, "
+                                    f"so it starts {local_label(pace['starts_local'], pace['zone'])} "
+                                    f"({pace['zone']})."
+                                )
+                                if pace["waits_for_window"]
+                                else "Your campaign is on its way. Results appear below as they arrive.",
                             )
                         return redirect("whatsapp-campaign-detail", pk=campaign.pk)
 
@@ -1112,12 +1125,15 @@ def campaign_estimate(request):
     from apps.whatsapp.delivery import forecast
 
     send_at, tz, when_error = _send_time(request.GET, account)
+    pace = forecast(account, est.will_receive, now=send_at)
     return render(
         request,
         "whatsapp/_campaign_estimate.html",
         {
             "est": est,
-            "pace": forecast(account, est.will_receive, now=send_at),
+            "pace": pace,
+            # Step 3's "Send now" is about now, whichever time is picked.
+            "pace_now": forecast(account, est.will_receive) if send_at else pace,
             "template": template,
             "contact_list": contact_list,
             "segment": segment,

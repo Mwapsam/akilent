@@ -23,6 +23,10 @@ swapped-in copy lost, so the Send button showed from step 2.{% endcomment %}
   {% else %}
   <div class="card card-pad text-sm text-ink-subtle">Choose who gets it and a message to see a preview.</div>
   {% endif %}
+  {% comment %}Step 3's "Send now" says when it really starts: at once, or when the sending hours
+  open (delivery.forecast, in the workspace's zone).{% endcomment %}
+  <span id="when-now-note" hx-swap-oob="innerHTML">{% if pace_now.waits_for_window %}Your sending hours are closed now, so it starts {{ pace_now.starts_local|timezone:pace_now.zone|date:"D H:i" }} ({{ pace_now.zone }}).{% else %}It starts going out as soon as you press send.{% endif %}</span>
+
   <div id="send-slot" hx-swap-oob="innerHTML"></div>
 {% else %}
   <section class="card card-pad" aria-labelledby="preview-title">
@@ -63,7 +67,7 @@ swapped-in copy lost, so the Send button showed from step 2.{% endcomment %}
       <p class="alert alert-info mt-3 !text-xs">{% include "components/icon.html" with name="clock" %}<span>Meta lets your number start conversations with {{ pace.limit|floatformat:"0g" }} customers a day, so this goes out over {{ pace.days }} days — {{ pace.room|floatformat:"0g" }} today, the rest each day after.</span></p>
     {% endif %}
     {% if pace.waits_for_window %}
-      <p class="alert alert-info mt-3 !text-xs">{% include "components/icon.html" with name="clock" %}<span>Outside your sending hours, so messages start at {{ pace.starts_local|date:"D H:i" }} ({{ pace.zone }}). <a href="{% url 'whatsapp-campaign-settings' %}" class="underline font-medium">Change hours</a></span></p>
+      <p class="alert alert-info mt-3 !text-xs">{% include "components/icon.html" with name="clock" %}<span>Outside your sending hours, so messages start at {{ pace.starts_local|timezone:pace.zone|date:"D H:i" }} ({{ pace.zone }}). <a href="{% url 'whatsapp-campaign-settings' %}" class="underline font-medium">Change hours</a></span></p>
     {% endif %}
     {% if is_marketing and est.not_opted_in %}
       <p class="alert alert-info mt-3 !text-xs">{% include "components/icon.html" with name="info" %}<span>To reach more people with offers, they need to opt in.{% if contact_list %} <a href="{% url 'contacts:list_detail' contact_list.pk %}?wa=updates" class="underline font-medium">See who hasn't</a>{% endif %}</span></p>
@@ -74,13 +78,17 @@ swapped-in copy lost, so the Send button showed from step 2.{% endcomment %}
     <dl class="card card-pad text-sm space-y-2">
       <div class="flex justify-between gap-4"><dt class="text-ink-subtle">To</dt><dd class="text-right text-ink">{{ audience_name }} · {{ est.will_receive }} of {{ est.total }}</dd></div>
       <div class="flex justify-between gap-4"><dt class="text-ink-subtle">Message</dt><dd class="text-right text-ink">{{ template.name }} · {% if is_marketing %}Promotion{% else %}Update{% endif %}</dd></div>
-      <div class="flex justify-between gap-4"><dt class="text-ink-subtle">When</dt><dd class="text-right text-ink">{% if send_at %}{{ send_at|timezone:send_tz|date:"D j M Y, H:i" }} ({{ send_tz }}){% elif when_error %}<span class="text-coral-700">{{ when_error }}</span>{% else %}Now{% endif %}</dd></div>
+      <div class="flex justify-between gap-4"><dt class="text-ink-subtle">When</dt><dd class="text-right text-ink">{% if when_error %}<span class="text-coral-700">{{ when_error }}</span>{% elif send_at %}{{ send_at|timezone:send_tz|date:"D j M Y, H:i" }} ({{ send_tz }}){% if pace.waits_for_window %}<span class="block text-xs text-ink-subtle">Starts {{ pace.starts_local|timezone:pace.zone|date:"D H:i" }} ({{ pace.zone }}), when your sending hours open</span>{% endif %}{% elif pace.waits_for_window %}Starts {{ pace.starts_local|timezone:pace.zone|date:"D H:i" }} ({{ pace.zone }})<span class="block text-xs text-ink-subtle">Outside your sending hours now</span>{% else %}Now{% endif %}</dd></div>
       {% if segment %}<p class="text-xs text-ink-subtle">A segment is checked again when it sends, so the number can change.</p>{% endif %}
     </dl>
     {% if not est.will_receive %}
       <p class="alert alert-warning mt-3" role="alert">{% include "components/icon.html" with name="alert-triangle" %}<span>Nobody on this list can get this message{% if is_marketing %} — nobody has opted in yet. Choose an update message, or get people to opt in first{% endif %}.</span></p>
     {% endif %}
   </div>
+
+  {% comment %}Step 3's "Send now" says when it really starts: at once, or when the sending hours
+  open (delivery.forecast, in the workspace's zone).{% endcomment %}
+  <span id="when-now-note" hx-swap-oob="innerHTML">{% if pace_now.waits_for_window %}Your sending hours are closed now, so it starts {{ pace_now.starts_local|timezone:pace_now.zone|date:"D H:i" }} ({{ pace_now.zone }}).{% else %}It starts going out as soon as you press send.{% endif %}</span>
 
   <div id="send-slot" hx-swap-oob="innerHTML">
     {% if can_send %}

@@ -2276,3 +2276,21 @@ Plan: the Campaigns plan of 2026-11-06 (from the user's review of live Campaigns
 - **Before sending (warn and confirm, the user's choice):** the composer shows the problem with its fix in step 1 and on Review. Send asks "Send anyway?" with the reason, then posts `confirm_account_problem=1`; without it the server refuses with the reason (400) and nothing is created. Without scripts, a "Send anyway" box on Review does the same.
 - **Budgets (`test_campaign_speed.py`):** list 15, campaign page 19, composer 19 queries, the same with 6× the campaigns and recipients.
 - **Verification:** `test_campaign_results.py` (14): outcome three ways, badges and history on both pages, grouped plain reasons with the fix, a stored sentence, Retry swapped and kept, `account_problem` cases, the warning in steps 1 and 4, Send refused then sent with the confirm, and Send asking first. Full suite: one scheduler test (`test_drain_fires_due_message`, untouched) failed in the parallel run and passes alone. ruff, format, mypy, migrations clean. Not yet checked in a browser: the Campaigns harness comes in Phase G.
+
+### Entry 35: Campaigns Phase B, the composer's bugs (2026-11-07)
+Plan: the Campaigns plan of 2026-11-06, Phase B.
+
+- **Wrong start time:** `delivery.forecast` found 08:00 in the workspace's zone correctly, but `_campaign_estimate.html` printed it with `|date`, which turns an aware time back into the server's zone (UTC): 08:00 in Lusaka read "Sat 06:00 (Africa/Lusaka)". Every forecast time is now shown with `|timezone:<zone>` first. A test with the workspace in Africa/Lusaka at 22:00 on a Friday asserts "Sat 08:00 (Africa/Lusaka)"; with the old filter it fails.
+- **"Send now" outside sending hours:**
+  - step 3's line under Send now comes from the forecast for now (`pace_now`): "Your sending hours are closed now, so it starts Sat 08:00 (Africa/Lusaka)";
+  - Review's When reads "Starts Sat 08:00 (…) · Outside your sending hours now", and a scheduled time outside the hours adds when it really starts;
+  - after sending, the message says "Your campaign is ready. Your sending hours are closed, so it starts Sat 7 Nov 2026, 08:00 (Africa/Lusaka)." instead of "on its way".
+- **Authentication templates:** `campaign_ui.template_options` leaves them out, and `campaigns._check_sendable` refuses one posted by hand ("Meta doesn't allow those in campaigns").
+- **Fill in the blanks:**
+  - a customer detail shows only its fallback, filled in from the start ("there" for a name, `variables.default_fallback`) and required;
+  - fixed text shows only its box and the warning, and is required;
+  - the field not chosen is disabled, so it isn't sent;
+  - without scripts both show and the server reads the one matching the choice (as before);
+  - the choice reads "Fixed text, the same for everyone".
+- **Harness:** new `tools/qa/campaigns_qa.mjs` (the Inbox harness's plumbing, every POST intercepted). `QA_BLANKS`: a name shows only its fallback ("there", required), fixed text only its box and warning, and back again; the preview fills in after a change.
+- **Verification:** `test_campaign_composer.py` (7): the start time, Send now in step 3 and Review (closed and open), the message after sending, authentication templates neither offered nor sendable, the fallback filled in, and only the chosen kind of answer counting. Full suite with no failures; ruff, format, mypy and migrations clean.

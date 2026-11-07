@@ -140,20 +140,30 @@ and the send could only fail.{% endcomment %}
           <h3 class="text-sm font-medium text-ink">Fill in the blanks</h3>
           {% for b in t.blanks %}
           {% with key=t.pk|stringformat:"s"|add:"__"|add:b.name %}
-          <div class="rounded-xl border border-border p-3 space-y-2">
+          {% comment %}One of two things goes in a blank: a detail we fill per customer, with what to use
+          when we don't have it (a name falls back to "there", filled in and required), or fixed
+          text everyone gets, with the warning about names. Only the one chosen shows, and only
+          its field is sent (:disabled), so a box left over from the other can't mislead. Without
+          scripts both show, and the server reads the one that matches the choice.{% endcomment %}
+          <div class="rounded-xl border border-border p-3 space-y-2" data-blank="{{ key }}">
             <label class="label" for="var-{{ t.pk }}-{{ forloop.counter }}">What goes in “{{ b.name }}”?</label>
-            <select id="var-{{ t.pk }}-{{ forloop.counter }}" name="var__{{ key }}" class="select" x-model="picks['{{ key }}']">
+            <select id="var-{{ t.pk }}-{{ forloop.counter }}" name="var__{{ key }}" class="select" x-model="picks['{{ key }}']" data-blank-source
+                    @change="if (['first_name', 'full_name'].includes(picks['{{ key }}']) && !(fbs['{{ key }}'] || '').trim()) fbs['{{ key }}'] = 'there'">
               {% for c in blank_choices %}<option value="{{ c.key }}">{{ c.label }}</option>{% endfor %}
-              <option value="literal">The same text for everyone</option>
+              <option value="literal">Fixed text, the same for everyone</option>
             </select>
-            <div x-show="picks['{{ key }}'] === 'literal'" x-cloak>
-              <input name="lit__{{ key }}" class="input" x-model="lits['{{ key }}']" aria-label="Text for “{{ b.name }}”" />
-              <p class="text-xs text-amber-800 mt-1">Every customer gets exactly this text — don't type a person's name here.</p>
+            <div x-show="picks['{{ key }}'] === 'literal'">
+              <label class="sr-only" for="lit-{{ t.pk }}-{{ forloop.counter }}">Text for “{{ b.name }}”</label>
+              <input id="lit-{{ t.pk }}-{{ forloop.counter }}" name="lit__{{ key }}" class="input" x-model="lits['{{ key }}']"
+                     :disabled="picks['{{ key }}'] !== 'literal'" :required="picks['{{ key }}'] === 'literal'" />
+              <p class="text-xs text-amber-800 mt-1" data-literal-warning>Every customer gets exactly this text — don't type a person's name here.</p>
             </div>
-            <div x-show="picks['{{ key }}'] !== 'literal'" x-cloak>
+            <div x-show="picks['{{ key }}'] !== 'literal'">
               <label class="text-xs text-gray-600 block">If we don't have it for someone, use
                 <input name="fb__{{ key }}" class="input mt-0.5" x-model="fbs['{{ key }}']"
-                       :placeholder="picks['{{ key }}'] === 'first_name' || picks['{{ key }}'] === 'full_name' ? 'there' : 'leave empty to skip them'" />
+                       :disabled="picks['{{ key }}'] === 'literal'"
+                       :required="['first_name', 'full_name'].includes(picks['{{ key }}'])"
+                       :placeholder="['first_name', 'full_name'].includes(picks['{{ key }}']) ? 'there' : 'leave empty to skip them'" />
               </label>
             </div>
           </div>
@@ -170,7 +180,7 @@ and the send could only fail.{% endcomment %}
         <div class="space-y-3">
           <label class="card card-pad !p-4 flex items-start gap-3 cursor-pointer" :class="when === 'now' ? 'ring-2 ring-brand-500' : ''">
             <input type="radio" name="when" value="now" x-model="when" class="mt-1 h-4 w-4">
-            <span><span class="font-medium text-ink block">Send now</span><span class="text-sm text-gray-600">It starts going out as soon as you press send.</span></span>
+            <span><span class="font-medium text-ink block">Send now</span><span class="text-sm text-gray-600" id="when-now-note" data-when-now>It starts going out as soon as you press send.</span></span>
           </label>
           <label class="card card-pad !p-4 flex items-start gap-3 cursor-pointer" :class="when === 'later' ? 'ring-2 ring-brand-500' : ''">
             <input type="radio" name="when" value="later" x-model="when" class="mt-1 h-4 w-4">

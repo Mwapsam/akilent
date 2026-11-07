@@ -92,6 +92,11 @@ def looks_like_name(variable: str) -> bool:
     return default_choice(variable) in ("first_name", "full_name")
 
 
+def default_fallback(choice: str) -> str:
+    """What a detail falls back to when a customer doesn't have it ("there" for a name)."""
+    return _BY_KEY.get(choice, ("", "", ""))[2]
+
+
 def entry_from_choice(choice: str, literal: str = "", fallback: str = ""):
     """``(source, fallback)`` for what the owner picked, or ``(None, "")`` if it is incomplete."""
     if choice in _BY_KEY:
