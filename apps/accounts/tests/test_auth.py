@@ -70,7 +70,10 @@ def test_signup_creates_active_account_and_sends_verification(
 ):
     resp = client.post(SIGNUP_URL, _payload())
     assert resp.status_code == 302
-    assert resp.url == "/email/domains/"  # email-only → straight to domain setup
+    # Free and trial: the code page first; skipping it goes on to setup (email-only →
+    # domain setup).
+    assert resp.url == "/signup/verify/"
+    assert client.post("/signup/verify/", {"action": "skip"}).url == "/email/domains/"
 
     user = User.objects.get(email="new@example.com")
     assert user.is_active is True
@@ -93,6 +96,7 @@ def test_signup_creates_active_account_and_sends_verification(
 
     assert len(mail.outbox) == 1
     assert "new@example.com" in mail.outbox[0].to
+    assert mail.outbox[0].subject == "Confirm your email address"
 
     # Logged in immediately.
     assert client.session.get("_auth_user_id") == str(user.pk)
@@ -112,8 +116,10 @@ def test_signup_whatsapp_routes_to_meta_onboarding(
             plan=Plan.PROFESSIONAL,
         ),
     )
-    assert resp.status_code == 302
-    assert resp.url == "/whatsapp/numbers/"
+    assert resp.status_code == 302 and resp.url == "/signup/verify/"
+    assert (
+        client.post("/signup/verify/", {"action": "skip"}).url == "/whatsapp/numbers/"
+    )
     account = Account.objects.get(company_name="WA Co")
     assert account.onboarding_state == Account.Onboarding.WHATSAPP_SETUP
 

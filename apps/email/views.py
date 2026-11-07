@@ -1621,6 +1621,38 @@ def _parse_recipients_text(raw: str) -> list[dict]:
     return recipients
 
 
+def _campaign_send_blockers(request, account) -> list[dict]:
+    """What has to be done before a campaign can go out, each with where to do it, so the
+    composer says so before anyone writes a campaign rather than after they press Send.
+    The address form comes back here once it's saved."""
+    from urllib.parse import urlencode
+
+    from django.urls import reverse
+
+    from apps.accounts.verification import can_send_campaigns
+
+    blockers = []
+    if not can_send_campaigns(account):
+        blockers.append(
+            {
+                "text": "Confirm your email address to send campaigns.",
+                "url": reverse("signup-verify"),
+                "label": "Enter code",
+            }
+        )
+    if not account.has_postal_address:
+        back = urlencode({"next": request.get_full_path()})
+        blockers.append(
+            {
+                "text": "Add your business's postal address. Every campaign email shows it "
+                "in the footer, as the law requires.",
+                "url": f"{reverse('settings-business')}?{back}",
+                "label": "Add address",
+            }
+        )
+    return blockers
+
+
 def _render_composer(request, account, *, form_data=None, errors=None, status=200):
     """Render the standalone message composer (`/email/campaigns/new/`).
 
@@ -1661,6 +1693,7 @@ def _render_composer(request, account, *, form_data=None, errors=None, status=20
         "email/campaign_compose.html",
         {
             "account": account,
+            "send_blockers": _campaign_send_blockers(request, account),
             "templates": templates,
             "verified_domains": verified_domains,
             "bulk_enabled": bulk_enabled,
@@ -1881,7 +1914,11 @@ def campaign_create(request):
         create_and_queue_campaign,
     )
     from apps.billing.limits import PlanLimitExceeded
-    from apps.email.exceptions import MissingPostalAddressError, UnverifiedDomainError
+    from apps.email.exceptions import (
+        MissingPostalAddressError,
+        UnconfirmedOwnerEmailError,
+        UnverifiedDomainError,
+    )
     from apps.scheduler.api import SchedulingError
 
     account = get_current_account(request)
@@ -1966,7 +2003,7 @@ def campaign_create(request):
             )
         except UnverifiedDomainError as exc:
             errors["from_email"] = str(exc)
-        except MissingPostalAddressError as exc:
+        except (MissingPostalAddressError, UnconfirmedOwnerEmailError) as exc:
             errors["form"] = str(exc)
         except ChannelError as exc:
             errors["form"] = str(exc)

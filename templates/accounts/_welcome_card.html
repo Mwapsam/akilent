@@ -1,0 +1,33 @@
+{% comment %}Optional, after signup: industry and team size (accounts.welcome). "No thanks" hides it
+for good; saving hides it too. Posts a full page, then back to the dashboard.{% endcomment %}
+<section class="card card-pad mb-6" aria-labelledby="welcome-card-title">
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <h2 id="welcome-card-title" class="text-base font-semibold text-ink">Tell us about your business</h2>
+      <p class="mt-0.5 text-sm text-ink-subtle">Optional. Two quick answers help us suggest the right setup.</p>
+    </div>
+  </div>
+  <form method="post" action="{% url 'welcome-profile' %}" hx-boost="false" class="mt-4 grid sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
+    {% csrf_token %}
+    <div>
+      <label class="label" for="id_welcome_industry">Industry</label>
+      <select id="id_welcome_industry" name="industry" class="select">
+        {% for value, label in form.fields.industry.choices %}
+          <option value="{{ value }}" {% if value == form.initial.industry %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="label" for="id_welcome_size">Team size</label>
+      <select id="id_welcome_size" name="company_size" class="select">
+        {% for value, label in form.fields.company_size.choices %}
+          <option value="{{ value }}" {% if value == form.initial.company_size %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="flex gap-2">
+      <button type="submit" name="action" value="save" class="btn btn-primary">Save</button>
+      <button type="submit" name="action" value="dismiss" class="btn btn-ghost">No thanks</button>
+    </div>
+  </form>
+</section>

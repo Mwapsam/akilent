@@ -11,7 +11,11 @@ from __future__ import annotations
 
 from django.db import transaction
 
-from apps.email.exceptions import MissingPostalAddressError, UnverifiedDomainError
+from apps.email.exceptions import (
+    MissingPostalAddressError,
+    UnconfirmedOwnerEmailError,
+    UnverifiedDomainError,
+)
 from apps.email.models import BulkEmailCampaign, BulkEmailRecipient, EmailDomain
 
 _CREATE_BATCH_SIZE = 1000
@@ -49,6 +53,11 @@ def create_campaign(
     # the single choke point for both the composer UI and the API.
     if not account.has_postal_address:
         raise MissingPostalAddressError()
+    # Campaigns wait until the owner has confirmed their email (accounts.verification).
+    from apps.accounts.verification import can_send_campaigns
+
+    if not can_send_campaigns(account):
+        raise UnconfirmedOwnerEmailError()
 
     scheduled = initial_status == BulkEmailCampaign.Status.SCHEDULED
     campaign = BulkEmailCampaign.objects.create(

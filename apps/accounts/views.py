@@ -486,7 +486,8 @@ def signup(request):
             else:
                 login(request, user, backend="apps.accounts.backends.EmailBackend")
                 set_current_account(request, account)
-                verification_sent = _send_verification_email(request, user)
+                # The code (and, as a fallback, the link) that confirms their address.
+                verification_sent = _send_verify_code(user) == "sent"
                 # Sent by the next page the browser loads (dashboard or checkout).
                 queue_ga_event(request, "signup_created", plan=form.chosen_plan.slug)
                 if cd.get("product_updates"):
@@ -517,8 +518,8 @@ def signup(request):
                     if not verification_sent:
                         messages.warning(
                             request,
-                            "We couldn't send the verification email just now. Use "
-                            "“Resend link” on the setup page once you've paid.",
+                            "We couldn't send your confirmation code just now. You can "
+                            "ask for a new one from the setup page once you've paid.",
                         )
                     messages.success(
                         request,
@@ -529,19 +530,14 @@ def signup(request):
                     request.session[PAY_AUTOSTART] = True
                     return redirect(after_signup_url(account))
 
-                if verification_sent:
-                    messages.success(
-                        request,
-                        # Queued, not yet delivered: say "sending", not "emailed".
-                        "Your account is ready. We're sending a link to confirm your email address.",
-                    )
-                else:
+                if not verification_sent:
                     messages.warning(
                         request,
-                        "Your account is ready, but we couldn't send the verification email "
-                        "just now. Use “Resend link” on this page in a few minutes.",
+                        "Your account is ready, but we couldn't send your confirmation "
+                        "code just now. Press “Send a new code” in a few minutes.",
                     )
-                return redirect(after_signup_url(account))
+                # Free and trial: confirm the address with the code, or skip to setup.
+                return redirect("signup-verify")
 
         config = _build_signup_wizard_config(
             request,
@@ -691,6 +687,151 @@ def verify_email(request, uidb64, token):
         return redirect("login")
 
     return render(request, "accounts/verify_email_invalid.html", status=400)
+
+
+def _send_verify_code(user) -> str:
+    """Email a code that confirms ``user``'s address, with the link as a fallback
+    (email_mfa.VERIFY). Returns email_mfa's result: SENT, RECENT, CAPPED or UNAVAILABLE."""
+    from apps.accounts import email_mfa
+
+    return email_mfa.send_code(user, email_mfa.VERIFY)
+
+
+_VERIFY_SEND_MESSAGES = {
+    "sent": ("success", "We've sent a new code to {email}."),
+    "recent": (
+        "info",
+        "A code went out moments ago. Give it a minute, then try again.",
+    ),
+    "capped": (
+        "error",
+        "You've asked for several codes in the last hour. Use the newest one, or the link "
+        "in the email.",
+    ),
+    "unavailable": (
+        "error",
+        "We couldn't send a code just now. Please try again in a few minutes.",
+    ),
+}
+
+
+@login_required
+def signup_verify(request):
+    """Confirm the owner's email address with the 6-digit code from signup.
+
+    Shown straight after a free or trial signup (a paid one goes to checkout first and gets
+    here from the setup checklist). Never a gate: "Skip for now" goes on to setup, and the
+    link in the same email still works. Until it's confirmed, campaigns can't be sent
+    (apps.accounts.verification). Limits are email_mfa's, in their own pool, so wrong
+    guesses here never lock anyone out of signing in.
+    """
+    from apps.accounts import email_mfa
+
+    account = (
+        Account.objects.filter(
+            memberships__user=request.user, memberships__role=Membership.Role.OWNER
+        )
+        .order_by("pk")
+        .first()
+    )
+    if account is None or account.email_verified:
+        return redirect(after_signup_url(account) if account else "dashboard")
+
+    error = ""
+    email_error = ""
+    if request.method == "POST":
+        action = request.POST.get("action", "verify")
+        if action == "verify":
+            code = "".join(ch for ch in request.POST.get("code", "") if ch.isdigit())
+            if email_mfa.guess_limit_reached(request.user, email_mfa.VERIFY):
+                error = (
+                    "Too many tries for now. Use the link in the email, or request a new "
+                    "code in an hour."
+                )
+            elif len(code) == 6 and email_mfa.check_code(
+                request.user, email_mfa.VERIFY, code
+            ):
+                _mark_email_verified(request.user)
+                queue_ga_event(request, "email_verified")
+                messages.success(request, "Your email address is confirmed. Thanks!")
+                return redirect(after_signup_url(account))
+            else:
+                error = (
+                    "That code isn't right, or it has expired. Check the newest email."
+                )
+        elif action == "resend":
+            level, text = _VERIFY_SEND_MESSAGES[_send_verify_code(request.user)]
+            getattr(messages, level)(request, text.format(email=request.user.email))
+            return redirect("signup-verify")
+        elif action == "change_email":
+            email_error = _change_signup_email(request, account)
+            if not email_error:
+                return redirect("signup-verify")
+        elif action == "skip":
+            queue_ga_event(request, "email_verify_skipped")
+            return redirect(after_signup_url(account))
+
+    return render(
+        request,
+        "accounts/verify_email_code.html",
+        {
+            "email": request.user.email,
+            "error": error,
+            "email_error": email_error,
+            "changing": bool(email_error),
+            "posted_email": request.POST.get("email", "") if email_error else "",
+        },
+        status=400 if (error or email_error) else 200,
+    )
+
+
+def _change_signup_email(request, account) -> str:
+    """Move a new, still unverified owner to another address: checked like signup's, codes
+    for the old address voided (the old link stops working by itself, as the token hashes
+    the email), and a code sent to the new one. Returns an error to show, or ""."""
+    from django import forms as dj_forms
+    from django.core.exceptions import ValidationError
+
+    from apps.accounts.models import EmailLoginCode
+
+    raw = request.POST.get("email", "").strip()
+    try:
+        email = dj_forms.EmailField(max_length=254).clean(raw)
+    except ValidationError:
+        return "Enter a valid email address, like name@company.com."
+    user = request.user
+    if email.lower() == user.email.lower():
+        return "That's the address we already have."
+    if (
+        User.objects.filter(Q(email__iexact=email) | Q(username=email[:150]))
+        .exclude(pk=user.pk)
+        .exists()
+    ):
+        return "An account with this email already exists."
+    try:
+        with transaction.atomic():
+            user.email = email
+            user.username = email[:150]
+            user.save(update_fields=["email", "username"])
+            Account.objects.filter(pk=account.pk).update(billing_email=email)
+            EmailLoginCode.objects.filter(
+                user=user,
+                purpose=EmailLoginCode.Purpose.VERIFY,
+                used_at__isnull=True,
+            ).update(used_at=timezone.now())
+    except IntegrityError:
+        return "An account with this email already exists."
+    logger.info("signup_verify: user %s changed their signup email", user.pk)
+    result = _send_verify_code(user)
+    if result == "recent":
+        messages.success(
+            request,
+            f"Your email is now {email}. Wait a minute, then press “Send a new code”.",
+        )
+    else:
+        level, text = _VERIFY_SEND_MESSAGES[result]
+        getattr(messages, level)(request, text.format(email=email))
+    return ""
 
 
 def resend_verification(request):
@@ -1016,6 +1157,15 @@ def dashboard(request):
 
     state = ob.get_state(account, essentials_only=True, request=request)
 
+    from apps.accounts import welcome
+
+    membership = Membership.objects.filter(user=request.user, account=account).first()
+    welcome_form = (
+        welcome.WelcomeProfileForm(account=account)
+        if welcome.show_card(account, membership)
+        else None
+    )
+
     # Only the work queue is rendered on the first byte - it answers the
     # dashboard's primary question and is cheap (three counts). Everything
     # statistical, plus the domain/number/subscription lookups behind it, is
@@ -1031,9 +1181,37 @@ def dashboard(request):
             "onboarding_total": state["required_total"],
             "onboarding_next": state["next_step"],
             "greeting": greeting,
+            "welcome_form": welcome_form,
             **_work_queue(account),
         },
     )
+
+
+@login_required
+@require_POST
+def welcome_profile(request):
+    """The dashboard's optional "Tell us about your business" card: save the answers, or
+    "No thanks" to hide it for good. Never required; nothing waits on it."""
+    from apps.accounts import welcome
+    from apps.accounts.utils import viewing_as
+
+    account = get_current_account(request)
+    membership = (
+        Membership.objects.filter(user=request.user, account=account).first()
+        if account is not None
+        else None
+    )
+    if viewing_as(request) is None and welcome.show_card(account, membership):
+        if request.POST.get("action") == "dismiss":
+            welcome.dismiss(account)
+        else:
+            form = welcome.WelcomeProfileForm(request.POST, account=account)
+            if form.is_valid() and form.save():
+                messages.success(
+                    request, "Thanks, that helps us tailor Akilent for you."
+                )
+            welcome.dismiss(account)  # answered: don't ask again
+    return redirect("dashboard")
 
 
 @login_required

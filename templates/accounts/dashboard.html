@@ -23,6 +23,8 @@
     </p>
   </header>
 
+  {% if welcome_form %}{% include "accounts/_welcome_card.html" with form=welcome_form %}{% endif %}
+
   {% if onboarding_complete %}{% next_action_card %}{% endif %}
 
   {# ── Onboarding checklist (until complete) ────────────────── #}

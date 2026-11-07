@@ -14,12 +14,22 @@
       <div class="alert alert-danger">
         {% include "components/icon.html" with name="alert" class="w-4 h-4 shrink-0 mt-0.5" %}
         <p>
-          This confirmation link is invalid or has expired. Request a new one
-          below, or sign in if you've already confirmed your email.
+          This confirmation link is invalid or has expired, or your email address changed
+          since it was sent. Get a new one below, or sign in if you've already confirmed.
         </p>
       </div>
-      <a href="{% url 'resend-verification' %}" class="btn btn-primary btn-block mt-4">Resend confirmation link</a>
-      <a href="{% url 'login' %}" class="btn btn-secondary btn-block mt-2">Sign in</a>
+      {% comment %}Signed in: the code page sends a fresh code (and link) and takes it there.
+      Signed out: the resend form, which never says whether an address has an account.{% endcomment %}
+      {% if user.is_authenticated %}
+        <form method="post" action="{% url 'signup-verify' %}" hx-boost="false" class="mt-4">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="resend">
+          <button type="submit" class="btn btn-primary btn-block">Send a new code</button>
+        </form>
+      {% else %}
+        <a href="{% url 'resend-verification' %}" class="btn btn-primary btn-block mt-4">Send a new link</a>
+        <a href="{% url 'login' %}" class="btn btn-secondary btn-block mt-2">Sign in</a>
+      {% endif %}
     </div>
   </div>
 </div>

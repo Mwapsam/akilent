@@ -19,6 +19,7 @@ def api_key(db):
         address_line1="1 Market St",
         city="Lusaka",
         country="ZM",
+        email_verified=True,  # campaigns wait for a confirmed owner email
     )
     Membership.objects.create(user=user, account=acc, role=Membership.Role.OWNER)
     plan = Plan.objects.create(

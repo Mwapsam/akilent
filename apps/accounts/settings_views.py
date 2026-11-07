@@ -138,12 +138,21 @@ def settings_profile(request):
 @login_required
 def settings_business(request):
     """The business name and mailing address shown in campaign email footers."""
+    from django.utils.http import url_has_allowed_host_and_scheme
+
     from apps.email.services.compliance_footer import format_postal_address
 
     account, membership = _account_and_membership(request)
     if account is None:
         return redirect("dashboard")
     can_edit = _can_manage_team(membership)
+    # Sent here from the campaign composer to add the address; back there once it's saved.
+    # Only a path on this site.
+    next_url = request.POST.get("next") or request.GET.get("next") or ""
+    if not url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        next_url = ""
 
     if request.method == "POST":
         if not can_edit:
@@ -155,7 +164,7 @@ def settings_business(request):
         if form.is_valid():
             form.save()
             messages.success(request, "Business details saved.")
-            return redirect("settings-business")
+            return redirect(next_url or "settings-business")
     else:
         form = BusinessAddressForm(instance=account)
 
@@ -170,6 +179,7 @@ def settings_business(request):
             "has_address": account.has_postal_address,
             "footer_name": account.legal_name or account.company_name,
             "footer_address": format_postal_address(account),
+            "next_url": next_url,
         },
     )
 

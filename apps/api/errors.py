@@ -18,7 +18,7 @@ from apps.api.services import (
     UnverifiedDomainError,
 )
 from apps.billing.limits import PlanLimitExceeded
-from apps.email.exceptions import MissingPostalAddressError
+from apps.email.exceptions import MissingPostalAddressError, UnconfirmedOwnerEmailError
 from apps.email.models import BulkEmailCampaign, EmailMessage, EmailTemplate
 
 
@@ -62,6 +62,11 @@ def custom_exception_handler(exc, context):
     if isinstance(exc, UnverifiedDomainError):
         return _envelope(
             "unverified_domain", str(exc), status.HTTP_403_FORBIDDEN, context
+        )
+
+    if isinstance(exc, UnconfirmedOwnerEmailError):
+        return _envelope(
+            "email_not_confirmed", str(exc), status.HTTP_403_FORBIDDEN, context
         )
 
     if isinstance(exc, MissingPostalAddressError):

@@ -341,6 +341,14 @@ def save_draft(
     return campaign
 
 
+def _check_owner_confirmed(account) -> None:
+    """Campaigns wait until the owner has confirmed their email (accounts.verification)."""
+    from apps.accounts.verification import MESSAGE, can_send_campaigns
+
+    if not can_send_campaigns(account):
+        raise CampaignError(MESSAGE)
+
+
 def start_campaign(campaign_id: int, *, user=None, due_only: bool = False):
     """Send a draft or scheduled campaign now (or, ``due_only``, if its time has come).
 
@@ -367,6 +375,7 @@ def start_campaign(campaign_id: int, *, user=None, due_only: bool = False):
         ):
             return campaign
         try:
+            _check_owner_confirmed(campaign.account)
             _check_sendable(campaign.template)
             contact_ids = audience_contact_ids(campaign)
             _check_audience_ids(

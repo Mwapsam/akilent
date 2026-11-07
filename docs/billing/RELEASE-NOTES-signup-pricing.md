@@ -68,3 +68,39 @@ Still open: Cloudflare Insights (performance beacon) is unchanged and isn't behi
 The trial signup asks for name, email, password and company only. Fields are checked as
 they are left. Progress survives a reload and the Back button. A plain `/signup/` starts on
 the trial, and the Package step shows only for paid plans.
+
+## 4. Confirm email by code; campaigns wait for it (Phase 4, needs its own release)
+
+This changes sign-in code limits and blocks campaign sends, so it ships as a separate,
+deliberate release.
+
+**Deploy order:** run migrations before the new code serves traffic.
+- `accounts/0028` adds the `verify` code purpose.
+- `accounts/0029` marks **every existing account** email-confirmed, so no pilot loses campaign
+  sending. It only marks accounts present when it runs; one created by the old code after
+  that would have to confirm.
+
+**What changes**
+- **Signup sends a 6-digit code** (with the old link as a fallback in the same email) and
+  sends free and trial signups to `/signup/verify/`. That page offers: enter code, send a new
+  code, use a different email, skip for now. Paid signups still go to checkout first; the
+  setup checklist's first step is now "Confirm your email address → Enter code".
+- **Limits:** codes use `email_mfa`, with 5 guesses per code, 10 guesses and 5 sends per hour.
+  The verify purpose has its **own** hourly allowance, so wrong verify guesses can't lock
+  anyone out of sign-in codes. The sign-in purposes still share theirs (no extra guesses at a
+  sign-in code).
+- **Different email:** it's checked for uniqueness. The user's email and username and the
+  account's billing email change together. Old codes are voided, and old links stop working
+  (the token hashes the email).
+- **Campaigns wait for a confirmed owner email:** email campaigns (`bulk.py`, composer and
+  API; the API returns `403 email_not_confirmed`) and WhatsApp campaigns (`start_campaign`; a
+  scheduled one fails with the reason). Nothing else is gated: inbox replies, Embedded Signup
+  and channel setup work at once. The composer says up front what's missing, with links:
+  "Enter code", and "Add address", which comes back to the composer once saved.
+- **Dashboard welcome card** (optional) for industry and team size. Choices are on the form
+  only, old free-text values are kept, and "No thanks" hides it for good.
+- The first-run tour and setup widget don't open on the code page; they start on the next
+  page.
+
+**Not in this release:** the Country field in Settings → Business is still free text. A
+proper select needs a country list (e.g. `django-countries`), which hasn't been added.

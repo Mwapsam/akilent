@@ -248,7 +248,7 @@
         <p class="text-xs text-ink-subtle pt-2">
           <span x-show="isPaid(selectedPlan)">At checkout you'll pay <span x-text="dueLabel(selectedPlan)"></span>, less any account credit. It renews each term until you cancel.</span>
           <span x-show="!isPaid(selectedPlan)"><span x-text="freeNote"></span> You can add payment details any time from Billing.</span>
-          We'll email you a link to confirm your email address; you can keep setting up in the meantime.
+          We'll email you a 6-digit code to confirm your email address; you can keep setting up in the meantime.
         </p>
         <label class="flex items-start gap-2 pt-3 border-t border-border text-sm text-ink-muted cursor-pointer">
           <input type="checkbox" name="product_updates" value="on" class="checkbox mt-0.5" {% if form.product_updates.value %}checked{% endif %}>

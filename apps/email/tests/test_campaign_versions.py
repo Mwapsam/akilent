@@ -23,6 +23,7 @@ def account(db):
         address_line1="1 Market St",
         city="Lusaka",
         country="ZM",
+        email_verified=True,  # campaigns wait for a confirmed owner email
     )
     Membership.objects.create(user=user, account=acc, role=Membership.Role.OWNER)
     Plan.objects.create(slug="p", name="P", price_monthly=Decimal("1"))

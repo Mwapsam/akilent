@@ -148,8 +148,11 @@ def test_signup_stores_the_channels_picked(client, plans, settings):
     assert resp.status_code == 302, resp.content[:2000]
     account = Account.objects.get(company_name="New Co")
     assert account.selected_channels == ["facebook", "instagram"]
-    # Onboarding sets up what was picked, starting with Instagram.
-    assert resp.url == "/instagram/accounts/"
+    # After the code page, onboarding sets up what was picked, starting with Instagram.
+    assert resp.url == "/signup/verify/"
+    assert (
+        client.post("/signup/verify/", {"action": "skip"}).url == "/instagram/accounts/"
+    )
 
 
 @pytest.mark.django_db
@@ -208,8 +211,11 @@ def test_signup_with_email_off_succeeds_on_the_trial(client, plans, settings):
     settings.WHATSAPP_ENABLED = True
     resp = client.post(SIGNUP_URL, _payload())
     assert resp.status_code == 302, resp.content[:2000]
-    # Straight to the channel that's on, not to a checklist that's on hold.
-    assert resp.url == "/whatsapp/numbers/"
+    # After the code page, straight to the channel that's on, not to a checklist on hold.
+    assert resp.url == "/signup/verify/"
+    assert (
+        client.post("/signup/verify/", {"action": "skip"}).url == "/whatsapp/numbers/"
+    )
     account = Account.objects.get(company_name="New Co")
     assert account.selected_channels == ["whatsapp"]
     assert account.subscription.plan.slug == Plan.TRIAL
@@ -241,7 +247,7 @@ def test_signup_survives_a_broker_outage(client, plans, settings, monkeypatch):
     def boom(*args, **kwargs):
         raise ConnectionError("broker down")
 
-    monkeypatch.setattr("apps.accounts.tasks.send_verification_email.delay", boom)
+    monkeypatch.setattr("apps.accounts.tasks.send_email_code.delay", boom)
     resp = client.post(SIGNUP_URL, _payload(selected_channels=["email", "whatsapp"]))
     assert resp.status_code == 302
     assert User.objects.filter(email="new@example.com").exists()
@@ -325,14 +331,14 @@ def test_paid_signup_warns_when_verification_could_not_be_queued(
     def boom(*args, **kwargs):
         raise ConnectionError("broker down")
 
-    monkeypatch.setattr("apps.accounts.tasks.send_verification_email.delay", boom)
+    monkeypatch.setattr("apps.accounts.tasks.send_email_code.delay", boom)
     resp = client.post(
         SIGNUP_URL,
         _payload(selected_channels=["email"], plan=Plan.STARTER),
     )
     assert resp.status_code == 302 and resp.url == "/billing/pay/"
     texts = [str(m) for m in get_messages(resp.wsgi_request)]
-    assert any("couldn't send the verification email" in t for t in texts), texts
+    assert any("couldn't send your confirmation code" in t for t in texts), texts
 
 
 @pytest.mark.django_db

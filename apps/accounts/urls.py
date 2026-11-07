@@ -11,6 +11,7 @@ urlpatterns = [
     path("for/<slug:slug>/", views.use_case, name="use-case"),
     path("verify/<uidb64>/<token>/", views.verify_email, name="verify_email"),
     path("resend-verification/", views.resend_verification, name="resend-verification"),
+    path("signup/verify/", views.signup_verify, name="signup-verify"),
     path("onboarding/", views.onboarding, name="onboarding"),
     path("onboarding/tour-seen/", views.welcome_tour_seen, name="welcome-tour-seen"),
     path(
@@ -19,6 +20,7 @@ urlpatterns = [
         name="next-action-dismiss",
     ),
     path("dashboard/", views.dashboard, name="dashboard"),
+    path("dashboard/welcome/", views.welcome_profile, name="welcome-profile"),
     # Dashboard fragments (HTMX). The work queue is polled; the secondary
     # panels are lazy-loaded so their aggregates stay off the first byte.
     path(

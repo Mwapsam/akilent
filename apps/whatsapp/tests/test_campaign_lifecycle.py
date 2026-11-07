@@ -27,7 +27,8 @@ _Opt = WhatsAppContact.OptInStatus
 
 @pytest.fixture
 def account(db):
-    return Account.objects.create(company_name="Mwamba Kitchen")
+    # Campaigns wait for a confirmed owner email (accounts.verification).
+    return Account.objects.create(company_name="Mwamba Kitchen", email_verified=True)
 
 
 @pytest.fixture

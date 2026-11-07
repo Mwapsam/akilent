@@ -129,6 +129,16 @@ class UnverifiedDomainError(Exception):
         )
 
 
+class UnconfirmedOwnerEmailError(Exception):
+    """The account owner hasn't confirmed their email address yet, so campaigns wait
+    (apps.accounts.verification)."""
+
+    def __init__(self) -> None:
+        from apps.accounts.verification import MESSAGE
+
+        super().__init__(MESSAGE)
+
+
 class MissingPostalAddressError(Exception):
     """The account has no mailing address, so its campaigns can't be CAN-SPAM compliant.
 

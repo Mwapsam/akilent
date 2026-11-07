@@ -469,6 +469,8 @@ class EmailLoginCode(models.Model):
         LOGIN = "login", "Sign in"
         DISABLE = "disable", "Disable"
         REAUTH = "reauth", "Confirm a passkey change"
+        # Confirming the owner's email address after signup (signup's code page).
+        VERIFY = "verify", "Confirm email address"
 
     user = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="email_login_codes"

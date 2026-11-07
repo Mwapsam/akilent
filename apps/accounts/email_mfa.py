@@ -1,11 +1,14 @@
-"""Email codes: a login factor for users who opt in, and a re-authentication step.
+"""Email codes: a login factor for users who opt in, a re-authentication step, and the code
+that confirms a new owner's email address after signup.
 
 Codes are six digits, hashed with HMAC-SHA256 keyed on SECRET_KEY, single-use,
 valid for ten minutes, and locked after five wrong guesses. Limits apply to the
 whole account, not just one code: at most five codes are sent and ten guesses
-are accepted in any hour. Each check locks the user row, so concurrent requests
-cannot get around the limits. A refused request looks the same to the user, so
-an attacker cannot tell which accounts exist or have codes.
+are accepted in any hour. The sign-in purposes share that allowance; confirming
+an email address has its own, so fumbling it can't lock anyone out of signing in
+(and it gives no extra guesses at a sign-in code). Each check locks the user row,
+so concurrent requests cannot get around the limits. A refused request looks the
+same to the user, so an attacker cannot tell which accounts exist or have codes.
 
 An email code proves a login. It never counts as a strong factor for mandatory
 MFA; see apps/accounts/mfa.py.
@@ -42,6 +45,16 @@ UNAVAILABLE = "unavailable"  # no address on file, or delivery failed
 
 # Stored until the task picks the code. Not hex, so no digest can ever equal it.
 PENDING_HASH = "pending"
+
+
+VERIFY = EmailLoginCode.Purpose.VERIFY
+
+
+def _pool(purpose):
+    """The purposes whose codes count toward the same hourly limits as ``purpose``."""
+    if purpose == VERIFY:
+        return [VERIFY]
+    return [p for p in EmailLoginCode.Purpose.values if p != VERIFY]
 
 
 def is_enrolled(user):
@@ -84,7 +97,9 @@ def send_code(user, purpose):
         if latest is not None and now - latest.created_at < COOLDOWN:
             return RECENT
         recent = EmailLoginCode.objects.filter(
-            user=user, created_at__gte=now - timedelta(hours=1)
+            user=user,
+            purpose__in=_pool(purpose),
+            created_at__gte=now - timedelta(hours=1),
         )
         if recent.count() >= MAX_SENDS_PER_HOUR:
             logger.warning("email_mfa: send limit reached for user %s", user.pk)
@@ -117,16 +132,67 @@ def deliver_code(row):
     code = f"{secrets.randbelow(10**6):06d}"
     row.code_hash = _digest(row.user, row.purpose, code)
     row.save(update_fields=["code_hash"])
-    send_system_email(
-        to_email=row.user.email,
-        subject=CODE_SUBJECT,
-        text_body=(
+    if row.purpose == VERIFY:
+        subject, text_body, html_body = verify_email_parts(row.user, code)
+        sender = "Account"
+    else:
+        subject, html_body, sender = CODE_SUBJECT, code_email_html(code), "Security"
+        text_body = (
             f"Your code is {code}. It expires in 10 minutes. "
             "If you did not ask for it, ignore this email and change your password."
-        ),
-        html_body=code_email_html(code),
-        sender_label="Security",
+        )
+    send_system_email(
+        to_email=row.user.email,
+        subject=subject,
+        text_body=text_body,
+        html_body=html_body,
+        sender_label=sender,
     )
+
+
+VERIFY_SUBJECT = "Confirm your email address"
+
+
+def verify_link(user) -> str:
+    """The tokened confirmation link (apps.accounts.tokens), absolute on SITE_URL: the email
+    is sent from a worker, with no request to build the host from."""
+    from django.urls import reverse
+    from django.utils.encoding import force_bytes
+    from django.utils.http import urlsafe_base64_encode
+
+    from apps.accounts.tokens import email_verification_token
+
+    uid = urlsafe_base64_encode(force_bytes(user.pk))
+    path = reverse(
+        "verify_email",
+        kwargs={"uidb64": uid, "token": email_verification_token.make_token(user)},
+    )
+    return settings.SITE_URL.rstrip("/") + path
+
+
+def verify_email_parts(user, code: str) -> tuple[str, str, str]:
+    """(subject, text, html) of the email that confirms a new owner's address: the code to
+    type on the signup page, and the link as a fallback (another device, a lost tab)."""
+    from apps.email.services.html_email import build_transactional_html
+
+    link = verify_link(user)
+    text = (
+        f"Your code is {code}. Enter it on the page you signed up on; it expires in 10 "
+        f"minutes.\n\nOr confirm with this link: {link}\n\n"
+        "If you didn't create this account, ignore this email."
+    )
+    html = build_transactional_html(
+        "Enter this code on the page you signed up on. It expires in 10 minutes.",
+        VERIFY_SUBJECT,
+        eyebrow="Account",
+        heading="Confirm your email address",
+        preheader=f"Your code is {code}.",
+        code=code,
+        cta_url=link,
+        cta_label="Or confirm with one click",
+        small_print="If you didn't create this account, you can ignore this email.",
+    )
+    return VERIFY_SUBJECT, text, html
 
 
 CODE_SUBJECT = "Your sign-in code"
@@ -150,11 +216,13 @@ def code_email_html(code: str) -> str:
     )
 
 
-def guess_limit_reached(user):
-    """True when this account has used up its guesses for the hour."""
+def guess_limit_reached(user, purpose=EmailLoginCode.Purpose.LOGIN):
+    """True when this account has used up its guesses for the hour (for ``purpose``'s pool)."""
     spent = (
         EmailLoginCode.objects.filter(
-            user=user, created_at__gte=timezone.now() - timedelta(hours=1)
+            user=user,
+            purpose__in=_pool(purpose),
+            created_at__gte=timezone.now() - timedelta(hours=1),
         ).aggregate(total=Sum("attempts"))["total"]
         or 0
     )
@@ -169,7 +237,9 @@ def check_code(user, purpose, raw):
         _lock_user(user)
         spent = (
             EmailLoginCode.objects.filter(
-                user=user, created_at__gte=now - timedelta(hours=1)
+                user=user,
+                purpose__in=_pool(purpose),
+                created_at__gte=now - timedelta(hours=1),
             ).aggregate(total=Sum("attempts"))["total"]
             or 0
         )
