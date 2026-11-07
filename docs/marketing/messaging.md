@@ -198,6 +198,16 @@ Evidence is `path::text`: the file must exist and contain the text.
 | own-number | Mechanism | Connect your own WhatsApp business number through Meta's guided setup | apps/whatsapp/embedded.py::def |
 | roles | Capability | Team roles: Owner, Admin, Member | apps/accounts/models.py::MEMBER = "member", "Member" |
 | data-deletion | Capability | Data deletion on request | automator/urls.py::name="data-deletion" |
+| encryption | Mechanism | Encrypted in transit (HTTPS/TLS) and at rest (encrypted database disk and backups) | docs/ops/security-facts.md::EBS encryption is on |
+| tls | Mechanism | HTTPS only, with HSTS for a year, preloaded | automator/settings.py::SECURE_HSTS_PRELOAD = True |
+| token-encryption | Mechanism | Channel access tokens are encrypted field by field in the database | apps/whatsapp/models/tenant.py::access_token = EncryptedTextField(blank=True, null=True) |
+| hosting | Mechanism | Hosted on Amazon Web Services, behind Cloudflare (region not published) | docs/ops/security-facts.md::Amazon Web Services (AWS EC2) |
+| audit-log | Capability | Sign-ins, security changes, team changes, API keys, contact deletions and campaign sends are recorded in an audit log that is never edited | apps/core/models.py::class PlatformAuditLog( |
+| backups | Mechanism | Encrypted nightly backups, kept 30 days, restore-tested weekly | docker/backup/backup.sh::pg_dump -Fc |
+| mfa | Capability | Two-step sign-in with an authenticator app, an email code or a passkey, with recovery codes | apps/accounts/models.py::class PasskeyCredential(Device) |
+| support-access | Mechanism | Akilent support can only view a workspace read-only, for up to an hour, and each view is logged | apps/core/middleware.py::class ViewAsReadOnlyMiddleware |
+| incident-response | Mechanism | Written security-incident runbook; affected customers are told directly | docs/ops/incidents/INC-006-security-incident.md::Notify affected pilot customers promptly and directly |
+| subprocessors | Mechanism | The service providers that process data for Akilent, listed on the Security page | templates/legal/security.html::id="subprocessors" |
 | trial | Capability | N-day free trial, no card required (N from the signup plan) | apps/billing/api.py::def default_signup_trial |
 | cancel | Capability | Cancel from Billing at any time | apps/billing/views.py::def cancel_subscription |
 | trial-end | Capability | Nothing is deleted when a trial ends | apps/billing/tasks.py::def expire_trials |

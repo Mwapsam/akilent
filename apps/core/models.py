@@ -337,6 +337,12 @@ class Testimonial(models.Model):
     business_name = models.CharField(max_length=160, blank=True, default="")
     # Who agreed to this being published, and when (e.g. "Email from owner, 2026-11-02").
     permission_note = models.CharField(max_length=255)
+    # The business's logo, shown in the landing page's logo row (and the hero's proof strip)
+    # only with the same permission. Never a placeholder.
+    logo = models.ImageField(upload_to="testimonials/", blank=True, null=True)
+    # A short case study (what changed for them, in their own facts). The first published one
+    # with a story is the landing page's case-study card.
+    case_study = models.TextField(blank=True, default="")
     is_published = models.BooleanField(default=False)
     order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)

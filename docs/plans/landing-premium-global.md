@@ -111,8 +111,46 @@ CI rebuilds both and compares them with what is committed.
 - **Book a demo:** `/demo/` saves a `DemoRequest`, emails sales, and has a honeypot and a limit of 5 an hour per address. It works without JavaScript and is in the sitemap.
 - **Global illustrations:** varied names, $ amounts and "Paid by card" in every illustration on the page (the plan put this in Phase 2; done now because Phase 1 rebuilt these same illustrations).
 
-### Still Phase 2 or later (not done)
-- The footer tagline still says "for small businesses".
-- No `/security/` page and no status page.
-- No proof slots, and no "Meta Tech Provider" mark. That needs Meta's partner wording checked first, so it is left out rather than guessed.
 - The proof strip says "Facebook Pages", not "Messenger", following messaging.md's rule that Facebook means a Page.
+
+## Phase 2: global content and trust (built 2026-11-07)
+Facts the code can't show were confirmed with you and recorded in `docs/ops/security-facts.md`:
+- **Encryption:** the database disk is EBS-encrypted.
+- **Backups:** running in production.
+- **Region:** not published.
+- **GDPR/DPA:** not offered yet.
+
+The claim register points at that file.
+
+- **Positioning line everywhere:**
+  - It is the default page title and meta description (`SEO_DEFAULTS`) and the footer tagline. "For small businesses" is gone.
+  - Lusaka, Zambia stays in the footer's company block.
+  - The illustrations went global in Phase 1.
+- **Trust section, two rows:**
+  - **You stay in control:** your own number or domain, AI only when on, team roles, deletion on request.
+  - **How your data is protected:** encryption, hosting, audit log, backups. Each opens its part of `/security/`.
+- **`/security/`:**
+  - It sits in the legal shell and its navigation, and is in the sitemap.
+  - It covers:
+    - hosting, without a region;
+    - encryption: TLS with HSTS, EBS, encrypted backups, field-encrypted channel tokens;
+    - access control: roles, two-step sign-in, read-only support access that is time-limited and audited;
+    - the audit log: exactly what is recorded today;
+    - backups and recovery;
+    - incidents;
+    - your data;
+    - sub-processors;
+    - reporting a vulnerability.
+  - The status section appears only when `STATUS_PAGE_URL` is set. Every statement is in the claim register, and `/security/` is in the claims test.
+- **`/.well-known/security.txt`** (RFC 9116), from `SECURITY_CONTACT_EMAIL`, else the support address. It returns 404 when there is neither.
+- **Status page:** linked from both footers and the Security page only when `STATUS_PAGE_URL` is set.
+- **Proof slots:**
+  - Testimonials gained a logo and a case study, both editable in Operator Console → Testimonials.
+  - The logo row, the hero's "Used by" logos and the case-study card show only for published testimonials that have a permission note. Nothing shows until then.
+- **Meta Tech Provider:** not shown. It needs the status confirmed and Meta's partner wording checked.
+
+### Needs you
+- **Status page:** create a hosted status page (for example Better Stack or UptimeRobot) and set the `STATUS_PAGE_URL` secret.
+- **Security contact:** set `SECURITY_CONTACT_EMAIL` (for example security@akilent.com) if reports shouldn't go to the support address.
+- **Privacy policy's provider list is out of date.** It names Flutterwave and Stripe, but not PayPal (the live billing provider) or Cloudflare. The Security page lists what is used today, so the two pages disagree until the privacy policy is updated. That is legal text, so I left it for you.
+- **Data region:** confirm it, so the Security page can name it.

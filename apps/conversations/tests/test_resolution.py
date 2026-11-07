@@ -1,6 +1,8 @@
 """Phase B.3: close/reopen with a resolution reason, closed_at, and the
 conversation-detail pane's customer/order context."""
 
+import re
+
 import pytest
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -141,7 +143,9 @@ class TestPaneCustomerContext:
         client, _, _ = logged_in
         body = on_screen(client, open_conversation.public_id)
         assert "Customer since" in body
-        assert "Conversations" in body
+        # The pane's own count ("1 conversation"), not a word that happens to be elsewhere on
+        # the page (the old default page title said "Customer Conversations").
+        assert re.search(r"\b\d+ conversations?\b", body)
 
     def test_an_open_order_is_shown_when_the_orders_feature_is_usable(
         self, logged_in, open_conversation

@@ -199,6 +199,8 @@ Help centre or Developers from the request path.
           <li><a href="{% url 'terms' %}">Terms of service</a></li>
           <li><a href="{% url 'cookies' %}">Cookie policy</a></li>
           <li><a href="{% url 'data-deletion' %}">Data deletion</a></li>
+          <li><a href="{% url 'security' %}">Security</a></li>
+          {% if STATUS_PAGE_URL %}<li><a href="{{ STATUS_PAGE_URL }}" rel="noopener">Status</a></li>{% endif %}
         </ul>
       </div>
     </div>

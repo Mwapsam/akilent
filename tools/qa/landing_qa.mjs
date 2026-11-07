@@ -115,6 +115,8 @@ const check = (id, pass, detail) => { results.push({ id, pass: !!pass, detail })
 const shot = async (name, full) => {
   let clip;
   if (full) {
+    // Sections off screen aren't drawn (content-visibility: auto); draw them all for the shot.
+    await evaluate("document.querySelectorAll('.lp-section').forEach(s => s.style.contentVisibility = 'visible')");
     const m = await send("Page.getLayoutMetrics");
     // At 1x: a phone's 3x pixel ratio made a full-page shot tens of thousands of pixels tall.
     const dpr = await evaluate("window.devicePixelRatio");

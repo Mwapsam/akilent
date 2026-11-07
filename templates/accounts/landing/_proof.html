@@ -1,17 +1,40 @@
-{% comment %} Proof: only real, permissioned testimonials (Operator Console → Testimonials). {% endcomment %}
+{% comment %}
+  Proof: only real, permissioned customers (Operator Console → Testimonials). The section stays
+  out of the page until one is published. Three slots, each shown only when it has something real:
+  the logo row (testimonials with a logo), the case-study card (the first with a case study) and
+  the quotes. No placeholder ever stands in for any of them.
+{% endcomment %}
 <section id="proof" class="lp-light lp-section" aria-labelledby="proof-title">
   <div class="lp-wrap">
     <div class="lp-head section-head center lp-reveal">
       <p class="lp-eyebrow eyebrow">From businesses using {{ app }}</p>
       <h2 id="proof-title" class="lp-h2">In their words</h2>
     </div>
+    {% if logos %}
+    <ul class="lp-logos" aria-label="Businesses using {{ app }}">
+      {% for t in logos %}<li><img src="{{ t.logo.url }}" alt="{{ t.business_name }}" width="140" height="40" loading="lazy" decoding="async"></li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if case_study %}
+    <figure class="lp-case lp-reveal" data-claim-exempt>
+      <div class="lp-case-story">
+        <p class="lp-eyebrow eyebrow">Case study{% if case_study.business_name %} · {{ case_study.business_name }}{% endif %}</p>
+        <p class="lp-lead">{{ case_study.case_study|linebreaksbr }}</p>
+      </div>
+      <blockquote>“{{ case_study.quote }}”</blockquote>
+      <figcaption class="lp-small lp-muted">
+        {% if case_study.logo %}<img src="{{ case_study.logo.url }}" alt="" width="96" height="28" loading="lazy" decoding="async">{% endif %}
+        <span><strong>{{ case_study.person_name }}</strong>{% if case_study.business_name %}, {{ case_study.business_name }}{% endif %}</span>
+      </figcaption>
+    </figure>
+    {% endif %}
     <div class="lp-quotes">
-      {% for t in testimonials %}
+      {% for t in testimonials %}{% if t != case_study %}
       <figure class="lp-card lp-quote lp-reveal">
         <blockquote>“{{ t.quote }}”</blockquote>
         <figcaption class="lp-small lp-muted"><strong>{{ t.person_name }}</strong>{% if t.business_name %}, {{ t.business_name }}{% endif %}</figcaption>
       </figure>
-      {% endfor %}
+      {% endif %}{% endfor %}
     </div>
   </div>
 </section>

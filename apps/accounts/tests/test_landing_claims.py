@@ -25,6 +25,7 @@ CHECKED_SECTIONS = {
     "hero",
     "channels",
     "platform",  # holds the Inbox, Content Studio, Automations and Sales panels
+    "security-facts",  # the Security page (/security/)
     "content-studio",
     "how-it-works",
     "features",
@@ -150,7 +151,14 @@ def _open_meta_channels():
 @pytest.mark.django_db
 @pytest.mark.parametrize("meta_open", [False, True])
 @pytest.mark.parametrize(
-    "url", ["/", "/for/missed-enquiries/", "/for/shared-inbox/", "/for/content-studio/"]
+    "url",
+    [
+        "/",
+        "/for/missed-enquiries/",
+        "/for/shared-inbox/",
+        "/for/content-studio/",
+        "/security/",
+    ],
 )
 @pytest.mark.parametrize("whatsapp", [True, False])
 def test_every_claim_on_the_page_is_registered(

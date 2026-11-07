@@ -30,6 +30,8 @@ def site_context(request):
         "SIGNUPS_ENABLED": signups,
         "released": released_flags(),
         "REALTIME_SSE_ENABLED": settings.REALTIME_SSE_ENABLED,
+        # Footers and the Security page link a status page only when there is one.
+        "STATUS_PAGE_URL": settings.STATUS_PAGE_URL,
     }
 
 

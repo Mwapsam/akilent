@@ -23,6 +23,7 @@ from apps.seo.views import api_catalog, robots_txt
 urlpatterns = [
     path("robots.txt", robots_txt, name="robots-txt"),
     path(".well-known/api-catalog", api_catalog, name="api-catalog"),
+    path(".well-known/security.txt", core_views.security_txt, name="security-txt"),
     path(
         "sitemap.xml",
         sitemap,
@@ -103,6 +104,7 @@ urlpatterns = [
         name="data-deletion",
     ),
     path("cookies/", core_views.legal_page, {"slug": "cookies"}, name="cookies"),
+    path("security/", core_views.legal_page, {"slug": "security"}, name="security"),
     path("docs/", core_views.docs_page, name="docs"),
     path("docs/<slug:slug>/", core_views.docs_page, name="docs-page"),
     path("", include("apps.accounts.urls")),

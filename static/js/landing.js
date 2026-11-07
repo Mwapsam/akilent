@@ -64,8 +64,15 @@
     });
   }
   if (links.length) {
-    window.addEventListener('scroll', function () { if (!spyQueued) { spyQueued = true; requestAnimationFrame(spy); } }, { passive: true });
-    window.addEventListener('resize', spy);
+    var queueSpy = function () { if (!spyQueued) { spyQueued = true; requestAnimationFrame(spy); } };
+    window.addEventListener('scroll', queueSpy, { passive: true });
+    window.addEventListener('resize', queueSpy);
+    // Sections below the hero are drawn as they near the screen (content-visibility), which can
+    // change their height without a scroll event; re-check whenever any section resizes.
+    if ('ResizeObserver' in window) {
+      var ro = new ResizeObserver(queueSpy);
+      document.querySelectorAll('main > section').forEach(function (s) { ro.observe(s); });
+    }
     spy();
   }
 
@@ -184,7 +191,7 @@
   if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
     document.addEventListener('pointermove', function (e) {
       if (reduce.matches) return;
-      var card = e.target.closest && e.target.closest('.lp-card, .lp-trust > div');
+      var card = e.target.closest && e.target.closest('.lp-card, .lp-trust > div, .lp-trust > a');
       if (!card) return;
       var r = card.getBoundingClientRect();
       card.style.setProperty('--mx', (e.clientX - r.left) + 'px');

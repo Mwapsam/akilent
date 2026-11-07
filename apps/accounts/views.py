@@ -848,6 +848,7 @@ def landing(request):
     _, trial_days = billing_api.default_signup_trial()
     # len() counts pending messages without marking them read, so the page still shows them.
     personal = request.user.is_authenticated or len(messages.get_messages(request)) > 0
+    testimonials = list(Testimonial.shown())
     resp = render(
         request,
         "accounts/landing.html",
@@ -856,7 +857,11 @@ def landing(request):
             "cards": cards,
             "trial_days": trial_days,
             "ch": marketing_channels(),
-            "testimonials": list(Testimonial.shown()),
+            "testimonials": testimonials,
+            # Proof slots: logos and the case-study card come from the same permissioned
+            # testimonials, so nothing shows until a real customer has agreed.
+            "logos": [t for t in testimonials if t.logo and t.business_name],
+            "case_study": next((t for t in testimonials if t.case_study), None),
         },
     )
     # RFC 8288 / RFC 9727 §3 — advertise machine-readable APIs for agent discovery.

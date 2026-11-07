@@ -1,0 +1,92 @@
+{% extends "legal/_layout.html" %}
+{% comment %}
+  Security (/security/): plain and factual. Only what is true today; anything planned is left out,
+  never labelled "coming soon". Each statement carries its claim id (docs/marketing/messaging.md
+  §10). Infrastructure facts the code can't show are recorded in docs/ops/security-facts.md;
+  change that file, this page and the landing trust section together.
+{% endcomment %}
+{% block legal_body %}
+<section id="security-facts" aria-label="Security at {{ site.app_name|default:'Akilent' }}">
+<p data-claim-exempt>
+  This page sets out how {{ site.app_name|default:"Akilent" }} protects your business's data today. It lists only what is
+  in place now. For what data we collect and why, see the <a href="{% url 'privacy' %}">privacy policy</a>.
+</p>
+
+<h2 id="hosting">Hosting</h2>
+<p data-claim="hosting">
+  {{ site.app_name|default:"Akilent" }} runs on Amazon Web Services (AWS). The application runs on AWS EC2, files and backups
+  are stored in Amazon S3, and static files are served through Amazon CloudFront. Cloudflare sits in
+  front of akilent.com.
+</p>
+
+<h2 id="encryption">Encryption</h2>
+<ul>
+  <li data-claim="tls"><strong>In transit:</strong> every connection uses HTTPS (TLS). Browsers are told to use HTTPS only, for a year (HSTS, preloaded).</li>
+  <li data-claim="encryption"><strong>At rest:</strong> the production database disk is encrypted (AWS EBS encryption), and backups are encrypted in Amazon S3.</li>
+  <li data-claim="token-encryption"><strong>Access tokens:</strong> the tokens that connect your WhatsApp, Instagram and Facebook accounts are also encrypted field by field in the database.</li>
+</ul>
+
+<h2 id="access">Access control</h2>
+<ul>
+  <li data-claim="roles">Every teammate signs in with their own account and a role: Owner, Admin or Member.</li>
+  <li data-claim="mfa">Two-step sign-in with an authenticator app, an email code or a passkey, with recovery codes for when a device is lost.</li>
+  <li data-claim="support-access">When {{ site.app_name|default:"Akilent" }} support looks at your workspace to help you, the view is read-only: nothing can be sent, saved or changed. It ends after an hour, and each view is recorded in the audit log.</li>
+</ul>
+
+<h2 id="audit-log">Audit log</h2>
+<p data-claim="audit-log">
+  Sensitive actions are recorded in an audit log: sign-ins and failed sign-ins, password and two-step
+  sign-in changes, passkeys and recovery codes, team invitations and role changes, API keys, contact
+  deletions and merges, and WhatsApp campaign sends. Entries are never edited or deleted.
+</p>
+
+<h2 id="backups">Backups and recovery</h2>
+<p data-claim="backups">
+  The database is backed up every night to a private, encrypted Amazon S3 bucket. Backups are kept for
+  30 days, and every week the newest one is restored into a separate database to check that it works.
+</p>
+
+<h2 id="incidents">Incidents</h2>
+<p data-claim="incident-response">
+  We keep written runbooks for outages and security incidents. If a security incident affects your
+  data, we tell you directly.
+</p>
+
+<h2 id="privacy">Your data</h2>
+<ul>
+  <li data-claim="data-deletion">You can ask us to delete your data at any time: see <a href="{% url 'data-deletion' %}">data deletion</a>.</li>
+  <li data-claim="ai">AI is off until you switch it on.</li>
+</ul>
+
+<h2 id="subprocessors">Sub-processors</h2>
+<p data-claim="subprocessors">These service providers process data so that {{ site.app_name|default:"Akilent" }} can run:</p>
+<table>
+  <thead><tr><th scope="col">Provider</th><th scope="col">What for</th></tr></thead>
+  <tbody>
+    <tr><td>Meta Platforms</td><td>Sending and receiving WhatsApp, Instagram and Facebook Page messages, comments and posts</td></tr>
+    <tr><td>Amazon Web Services</td><td>Hosting, file storage, backups and static files</td></tr>
+    <tr><td>Cloudflare</td><td>Delivering akilent.com</td></tr>
+    <tr><td>Email delivery provider</td><td>Account emails, such as sign-in codes and password resets</td></tr>
+    <tr><td>Sentry</td><td>Error monitoring, set up to avoid personal data</td></tr>
+    <tr><td>PayPal</td><td>Payments for {{ site.app_name|default:"Akilent" }} subscriptions</td></tr>
+    <tr><td>AI model provider</td><td>Reply suggestions and AI help, only when you switch AI on</td></tr>
+  </tbody>
+</table>
+
+<h2 id="disclosure">Reporting a vulnerability</h2>
+{% if security_email %}
+<p data-claim-exempt>
+  If you think you've found a security problem, email <a href="mailto:{{ security_email }}">{{ security_email }}</a>
+  with the details and the steps to reproduce it. Please give us time to fix it before telling anyone
+  else, and don't access or change other people's data while testing.
+</p>
+{% else %}
+<p data-claim-exempt>If you think you've found a security problem, please contact us through the <a href="{% url 'help' %}">help centre</a>.</p>
+{% endif %}
+
+{% if STATUS_PAGE_URL %}
+<h2 id="status">Service status</h2>
+<p data-claim-exempt>Current availability and past incidents are on our <a href="{{ STATUS_PAGE_URL }}" rel="noopener">status page</a>.</p>
+{% endif %}
+</section>
+{% endblock %}

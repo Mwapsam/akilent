@@ -231,13 +231,31 @@ _LEGAL_PAGES = {
     "terms": ("legal/terms.html", "Terms of service"),
     "data-deletion": ("legal/data_deletion.html", "Data deletion"),
     "cookies": ("legal/cookies.html", "Cookie policy"),
+    "security": ("legal/security.html", "Security"),
 }
 _LEGAL_UPDATED = "24 October 2026"  # change with the text
+# The Security page changes with the infrastructure (docs/ops/security-facts.md), not the legal text.
+_SECURITY_UPDATED = "7 November 2026"
+
+
+def security_contact() -> str:
+    """Where vulnerabilities are reported: SECURITY_CONTACT_EMAIL, else the support address."""
+    from django.conf import settings
+
+    from apps.core.models import SiteSettings
+
+    return settings.SECURITY_CONTACT_EMAIL or SiteSettings.load().support_email
 
 
 def legal_page(request, slug):
     template, title = _LEGAL_PAGES[slug]
     ctx = {"page_title": title, "updated": _LEGAL_UPDATED}
+    if slug == "security":
+        ctx.update(
+            updated=_SECURITY_UPDATED,
+            eyebrow="Trust",
+            security_email=security_contact(),
+        )
     if slug == "data-deletion":
         # Meta links people here with the confirmation code from its data-deletion
         # callback. Only a code in the format we issue is echoed back.
@@ -403,3 +421,27 @@ def csrf_token(request):
     from django.middleware.csrf import get_token
 
     return JsonResponse({"token": get_token(request)})
+
+
+def security_txt(request):
+    """RFC 9116 /.well-known/security.txt: where to report a vulnerability. Expires a year ahead,
+    recomputed on each request, so it never goes stale."""
+    from datetime import timedelta
+
+    from django.conf import settings
+    from django.http import HttpResponse
+    from django.utils import timezone
+
+    contact = security_contact()
+    if not contact:
+        raise Http404
+    site = settings.SITE_URL.rstrip("/")
+    expires = (timezone.now() + timedelta(days=365)).strftime("%Y-%m-%dT00:00:00Z")
+    body = (
+        f"Contact: mailto:{contact}\n"
+        f"Expires: {expires}\n"
+        "Preferred-Languages: en\n"
+        f"Canonical: {site}/.well-known/security.txt\n"
+        f"Policy: {site}/security/#disclosure\n"
+    )
+    return HttpResponse(body, content_type="text/plain; charset=utf-8")

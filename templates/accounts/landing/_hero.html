@@ -28,14 +28,20 @@
       <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>No card required</span>
     </p>
     {% endif %}
-    {% comment %}Proof strip: the channels that are on. Customer logos join it once there are real
-    ones with permission; nothing stands in for them until then.{% endcomment %}
+    {% comment %}Proof strip: the channels that are on, then real customers' logos once there are any
+    with permission (Operator Console → Testimonials); nothing stands in for them until then.{% endcomment %}
     {% if chat %}
     <p class="lp-proof" data-claim="{% if ch.whatsapp == 'live' %}inbox{% endif %}{% if ch.instagram == 'live' %} instagram-dms{% endif %}{% if ch.facebook == 'live' %} facebook-inbox{% endif %}">
       <span class="lp-proof-label">Works with</span>
       {% if ch.whatsapp == "live" %}<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>WhatsApp</span>{% endif %}
       {% if ch.instagram == "live" %}<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/></svg>Instagram</span>{% endif %}
       {% if ch.facebook == "live" %}<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>Facebook Pages</span>{% endif %}
+    </p>
+    {% endif %}
+    {% if logos %}
+    <p class="lp-proof lp-proof-logos" data-claim-exempt>
+      <span class="lp-proof-label">Used by</span>
+      {% for t in logos|slice:":6" %}<img src="{{ t.logo.url }}" alt="{{ t.business_name }}" width="112" height="32" decoding="async">{% endfor %}
     </p>
     {% endif %}
   </div>

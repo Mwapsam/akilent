@@ -308,6 +308,12 @@ SITE_URL = os.getenv("SITE_URL", "https://akilent.com")
 # Where /demo/ ("Book a demo", "Contact sales") requests are emailed. Empty: the site's support
 # address (SiteSettings.support_email); the request is saved either way.
 SALES_NOTIFY_EMAIL = os.getenv("SALES_NOTIFY_EMAIL", "")
+# A hosted public status page. Linked from the footers and the Security page only when set, so
+# no page ever points at a status page that doesn't exist.
+STATUS_PAGE_URL = os.getenv("STATUS_PAGE_URL", "")
+# Where security researchers report vulnerabilities (Security page, /.well-known/security.txt).
+# Empty: the site's support address (SiteSettings.support_email).
+SECURITY_CONTACT_EMAIL = os.getenv("SECURITY_CONTACT_EMAIL", "")
 
 # Origins where system (Akilent-owned) chatbots may be deployed.
 # SITE_URL is always implicitly included; add additional Akilent-controlled
@@ -320,8 +326,9 @@ PLATFORM_ALLOWED_ORIGINS: list[str] = [
 
 SEO_DEFAULTS = {
     "site_name": "Akilent",
-    "default_title": "Customer Conversations, CRM & Business Automation",
-    "default_description": "Akilent helps businesses manage customer conversations, contacts, sales, automation and insights from one workspace.",
+    # The positioning line (docs/marketing/messaging.md §1): global, no country or currency.
+    "default_title": "The customer conversation platform for teams that sell through chat",
+    "default_description": "Akilent is the customer conversation platform for teams that sell through chat. Answer customers from one shared inbox, follow up on time and record every order.",
     "title_suffix": "— Akilent",
     "og_image": "img/seo/og-default.png",
 }

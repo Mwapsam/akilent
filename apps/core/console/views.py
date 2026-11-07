@@ -880,6 +880,11 @@ def testimonial_save(request):
     item.person_name = (request.POST.get("person_name") or "").strip()[:120]
     item.business_name = (request.POST.get("business_name") or "").strip()[:160]
     item.permission_note = (request.POST.get("permission_note") or "").strip()[:255]
+    item.case_study = (request.POST.get("case_study") or "").strip()
+    if request.FILES.get("logo"):
+        item.logo = request.FILES["logo"]
+    elif "remove_logo" in request.POST:
+        item.logo = None
     item.is_published = "is_published" in request.POST
     try:
         item.order = max(0, int(request.POST.get("order") or 0))

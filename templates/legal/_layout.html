@@ -73,7 +73,7 @@ on these pages, and a lawyer should review them.
 {% with current=request.resolver_match.url_name %}
 <div class="legal-wrap">
   <header class="legal-head">
-    <p class="legal-eyebrow">Legal</p>
+    <p class="legal-eyebrow">{{ eyebrow|default:"Legal" }}</p>
     <h1>{{ page_title }}</h1>
     <div class="legal-meta">
       <span>Last updated {{ updated }}</span>
@@ -81,13 +81,14 @@ on these pages, and a lawyer should review them.
     </div>
   </header>
 
-  <nav class="legal-nav" aria-label="Legal documents">
-    <p>Legal</p>
+  <nav class="legal-nav" aria-label="Trust and legal documents">
+    <p>Trust and legal</p>
     <ul>
       <li><a href="{% url 'privacy' %}" {% if current == 'privacy' %}aria-current="page"{% endif %}>Privacy policy</a></li>
       <li><a href="{% url 'terms' %}" {% if current == 'terms' %}aria-current="page"{% endif %}>Terms of service</a></li>
       <li><a href="{% url 'cookies' %}" {% if current == 'cookies' %}aria-current="page"{% endif %}>Cookie policy</a></li>
       <li><a href="{% url 'data-deletion' %}" {% if current == 'data-deletion' %}aria-current="page"{% endif %}>Data deletion</a></li>
+      <li><a href="{% url 'security' %}" {% if current == 'security' %}aria-current="page"{% endif %}>Security</a></li>
     </ul>
   </nav>
 
