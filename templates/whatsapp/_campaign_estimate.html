@@ -77,7 +77,10 @@ swapped-in copy lost, so the Send button showed from step 2.{% endcomment %}
   <div id="review-summary" hx-swap-oob="innerHTML">
     <dl class="card card-pad text-sm space-y-2">
       <div class="flex justify-between gap-4"><dt class="text-ink-subtle">To</dt><dd class="text-right text-ink">{{ audience_name }} · {{ est.will_receive }} of {{ est.total }}</dd></div>
-      <div class="flex justify-between gap-4"><dt class="text-ink-subtle">Message</dt><dd class="text-right text-ink">{{ template.name }} · {% if is_marketing %}Promotion{% else %}Update{% endif %}</dd></div>
+      <div class="flex justify-between gap-4"><dt class="text-ink-subtle">Message</dt><dd class="text-right text-ink">{{ template.label }} · {% if is_marketing %}Promotion{% else %}Update{% endif %}</dd></div>
+      {% comment %}What it costs, without a price: Meta charges the business's own WhatsApp account
+      by category and country, and Akilent doesn't know those rates.{% endcomment %}
+      <div class="flex justify-between gap-4" data-review-cost><dt class="text-ink-subtle">Cost</dt><dd class="text-right text-ink">{{ est.will_receive }} {% if is_marketing %}marketing{% else %}utility{% endif %} message{{ est.will_receive|pluralize }}<span class="block text-xs text-ink-subtle">charged by Meta to your WhatsApp account</span></dd></div>
       <div class="flex justify-between gap-4"><dt class="text-ink-subtle">When</dt><dd class="text-right text-ink">{% if when_error %}<span class="text-coral-700">{{ when_error }}</span>{% elif send_at %}{{ send_at|timezone:send_tz|date:"D j M Y, H:i" }} ({{ send_tz }}){% if pace.waits_for_window %}<span class="block text-xs text-ink-subtle">Starts {{ pace.starts_local|timezone:pace.zone|date:"D H:i" }} ({{ pace.zone }}), when your sending hours open</span>{% endif %}{% elif pace.waits_for_window %}Starts {{ pace.starts_local|timezone:pace.zone|date:"D H:i" }} ({{ pace.zone }})<span class="block text-xs text-ink-subtle">Outside your sending hours now</span>{% else %}Now{% endif %}</dd></div>
       {% if segment %}<p class="text-xs text-ink-subtle">A segment is checked again when it sends, so the number can change.</p>{% endif %}
     </dl>

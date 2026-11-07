@@ -165,7 +165,11 @@ def test_a_names_fallback_starts_filled_in(composer):
         re.search(r'id="composer-fbs"[^>]*>(.*?)</script>', page, re.S).group(1)
     )
     assert fbs[key] == "there"
-    assert "Fixed text, the same for everyone" in page
+    # Phase F: the kind of answer is a segmented control, a customer detail chosen at first.
+    kind = page[page.index(f'data-blank="{key}"') :]
+    kind = kind[kind.index("data-blank-kind") : kind.index("</div>")]
+    assert f'name="src__{key}" value="detail"' in kind and ">Fixed text</label>" in kind
+    assert kind.index("checked") < kind.index('value="literal"')
 
 
 @_wa_urls

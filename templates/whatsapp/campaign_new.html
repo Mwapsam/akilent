@@ -25,15 +25,18 @@ and the send could only fail.{% endcomment %}
   {% include "whatsapp/_campaign_readiness.html" with readiness=readiness %}
 {% else %}
 {{ state.picks|json_script:"composer-picks" }}
+{{ state.kinds|json_script:"composer-kinds" }}
 {{ state.lits|json_script:"composer-lits" }}
 {{ state.fbs|json_script:"composer-fbs" }}
-<form id="composer-form" method="post" novalidate
+<form id="composer-form" class="campaign-composer" method="post" novalidate
       x-data="{
         step: {{ step }},
         audience: '{{ state.audience|escapejs }}',
         template: '{{ state.template|escapejs }}',
         when: '{{ state.when|escapejs }}',
         picks: JSON.parse(document.getElementById('composer-picks').textContent),
+        kinds: JSON.parse(document.getElementById('composer-kinds').textContent),
+        tplQ: '',
         lits: JSON.parse(document.getElementById('composer-lits').textContent),
         fbs: JSON.parse(document.getElementById('composer-fbs').textContent),
         busy: false,
@@ -116,23 +119,30 @@ and the send could only fail.{% endcomment %}
       <fieldset x-show="step === 2" x-cloak>
         <legend id="step-2-title" tabindex="-1" class="text-lg font-semibold text-ink mb-1">What do you want to send?</legend>
         <p class="text-sm text-gray-600 mb-4">WhatsApp only allows messages Meta has approved. <a href="/email/templates/" class="text-accent hover:text-accent-strong">Manage templates</a></p>
-        <div class="space-y-3">
+        {% comment %}The templates as a list to read (the Inbox picker's look, .cv-tpl-option): the
+        readable name, its kind and language, and the start of its text. Radios, so arrow keys and
+        a page without scripts both work; past three, a search box (hidden without scripts).{% endcomment %}
+        {% if templates|length > 3 %}
+        <div class="mb-3" x-cloak>
+          <label class="sr-only" for="tpl-search">Search messages</label>
+          <input id="tpl-search" type="search" class="input" x-model="tplQ" placeholder="Search by name or text" autocomplete="off" data-tpl-search>
+        </div>
+        {% endif %}
+        <div class="campaign-tpl-list" role="radiogroup" aria-labelledby="step-2-title">
           {% for t in templates %}
-          <label class="card card-pad !p-4 flex items-start gap-3 transition {% if t.sendable %}cursor-pointer{% else %}opacity-60 cursor-not-allowed{% endif %}"
-                 :class="template === '{{ t.pk }}' ? 'ring-2 ring-brand-500' : ''">
-            <input type="radio" name="template_id" value="{{ t.pk }}" x-model="template" class="mt-1 h-4 w-4" {% if not t.sendable %}disabled{% endif %}>
-            <span class="min-w-0 flex-1">
-              <span class="flex flex-wrap items-center gap-2">
-                <span class="font-medium text-ink">{{ t.name }}</span>
-                {% if t.is_marketing %}<span class="badge badge-warning">Promotion</span>{% elif t.category == 'utility' %}<span class="badge badge-info">Update</span>{% else %}<span class="badge badge-neutral">{{ t.get_category_display }}</span>{% endif %}
-                <span class="text-xs text-ink-subtle uppercase">{{ t.language_code }}</span>
-              </span>
-              <span class="mt-1 block text-sm text-gray-600 line-clamp-2">{{ t.display_content }}</span>
-              {% if not t.sendable %}<span class="mt-1 block text-xs text-ink-subtle">Has a picture or file at the top — campaigns can't send those yet.</span>
-              {% elif t.is_marketing %}<span class="mt-1 block text-xs text-ink-subtle">Promotions only go to people who opted in.</span>{% endif %}
-            </span>
+          <label class="cv-tpl-option" data-tpl-option="{{ t.pk }}"
+                 data-search="{{ t.label|lower }} {{ t.name|lower }} {{ t.display_content|lower }}"
+                 x-show="!tplQ.trim() || $el.dataset.search.includes(tplQ.trim().toLowerCase())">
+            <input type="radio" name="template_id" value="{{ t.pk }}" x-model="template" class="sr-only" {% if not t.sendable %}disabled{% endif %}>
+            <span class="cv-tpl-name">{{ t.label }}<span class="cv-tpl-meta">{% if t.is_marketing %}Promotion{% elif t.category == 'utility' %}Update{% else %}{{ t.get_category_display }}{% endif %} · {{ t.language_code|upper }}</span></span>
+            <span class="cv-tpl-body">{{ t.display_content }}</span>
+            {% if not t.sendable %}<span class="cv-tpl-meta">Has a picture or file at the top — campaigns can't send those yet.</span>
+            {% elif t.is_marketing %}<span class="cv-tpl-meta">Promotions only go to people who opted in.</span>{% endif %}
           </label>
           {% endfor %}
+          {% if templates|length > 3 %}
+          <p class="cv-tpl-none" x-cloak x-show="tplQ.trim() && ![...$root.querySelectorAll('[data-tpl-option]')].some(o => o.dataset.search.includes(tplQ.trim().toLowerCase()))" data-tpl-none>No message matches “<span x-text="tplQ.trim()"></span>”.</p>
+          {% endif %}
         </div>
 
         {% for t in templates %}{% if t.blanks and t.sendable %}
@@ -140,33 +150,39 @@ and the send could only fail.{% endcomment %}
           <h3 class="text-sm font-medium text-ink">Fill in the blanks</h3>
           {% for b in t.blanks %}
           {% with key=t.pk|stringformat:"s"|add:"__"|add:b.name %}
-          {% comment %}One of two things goes in a blank: a detail we fill per customer, with what to use
-          when we don't have it (a name falls back to "there", filled in and required), or fixed
-          text everyone gets, with the warning about names. Only the one chosen shows, and only
-          its field is sent (:disabled), so a box left over from the other can't mislead. Without
-          scripts both show, and the server reads the one that matches the choice.{% endcomment %}
-          <div class="rounded-xl border border-border p-3 space-y-2" data-blank="{{ key }}">
-            <label class="label" for="var-{{ t.pk }}-{{ forloop.counter }}">What goes in “{{ b.name }}”?</label>
-            <select id="var-{{ t.pk }}-{{ forloop.counter }}" name="var__{{ key }}" class="select" x-model="picks['{{ key }}']" data-blank-source
-                    @change="if (['first_name', 'full_name'].includes(picks['{{ key }}']) && !(fbs['{{ key }}'] || '').trim()) fbs['{{ key }}'] = 'there'">
-              {% for c in blank_choices %}<option value="{{ c.key }}">{{ c.label }}</option>{% endfor %}
-              <option value="literal">Fixed text, the same for everyone</option>
-            </select>
-            <div x-show="picks['{{ key }}'] === 'literal'">
-              <label class="sr-only" for="lit-{{ t.pk }}-{{ forloop.counter }}">Text for “{{ b.name }}”</label>
-              <input id="lit-{{ t.pk }}-{{ forloop.counter }}" name="lit__{{ key }}" class="input" x-model="lits['{{ key }}']"
-                     :disabled="picks['{{ key }}'] !== 'literal'" :required="picks['{{ key }}'] === 'literal'" />
-              <p class="text-xs text-amber-800 mt-1" data-literal-warning>Every customer gets exactly this text — don't type a person's name here.</p>
+          {% comment %}One of two kinds of answer goes in a blank (src__, a segmented control): a detail
+          we fill per customer, chosen from the menu (var__), with what to use when we don't have
+          it (a name falls back to "there", filled in and required); or fixed text everyone gets,
+          with the warning about names. Only the chosen kind's fields show and are sent
+          (:disabled). Without scripts everything shows, and the server reads the kind chosen.{% endcomment %}
+          <fieldset class="rounded-xl border border-border p-3 space-y-2" data-blank="{{ key }}">
+            <legend class="label">What goes in “{{ b.name }}”?</legend>
+            <div class="seg" data-blank-kind>
+              <label class="seg-item"><input type="radio" class="sr-only" name="src__{{ key }}" value="detail" x-model="kinds['{{ key }}']" {% if b.kind != 'literal' %}checked{% endif %}
+                     @change="if (['first_name', 'full_name'].includes(picks['{{ key }}']) && !(fbs['{{ key }}'] || '').trim()) fbs['{{ key }}'] = 'there'">Customer detail</label>
+              <label class="seg-item"><input type="radio" class="sr-only" name="src__{{ key }}" value="literal" x-model="kinds['{{ key }}']" {% if b.kind == 'literal' %}checked{% endif %}>Fixed text</label>
             </div>
-            <div x-show="picks['{{ key }}'] !== 'literal'">
+            <div x-show="kinds['{{ key }}'] !== 'literal'" class="space-y-2">
+              <label class="sr-only" for="var-{{ t.pk }}-{{ forloop.counter }}">Which detail</label>
+              <select id="var-{{ t.pk }}-{{ forloop.counter }}" name="var__{{ key }}" class="select" x-model="picks['{{ key }}']" data-blank-source
+                      :disabled="kinds['{{ key }}'] === 'literal'"
+                      @change="if (['first_name', 'full_name'].includes(picks['{{ key }}']) && !(fbs['{{ key }}'] || '').trim()) fbs['{{ key }}'] = 'there'">
+                {% for c in blank_choices %}<option value="{{ c.key }}"{% if c.key == b.pick %} selected{% endif %}>{{ c.label }}</option>{% endfor %}
+              </select>
               <label class="text-xs text-gray-600 block">If we don't have it for someone, use
                 <input name="fb__{{ key }}" class="input mt-0.5" x-model="fbs['{{ key }}']"
-                       :disabled="picks['{{ key }}'] === 'literal'"
-                       :required="['first_name', 'full_name'].includes(picks['{{ key }}'])"
+                       :disabled="kinds['{{ key }}'] === 'literal'"
+                       :required="kinds['{{ key }}'] !== 'literal' && ['first_name', 'full_name'].includes(picks['{{ key }}'])"
                        :placeholder="['first_name', 'full_name'].includes(picks['{{ key }}']) ? 'there' : 'leave empty to skip them'" />
               </label>
             </div>
-          </div>
+            <div x-show="kinds['{{ key }}'] === 'literal'">
+              <label class="sr-only" for="lit-{{ t.pk }}-{{ forloop.counter }}">Text for “{{ b.name }}”</label>
+              <input id="lit-{{ t.pk }}-{{ forloop.counter }}" name="lit__{{ key }}" class="input" x-model="lits['{{ key }}']" placeholder="The same text for everyone"
+                     :disabled="kinds['{{ key }}'] !== 'literal'" :required="kinds['{{ key }}'] === 'literal'" />
+              <p class="text-xs text-amber-800 mt-1" data-literal-warning>Every customer gets exactly this text — don't type a person's name here.</p>
+            </div>
+          </fieldset>
           {% endwith %}
           {% endfor %}
         </div>
@@ -211,8 +227,9 @@ and the send could only fail.{% endcomment %}
         {% if account_problem %}<div class="mt-4">{% include "whatsapp/_account_problem.html" with with_confirm=True %}</div>{% endif %}
         <div id="review-summary" class="mt-4"></div>
 
-        <details class="card card-pad mt-4" x-data="{}">
-          <summary class="cursor-pointer text-sm font-medium text-ink">Send a test to my WhatsApp</summary>
+        {% comment %}A quiet disclosure (the Inbox details' look), not a card: the test is optional.{% endcomment %}
+        <details class="cv-disclosure mt-4" data-test-send>
+          <summary>{% include "components/icon.html" with name="chevron-down" class="cv-disclosure-chev w-4 h-4" %} Send a test to my WhatsApp</summary>
           <p class="mt-2 text-sm text-gray-600">See it on your own phone first. A test isn't counted as a campaign. Blanks we can't fill for you show as [blank name].</p>
           <div class="mt-3 flex flex-wrap items-end gap-2">
             <div class="flex-1 min-w-[12rem]">
@@ -229,13 +246,15 @@ and the send could only fail.{% endcomment %}
       </section>
     </div>
 
-    {% comment %}Live preview + who it reaches (server-computed, same rules as the send).{% endcomment %}
+    {% comment %}Live preview + who it reaches (server-computed, same rules as the send). A change
+    waits a moment before asking: switching a blank between Customer detail and Fixed text fires
+    change before Alpine has re-enabled the chosen kind's fields, and a disabled field isn't sent.{% endcomment %}
     <aside class="lg:col-span-2">
       <div class="lg:sticky lg:top-6 space-y-4"
            id="estimate"
            hx-get="{% url 'whatsapp-campaign-estimate' %}"
            hx-include="#composer-form"
-           hx-trigger="load, change from:#composer-form, input from:#composer-form delay:500ms"
+           hx-trigger="load, change from:#composer-form delay:50ms, input from:#composer-form delay:500ms"
            hx-swap="innerHTML"
            aria-live="polite">
         <div class="card card-pad text-sm text-ink-subtle">Choose who gets it and a message to see a preview.</div>

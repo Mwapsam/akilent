@@ -31,7 +31,7 @@
     {% else %}
     <p class="text-xs text-ink-subtle">In your business's time zone: {{ tz }}. <a href="{% url 'settings-hours' %}" class="text-accent hover:text-accent-strong">Change it with your opening hours</a>.</p>
     {% endif %}
-    {% if can_send %}<button class="btn btn-primary btn-sm">Save</button>{% else %}<p class="text-sm text-ink-subtle">Only the business owner or an admin can change these.</p>{% endif %}
+    {% if can_send %}<button class="btn btn-secondary btn-sm">Save</button>{% else %}<p class="text-sm text-ink-subtle">Only the business owner or an admin can change these.</p>{% endif %}
   </form>
 
   <aside class="card card-pad text-sm space-y-2">

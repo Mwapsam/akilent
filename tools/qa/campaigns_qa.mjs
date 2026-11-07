@@ -7,6 +7,8 @@
 //               through Lists (opened in place, as a boosted link) and back;
 //   QA_LIST=1   Phase D: the list's tiles or start card and result columns at six widths in
 //               both themes (sideways scroll, tap targets, contrast, sparkline hover);
+//   QA_WIZARD=1 Phase F: the template list, the blank's segmented choice, the test send and
+//               Review's cost, at six widths in both themes;
 //   QA_DETAIL=1 Phase E: a finished campaign's page at six widths in both themes, and its
 //               skeleton when the page is slow to arrive;
 // Needs a dev server with WHATSAPP_ENABLED=True (QA_BASE, default :8001) and QA_UI_EMAIL /
@@ -125,7 +127,7 @@ const shot0 = async (name) => writeFileSync(join(shots, name + ".jpg"), Buffer.f
 const composer = (expr) => evaluate(`(() => { const c = Alpine.$data(document.getElementById('composer-form')); return (${expr}); })()`);
 // The composer at step 2 with the first audience and the first template that has blanks.
 async function toBlanks() {
-  await go("/whatsapp/campaigns/new/", 1500);
+  await go("/campaigns/new/", 1500);
   const pick = await evaluate(`(() => { const a = document.querySelector('input[name=audience]'); const t = [...document.querySelectorAll('input[name=template_id]:not(:disabled)')]
     .find(i => document.querySelector('[name^="var__' + i.value + '__"]')); return { audience: a && a.value, template: t && t.value }; })()`);
   if (!pick.audience || !pick.template) { console.log("FAIL no audience or no template with blanks", JSON.stringify(pick)); process.exit(1); }
@@ -136,7 +138,7 @@ async function toBlanks() {
 const blankState = (tpl) => evaluate(`(() => { const box = [...document.querySelectorAll('[data-blank]')].find(b => b.dataset.blank.startsWith(${JSON.stringify(tpl + "__")}));
   const shown = (s) => { const e = box.querySelector(s); return !!e && !!e.offsetParent; };
   const fb = box.querySelector('[name^="fb__"]');
-  return { source: box.querySelector('[data-blank-source]') ? box.querySelector('[data-blank-source]').value : null, literalBox: shown('[name^="lit__"]'), literalWarning: shown('[data-literal-warning]'),
+  return { kind: (box.querySelector('[data-blank-kind] input:checked') || {}).value, source: box.querySelector('[data-blank-source]') ? box.querySelector('[data-blank-source]').value : null, menu: shown('[data-blank-source]'), literalBox: shown('[name^="lit__"]'), literalWarning: shown('[data-literal-warning]'),
     fallback: shown('[name^="fb__"]'), fallbackValue: fb && fb.value, fallbackRequired: !!fb && fb.required }; })()`);
 
 if (process.env.QA_BLANKS) {
@@ -144,14 +146,14 @@ if (process.env.QA_BLANKS) {
   await viewport(1280, 900, false);
   const tpl = await toBlanks();
   out.start = await blankState(tpl);
-  await evaluate(`(() => { const s = [...document.querySelectorAll('[data-blank-source]')].find(e => e.name.startsWith(${JSON.stringify("var__" + tpl + "__")})); s.value = 'literal'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await evaluate(`(() => { const r = [...document.querySelectorAll('[data-blank-kind] input[value=literal]')].find(e => e.name.startsWith(${JSON.stringify("src__" + tpl + "__")})); r.click(); })()`);
   await sleep(250);
   out.fixedText = await blankState(tpl);
-  await evaluate(`(() => { const s = [...document.querySelectorAll('[data-blank-source]')].find(e => e.name.startsWith(${JSON.stringify("var__" + tpl + "__")})); s.value = 'first_name'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await evaluate(`(() => { const r = [...document.querySelectorAll('[data-blank-kind] input[value=detail]')].find(e => e.name.startsWith(${JSON.stringify("src__" + tpl + "__")})); r.click(); })()`);
   await sleep(250);
   out.backToName = await blankState(tpl);
   await sleep(1500); // the preview re-reads after a change (hx-trigger on the form)
-  out.preview = await evaluate(`(() => { const p = document.querySelector('#estimate'); return p ? p.innerText.replace(/\s+/g, ' ').slice(0, 160) : null; })()`);
+  out.preview = await evaluate(`(() => { const p = document.querySelector('#estimate'); return p ? p.innerText.replace(/\\s+/g, ' ').slice(0, 160) : null; })()`);
   await shot0("blanks-1280");
   console.log(JSON.stringify(out, null, 1));
   process.exit(0);
@@ -238,6 +240,52 @@ if (process.env.QA_DETAIL) {
   await sleep(2500);
   const after = await evaluate(`({ path: location.pathname, skeleton: !!document.querySelector('[data-page-skeleton]'), funnel: !!document.querySelector('[data-campaign-funnel]') })`);
   out.push({ skeleton: { during, after } });
+  console.log(JSON.stringify(out, null, 1));
+  process.exit(0);
+}
+
+// Phase F: the composer's template list (readable names, search past three), the blank's
+// segmented choice, the test-send disclosure and Review's cost line, at six widths in both
+// themes (sideways scroll, tap targets, contrast).
+if (process.env.QA_WIZARD) {
+  const out = [];
+  const NO_MOTION = `(() => { const s=document.createElement('style'); s.textContent='*,*::before,*::after{transition:none!important;animation:none!important}'; document.head.appendChild(s); })()`;
+  const sizes = [[360, 740, true], [390, 844, true], [768, 1024, true], [1024, 768, false], [1280, 800, false], [1440, 900, false]];
+  for (const [w, h, touch] of sizes) {
+    await viewport(w, h, touch);
+    const tpl = await toBlanks();
+    await evaluate(scanner); await evaluate(NO_MOTION);
+    for (const theme of ["light", "dark"]) {
+      const r = await evaluate(`(async () => { document.documentElement.dataset.theme = ${JSON.stringify(theme)}; await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const s = await window.__uiScan({ max: 4 });
+        const mine = [...document.querySelectorAll('.cv-tpl-option, [data-blank-kind] .seg-item, [data-blank-source], [data-test-send] > summary')].filter(e => e.offsetParent)
+          .map(e => { const b = e.getBoundingClientRect(); return { t: e.textContent.trim().slice(0, 20), h: Math.round(b.height) }; });
+        const picked = document.querySelector('.cv-tpl-option:has(input:checked)');
+        return { theme: ${JSON.stringify(theme)}, sideways: document.documentElement.scrollWidth > innerWidth + 1,
+          options: [...document.querySelectorAll('.cv-tpl-option .cv-tpl-name')].map(n => n.innerText.replace(/\s+/g, ' ').trim()).slice(0, 4),
+          picked: picked && getComputedStyle(picked).borderColor, search: !!document.querySelector('[data-tpl-search]'),
+          ownSmall: innerWidth < 1024 ? mine.filter(m => m.h < 44) : undefined,
+          contrastFail: s.contrast.failing, contrastEx: s.contrast.failing ? s.contrast.examples : undefined, overflow: s.overflow.count }; })()`);
+      out.push({ w, ...r });
+      if (w === 390 || w === 1280) await shot0(`wizard-2-${w}-${theme}`);
+    }
+    await evaluate("document.documentElement.dataset.theme = 'light'");
+  }
+  await viewport(1280, 800, false);
+  const tpl = await toBlanks();
+  if (await evaluate("!!document.querySelector('[data-tpl-search]')")) {
+    await evaluate(`(() => { const i = document.querySelector('[data-tpl-search]'); i.value = 'zzzz no such'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await sleep(200);
+    out.push({ searchNone: await evaluate(`({ shown: [...document.querySelectorAll('.cv-tpl-option')].filter(e => e.offsetParent).length, none: !!(document.querySelector('[data-tpl-none]') || {}).offsetParent })`) });
+    await evaluate(`(() => { const i = document.querySelector('[data-tpl-search]'); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  } else out.push({ searchNone: "three or fewer templates: no search" });
+  // Choosing through Alpine fires no change event, which is what refreshes the preview.
+  await evaluate("document.getElementById('composer-form').dispatchEvent(new Event('change', { bubbles: true }))");
+  await composer("c.go(4)"); await sleep(1800);
+  await evaluate("document.querySelector('[data-test-send] > summary').click()"); await sleep(200);
+  out.push({ review: await evaluate(`({ cost: (document.querySelector('[data-review-cost]') || {}).innerText, testOpen: document.querySelector('[data-test-send]').open,
+    testField: !!(document.querySelector('#test-phone') || {}).offsetParent })`) });
+  await shot0("wizard-4-1280");
   console.log(JSON.stringify(out, null, 1));
   process.exit(0);
 }

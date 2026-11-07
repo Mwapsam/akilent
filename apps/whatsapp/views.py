@@ -696,8 +696,15 @@ def _campaign_variable_mapping_from_post(request, template) -> tuple[dict, dict,
     mapping, fallbacks, missing = {}, {}, []
     for var in template.variables or []:
         key = f"{template.pk}__{var}"
+        # The kind of answer (src__: a customer detail or fixed text) chooses; var__ names the
+        # detail. An older form (or a draft link) says "literal" in var__ itself.
+        choice = (
+            "literal"
+            if request.POST.get(f"src__{key}") == "literal"
+            else request.POST.get(f"var__{key}") or ""
+        )
         source, fallback = wa_variables.entry_from_choice(
-            request.POST.get(f"var__{key}") or "",
+            choice,
             request.POST.get(f"lit__{key}") or "",
             request.POST.get(f"fb__{key}") or "",
         )
@@ -803,11 +810,17 @@ def _composer_state(request, account, templates, src=None):
 
     if src is None:
         src = request.POST if request.method == "POST" else request.GET
-    picks, lits, fbs = {}, {}, {}
+    picks, kinds, lits, fbs = {}, {}, {}, {}
     for t in templates:
         for b in t.blanks:  # type: ignore[attr-defined]
             key = f"{t.pk}__{b['name']}"
             picks[key] = src.get(f"var__{key}") or b["default"]
+            # Fixed text or a customer detail; the detail menu keeps a detail either way, so
+            # going back to "Customer detail" finds one chosen.
+            literal = src.get(f"src__{key}") == "literal" or picks[key] == "literal"
+            kinds[key] = "literal" if literal else "detail"
+            if picks[key] == "literal":
+                picks[key] = b["default"] if b["default"] != "literal" else "first_name"
             lits[key] = src.get(f"lit__{key}") or ""
             # Filled in from the start ("there" for a name), so it's never left blank unseen.
             fbs[key] = src.get(f"fb__{key}") or wa_variables.default_fallback(
@@ -824,6 +837,7 @@ def _composer_state(request, account, templates, src=None):
         "send_time": src.get("send_time") or "09:00",
         "send_tz": src.get("send_tz") or workspace_timezone(account),
         "picks": picks,
+        "kinds": kinds,
         "lits": lits,
         "fbs": fbs,
         "submission_key": request.POST.get("submission_key")
@@ -1010,6 +1024,12 @@ def campaign_new(request):
                         return redirect("whatsapp-campaign-detail", pk=campaign.pk)
 
     state = _composer_state(request, account, templates, src=src)
+    for (
+        t
+    ) in templates:  # each blank's answer as first shown, for the page without scripts
+        for b in t.blanks:  # type: ignore[attr-defined]
+            key = f"{t.pk}__{b['name']}"
+            b["kind"], b["pick"] = state["kinds"][key], state["picks"][key]
     if request.method == "GET" and src is None and state["audience"]:
         step = 2 if not state["template"] else 4
     return render(
