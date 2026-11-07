@@ -255,7 +255,9 @@ def test_step_in_the_url_never_skips_what_is_missing(client, trial_plan, email_p
     pre = _preselect(client.get(SIGNUP_URL + "?step=account"))
     assert pre["startStep"] == "channels"
     # With the channels and plan in the link, an earlier step can be asked for...
-    pre = _preselect(client.get(SIGNUP_URL + "?plan=trial&channels=email&step=channels"))
+    pre = _preselect(
+        client.get(SIGNUP_URL + "?plan=trial&channels=email&step=channels")
+    )
     assert pre["startStep"] == "channels"
     # ...and the furthest one the link reaches is the default.
     pre = _preselect(client.get(SIGNUP_URL + "?plan=trial&channels=email"))

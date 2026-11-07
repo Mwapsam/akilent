@@ -196,7 +196,10 @@ def test_links_preselect_channels(client, plans, settings):
     assert cfg["preselect"]["startStep"] == "package"
     # A channel that isn't offered is dropped.
     cfg = _wizard_config(client.get(SIGNUP_URL + "?channels=instagram"))
-    assert cfg["preselect"]["channels"] == [] and cfg["preselect"]["startStep"] == "channels"
+    assert (
+        cfg["preselect"]["channels"] == []
+        and cfg["preselect"]["startStep"] == "channels"
+    )
 
 
 @pytest.mark.django_db
