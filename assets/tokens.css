@@ -152,8 +152,8 @@
      Both pairs below were validated, not chosen by eye: OKLCH lightness band,
      chroma floor, CVD separation (deutan/protan/tritan), normal-vision
      separation, and >= 3:1 against their own surface. Dark is *selected*, not a
-     flip — its steps are picked against #161F35, which is why series-1 lifts a
-     step while series-2 stays put.
+     flip — its steps were picked against the old navy #161F35 and hold on the
+     graphite #111318 (test_contrast checks every theme).
 
      Status colours are reserved for state and are never reused as "series 3";
      they always ship with a label, never colour alone. */
@@ -260,6 +260,22 @@
   --radius-control-sm: 0.5rem;
   --radius-surface: 1rem;
 
+  /* The primary action (D1, 2026-11-08): solid neutral, the inverse of the page:
+     near-black on light, near-white on dark. Brand amber is kept for highlights (logo,
+     active tab, progress, the unread badge), never for buttons, so one action per page
+     reads as the action without the page turning yellow. The public pages
+     (data-surface="public") keep amber buttons for now. */
+  --color-primary: #111318;
+  --color-primary-hover: #2A2D35;
+  --color-primary-active: #000000;
+  --color-on-primary: #FFFFFF;
+  /* Brand amber as a highlight: the active tab's underline, progress, the unread badge. */
+  --color-highlight: var(--color-amber-400);
+  /* Secondary: a quiet fill of the ink itself, no border. */
+  --color-secondary-bg: color-mix(in srgb, var(--color-ink) 6%, transparent);
+  --color-secondary-hover: color-mix(in srgb, var(--color-ink) 10%, transparent);
+  --color-secondary-active: color-mix(in srgb, var(--color-ink) 14%, transparent);
+
   /* Text on an amber fill. Fixed in both themes: amber stays amber in the dark
      theme, so --color-ink (which flips to near-white) measured 1.77:1 on the
      primary button there. #12182B on amber-400 is 9.6:1. */
@@ -299,11 +315,11 @@
 --------------------------------------------------------------------------- */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --color-surface: #161F35;        /* ink-2 — raised panels / cards */
-    --color-surface-muted: #1C2640;  /* ink-3 — wells, table headers  */
-    --color-canvas: #0E1526;         /* Night Ops Navy page ground     */
-    --color-border: #26314A;         /* hairline                       */
-    --color-border-strong: #46516B;
+    --color-surface: #111318;
+    --color-surface-muted: #16181D;
+    --color-canvas: #0B0C10;
+    --color-border: #1F2126;
+    --color-border-strong: #33353C;
     --chart-series-1: var(--color-blue-500);
     --chart-series-2: var(--color-teal-600);
     --chart-good: var(--color-teal-500);
@@ -311,10 +327,10 @@
     --chart-grid: var(--color-border);
     --chart-axis: var(--color-ink-subtle);
     --chart-muted: var(--color-border-strong);
-    --color-ink: #FAFBFC;
-    --color-ink-muted: #A8B2C4;      /* gray-400 — secondary text      */
-    --color-ink-subtle: #838EA3;     /* gray-500 — tertiary            */
-    --color-hover: #1C2640;          /* ink-3 — neutral hover fill     */
+    --color-ink: #F4F4F5;
+    --color-ink-muted: #A1A1AA;
+    --color-ink-subtle: #8B8B94;
+    --color-hover: #1A1C21;
     --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.24), 0 1px 3px 0 rgb(0 0 0 / 0.32);
     --shadow-pop: 0 4px 6px -2px rgb(0 0 0 / 0.3), 0 12px 16px -4px rgb(0 0 0 / 0.44);
     --shadow-modal: 0 8px 8px -4px rgb(0 0 0 / 0.3), 0 20px 24px -4px rgb(0 0 0 / 0.5);
@@ -334,14 +350,18 @@
     --color-accent: var(--color-brand-200);
     --color-accent-strong: var(--color-brand-100);
     --color-focus-ring: var(--color-brand-400);   /* 5.2:1 on the canvas */
+    --color-primary: #F4F4F5;
+    --color-primary-hover: #FFFFFF;
+    --color-primary-active: #E4E4E7;
+    --color-on-primary: #0B0C10;
   }
 }
 :root[data-theme="dark"] {
-  --color-surface: #161F35;
-  --color-surface-muted: #1C2640;
-  --color-canvas: #0E1526;
-  --color-border: #26314A;
-  --color-border-strong: #46516B;
+  --color-surface: #111318;
+  --color-surface-muted: #16181D;
+  --color-canvas: #0B0C10;
+  --color-border: #1F2126;
+  --color-border-strong: #33353C;
   --chart-series-1: var(--color-blue-500);
   --chart-series-2: var(--color-teal-600);
   --chart-good: var(--color-teal-500);
@@ -349,10 +369,10 @@
   --chart-grid: var(--color-border);
   --chart-axis: var(--color-ink-subtle);
   --chart-muted: var(--color-border-strong);
-  --color-ink: #FAFBFC;
-  --color-ink-muted: #A8B2C4;
-  --color-ink-subtle: #838EA3;
-  --color-hover: #1C2640;
+  --color-ink: #F4F4F5;
+  --color-ink-muted: #A1A1AA;
+  --color-ink-subtle: #8B8B94;
+  --color-hover: #1A1C21;
   --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.24), 0 1px 3px 0 rgb(0 0 0 / 0.32);
   --shadow-pop: 0 4px 6px -2px rgb(0 0 0 / 0.3), 0 12px 16px -4px rgb(0 0 0 / 0.44);
   --shadow-modal: 0 8px 8px -4px rgb(0 0 0 / 0.3), 0 20px 24px -4px rgb(0 0 0 / 0.5);
@@ -372,4 +392,17 @@
   --color-accent: var(--color-brand-200);
   --color-accent-strong: var(--color-brand-100);
   --color-focus-ring: var(--color-brand-400);
+  --color-primary: #F4F4F5;
+  --color-primary-hover: #FFFFFF;
+  --color-primary-active: #E4E4E7;
+  --color-on-primary: #0B0C10;
+}
+
+/* The public pages (help, docs, legal: templates/public/_base.html) keep the amber
+   primary button until the site is brought in line with the app. */
+:root[data-surface="public"] {
+  --color-primary: var(--color-amber-400);
+  --color-primary-hover: var(--color-amber-500);
+  --color-primary-active: var(--color-amber-600);
+  --color-on-primary: var(--color-ink-fixed);
 }

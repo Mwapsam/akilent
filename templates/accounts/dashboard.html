@@ -15,7 +15,9 @@
       {{ greeting }}{% if request.user.first_name %}, {{ request.user.first_name }}{% endif %} <span aria-hidden="true">👋</span>
     </h1>
     <p class="mt-1 text-sm text-ink-subtle">
-      {% if onboarding_complete %}
+      {% if onboarding_paused %}
+        Setup is done for now. A channel is waiting on its provider; we'll let you know when it's ready.
+      {% elif onboarding_complete %}
         Here's what's happening with your communications.
       {% else %}
         You're almost ready — finish setup to start reaching your customers.
@@ -38,7 +40,7 @@
          aria-labelledby="onboarding-label"
          aria-valuenow="{{ onboarding_done }}" aria-valuemin="0" aria-valuemax="{{ onboarding_total }}"
          aria-valuetext="{{ onboarding_done }} of {{ onboarding_total }} setup steps complete">
-      <div class="h-full rounded-full bg-brand-600 transition-all"
+      <div class="h-full rounded-full bg-highlight transition-all"
            style="width: {% widthratio onboarding_done onboarding_total 100 %}%"></div>
     </div>
     {% if onboarding_next.state == "paused" %}

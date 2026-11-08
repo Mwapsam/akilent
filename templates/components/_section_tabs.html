@@ -14,12 +14,12 @@ compact=True: less space below, for the full-height Inbox.{% endcomment %}
 <div class="section-tabs-wrap {% if compact %}mb-2{% else %}mb-6 -mt-2{% endif %}">
 <nav class="section-tabs flex items-center gap-1 border-b border-border overflow-x-auto whitespace-nowrap snap-x [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
      aria-label="{{ sec.label }}"
-     data-instant-tabs data-active-class="border-accent text-accent" data-inactive-class="border-transparent text-ink-subtle hover:text-ink hover:border-gray-300"
+     data-instant-tabs data-active-class="border-highlight text-ink" data-inactive-class="border-transparent text-ink-subtle hover:text-ink hover:border-border-strong"
      x-data x-init="const a = $el.querySelector('[aria-current=page]'); const fit = () => $el.classList.toggle('is-scrollable', $el.scrollWidth > $el.clientWidth + 1); fit(); window.addEventListener('resize', fit, { passive: true }); if (a && $el.scrollWidth > $el.clientWidth) a.scrollIntoView({ inline: 'center', block: 'nearest' })">
   {% for tab in sec.tabs %}
   <a href="{{ tab.href }}" data-skeleton="{{ tab.skeleton }}"{% if tab.active %} aria-current="page"{% endif %}{% if tab.locked %} title="{{ tab.label }} (not in your plan)"{% endif %}
      class="snap-start px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors inline-flex items-center gap-1
-       {% if tab.active %}border-accent text-accent{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-gray-300{% endif %}">
+       {% if tab.active %}border-highlight text-ink{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-border-strong{% endif %}">
     {{ tab.label }}{% if tab.locked %} {% include "components/icon.html" with name="lock" class="w-3.5 h-3.5" %}<span class="sr-only">(locked)</span>{% endif %}
   </a>
   {% endfor %}

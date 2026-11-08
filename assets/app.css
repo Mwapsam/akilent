@@ -15,6 +15,29 @@
 @source not "../static/js/landing.js";
 
 
+/* Type scale (D3, 2026-11-08): six sizes, three weights, for the signed-in app.
+   12 (xs) · 13 (text-[13px]) · 14 (sm) · 16 (base, lg) · 20 (xl) · 24-28 (2xl, 3xl), weights
+   400 / 500 / 600 only: font-bold renders 600. Section headings (text-lg) drop to 16px so a
+   page has one clear title and calm sections under it; titles (text-3xl) are 28px. The
+   public pages (data-surface="public") keep the previous sizes below. */
+@theme {
+  --text-lg: 1rem;
+  --text-lg--line-height: 1.5rem;
+  --text-3xl: 1.75rem;
+  --text-3xl--line-height: 2.25rem;
+  --font-weight-bold: 600;
+}
+:root[data-surface="public"] {
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.75rem;
+  --text-3xl: 1.875rem;
+  --text-3xl--line-height: 2.25rem;
+  --font-weight-bold: 700;
+}
+/* Headings sit tight, the way large type is set; body text keeps Inter's own spacing. */
+:root:not([data-surface="public"]) :is(h1, h2) { letter-spacing: -0.018em; }
+:root:not([data-surface="public"]) h3 { letter-spacing: -0.008em; }
+
 /* Safe areas: notched phones put the home indicator and rounded corners inside
    the viewport once viewport-fit=cover is set. Anything pinned to an edge pads
    by these. They are 0 everywhere else. */
@@ -243,36 +266,42 @@
     min-width: 2.75rem;
   }
 
-  /* Buttons ------------------------------------------------------------- */
+  /* Buttons -------------------------------------------------------------
+     Three styles, one shape (D1, 2026-11-08): primary (solid neutral), secondary (a
+     quiet fill, no border) and ghost (text). Every button is 36px (32px small, 40px
+     large) with an 8px radius, so a row of mixed buttons lines up. One primary per
+     page; brand amber is for highlights, not buttons. */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5
-      text-sm font-medium transition-colors select-none
-      disabled:opacity-60 disabled:pointer-events-none;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-1.5
+      text-sm font-medium leading-5 transition-colors select-none whitespace-nowrap
+      disabled:opacity-50 disabled:pointer-events-none;
+    min-height: 2.25rem;
   }
-  .btn-sm { @apply px-3 py-1.5 text-xs rounded-lg; }
-  .btn-lg { @apply px-5 py-3 text-base; }
+  .btn-sm { @apply px-3 py-1 text-[13px] rounded-lg; min-height: 2rem; gap: 0.375rem; }
+  .btn-lg { @apply px-4 py-2 text-sm; min-height: 2.5rem; }
   .btn-block { @apply w-full; }
-  .btn { transition-timing-function: var(--ease-emphasized); }
-  .btn-primary { @apply bg-amber-400 font-semibold hover:bg-amber-500 active:bg-amber-600; color: var(--color-on-amber); }
-  .btn-secondary {
-    background-color: var(--color-surface);
-    color: var(--color-ink-muted);
-    @apply border border-border-strong;
-  }
-  .btn-secondary:hover { background-color: var(--color-hover); }
+  .btn { transition-timing-function: var(--ease-emphasized); transition-duration: var(--duration-fast); }
+  .btn-primary { background-color: var(--color-primary); color: var(--color-on-primary); }
+  .btn-primary:hover { background-color: var(--color-primary-hover); }
+  .btn-primary:active { background-color: var(--color-primary-active); }
+  .btn-secondary { background-color: var(--color-secondary-bg); color: var(--color-ink); }
+  .btn-secondary:hover { background-color: var(--color-secondary-hover); }
   /* Pressed: a step past hover, so a tap visibly lands (there is no hover on touch). */
-  .btn-secondary:active { background-color: var(--color-surface-muted); border-color: var(--color-ink-subtle); }
-  .btn-ghost { color: var(--color-ink-subtle); }
-  .btn-ghost:hover { background-color: var(--color-hover); color: var(--color-ink); }
-  .btn-ghost:active { background-color: var(--color-surface-muted); color: var(--color-ink); }
+  .btn-secondary:active { background-color: var(--color-secondary-active); }
+  /* Tonal is secondary now: one quiet style, not two. */
+  .btn-tonal { background-color: var(--color-secondary-bg); color: var(--color-ink); }
+  .btn-tonal:hover { background-color: var(--color-secondary-hover); }
+  .btn-ghost { color: var(--color-ink-muted); }
+  .btn-ghost:hover { background-color: var(--color-secondary-bg); color: var(--color-ink); }
+  .btn-ghost:active { background-color: var(--color-secondary-hover); color: var(--color-ink); }
   .btn-danger { @apply bg-red-600 text-white hover:bg-red-700 active:bg-red-800; } /* red-600 = coral #CC4530, AA with white */
   /* tone-coral-fg, not text-coral-600: coral-600 measured 3.5:1 on the dark surface. */
   .btn-danger-ghost { color: var(--tone-coral-fg); }
   .btn-danger-ghost:hover { background-color: var(--tone-coral-bg); }
   .btn-danger-ghost:active { background-color: var(--tone-coral-border); }
-  /* Square icon-only button. */
-  .btn-icon { @apply p-2 rounded-xl; }
-  .btn-icon.btn-sm { @apply p-1.5 rounded-lg; }
+  /* Square icon-only button: as tall as its row's buttons. */
+  .btn-icon { @apply p-0 rounded-lg; min-width: 2.25rem; }
+  .btn-icon.btn-sm { @apply p-0 rounded-lg; min-width: 2rem; }
 
   /* Surfaces ------------------------------------------------------------ */
   .card { @apply bg-surface border border-border rounded-2xl shadow-card; }
@@ -834,6 +863,22 @@
     @apply absolute w-4 h-4 rounded-full border-2 border-current border-r-transparent animate-spin;
   }
 
+  /* Metrics (D3): the number is the subject. A small muted label above, the figure
+     large and tabular below, no box of its own. .kpi-* (Content Studio, Campaigns)
+     follow the same look. */
+  .metric { @apply flex flex-col gap-1 min-w-0; }
+  .metric-label {
+    @apply text-xs font-medium uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-ink-subtle);
+  }
+  .metric-value {
+    @apply font-semibold tabular-nums;
+    font-size: 1.75rem; line-height: 2.25rem; letter-spacing: -0.02em;
+    color: var(--color-ink);
+  }
+  .metric-note { @apply text-xs; color: var(--color-ink-subtle); }
+
   /* Tabs -------------------------------------------------------------- */
   .tabs { @apply flex items-stretch gap-1 border-b border-border overflow-x-auto; }
   .tab {
@@ -843,8 +888,9 @@
     transition-timing-function: var(--ease-emphasized);
   }
   .tab:hover { color: var(--color-ink); }
+  /* The active tab: ink text on the brand-amber underline (D1: amber as a highlight). */
   .tab[aria-selected="true"], .tab.tab-active {
-    @apply border-brand-500 text-accent-strong;
+    @apply border-highlight text-ink;
   }
 
   /* Alerts — block-level, distinct from inline .badge and transient toasts. */

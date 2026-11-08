@@ -55,17 +55,17 @@
 <div x-data="{ tab: 'messages' }" class="flex flex-col gap-4">
   <div class="flex gap-1 border-b border-border">
     <button @click="tab='messages'"
-            :class="tab==='messages' ? 'border-b-2 border-accent text-accent' : 'text-ink-muted hover:text-ink'"
+            :class="tab==='messages' ? 'border-b-2 border-highlight text-ink' : 'text-ink-muted hover:text-ink'"
             class="px-3 py-2 text-sm font-medium">
       Messages <span class="ml-1 text-xs text-ink-subtle">{{ messages|length }}</span>
     </button>
     <button @click="tab='notes'"
-            :class="tab==='notes' ? 'border-b-2 border-accent text-accent' : 'text-ink-muted hover:text-ink'"
+            :class="tab==='notes' ? 'border-b-2 border-highlight text-ink' : 'text-ink-muted hover:text-ink'"
             class="px-3 py-2 text-sm font-medium">
       Internal notes <span class="ml-1 text-xs text-ink-subtle">{{ internal_notes|length }}</span>
     </button>
     <button @click="tab='timeline'"
-            :class="tab==='timeline' ? 'border-b-2 border-accent text-accent' : 'text-ink-muted hover:text-ink'"
+            :class="tab==='timeline' ? 'border-b-2 border-highlight text-ink' : 'text-ink-muted hover:text-ink'"
             class="px-3 py-2 text-sm font-medium">
       Timeline
     </button>

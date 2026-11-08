@@ -11,7 +11,7 @@ across it, so the dialog used to stay open over the page it had just opened.
 <div x-data="{ open: false, trigger: null }" @keydown.escape.window="open = false" @send-menu-open.window="open = true">
   <button type="button"
           id="send-menu-trigger"
-          class="btn btn-primary btn-sm touch-target"
+          class="btn btn-secondary btn-sm touch-target"
           @click="trigger = $event.target; open = true"
           aria-haspopup="dialog"
           aria-controls="send-menu-dialog"

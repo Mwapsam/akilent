@@ -424,6 +424,9 @@ def starting_points(templates, n: int = 3) -> list:
         t
         for t in templates
         if t.sendable  # type: ignore[attr-defined]
+        # Meta's own examples (hello_world, the integration test) aren't a business's
+        # message to start a campaign from.
+        and not t.is_sample
         and t.category
         in (MessageTemplate.Category.MARKETING, MessageTemplate.Category.UTILITY)
     ][:n]

@@ -1200,7 +1200,10 @@ def dashboard(request):
         "accounts/dashboard.html",
         {
             "account": account,
-            "onboarding_complete": state["complete"],
+            # One status everywhere (the top bar's chip reads the same state): when only a
+            # paused channel is left, setup is done for now, never "almost ready" at 4/4.
+            "onboarding_complete": state["complete"] or state["only_paused_left"],
+            "onboarding_paused": state["only_paused_left"],
             "onboarding_done": state["required_done"],
             "onboarding_total": state["required_total"],
             "onboarding_next": state["next_step"],

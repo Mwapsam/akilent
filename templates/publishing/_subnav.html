@@ -11,42 +11,42 @@
   with or without buttons, so the tab row never moves between tabs.
 {% endcomment %}
 <nav class="flex items-center gap-1 mb-6 border-b border-surface-subtle pb-0 -mt-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Content Studio"
-     data-shortcut-new="{% url 'publishing:post-new' %}" data-instant-tabs data-active-class="border-accent text-accent" data-inactive-class="border-transparent text-ink-subtle hover:text-ink hover:border-gray-300">
+     data-shortcut-new="{% url 'publishing:post-new' %}" data-instant-tabs data-active-class="border-highlight text-ink" data-inactive-class="border-transparent text-ink-subtle hover:text-ink hover:border-border-strong">
   <a href="{% url 'publishing:index' %}" data-skeleton="grid"
      {% if path == '/publishing/' %}aria-current="page"{% endif %}
      class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
-       {% if path == '/publishing/' %}border-accent text-accent{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-gray-300{% endif %}">
+       {% if path == '/publishing/' %}border-highlight text-ink{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-border-strong{% endif %}">
     Overview
   </a>
   <a href="{% url 'publishing:planning' %}" data-skeleton="grid"
      {% if '/planning' in path %}aria-current="page"{% endif %}
      class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
-       {% if '/planning' in path %}border-accent text-accent{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-gray-300{% endif %}">
+       {% if '/planning' in path %}border-highlight text-ink{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-border-strong{% endif %}">
     Planning
   </a>
   <a href="{% url 'publishing:calendar' %}" data-skeleton="calendar"
      {% if '/calendar' in path or '/publishing/slots' in path or '/publishing/recurring' in path %}aria-current="page"{% endif %}
      class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
-       {% if '/calendar' in path or '/publishing/slots' in path or '/publishing/recurring' in path %}border-accent text-accent{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-gray-300{% endif %}">
+       {% if '/calendar' in path or '/publishing/slots' in path or '/publishing/recurring' in path %}border-highlight text-ink{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-border-strong{% endif %}">
     Calendar
   </a>
   <a href="{% url 'publishing:library' %}" data-skeleton="table"
      {% if '/library' in path or '/publishing/import' in path %}aria-current="page"{% endif %}
      class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
-       {% if '/library' in path or '/publishing/import' in path %}border-accent text-accent{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-gray-300{% endif %}">
+       {% if '/library' in path or '/publishing/import' in path %}border-highlight text-ink{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-border-strong{% endif %}">
     Library
   </a>
   <a href="{% url 'publishing:channels' %}" data-skeleton="form"
      {% if '/channels' in path %}aria-current="page"{% endif %}
      class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
-       {% if '/channels' in path %}border-accent text-accent{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-gray-300{% endif %}">
+       {% if '/channels' in path %}border-highlight text-ink{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-border-strong{% endif %}">
     Channels
   </a>
   {% if released.cs_media_library %}
   <a href="{% url 'publishing:media-library' %}" data-skeleton="grid"
      {% if '/publishing/media' in path %}aria-current="page"{% endif %}
      class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
-       {% if '/publishing/media' in path %}border-accent text-accent{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-gray-300{% endif %}">
+       {% if '/publishing/media' in path %}border-highlight text-ink{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-border-strong{% endif %}">
     Media
   </a>
   {% endif %}
@@ -54,7 +54,7 @@
   <a href="{% url 'publishing:analytics' %}" data-skeleton="table"
      {% if '/publishing/analytics' in path %}aria-current="page"{% endif %}
      class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
-       {% if '/publishing/analytics' in path %}border-accent text-accent{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-gray-300{% endif %}">
+       {% if '/publishing/analytics' in path %}border-highlight text-ink{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-border-strong{% endif %}">
     Analytics
   </a>
   {% endif %}
@@ -62,7 +62,7 @@
   <a href="{% url 'publishing:sales' %}" data-skeleton="table"
      {% if '/publishing/sales' in path %}aria-current="page"{% endif %}
      class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
-       {% if '/publishing/sales' in path %}border-accent text-accent{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-gray-300{% endif %}">
+       {% if '/publishing/sales' in path %}border-highlight text-ink{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-border-strong{% endif %}">
     Sales
   </a>
   {% endif %}
@@ -70,7 +70,7 @@
   <a href="{% url 'publishing:ai-tools' %}" data-skeleton="form"
      {% if '/publishing/ai' in path %}aria-current="page"{% endif %}
      class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
-       {% if '/publishing/ai' in path %}border-accent text-accent{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-gray-300{% endif %}">
+       {% if '/publishing/ai' in path %}border-highlight text-ink{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-border-strong{% endif %}">
     AI
   </a>
   {% endif %}
@@ -78,7 +78,7 @@
   <a href="{% url 'publishing:bio' %}" data-skeleton="form"
      {% if '/bio' in path %}aria-current="page"{% endif %}
      class="px-3 py-2 text-sm font-medium border-b-2 transition-colors
-       {% if '/bio' in path %}border-accent text-accent{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-gray-300{% endif %}">
+       {% if '/bio' in path %}border-highlight text-ink{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-border-strong{% endif %}">
     Bio page
   </a>
   {% endif %}
@@ -87,7 +87,7 @@
   <a href="{{ recon_url }}" data-skeleton="table"
      {% if path == recon_url %}aria-current="page"{% endif %}
      class="px-3 py-2 text-sm font-medium border-b-2 transition-colors inline-flex items-center gap-1.5
-       {% if path == recon_url %}border-accent text-accent{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-gray-300{% endif %}">
+       {% if path == recon_url %}border-highlight text-ink{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-border-strong{% endif %}">
     Needs check
     {% if needs_check %}<span class="text-xs font-semibold px-1.5 rounded-full tone-amber">{{ needs_check }}<span class="sr-only"> publications</span></span>{% endif %}
   </a>

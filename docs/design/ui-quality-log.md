@@ -2526,3 +2526,40 @@ Plan: the Inbox-area pages plan, Stage 4, and item 1 of the user's production wa
   - lint, badge and automation-list tests updated;
   - the app suites are green apart from the known `test_import_5000_contacts`;
   - Tailwind rebuilt (4.3.3 standalone binary).
+
+### Entry 46: Premium pass D1–D3, plus the 11-08 follow-ups (2026-11-08)
+Plan: the design audit of 2026-11-08 (D1 colour and buttons → D2 graphite dark → D3 type, then D5). The user chose a neutral primary, graphite, and D1 → D2 → D3 before the Dashboard; the public site is unchanged for now.
+
+- **D1, colour and buttons** (`assets/tokens.css`, `assets/app.css`):
+  - the primary button is solid neutral, `--color-primary`: #111318 with white text on light, #F4F4F5 with #0B0C10 text on dark;
+  - secondary is a quiet ink fill with no border, `--color-secondary-*`; `btn-tonal` folds into it; ghost is text;
+  - every button is 36px (32 small, 40 large), with an 8px radius and 150ms transitions; icon buttons match their row;
+  - brand amber is now a highlight (`--color-highlight`): the active tab's underline (section tabs, Content Studio, tickets, `.tab-active`) and the setup progress bar;
+  - the top bar's Send is a secondary button, so the page's own primary is the one primary;
+  - the public pages (`templates/public/_base.html`, `data-surface="public"`) keep amber buttons; the landing page has its own stylesheet and is unchanged.
+- **D2, graphite dark:**
+  - canvas #0B0C10, surface #111318, wells #16181D, hover #1A1C21, borders #1F2126 / #33353C (about 6% and 12% white);
+  - ink #F4F4F5 / #A1A1AA / #8B8B94;
+  - this replaces the navy ink scale; `test_contrast` passes in both themes.
+- **D3, type:**
+  - section headings (`text-lg`) are 16px and titles (`text-3xl`) 28px;
+  - `font-bold` renders 600, so the app uses three weights;
+  - headings are set tight;
+  - new `.metric` / `.metric-label` / `.metric-value`: a 12px uppercase label above a 28px tabular figure, with no box; Content Studio's `.kpi-*` match it;
+  - public pages keep the previous sizes.
+- **D6 (small):**
+  - the Dashboard reads the same setup state as the top bar: with only a paused channel left it says "Setup is done for now", never "almost ready" at 4/4;
+  - Meta's sample templates are no longer offered as campaign starting points.
+- **11-08 follow-ups:**
+  - the Alpine error was the closed-window template picker keying values by the variable's name ("Customer's first name"); fields are now keyed by position (`var__<id>__<n>`), the server also reads the old name-keyed form, and the Automations picker and campaign composer escape the name (`|escapejs`); there's a test with that variable;
+  - Comments' Reply is a ghost button with an inline box, and post links are plain text with ↗;
+  - "Next week" is the coming Monday at 9:00;
+  - the top bar shows the workspace on every page (a `workspace_account` context processor; Comment rules didn't pass `account`);
+  - `X-Akilent-Timing` (total, db, queries) goes out next to `Server-Timing`, which Cloudflare adds its own entries to;
+  - Automations dropped from 36 to 14 queries (the readiness channel checks run once per page);
+  - nginx `keepalive_timeout` 30s → 620s with `keepalive_requests 10000`, so Cloudflare reuses its connections to the origin.
+- **Not done:**
+  - the Inbox pill overlap: not found from the CSS, needs a screenshot;
+  - HubSpot's "(Sample Contact)" rows: HubSpot's own demo data in the connected portal;
+  - before/after screenshots of real pages: not taken.
+- **Verification:** the full suite is green. Tailwind rebuilt (4.3.3 standalone); landing.css changed only in unused theme variables.
