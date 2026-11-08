@@ -172,9 +172,14 @@ def test_the_week_view_drags_too(shop, scheduling):  # noqa: F811
         status=ContentPostVariant.Status.SCHEDULED,
         scheduled_at=when,
     )
-    idea = _idea(account, timezone.localdate())
+    day = timezone.localtime(when).date()
+    idea = _idea(account, day)
+    # Ask for the week the post is in: "tomorrow" is next week when run on a Sunday.
+    year, week, _ = day.isocalendar()
 
-    html = client.get(reverse("publishing:calendar")).content.decode()
+    html = client.get(
+        reverse("publishing:calendar"), {"week": f"{year}-W{week:02d}"}
+    ).content.decode()
 
     assert f'data-week-movable="{post.pk}"' in html
     assert f'id="wmove-{post.pk}-instagram"' in html
