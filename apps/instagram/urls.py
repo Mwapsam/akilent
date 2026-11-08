@@ -29,6 +29,21 @@ urlpatterns = [
         name="instagram-comment-rule-defaults",
     ),
     path(
+        "rules/moderation/<int:pk>/merge/",
+        rules_views.comment_rule_merge,
+        name="instagram-comment-rule-merge",
+    ),
+    path(
+        "rules/apply-existing/",
+        rules_views.comment_rules_apply_existing,
+        name="instagram-comment-rules-apply-existing",
+    ),
+    path(
+        "rules/apply-existing/status/",
+        rules_views.comment_rules_apply_existing_status,
+        name="instagram-comment-rules-apply-existing-status",
+    ),
+    path(
         "rules/<str:kind>/new/",
         rules_views.comment_rule_edit,
         name="instagram-comment-rule-new",

@@ -346,3 +346,27 @@ def _dispatch(event: WebhookEventLog) -> None:
             event.event_type,
             event.pk,
         )
+
+
+@shared_task
+def apply_rules_to_existing(account_id: int, days: int = 30) -> dict:
+    """Apply the moderation rules to older comments (moderation only: hide or flag;
+    no email, lead or DM). Writes its progress for the rules page to show."""
+    from django.core.cache import cache
+
+    from apps.accounts.models import Account
+    from apps.instagram.services import backfill
+
+    account = Account.objects.filter(pk=account_id).first()
+    if account is None:
+        return {}
+    cache.set(backfill.status_key(account_id), {"state": "running"}, 60 * 60)
+    try:
+        tally = backfill.apply(account, days)
+    except Exception:
+        logger.exception("apply_rules_to_existing failed for account %s", account_id)
+        tally = {"error": True}
+    finally:
+        cache.delete(backfill.lock_key(account_id))
+    cache.set(backfill.status_key(account_id), {"state": "done", **tally}, 60 * 60 * 24)
+    return tally

@@ -1,0 +1,24 @@
+{% comment %}What applying the moderation rules to older comments would do, then confirm.
+Needs: preview (backfill.preview). In a modal from the rules page, or its own page.{% endcomment %}
+<div class="space-y-4">
+  {% if preview.checked %}
+  <p class="text-sm text-ink">Checks {{ preview.checked }} comment{{ preview.checked|pluralize }} from the last {{ preview.days }} days that no rule has acted on{% if preview.capped %} (the oldest {{ preview.checked }}; run it again for the rest){% endif %}:</p>
+  <ul class="text-sm text-ink space-y-1">
+    <li><strong>~{{ preview.hide }}</strong> will be hidden</li>
+    <li><strong>~{{ preview.flag }}</strong> will be flagged for your team</li>
+  </ul>
+  <p class="text-sm font-medium text-ink">Hides or flags only. No messages or emails are sent, and no leads are opened.</p>
+  <p class="text-xs text-ink-subtle">Rules that delete comments hide older ones instead, so you can still unhide them. Comments already hidden or acted on are left alone.</p>
+  {% if preview.hide or preview.flag %}
+  <form method="post" action="{% url 'instagram-comment-rules-apply-existing' %}" class="flex flex-wrap justify-end gap-2"{% if not in_overlay %} hx-boost="false"{% endif %}>
+    {% csrf_token %}
+    {% if in_overlay %}<button type="button" class="btn btn-ghost btn-sm" data-overlay-close>Cancel</button>{% else %}<a href="{% url 'instagram-comment-rules' %}" class="btn btn-ghost btn-sm">Cancel</a>{% endif %}
+    <button type="submit" class="btn btn-primary btn-sm">Apply rules</button>
+  </form>
+  {% else %}
+  <p class="text-sm text-ink-subtle">None of them match a rule that hides or flags, so there's nothing to do.</p>
+  {% endif %}
+  {% else %}
+  <p class="text-sm text-ink-subtle">No comments from the last {{ preview.days }} days are waiting: every one is already hidden or has been checked by a rule.</p>
+  {% endif %}
+</div>

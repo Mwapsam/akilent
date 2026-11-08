@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Apply rules to existing comments — {{ site.app_name|default:"Akilent" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  <nav class="mb-1 flex items-center gap-1.5 text-xs text-ink-subtle" aria-label="Breadcrumb">
+    <a href="{% url 'instagram-comment-rules' %}" class="hover:text-ink">Comment rules</a>
+    <span aria-hidden="true">/</span><span class="text-ink">Apply to existing comments</span>
+  </nav>
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Apply rules to existing comments</h1>
+</header>
+<div class="card card-pad max-w-2xl">{% include "instagram/_comment_rules_apply_existing.html" %}</div>
+{% endblock %}

@@ -2420,3 +2420,18 @@ Plan: the Campaigns plan of 2026-11-06, Phase H (the user's decision: replies no
   - the order page's "From a WhatsApp campaign".
 
   `campaigns_qa.mjs QA_LIST` with five tiles: six widths in both themes, no problems (a temporary third campaign in the dev workspace, deleted after).
+
+### Entry 42: Inbox pages Stage 1, three trust bugs (2026-11-08)
+Plan: the Inbox-area pages plan of 2026-11-08, Stage 1 (approved).
+
+- **1a, forms that couldn't publish:** the Flow JSON upload left out Meta's required `name=flow.json` part, so every publish failed with "(#100) The parameter name is required".
+  - One status everywhere (`ConversationForm.display_status`, `components/status_badge.html`): the list, the header and the WhatsApp card no longer say Published, Ready to send and Not published about the same form. Live only when it can be sent: a form with unpublished changes says "Changes not published" (answers are matched against the current questions, so the old Flow isn't sent).
+  - Readable errors (`conversations/flow_errors.py`); Meta's raw text kept for operators (`flow_error_detail`, migration `conversations/0030`).
+  - A live form republishes as a new Flow and switches only once it's published; a draft is updated in place; a request or validation error never makes a new Flow; the old Flow isn't retired while a template button opens it.
+- **1c, duplicate "Wants to buy" comments:** a prod diagnosis (`docs/audits/2026-11-08-duplicate-comments-diagnosis.py`) found four distinct comments from one tester, each from its own webhook. Not an ingestion bug; no clean-up or constraint added.
+- **1b, comment rules (freeze exception):** a deliberate exception to the pilot freeze, for trust: old spam ("double your money", crypto, "DM me") was still visible on live posts, and overlapping or over-broad rules mis-tag real customers.
+  - `instagram/services/rule_lint.py`: rules are first-match, so it warns when a rule never acts (an earlier rule catches all it would), overlaps another, or uses common or very short keywords (keywords match inside words: "hi" in "this"). Common words are a warning for hide, delete and automatic replies, a softer note for flag and lead rules ("price" is fine there).
+  - Merge, with a before → after preview in a modal: the target gains the keywords and channels, the other is paused, never deleted.
+  - **Apply to existing comments** (last 30 days, up to 2000): a preview of how many will be hidden or flagged, then a background job (`apply_rules_to_existing`) with a progress card. Moderation only: no email, lead or DM, delete becomes hide, safe to run twice.
+  - The activity log in plain words: "Already hidden", "Couldn't hide", "Lead · team emailed", never "None"; "team emailed" only when the email was really sent (`ModerationLog.emailed`, with `backfill`; migration `instagram/0021`).
+- **Verification:** `test_flow_status.py`, the publish tests in `test_forms_complete.py` and `test_flows.py` (multipart parts), `test_rule_lint_backfill.py` (23). conversations, instagram, facebook, whatsapp suites green; ruff and mypy clean. Prod live Flow publish on the WABA still to do.

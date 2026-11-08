@@ -15,9 +15,16 @@ from apps.instagram.api import ModerationLog, ModerationRule
 logger = logging.getLogger(__name__)
 
 
-def moderate_comment(comment: FacebookComment, conn) -> ModerationLog | None:
-    """Apply the first matching rule's action and automation; log it. Once per comment."""
+def moderate_comment(
+    comment: FacebookComment, conn, *, moderation_only: bool = False
+) -> ModerationLog | None:
+    """Apply the first matching rule's action and automation; log it. Once per comment.
+
+    ``moderation_only``: as on Instagram (``apps.instagram.services.moderation``),
+    for older comments: hide or flag only, no email or lead, delete becomes hide.
+    """
     from apps.instagram.api import first_matching_rule
+    from apps.instagram.services.moderation import backfill_action
 
     if comment.moderation_logs.exists():
         return None  # a redelivered webhook must not act or notify twice
@@ -27,23 +34,32 @@ def moderate_comment(comment: FacebookComment, conn) -> ModerationLog | None:
     if rule is None:
         return None
 
-    outcome, error = execute_moderation(comment, rule.moderation_action, conn)
-    if rule.automation_trigger == ModerationRule.AutomationTrigger.CREATE_PROPOSAL:
-        _open_lead(comment)
-    if (
-        rule.moderation_action == ModerationRule.ModerationAction.FLAG
-        or rule.automation_trigger == ModerationRule.AutomationTrigger.NOTIFY_STAFF
-    ):
-        _notify_staff(comment, rule, outcome, error)
+    action, trigger, emailed = rule.moderation_action, rule.automation_trigger, False
+    if moderation_only:
+        action, trigger = backfill_action(action), ""
+        if action == ModerationRule.ModerationAction.NONE:
+            return None
+
+    outcome, error = execute_moderation(comment, action, conn)
+    if not moderation_only:
+        if trigger == ModerationRule.AutomationTrigger.CREATE_PROPOSAL:
+            _open_lead(comment)
+        if (
+            action == ModerationRule.ModerationAction.FLAG
+            or trigger == ModerationRule.AutomationTrigger.NOTIFY_STAFF
+        ):
+            emailed = _notify_staff(comment, rule, outcome, error)
 
     log = ModerationLog(
         account=account,
         rule=rule,
         facebook_comment=comment,
-        moderation_action=rule.moderation_action,
-        automation_trigger=rule.automation_trigger,
+        moderation_action=action,
+        automation_trigger=trigger,
         outcome=outcome,
         error=error,
+        emailed=emailed,
+        backfill=moderation_only,
     )
     log.save()
     return log
@@ -95,8 +111,9 @@ _ACTION_DONE = {
 }
 
 
-def _notify_staff(comment: FacebookComment, rule, outcome: str, error: str) -> None:
-    """Email the business's owners about the comment. Never breaks inbound processing."""
+def _notify_staff(comment: FacebookComment, rule, outcome: str, error: str) -> bool:
+    """Email the business's owners about the comment; True if it reached anyone.
+    Never breaks inbound processing."""
     from django.urls import reverse
 
     from apps.accounts.notifications import notify_team
@@ -113,15 +130,17 @@ def _notify_staff(comment: FacebookComment, rule, outcome: str, error: str) -> N
     elif outcome == ModerationLog.Outcome.FAILED:
         lines.append(f"Akilent could not act on it. {error}")
     try:
-        notify_team(
+        sent = notify_team(
             account,
             to="owners",
             subject="A Facebook comment needs a look",
             text="\n\n".join(line for line in lines if line),
             path=reverse("conversations:comments") + "?channel=facebook&filter=flagged",
         )
+        return bool(sent)
     except Exception:
         logger.exception("Facebook moderation notice failed for %s", comment.comment_id)
+        return False
 
 
 def _open_lead(comment: FacebookComment) -> None:

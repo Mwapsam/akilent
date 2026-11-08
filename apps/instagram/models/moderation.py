@@ -99,6 +99,10 @@ class ModerationRule(models.Model):
     def keyword_list(self) -> list[str]:
         return [k.strip().lower() for k in self.keywords.split(",") if k.strip()]
 
+    def keywords_as_entered(self) -> list[str]:
+        """The keywords with the owner's own capitalisation, for display and merging."""
+        return [k.strip() for k in self.keywords.split(",") if k.strip()]
+
     def __str__(self):
         return f"{self.name} ({self.match_type} → {self.moderation_action})"
 
@@ -151,6 +155,11 @@ class ModerationLog(models.Model):
         blank=True,
         help_text="Set when a staff member manually triggered this action.",
     )
+    # The team email really went out (notify_team sent it to someone), not just
+    # "the rule asks for one". Rows before this field existed say False.
+    emailed = models.BooleanField(default=False)
+    # Applied by "Apply rules to existing comments": moderation only, no email, lead or DM.
+    backfill = models.BooleanField(default=False)
 
     occurred_at = models.DateTimeField(auto_now_add=True)
 
@@ -177,6 +186,39 @@ class ModerationLog(models.Model):
 
     def delete(self, *args, **kwargs):
         raise ValueError("ModerationLog rows are immutable.")
+
+    _DONE = {"hide": "Hidden", "delete": "Deleted", "flag": "Flagged"}
+    _ALREADY = {"hide": "Already hidden", "delete": "Already hidden"}
+    _COULDNT = {
+        "hide": "Couldn't hide",
+        "delete": "Couldn't delete",
+        "flag": "Couldn't flag",
+    }
+
+    @property
+    def display_outcome(self) -> dict | None:
+        """The badge in plain words ({label, tone}); None when the rule touches no
+        comment (a rule that only emails or opens a lead)."""
+        action = self.moderation_action
+        if self.outcome == self.Outcome.FAILED:
+            return {"label": self._COULDNT.get(action, "Failed"), "tone": "danger"}
+        if self.outcome == self.Outcome.APPLIED and action in self._DONE:
+            return {"label": self._DONE[action], "tone": "success"}
+        if self.outcome == self.Outcome.SKIPPED and action in self._ALREADY:
+            return {"label": self._ALREADY[action], "tone": "neutral"}
+        return None
+
+    @property
+    def display_trail(self) -> list[str]:
+        """What else happened, e.g. ["Lead", "team emailed"]; never "None"."""
+        trail = []
+        if self.automation_trigger == ModerationRule.AutomationTrigger.CREATE_PROPOSAL:
+            trail.append("Lead")
+        if self.emailed:
+            trail.append("team emailed")
+        if self.backfill:
+            trail.append("older comment")
+        return trail
 
     def __str__(self):
         target = self.comment_id or f"fb:{self.facebook_comment_id}"

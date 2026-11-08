@@ -1,0 +1,37 @@
+{% comment %}Merge one moderation rule into another: before → after, then confirm. Shown in a modal
+from the rules page (overlay_or_page) or as its own page. Needs: source, target, after.{% endcomment %}
+<div class="space-y-4">
+  <p class="text-sm text-ink-subtle">“{{ target.name }}” takes over the keywords{% if after.channels_changed %} and channels{% endif %} of “{{ source.name }}”. “{{ source.name }}” is then paused, not deleted, so you can switch it back on.</p>
+
+  <div class="grid gap-3 sm:grid-cols-2">
+    <section class="rounded-lg border border-border p-3" aria-labelledby="merge-before">
+      <h3 id="merge-before" class="text-xs font-semibold uppercase tracking-wide text-ink-subtle">Before</h3>
+      <p class="mt-2 text-sm font-medium text-ink">{{ target.name }}</p>
+      <p class="text-xs text-ink-subtle">{{ target.get_channels_display }} · {{ target.get_moderation_action_display }}</p>
+      <p class="mt-1 text-sm text-ink break-words">{{ target.keywords|default:"No keywords" }}</p>
+      <p class="mt-3 text-sm font-medium text-ink">{{ source.name }}</p>
+      <p class="text-xs text-ink-subtle">{{ source.get_channels_display }} · {{ source.get_moderation_action_display }}{% if not source.is_active %} · Paused{% endif %}</p>
+      <p class="mt-1 text-sm text-ink break-words">{{ source.keywords|default:"No keywords" }}</p>
+    </section>
+    <section class="rounded-lg border border-border p-3" aria-labelledby="merge-after">
+      <h3 id="merge-after" class="text-xs font-semibold uppercase tracking-wide text-ink-subtle">After</h3>
+      <p class="mt-2 text-sm font-medium text-ink">{{ target.name }}</p>
+      <p class="text-xs text-ink-subtle">{{ after.channels_label }} · {{ target.get_moderation_action_display }}</p>
+      <p class="mt-1 text-sm text-ink break-words">{{ after.keywords|default:"No keywords" }}</p>
+      {% if after.added_keywords %}<p class="mt-1 text-xs text-ink-subtle">Adds: {{ after.added_keywords|join:", " }}</p>{% endif %}
+      <p class="mt-3 text-sm font-medium text-ink">{{ source.name }}</p>
+      <p class="text-xs text-ink-subtle">Paused</p>
+    </section>
+  </div>
+
+  {% if source.moderation_action != target.moderation_action or source.automation_trigger != target.automation_trigger %}
+  <p class="text-sm text-amber-800">They don't do the same thing: comments that “{{ source.name }}” would have caught will get {{ target.get_moderation_action_display|lower }}{% if target.automation_trigger != "none" %} and {{ target.get_automation_trigger_display|lower }}{% endif %} instead.</p>
+  {% endif %}
+
+  <form method="post" action="{% url 'instagram-comment-rule-merge' source.pk %}" class="flex flex-wrap justify-end gap-2"{% if not in_overlay %} hx-boost="false"{% endif %}>
+    {% csrf_token %}
+    <input type="hidden" name="into" value="{{ target.pk }}">
+    {% if in_overlay %}<button type="button" class="btn btn-ghost btn-sm" data-overlay-close>Cancel</button>{% else %}<a href="{% url 'instagram-comment-rules' %}" class="btn btn-ghost btn-sm">Cancel</a>{% endif %}
+    <button type="submit" class="btn btn-primary btn-sm">Merge</button>
+  </form>
+</div>

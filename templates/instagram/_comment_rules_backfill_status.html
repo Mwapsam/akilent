@@ -1,0 +1,12 @@
+{% comment %}Progress of "Apply rules to existing comments"; polls itself while running. Needs: backfill (cached status).{% endcomment %}
+<div id="rules-backfill" class="mb-3 card p-4 text-sm" role="status"
+     {% if backfill.state == "running" %}hx-get="{% url 'instagram-comment-rules-apply-existing-status' %}" hx-trigger="every 3s" hx-swap="outerHTML" data-auto-refresh{% endif %}>
+  {% if backfill.state == "running" %}
+  <span class="badge badge-info">Working…</span> Applying your rules to older comments. You can leave this page.
+  {% elif backfill.error %}
+  <span class="badge badge-danger">Stopped</span> Something went wrong applying your rules to older comments. Try again in a few minutes.
+  {% elif backfill.state == "done" %}
+  <span class="badge badge-success">Done</span>
+  Checked {{ backfill.checked }} older comment{{ backfill.checked|pluralize }}: hid {{ backfill.hidden }}, flagged {{ backfill.flagged }}{% if backfill.failed %}, {{ backfill.failed }} couldn't be changed (see Recent moderation activity){% endif %}. No messages or emails were sent.
+  {% endif %}
+</div>

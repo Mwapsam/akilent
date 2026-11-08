@@ -29,11 +29,25 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def moderate_comment(comment: Comment) -> ModerationLog | None:
+def backfill_action(action: str) -> str:
+    """The action a rule takes on an *older* comment ("Apply rules to existing
+    comments"): delete becomes hide, so nothing old is removed for good."""
+    if action == ModerationRule.ModerationAction.DELETE:
+        return ModerationRule.ModerationAction.HIDE
+    return action
+
+
+def moderate_comment(
+    comment: Comment, *, moderation_only: bool = False
+) -> ModerationLog | None:
     """
     Evaluate all active rules for the comment's account, apply the first
     matching rule's moderation action, fire its automation trigger, and
     return an immutable ModerationLog (or None if no rule matched).
+
+    ``moderation_only`` (applying rules to older comments): only hide or flag. No
+    team email, no lead, delete becomes hide, and a rule that would only email or
+    open a lead does nothing (no log, so the comment isn't marked as handled).
     """
     if comment.moderation_logs.exists():
         # Already moderated: a redelivered or reprocessed webhook must not act,
@@ -48,14 +62,21 @@ def moderate_comment(comment: Comment) -> ModerationLog | None:
 
     moderation_action = matched_rule.moderation_action
     automation_trigger = matched_rule.automation_trigger
+    emailed = False
+    if moderation_only:
+        moderation_action = backfill_action(moderation_action)
+        automation_trigger = ""
+        if moderation_action == ModerationRule.ModerationAction.NONE:
+            return None
 
     outcome, error = _execute_moderation(comment, moderation_action)
-    _fire_automation(comment, automation_trigger)
-    if (
-        moderation_action == ModerationRule.ModerationAction.FLAG
-        or automation_trigger == ModerationRule.AutomationTrigger.NOTIFY_STAFF
-    ):
-        _notify_staff(comment, matched_rule, outcome, error)
+    if not moderation_only:
+        _fire_automation(comment, automation_trigger)
+        if (
+            moderation_action == ModerationRule.ModerationAction.FLAG
+            or automation_trigger == ModerationRule.AutomationTrigger.NOTIFY_STAFF
+        ):
+            emailed = _notify_staff(comment, matched_rule, outcome, error)
 
     log = ModerationLog(
         account=account,
@@ -65,6 +86,8 @@ def moderate_comment(comment: Comment) -> ModerationLog | None:
         automation_trigger=automation_trigger,
         outcome=outcome,
         error=error,
+        emailed=emailed,
+        backfill=moderation_only,
     )
     log.save()
     return log
@@ -228,8 +251,9 @@ _ACTION_DONE: dict[str, str] = {
 
 def _notify_staff(
     comment: Comment, rule: ModerationRule, outcome: str, error: str
-) -> None:
-    """Email the business's owners about the comment. Never breaks inbound processing."""
+) -> bool:
+    """Email the business's owners about the comment; True if it reached anyone.
+    Never breaks inbound processing."""
     from django.urls import reverse
 
     from apps.accounts.notifications import notify_team
@@ -259,12 +283,14 @@ def _notify_staff(
             sent,
             account.pk,
         )
+        return bool(sent)
     except Exception:
         logger.exception(
             "Moderation notice failed for comment %s on account %s",
             comment.comment_id,
             account.pk,
         )
+        return False
 
 
 def _open_lead(comment: Comment) -> None:

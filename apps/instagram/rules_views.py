@@ -167,15 +167,32 @@ def _style(form: forms.BaseForm) -> forms.BaseForm:
 @comment_rules_required
 def comment_rules(request):
     """List both kinds of rule, with an add form for each."""
+    from django.core.cache import cache
+
+    from apps.instagram.services import backfill
+    from apps.instagram.services.rule_lint import lint_rules
+
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
+    lint = lint_rules(account)
+    # (rule, its warnings) pairs, for the rows.
+    triggers = [
+        (rule, lint.for_rule("reply", rule.pk))
+        for rule in CommentTrigger.objects.filter(account=account)
+    ]
+    moderation_rules = [
+        (rule, lint.for_rule("moderation", rule.pk))
+        for rule in ModerationRule.objects.filter(account=account)
+    ]
     return render(
         request,
         "instagram/comment_rules.html",
         {
-            "triggers": CommentTrigger.objects.filter(account=account),
-            "moderation_rules": ModerationRule.objects.filter(account=account),
+            "lint_warnings": lint.page_level,
+            "backfill": cache.get(backfill.status_key(account.pk)),
+            "triggers": triggers,
+            "moderation_rules": moderation_rules,
             # What the rules actually did, so a failure (e.g. a missing Meta
             # permission) is visible to the business, not only in admin.
             "moderation_logs": ModerationLog.objects.filter(account=account)
@@ -320,3 +337,108 @@ def comment_rule_delete(request, kind: str, pk: int):
     rule.delete()
     messages.success(request, f'Rule "{name}" deleted.')
     return redirect("instagram-comment-rules")
+
+
+# ── Overlaps: merge one moderation rule into another ────────────────────────
+
+
+@login_required
+@comment_rules_required
+def comment_rule_merge(request, pk: int):
+    """Merge moderation rule ``pk`` into ``?into=``: a before → after preview first
+    (GET, a modal), then the merge (POST). The merged rule is turned off, not deleted."""
+    from apps.core.htmx import overlay_done, overlay_or_page
+    from apps.instagram.services.rule_lint import apply_merge, merge_preview
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("instagram-comment-rules")
+    source = get_object_or_404(ModerationRule, pk=pk, account=account)
+    into = request.POST.get("into") or request.GET.get("into") or ""
+    target = get_object_or_404(
+        ModerationRule, pk=int(into) if into.isdigit() else 0, account=account
+    )
+    if target.pk == source.pk:
+        return redirect("instagram-comment-rules")
+
+    if request.method == "POST":
+        apply_merge(source, target)
+        return overlay_done(
+            request,
+            f"Merged “{source.name}” into “{target.name}”. “{source.name}” is now paused.",
+            reverse("instagram-comment-rules"),
+        )
+    return overlay_or_page(
+        request,
+        "instagram/_comment_rule_merge.html",
+        "instagram/comment_rule_merge.html",
+        {
+            "source": source,
+            "target": target,
+            "after": merge_preview(source, target),
+        },
+        kind="modal",
+        title="Merge two rules",
+    )
+
+
+# ── Apply rules to existing comments (moderation only) ──────────────────────
+
+
+@login_required
+@comment_rules_required
+def comment_rules_apply_existing(request):
+    """GET: what applying the moderation rules to the last 30 days of comments would do
+    (a modal). POST: run it in the background. Hides or flags only: no messages, emails
+    or leads."""
+    from django.core.cache import cache
+
+    from apps.core.htmx import overlay_done, overlay_or_page
+    from apps.instagram.services import backfill
+    from apps.instagram.tasks import apply_rules_to_existing
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("instagram-comment-rules")
+
+    if request.method == "POST":
+        if not cache.add(backfill.lock_key(account.pk), 1, 60 * 60):
+            return overlay_done(
+                request,
+                "Your rules are already being applied to older comments.",
+                reverse("instagram-comment-rules"),
+                level="info",
+            )
+        cache.set(backfill.status_key(account.pk), {"state": "running"}, 60 * 60)
+        apply_rules_to_existing.delay(account.pk, backfill.DAYS)
+        return overlay_done(
+            request,
+            "Applying your rules to older comments. The result shows on this page.",
+            reverse("instagram-comment-rules"),
+        )
+    return overlay_or_page(
+        request,
+        "instagram/_comment_rules_apply_existing.html",
+        "instagram/comment_rules_apply_existing.html",
+        {"preview": backfill.preview(account)},
+        kind="modal",
+        title="Apply rules to existing comments",
+    )
+
+
+@login_required
+@comment_rules_required
+def comment_rules_apply_existing_status(request):
+    """The progress card, polled while the background job runs."""
+    from django.core.cache import cache
+
+    from apps.instagram.services import backfill
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("instagram-comment-rules")
+    return render(
+        request,
+        "instagram/_comment_rules_backfill_status.html",
+        {"backfill": cache.get(backfill.status_key(account.pk))},
+    )
