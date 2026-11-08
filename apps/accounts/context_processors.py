@@ -62,7 +62,20 @@ def workspace_context(request):
             lambda: facts["dashboard_section_order"]
         ),
         "workspace_objectives": SimpleLazyObject(lambda: facts["workspace_objectives"]),
+        # The workspace for the top bar on pages whose view doesn't pass ``account``
+        # (Comment rules didn't, so its top bar had no workspace name). Lazy: read only
+        # where ``account`` is missing.
+        "workspace_account": SimpleLazyObject(lambda: _current_account(request)),
     }
+
+
+def _current_account(request):
+    from apps.accounts.utils import get_current_account
+
+    try:
+        return get_current_account(request)
+    except Exception:
+        return None
 
 
 def _workspace_facts(request) -> dict:

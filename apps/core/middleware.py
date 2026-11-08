@@ -456,8 +456,12 @@ class ServerTimingMiddleware:
         # A person signed in (API keys put the Account here, which has no is_authenticated).
         if getattr(getattr(request, "user", None), "is_authenticated", False) is True:
             db_ms, app_ms = stats["db"] * 1000, max(total - stats["db"], 0) * 1000
-            response["Server-Timing"] = (
-                f'db;dur={db_ms:.1f};desc="{stats["n"]} q", app;dur={app_ms:.1f}'
+            timing = f'db;dur={db_ms:.1f};desc="{stats["n"]} q", app;dur={app_ms:.1f}'
+            response["Server-Timing"] = timing
+            # The same figures under a name no proxy rewrites: Cloudflare adds its own
+            # Server-Timing entries, so this is the one to read in Response Headers.
+            response["X-Akilent-Timing"] = (
+                f"total={total * 1000:.0f}ms db={db_ms:.0f}ms queries={stats['n']}"
             )
         return response
 

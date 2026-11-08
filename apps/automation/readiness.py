@@ -14,8 +14,31 @@ from __future__ import annotations
 from django.urls import reverse
 
 
+def _once(name: str, account, load):
+    """Asked once per page: the Automations list checks every starter (11 of them), and
+    each asked the same three channel questions again (36 queries on one page)."""
+    from apps.core.request_context import remembered
+
+    return remembered(("readiness", name, account.pk), load)
+
+
 def instagram_connected(account) -> bool:
     """An Instagram account is connected and its channel is switched on."""
+    return _once("instagram", account, lambda: _instagram_connected(account))
+
+
+def facebook_connected(account) -> bool:
+    """A Facebook Page is connected for the inbox and its channel is switched on."""
+    return _once("facebook", account, lambda: _facebook_connected(account))
+
+
+def _whatsapp_connected(account) -> bool:
+    from apps.whatsapp import api as whatsapp_api
+
+    return whatsapp_api.count_active_business_numbers(account) > 0
+
+
+def _instagram_connected(account) -> bool:
     from django.apps import apps
 
     from apps.core.channels import enabled_channels
@@ -28,8 +51,7 @@ def instagram_connected(account) -> bool:
     ).exists()
 
 
-def facebook_connected(account) -> bool:
-    """A Facebook Page is connected for the inbox and its channel is switched on."""
+def _facebook_connected(account) -> bool:
     from apps.billing import api as billing_api
     from apps.core.channels import enabled_channels
     from apps.facebook.models.page import active_page
@@ -42,7 +64,6 @@ def facebook_connected(account) -> bool:
 def check(account, starter: dict, *, approved_template_count: int) -> dict:
     """``{"ready": bool, "items": [{"ok", "blocking", "headline", "detail", "fix"}]}`` for one starter."""
     from apps.accounts import business_hours
-    from apps.whatsapp import api as whatsapp_api
 
     items = []
     needs_template = not (
@@ -51,7 +72,7 @@ def check(account, starter: dict, *, approved_template_count: int) -> dict:
         or starter.get("team")
         or starter.get("qualification")
     )
-    whatsapp = whatsapp_api.count_active_business_numbers(account) > 0
+    whatsapp = _once("whatsapp", account, lambda: _whatsapp_connected(account))
     if needs_template:
         # Approved templates are WhatsApp's; nothing else can send these.
         items.append(

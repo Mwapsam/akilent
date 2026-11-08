@@ -103,8 +103,11 @@ def test_server_timing_says_where_the_time_went(shop, settings):  # noqa: F811
     _, client = shop
     settings.RELEASED_FEATURES = RELEASED
 
-    header = client.get("/publishing/library/")["Server-Timing"]
+    resp = client.get("/publishing/library/")
+    header = resp["Server-Timing"]
     anonymous = Client().get("/auth/login/")
 
     assert re.fullmatch(r'db;dur=[\d.]+;desc="\d+ q", app;dur=[\d.]+', header)
+    assert re.fullmatch(r"total=\d+ms db=\d+ms queries=\d+", resp["X-Akilent-Timing"])
     assert "Server-Timing" not in anonymous  # only for people signed in
+    assert "X-Akilent-Timing" not in anonymous

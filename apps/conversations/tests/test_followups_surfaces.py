@@ -263,7 +263,9 @@ def test_the_panel_sets_a_follow_up_with_the_promise(signed_in, team):
     )
     assert resp.status_code == 302
     f = FollowUp.objects.get(conversation=chat)
-    assert f.note == "Quote" and f.due_at > timezone.now() + timedelta(days=6)
+    # "Next week" is the coming Monday, 9:00 in the workspace's zone.
+    assert f.note == "Quote" and f.due_at > timezone.now()
+    assert f.due_at.astimezone(followups.business_zone(f.account)).weekday() == 0
 
 
 @pytest.mark.django_db

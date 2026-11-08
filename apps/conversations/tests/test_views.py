@@ -297,6 +297,48 @@ def test_send_template_from_composer(logged_in, open_conversation):
 
 
 @pytest.mark.django_db
+def test_a_template_variable_with_an_apostrophe_is_keyed_by_position(
+    logged_in, open_conversation
+):
+    """A synced template's variable named "Customer's first name" was put in
+    x-model="vals['var__10__Customer's first name']": the apostrophe ended the JS string
+    (Alpine: Unexpected identifier 's'). Fields are keyed by position now."""
+    import html as html_lib
+    import re
+
+    from apps.whatsapp.models import MessageTemplate, OutboundMessage
+
+    client, account, _ = logged_in
+    template = MessageTemplate.objects.create(
+        account=account,
+        name="download_app",
+        whatsapp_template_name="download_app",
+        language_code="en",
+        content="Hi {{1}}, get the app",
+        variables=["Customer's first name"],
+        approval_status=MessageTemplate.ApprovalStatus.APPROVED,
+    )
+    page = client.get(f"/inbox/{open_conversation.public_id}/").content.decode()
+    models = [
+        html_lib.unescape(m) for m in re.findall(r'x-model="([^"]*var__[^"]*)"', page)
+    ]
+    assert f"vals['var__{template.pk}__1']" in models
+    assert not any("Customer" in m for m in models)
+    assert f'name="var__{template.pk}__1"' in page
+
+    client.post(
+        f"/inbox/{open_conversation.public_id}/",
+        {
+            "action": "send_template",
+            "template_id": template.pk,
+            f"var__{template.pk}__1": "Ada",
+        },
+    )
+    msg = OutboundMessage.objects.get(account=account, template=template)
+    assert msg.payload["params"] == {"Customer's first name": "Ada"}
+
+
+@pytest.mark.django_db
 def test_send_template_rejects_unapproved_template(logged_in, open_conversation):
     from apps.whatsapp.models import MessageTemplate
 

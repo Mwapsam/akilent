@@ -154,28 +154,28 @@ and the send could only fail.{% endcomment %}
           <fieldset class="rounded-xl border border-border p-3 space-y-2" data-blank="{{ key }}">
             <legend class="label">What goes in “{{ b.name }}”?</legend>
             <div class="seg" data-blank-kind>
-              <label class="seg-item"><input type="radio" class="sr-only" name="src__{{ key }}" value="detail" x-model="kinds['{{ key }}']" {% if b.kind != 'literal' %}checked{% endif %}
-                     @change="if (['first_name', 'full_name'].includes(picks['{{ key }}']) && !(fbs['{{ key }}'] || '').trim()) fbs['{{ key }}'] = 'there'">Customer detail</label>
-              <label class="seg-item"><input type="radio" class="sr-only" name="src__{{ key }}" value="literal" x-model="kinds['{{ key }}']" {% if b.kind == 'literal' %}checked{% endif %}>Fixed text</label>
+              <label class="seg-item"><input type="radio" class="sr-only" name="src__{{ key }}" value="detail" x-model="kinds['{{ key|escapejs }}']" {% if b.kind != 'literal' %}checked{% endif %}
+                     @change="if (['first_name', 'full_name'].includes(picks['{{ key|escapejs }}']) && !(fbs['{{ key|escapejs }}'] || '').trim()) fbs['{{ key|escapejs }}'] = 'there'">Customer detail</label>
+              <label class="seg-item"><input type="radio" class="sr-only" name="src__{{ key }}" value="literal" x-model="kinds['{{ key|escapejs }}']" {% if b.kind == 'literal' %}checked{% endif %}>Fixed text</label>
             </div>
-            <div x-show="kinds['{{ key }}'] !== 'literal'" class="space-y-2">
+            <div x-show="kinds['{{ key|escapejs }}'] !== 'literal'" class="space-y-2">
               <label class="sr-only" for="var-{{ t.pk }}-{{ forloop.counter }}">Which detail</label>
-              <select id="var-{{ t.pk }}-{{ forloop.counter }}" name="var__{{ key }}" class="select" x-model="picks['{{ key }}']" data-blank-source
-                      :disabled="kinds['{{ key }}'] === 'literal'"
-                      @change="if (['first_name', 'full_name'].includes(picks['{{ key }}']) && !(fbs['{{ key }}'] || '').trim()) fbs['{{ key }}'] = 'there'">
+              <select id="var-{{ t.pk }}-{{ forloop.counter }}" name="var__{{ key }}" class="select" x-model="picks['{{ key|escapejs }}']" data-blank-source
+                      :disabled="kinds['{{ key|escapejs }}'] === 'literal'"
+                      @change="if (['first_name', 'full_name'].includes(picks['{{ key|escapejs }}']) && !(fbs['{{ key|escapejs }}'] || '').trim()) fbs['{{ key|escapejs }}'] = 'there'">
                 {% for c in blank_choices %}<option value="{{ c.key }}"{% if c.key == b.pick %} selected{% endif %}>{{ c.label }}</option>{% endfor %}
               </select>
               <label class="text-xs text-gray-600 block">If we don't have it for someone, use
-                <input name="fb__{{ key }}" class="input mt-0.5" x-model="fbs['{{ key }}']"
-                       :disabled="kinds['{{ key }}'] === 'literal'"
-                       :required="kinds['{{ key }}'] !== 'literal' && ['first_name', 'full_name'].includes(picks['{{ key }}'])"
-                       :placeholder="['first_name', 'full_name'].includes(picks['{{ key }}']) ? 'there' : 'leave empty to skip them'" />
+                <input name="fb__{{ key }}" class="input mt-0.5" x-model="fbs['{{ key|escapejs }}']"
+                       :disabled="kinds['{{ key|escapejs }}'] === 'literal'"
+                       :required="kinds['{{ key|escapejs }}'] !== 'literal' && ['first_name', 'full_name'].includes(picks['{{ key|escapejs }}'])"
+                       :placeholder="['first_name', 'full_name'].includes(picks['{{ key|escapejs }}']) ? 'there' : 'leave empty to skip them'" />
               </label>
             </div>
-            <div x-show="kinds['{{ key }}'] === 'literal'">
+            <div x-show="kinds['{{ key|escapejs }}'] === 'literal'">
               <label class="sr-only" for="lit-{{ t.pk }}-{{ forloop.counter }}">Text for “{{ b.name }}”</label>
-              <input id="lit-{{ t.pk }}-{{ forloop.counter }}" name="lit__{{ key }}" class="input" x-model="lits['{{ key }}']" placeholder="The same text for everyone"
-                     :disabled="kinds['{{ key }}'] !== 'literal'" :required="kinds['{{ key }}'] === 'literal'" />
+              <input id="lit-{{ t.pk }}-{{ forloop.counter }}" name="lit__{{ key }}" class="input" x-model="lits['{{ key|escapejs }}']" placeholder="The same text for everyone"
+                     :disabled="kinds['{{ key|escapejs }}'] !== 'literal'" :required="kinds['{{ key|escapejs }}'] === 'literal'" />
               <p class="text-xs text-amber-800 mt-1" data-literal-warning>Every customer gets exactly this text — don't type a person's name here.</p>
             </div>
           </fieldset>

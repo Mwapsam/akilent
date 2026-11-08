@@ -31,7 +31,7 @@ A row is [data-row], so J/K step through comments. The checkbox belongs to the b
           <p class="mt-1 text-sm break-words {% if c.state == 'deleted' %}line-through text-ink-subtle{% else %}text-ink-muted{% endif %}">{{ c.body|default:"(no text)" }}</p>
           <div class="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-ink-subtle">
             {% include "components/channel_tag.html" with channel=thread.channel compact=True %}
-            {% if p %}<span class="truncate max-w-[16rem]">on {% if p.url %}<a href="{{ p.url }}" target="_blank" rel="noopener" class="underline hover:text-ink">{{ p.label }}</a>{% else %}{{ p.label }}{% endif %}</span>{% endif %}
+            {% if p %}<span class="truncate max-w-[16rem]">on {% if p.url %}<a href="{{ p.url }}" target="_blank" rel="noopener" class="text-ink-muted hover:text-ink" title="Open the post on {% if thread.channel == 'instagram' %}Instagram{% else %}Facebook{% endif %}">{{ p.label }} <span aria-hidden="true">↗</span></a>{% else %}{{ p.label }}{% endif %}</span>{% endif %}
             {% if thread.intent %}<span class="badge badge-success">Wants to buy</span>{% endif %}
             {% if c.state == 'flagged' %}<span class="badge badge-warning">Flagged</span>{% endif %}
             {% if c.state == 'hidden' %}<span class="badge badge-neutral">Hidden</span>{% endif %}
@@ -76,14 +76,15 @@ A row is [data-row], so J/K step through comments. The checkbox belongs to the b
       {% endif %}
 
       {% if not read_only and c and c.state != 'deleted' %}
-      <details class="mt-2">
-        <summary class="text-sm text-brand cursor-pointer select-none">Reply</summary>
-        <div class="mt-2 grid gap-3 sm:grid-cols-2">
+      <div class="mt-2" x-data="{ replying: false }">
+        <button type="button" class="btn btn-ghost btn-sm -ml-2" x-show="!replying" :aria-expanded="replying"
+                @click="replying = true; $nextTick(() => $refs.box.focus())">Reply</button>
+        <div class="grid gap-3 sm:grid-cols-2" x-show="replying" x-cloak @keydown.escape="replying = false">
           <form method="post" action="{% url 'conversations:comments_reply' thread.channel c.pk %}" hx-boost="false">
             {% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}"><input type="hidden" name="client_key" value="{{ client_key }}-r{{ thread.channel }}{{ thread.pk }}">
             <label class="label" for="reply-{{ thread.channel }}-{{ thread.pk }}">Public reply</label>
-            <textarea id="reply-{{ thread.channel }}-{{ thread.pk }}" name="body" rows="2" class="input" maxlength="2000" required placeholder="Everyone can see this"></textarea>
-            <button class="btn btn-secondary btn-sm mt-2">Post reply</button>
+            <textarea id="reply-{{ thread.channel }}-{{ thread.pk }}" x-ref="box" name="body" rows="2" class="input" maxlength="2000" required placeholder="Everyone can see this"></textarea>
+            <div class="mt-2 flex gap-2"><button class="btn btn-secondary btn-sm">Post reply</button><button type="button" class="btn btn-ghost btn-sm" @click="replying = false">Cancel</button></div>
           </form>
           {% if not thread.conversation_public_id and not c.outbound %}
           <form method="post" action="{% url 'conversations:comments_private_reply' thread.channel c.pk %}" hx-boost="false">
@@ -95,7 +96,7 @@ A row is [data-row], so J/K step through comments. The checkbox belongs to the b
           </form>
           {% endif %}
         </div>
-      </details>
+      </div>
       {% endif %}
     </div>
   </div>

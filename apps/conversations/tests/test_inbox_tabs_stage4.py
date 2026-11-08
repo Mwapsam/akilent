@@ -270,7 +270,7 @@ def test_later_presets_follow_the_workspace_clock():
         late = dict(followups.later_choices(account, night))
     assert early["evening"] == "This evening, 18:00"
     assert early["tomorrow"] == "Tomorrow, 9:00"
-    assert early["next_week"] == "Next week, Sun 15 Nov, 9:00"
+    assert early["next_week"] == "Next week, Mon 9 Nov, 9:00"  # 8 Nov 2026 is a Sunday
     assert "evening" not in late
 
 
@@ -285,6 +285,13 @@ def test_this_evening_resolves_to_six_in_the_workspace_zone():
     ):
         due = followups.resolve_due_at("evening", account=object())
         assert due.astimezone(zone).hour == 18 and due.astimezone(zone).day == 8
+    monday = datetime.datetime(2026, 11, 9, 10, 0, tzinfo=zone)
+    with (
+        patch.object(followups, "business_zone", return_value=zone),
+        patch.object(followups.timezone, "now", return_value=monday),
+    ):
+        nxt = followups.resolve_due_at("next_week", account=object()).astimezone(zone)
+        assert (nxt.day, nxt.hour, nxt.weekday()) == (16, 9, 0)  # Monday a week on
     with (
         patch.object(followups, "business_zone", return_value=zone),
         patch.object(

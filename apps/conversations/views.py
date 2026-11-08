@@ -654,9 +654,13 @@ def conversation_detail(request, public_id: str):
                 # are still submitted (HTML "hidden" doesn't exclude them from the
                 # POST), so an unqualified name could silently read another
                 # template's stale value.
+                # Keyed by position (var__<id>__<n>): a variable's name can hold spaces or
+                # an apostrophe ("Customer's first name"). The name-keyed form is still
+                # read, for a page loaded before this change.
                 params = {
-                    var: request.POST.get(f"var__{template.pk}__{var}", "")
-                    for var in (template.variables or [])
+                    var: request.POST.get(f"var__{template.pk}__{n}")
+                    or request.POST.get(f"var__{template.pk}__{var}", "")
+                    for n, var in enumerate(template.variables or [], 1)
                 }
                 run_action(
                     "send_whatsapp",

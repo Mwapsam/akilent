@@ -9,7 +9,8 @@ with a live preview of the message; Send waits until the template and every valu
 
 An AI suggestion's template and values arrive on the ai-template-apply event (chat.js
 aiReviewTemplate), with the proposal it answers, since the dialog sits outside the chat
-component. Field names are per template (var__<id>__<name>): every template's fields are in
+component. Field names are per template and position (var__<id>__<n>, never the variable's
+name, which can hold spaces or an apostrophe): every template's fields are in
 the form, and only the chosen one's are read (views.conversation_detail send_template).{% endcomment %}
 <div class="{% if inline %}cv-tplpick{% endif %}" x-data="tplPicker({{ inline|yesno:'true,false' }})"
      {% if inline %}@keydown.escape.window="if (pick) close()" @click.outside="if (pick) close()"{% endif %}
@@ -54,7 +55,7 @@ the form, and only the chosen one's are read (views.conversation_detail send_tem
     <div x-show="tpl === '{{ t.pk }}'" x-cloak class="cv-tpl-fields">
       {% for f in t.fields %}
       <label class="block text-xs text-ink-subtle">{{ f.label }}
-        <input class="input input-sm mt-1" name="var__{{ t.pk }}__{{ f.name }}" x-model="vals['var__{{ t.pk }}__{{ f.name }}']"
+        <input class="input input-sm mt-1" name="var__{{ t.pk }}__{{ forloop.counter }}" x-model="vals['var__{{ t.pk }}__{{ forloop.counter }}']"
                :required="tpl === '{{ t.pk }}'"{% if f.example %} placeholder="{{ f.example }}"{% endif %} />
       </label>
       {% endfor %}

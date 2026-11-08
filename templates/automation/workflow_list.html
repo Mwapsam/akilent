@@ -218,19 +218,19 @@
         {% for b in t.blanks %}
         <div class="rounded-xl border border-border p-3 space-y-2">
           <label class="label" for="var-{{ starter.key }}-{{ t.pk }}-{{ forloop.counter }}">What goes in &ldquo;{{ b.name }}&rdquo;?</label>
-          <select id="var-{{ starter.key }}-{{ t.pk }}-{{ forloop.counter }}" name="var__{{ t.pk }}__{{ b.name }}" class="select" x-model="picks['{{ t.pk }}__{{ b.name }}']">
+          <select id="var-{{ starter.key }}-{{ t.pk }}-{{ forloop.counter }}" name="var__{{ t.pk }}__{{ b.name }}" class="select" x-model="picks['{{ t.pk }}__{{ b.name|escapejs }}']">
             {% for c in blank_choices %}<option value="{{ c.key }}">{{ c.label }}</option>{% endfor %}
             <option value="literal">The same text for everyone</option>
           </select>
-          <div x-show="picks['{{ t.pk }}__{{ b.name }}'] === 'first_name' || picks['{{ t.pk }}__{{ b.name }}'] === 'full_name'" x-cloak>
+          <div x-show="picks['{{ t.pk }}__{{ b.name|escapejs }}'] === 'first_name' || picks['{{ t.pk }}__{{ b.name|escapejs }}'] === 'full_name'" x-cloak>
             <label class="text-xs block">If we don't know their name, say
               <input name="fb__{{ t.pk }}__{{ b.name }}" class="input mt-0.5" placeholder="there" />
             </label>
             <p class="text-xs text-ink-subtle mt-1">Each customer gets their own name, so Ada's message says Ada.</p>
           </div>
-          <div x-show="picks['{{ t.pk }}__{{ b.name }}'] === 'business'" x-cloak><p class="text-xs text-ink-subtle">Your business name, the same in every message.</p></div>
-          <div x-show="picks['{{ t.pk }}__{{ b.name }}'] === 'literal'" x-cloak>
-            <input name="lit__{{ t.pk }}__{{ b.name }}" class="input" x-model="lits['{{ t.pk }}__{{ b.name }}']" />
+          <div x-show="picks['{{ t.pk }}__{{ b.name|escapejs }}'] === 'business'" x-cloak><p class="text-xs text-ink-subtle">Your business name, the same in every message.</p></div>
+          <div x-show="picks['{{ t.pk }}__{{ b.name|escapejs }}'] === 'literal'" x-cloak>
+            <input name="lit__{{ t.pk }}__{{ b.name }}" class="input" x-model="lits['{{ t.pk }}__{{ b.name|escapejs }}']" />
             <p class="text-xs text-amber-700 mt-1">Every customer will get exactly this text. Don't type a person's name here.</p>
           </div>
         </div>

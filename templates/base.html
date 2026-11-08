@@ -307,8 +307,9 @@
 
         {# Workspace badge — visible on md and up #}
         <div class="hidden md:flex items-center gap-2 text-sm text-ink-subtle">
-          {% if account %}
-            <span class="truncate max-w-[12rem]">{{ account.company_name }}</span>
+          {% firstof account.company_name workspace_account.company_name as workspace_name %}
+          {% if workspace_name %}
+            <span class="truncate max-w-[12rem]">{{ workspace_name }}</span>
           {% endif %}
           {% if is_operator and not viewing_as %}
             <a href="{% url 'core:home' %}" class="badge badge-brand">Operator console</a>

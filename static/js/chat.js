@@ -1102,21 +1102,25 @@ function registerChat() {
     noMatch() {
       return !!this.q.trim() && ![...this.$root.querySelectorAll('[data-tpl-option]')].some((o) => this.shows(o.dataset.search));
     },
+    // Values are keyed by position (var__<template>__<1-based position>), never by the
+    // variable's name: a name like "Customer's first name" broke the x-model expression.
+    key(i, id) { return 'var__' + (id || this.tpl) + '__' + (i + 1); },
     // As the send fills it (apps.whatsapp.campaign_ui.render_body): the value at position i
     // fills {{i}}, or {{its name}}.
     preview() {
       const o = this.option();
       if (!o) return '';
       const fields = this.fields();
-      return o.dataset.content.replace(/\{\{\s*([^}\s]+)\s*\}\}/g, (all, name) => {
-        const field = /^\d+$/.test(name) ? fields[Number(name) - 1] : (fields.includes(name) ? name : null);
-        if (field === undefined || field === null) return all;
-        const v = (this.vals['var__' + this.tpl + '__' + field] || '').trim();
+      return o.dataset.content.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (all, name) => {
+        const i = /^\d+$/.test(name) ? Number(name) - 1 : fields.indexOf(name);
+        if (i < 0 || i >= fields.length) return all;
+        const field = fields[i];
+        const v = (this.vals[this.key(i)] || '').trim();
         return v || '[' + (/^\d+$/.test(field) ? 'Value ' + field : field.replace(/_/g, ' ')) + ']';
       });
     },
     ready() {
-      return !!this.tpl && this.fields().every((f) => (this.vals['var__' + this.tpl + '__' + f] || '').trim());
+      return !!this.tpl && this.fields().every((f, i) => (this.vals[this.key(i)] || '').trim());
     },
     open() {
       this.pick = true;
@@ -1135,7 +1139,11 @@ function registerChat() {
     apply(detail) {
       this.tpl = String(detail.templateId);
       this.proposal = String(detail.proposal || '');
-      for (const [k, v] of Object.entries(detail.values || {})) this.vals['var__' + detail.templateId + '__' + k] = v;
+      const fields = this.fields(detail.templateId);
+      for (const [k, v] of Object.entries(detail.values || {})) {
+        const i = /^\d+$/.test(k) && !fields.includes(k) ? Number(k) - 1 : fields.indexOf(k);
+        if (i >= 0) this.vals[this.key(i, detail.templateId)] = v;
+      }
       if (this.inline) this.pick = true;
     },
   }));
