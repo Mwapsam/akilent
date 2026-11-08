@@ -161,6 +161,10 @@ def process_whatsapp_event(self, event_id: int):
             "process_whatsapp_event: tenant not found for event %s: %s", event_id, exc
         )
         event.mark_failed(str(exc))
+        try:
+            _report_unknown_numbers(event)
+        except Exception:
+            logger.exception("process_whatsapp_event: unknown-number report failed")
     except Exception as exc:
         event.mark_failed(str(exc))
         logger.exception(
@@ -1418,8 +1422,85 @@ def _handle_template_status_update(event: WebhookEventLog) -> None:
     _for_each_item(entries, _process_template_status_change)
 
 
+_UNKNOWN_NUMBER_ALERT_TTL = 24 * 3600
+
+
+def _report_unknown_numbers(event: WebhookEventLog) -> None:
+    """Make "Meta is delivering for a number Akilent doesn't know" loud.
+
+    Happens when a number is re-onboarded (Meta issues a new phone_number_id) or a
+    second number is added to a connected WABA outside Akilent. Every message to it
+    would otherwise fail tenant resolution with only a warning in the logs. Logged
+    at ERROR; owners of the WABA (if we know it) are emailed at most once a day per
+    number.
+    """
+    from django.urls import reverse
+
+    from apps.accounts.models import Account
+    from apps.accounts.notifications import notify_team
+
+    known = set(
+        WhatsAppBusinessNumber.objects.filter(is_active=True).values_list(
+            "phone_number_id", flat=True
+        )
+    )
+    seen = set()
+    for entry in (event.payload or {}).get("entry") or []:
+        waba_id = str(entry.get("id") or "")
+        for change in entry.get("changes") or []:
+            md = (change.get("value") or {}).get("metadata") or {}
+            pnid = str(md.get("phone_number_id") or "")
+            if not pnid or pnid in known or pnid in seen:
+                continue
+            seen.add(pnid)
+            display = md.get("display_phone_number") or ""
+            account_ids = set(
+                WhatsAppBusinessNumber.objects.filter(waba_id=waba_id).values_list(
+                    "account_id", flat=True
+                )
+            ) if waba_id else set()
+            logger.error(
+                "WhatsApp webhook for unknown number: phone_number_id=%s display=%s "
+                "waba=%s owning_accounts=%s event=%s — reconnect the number or update "
+                "WhatsAppBusinessNumber.phone_number_id",
+                pnid,
+                display,
+                waba_id or "?",
+                sorted(account_ids) or "none",
+                event.pk,
+            )
+            if not account_ids or not cache.add(
+                f"wa_unknown_number_alert:{pnid}", "1", _UNKNOWN_NUMBER_ALERT_TTL
+            ):
+                continue
+            number = f"+{display}" if display and not display.startswith("+") else display
+            text = (
+                f"Customers are messaging your WhatsApp number {number or pnid}, but "
+                "Akilent doesn't have that number connected, so their messages aren't "
+                "reaching your inbox. This usually happens after a number is added or "
+                "re-registered in Meta. Reconnect WhatsApp in Akilent to fix it."
+            )
+            for account in Account.objects.filter(pk__in=account_ids):
+                try:
+                    notify_team(
+                        account,
+                        to="owners",
+                        subject="WhatsApp messages aren't reaching your inbox",
+                        text=text,
+                        path=reverse("whatsapp-numbers"),
+                        reason=(
+                            "You're getting this because Meta is sending Akilent "
+                            "messages for a WhatsApp number that isn't connected."
+                        ),
+                    )
+                except Exception:
+                    logger.exception(
+                        "unknown-number alert failed for account=%s", account.pk
+                    )
+
+
 # Meta webhooks about the health of the business's WhatsApp account and numbers.
-_ACCOUNT_HEALTH_FIELDS = ("phone_number_quality_update", "account_update")
+_ACCOUNT_HEALTH_FIELDS =("phone_number_quality_update", "account_update")
 # The events that put sending at risk; anything else is just logged.
 _ACCOUNT_HEALTH_ALERTS = {
     "FLAGGED": "Meta flagged the quality of your WhatsApp number {number}. If it "
