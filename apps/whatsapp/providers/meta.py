@@ -380,8 +380,9 @@ class MetaCloudAPIProvider(WhatsAppProvider):
     def update_flow_json(self, flow_id: str, flow_json: dict) -> dict:
         """Attach/replace this Flow's JSON definition via Meta's asset-upload endpoint.
 
-        Meta requires a multipart POST to ``/{flow_id}/assets`` with the Flow JSON
-        serialised as a file named ``flow.json`` and ``asset_type=FLOW_JSON``.
+        Meta requires a multipart POST to ``/{flow_id}/assets`` with three parts: the
+        Flow JSON as ``file``, ``name=flow.json`` and ``asset_type=FLOW_JSON``. Leaving
+        out ``name`` fails every upload with "(#100) The parameter name is required".
         """
         import json as _json
 
@@ -390,7 +391,7 @@ class MetaCloudAPIProvider(WhatsAppProvider):
         try:
             response = self._session.post(
                 url,
-                data={"asset_type": "FLOW_JSON"},
+                data={"name": "flow.json", "asset_type": "FLOW_JSON"},
                 files={"file": ("flow.json", file_bytes, "application/json")},
                 # Drop the session's JSON Content-Type so requests sets the multipart one,
                 # with its boundary; otherwise Meta can't parse the upload.
@@ -423,6 +424,8 @@ class MetaCloudAPIProvider(WhatsAppProvider):
                 )
             )
             err.code = "FLOW_VALIDATION"
+            # The full list, with JSON pointers, so the owner can be told which question.
+            err.problems = problems
             raise err
         return body
 

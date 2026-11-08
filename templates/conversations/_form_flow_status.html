@@ -1,30 +1,30 @@
-{% comment %}The WhatsApp Flow status card; polls itself while publishing. Needs: form.{% endcomment %}
+{% comment %}The WhatsApp Flow status card; polls itself while publishing. Needs: form. oob=True (the poll) also refreshes the header badge.{% endcomment %}
+{% with status=form.display_status %}
 <div id="flow-status" class="flex items-start justify-between gap-3 flex-wrap"
      {% if form.flow_status == "publishing" %}hx-get="{% url 'conversations:form_flow_status' form.pk %}" hx-trigger="every 2s" hx-swap="outerHTML" data-auto-refresh{% endif %}>
-  <div>
+  <div class="min-w-0">
     <p class="text-sm font-medium text-ink">On WhatsApp</p>
     <p class="text-xs text-ink-subtle mt-0.5" role="status">
-      {% if form.flow_status == "published" %}
-        <span class="badge badge-success">Live</span>{% if form.flow_published_at %} since {{ form.flow_published_at|date:"j M Y, H:i" }}{% endif %}
-      {% elif form.flow_status == "publishing" %}
-        <span class="badge badge-info">Publishing…</span> This takes a few seconds.
-      {% elif form.flow_status == "needs_republish" %}
-        <span class="badge badge-warning">Changes not live yet</span> Customers still get the last published version.
-      {% elif form.flow_status == "error" %}
-        <span class="badge badge-danger">Not published</span>
-      {% else %}
-        <span class="badge badge-neutral">Not published yet</span>
-      {% endif %}
+      {% include "components/status_badge.html" with status=status %}
+      {% if status.key == "live" and form.flow_status == "published" and form.flow_published_at %} since {{ form.flow_published_at|date:"j M Y, H:i" }}{% endif %}
     </p>
-    {% if form.flow_error %}<p class="text-xs text-red-700 mt-1">{{ form.flow_error }}</p>{% endif %}
+    {% if status.reason and status.key != "draft" %}<p class="text-xs mt-1 {% if form.flow_status == 'error' %}text-red-700{% else %}text-ink-subtle{% endif %}">{{ status.reason }}</p>{% endif %}
+    {% if is_operator and form.flow_error_detail %}
+    <details class="mt-1 text-xs text-ink-subtle">
+      <summary class="cursor-pointer">Details (operators)</summary>
+      <pre class="mt-1 whitespace-pre-wrap break-words">{{ form.flow_error_detail }}</pre>
+    </details>
+    {% endif %}
   </div>
   {% if form.flow_status != "publishing" %}
   <form method="post" action="{% url 'conversations:form_detail' form.pk %}" hx-boost="false">
     {% csrf_token %}
     <input type="hidden" name="action" value="publish_flow" />
     <button class="btn btn-primary btn-sm" {% if not form.questions %}disabled title="Add at least one question first"{% endif %}>
-      {% if form.flow_status == "needs_republish" %}Publish changes{% elif form.flow_status == "published" %}Publish again{% else %}Publish to WhatsApp{% endif %}
+      {% if form.flow_status == "needs_republish" %}Publish changes{% elif form.flow_is_live %}Publish again{% else %}Publish to WhatsApp{% endif %}
     </button>
   </form>
   {% endif %}
 </div>
+{% if oob %}<span id="form-status-badge" hx-swap-oob="true">{% include "components/status_badge.html" with status=status %}</span>{% endif %}
+{% endwith %}

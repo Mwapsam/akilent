@@ -1454,11 +1454,15 @@ def _report_unknown_numbers(event: WebhookEventLog) -> None:
                 continue
             seen.add(pnid)
             display = md.get("display_phone_number") or ""
-            account_ids = set(
-                WhatsAppBusinessNumber.objects.filter(waba_id=waba_id).values_list(
-                    "account_id", flat=True
+            account_ids = (
+                set(
+                    WhatsAppBusinessNumber.objects.filter(waba_id=waba_id).values_list(
+                        "account_id", flat=True
+                    )
                 )
-            ) if waba_id else set()
+                if waba_id
+                else set()
+            )
             logger.error(
                 "WhatsApp webhook for unknown number: phone_number_id=%s display=%s "
                 "waba=%s owning_accounts=%s event=%s — reconnect the number or update "
@@ -1473,7 +1477,9 @@ def _report_unknown_numbers(event: WebhookEventLog) -> None:
                 f"wa_unknown_number_alert:{pnid}", "1", _UNKNOWN_NUMBER_ALERT_TTL
             ):
                 continue
-            number = f"+{display}" if display and not display.startswith("+") else display
+            number = (
+                f"+{display}" if display and not display.startswith("+") else display
+            )
             text = (
                 f"Customers are messaging your WhatsApp number {number or pnid}, but "
                 "Akilent doesn't have that number connected, so their messages aren't "
@@ -1500,7 +1506,7 @@ def _report_unknown_numbers(event: WebhookEventLog) -> None:
 
 
 # Meta webhooks about the health of the business's WhatsApp account and numbers.
-_ACCOUNT_HEALTH_FIELDS =("phone_number_quality_update", "account_update")
+_ACCOUNT_HEALTH_FIELDS = ("phone_number_quality_update", "account_update")
 # The events that put sending at risk; anything else is just logged.
 _ACCOUNT_HEALTH_ALERTS = {
     "FLAGGED": "Meta flagged the quality of your WhatsApp number {number}. If it "
@@ -1815,6 +1821,25 @@ def sync_templates_for_account(account) -> dict:
     return {"synced": synced, "errors": errors}
 
 
+# Errors that mean the existing draft Flow can't be updated in place (it's gone, or Meta
+# has locked it), so a new Flow is the way forward. Anything else (a bad request, a
+# rejected Flow JSON, access problems) would fail the same way on a new Flow.
+_FLOW_REPLACE_CODES = {"100/33", "404", "139001"}
+
+
+def _flow_in_use_by_templates(account, flow_id: str) -> bool:
+    """Whether one of the business's WhatsApp templates has a button opening ``flow_id``."""
+    from apps.whatsapp.models import MessageTemplate
+
+    for buttons in MessageTemplate.objects.filter(account=account).values_list(
+        "buttons", flat=True
+    ):
+        for button in buttons or []:
+            if isinstance(button, dict) and str(button.get("flow_id", "")) == flow_id:
+                return True
+    return False
+
+
 def publish_conversation_flow(form) -> None:
     """Create or update, then publish, a ``ConversationForm``'s WhatsApp Flow.
 
@@ -1823,10 +1848,16 @@ def publish_conversation_flow(form) -> None:
 
     * The Flow lives in the WABA of the number the business sends from, so it can be sent.
       If that changed, a new Flow is made there.
-    * Republishing first updates the existing Flow (Meta allows editing published Flows on
-      current Flow JSON versions). If Meta refuses, a new Flow is published and the old one
-      retired, so customers always get the latest questions.
+    * A published Flow's JSON can't be changed, so republishing a live form publishes a
+      **new** Flow and only then moves ``form.flow_id`` onto it, retiring the old one
+      (unless a template button still opens it). Until the new Flow is live, customers
+      keep getting the old one, and ``flow_id`` keeps pointing at it.
+    * A Flow that was never published (a draft left by an earlier failed attempt) is
+      updated in place; a new one is made only if that draft is gone or locked.
+    * Failures are stored in owner words (``flow_error``) with Meta's raw text beside them
+      (``flow_error_detail``) for operators.
     """
+    from apps.conversations.flow_errors import humanize_flow_error
     from apps.conversations.flow_json import FlowJSONError, content_hash
     from apps.whatsapp.providers import (
         WhatsAppProviderError,
@@ -1834,17 +1865,38 @@ def publish_conversation_flow(form) -> None:
         sending_number,
     )
 
-    def fail(message: str) -> None:
+    flow_json: dict | None = None
+
+    def fail(message: str, detail: str = "") -> None:
         form.flow_status = form.FlowStatus.ERROR
         form.flow_error = message
+        form.flow_error_detail = detail
         form.save(
             update_fields=[
                 "flow_id",
                 "flow_waba_id",
                 "flow_status",
                 "flow_error",
+                "flow_error_detail",
+                "flow_published_at",
                 "updated_at",
             ]
+        )
+
+    def fail_provider(exc: Exception) -> None:
+        code = str(getattr(exc, "code", "") or "")
+        logger.warning(
+            "publish_conversation_flow: form %s failed (%s): %s", form.pk, code, exc
+        )
+        fail(
+            humanize_flow_error(
+                code=code,
+                message=str(exc),
+                problems=getattr(exc, "problems", None),
+                flow_json=flow_json,
+                questions=form.questions,
+            ),
+            str(exc),
         )
 
     number = sending_number(form.account)
@@ -1856,21 +1908,25 @@ def publish_conversation_flow(form) -> None:
         return fail(str(exc))
 
     provider = get_whatsapp_provider(form.account)
-    old_flow_id = form.flow_id if form.flow_waba_id in ("", number.waba_id) else ""
+    same_waba = form.flow_waba_id in ("", number.waba_id)
+    old_flow_id = form.flow_id if same_waba else ""
+    # flow_id only moves onto a Flow once it's published, so this is the live Flow.
+    old_is_live = bool(old_flow_id and form.flow_published_at)
+    flow_id = ""
     try:
-        flow_id = ""
-        if old_flow_id:
+        if old_flow_id and not old_is_live:
             try:
                 provider.update_flow_json(old_flow_id, flow_json)
                 provider.publish_flow(old_flow_id)
                 flow_id = old_flow_id
             except WhatsAppProviderError as exc:
-                if getattr(exc, "code", "") == "FLOW_VALIDATION":
+                if str(getattr(exc, "code", "")) not in _FLOW_REPLACE_CODES:
                     raise
                 logger.info(
-                    "publish_conversation_flow: form %s: in-place update refused (%s); "
+                    "publish_conversation_flow: form %s: draft flow %s unusable (%s); "
                     "publishing a new Flow",
                     form.pk,
+                    old_flow_id,
                     exc,
                 )
         if not flow_id:
@@ -1878,26 +1934,41 @@ def publish_conversation_flow(form) -> None:
                 f"{form.name[:100]} ({form.public_id[-6:]}-{timezone.now():%y%m%d%H%M})"
             )
             created = provider.create_flow(number.waba_id, name, ["OTHER"])
-            flow_id = created["id"]
-            form.flow_id, form.flow_waba_id = flow_id, number.waba_id
-            provider.update_flow_json(flow_id, flow_json)
-            provider.publish_flow(flow_id)
-            if old_flow_id and old_flow_id != flow_id:
-                try:
-                    provider.deprecate_flow(old_flow_id)
-                except (WhatsAppProviderError, NotImplementedError) as exc:
-                    logger.warning(
-                        "publish_conversation_flow: couldn't retire old flow %s: %s",
-                        old_flow_id,
-                        exc,
-                    )
+            new_flow_id = created["id"]
+            if not old_is_live:
+                # Nothing live to protect: remember the draft so a retry reuses it.
+                # It isn't published, so it mustn't look live (flow_is_live).
+                form.flow_id, form.flow_waba_id = new_flow_id, number.waba_id
+                form.flow_published_at = None
+            provider.update_flow_json(new_flow_id, flow_json)
+            provider.publish_flow(new_flow_id)
+            flow_id = new_flow_id
     except (WhatsAppProviderError, NotImplementedError, KeyError) as exc:
-        return fail(str(exc))
+        return fail_provider(exc)
+
+    if old_flow_id and old_flow_id != flow_id and old_is_live:
+        if _flow_in_use_by_templates(form.account, old_flow_id):
+            logger.warning(
+                "publish_conversation_flow: form %s: kept old flow %s live; a template "
+                "button still opens it",
+                form.pk,
+                old_flow_id,
+            )
+        else:
+            try:
+                provider.deprecate_flow(old_flow_id)
+            except (WhatsAppProviderError, NotImplementedError) as exc:
+                logger.warning(
+                    "publish_conversation_flow: couldn't retire old flow %s: %s",
+                    old_flow_id,
+                    exc,
+                )
 
     form.flow_id, form.flow_waba_id = flow_id, number.waba_id
     form.flow_status = form.FlowStatus.PUBLISHED
     form.flow_json_hash = content_hash(flow_json)
     form.flow_error = ""
+    form.flow_error_detail = ""
     form.flow_published_at = timezone.now()
     form.save(
         update_fields=[
@@ -1906,6 +1977,7 @@ def publish_conversation_flow(form) -> None:
             "flow_status",
             "flow_json_hash",
             "flow_error",
+            "flow_error_detail",
             "flow_published_at",
             "updated_at",
         ]

@@ -10,7 +10,7 @@
     </nav>
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">{{ form.name }}</h1>
     <p class="mt-1 text-sm text-ink-subtle">
-      <span class="badge {% if form.status == 'published' %}badge-success{% elif form.status == 'archived' %}badge-neutral{% else %}badge-warning{% endif %}">{% if form.status == 'published' %}Ready to send{% else %}{{ form.get_status_display }}{% endif %}</span>
+      <span id="form-status-badge">{% include "components/status_badge.html" with status=form.display_status %}</span>
       {% if stats.sent %}· Sent {{ stats.sent }} · finished {{ stats.done }}{% if stats.rate is not None %} ({{ stats.rate }}%){% endif %}{% if stats.waiting %} · {{ stats.waiting }} filling it in{% endif %}{% endif %}
     </p>
   </div>

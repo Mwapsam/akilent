@@ -1,0 +1,10 @@
+{% comment %}
+One status vocabulary for forms, templates, rules and comments:
+draft · pending · live · paused · error.
+
+  {% include "components/status_badge.html" with status=form.display_status %}
+
+``status`` is a dict {key, label, reason}. ``reason`` is the tooltip; pass
+show_reason=True to print it beside the badge instead.
+{% endcomment %}
+<span class="badge {% if status.key == 'live' %}badge-success{% elif status.key == 'pending' %}badge-info{% elif status.key == 'error' %}badge-danger{% elif status.key == 'paused' %}badge-neutral{% else %}badge-warning{% endif %}"{% if status.reason and not show_reason %} title="{{ status.reason }}"{% endif %}>{{ status.label }}</span>{% if show_reason and status.reason %} <span class="text-xs text-ink-subtle">{{ status.reason }}</span>{% endif %}

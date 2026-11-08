@@ -2425,7 +2425,10 @@ def form_flow_status(request, pk):
     if account is None:
         return redirect("dashboard")
     form = get_object_or_404(ConversationForm, account=account, pk=pk)
-    return render(request, "conversations/_form_flow_status.html", {"form": form})
+    # oob: also refresh the header badge, which shows the same status.
+    return render(
+        request, "conversations/_form_flow_status.html", {"form": form, "oob": True}
+    )
 
 
 @login_required

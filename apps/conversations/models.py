@@ -679,7 +679,13 @@ class ConversationForm(models.Model):
     # so an edit to ``questions`` after publishing can be detected and flagged
     # (see note_questions_changed) without polling Meta.
     flow_json_hash = models.CharField(max_length=40, blank=True, default="")
+    # What went wrong with the last publish, in owner words (flow_errors.humanize_flow_error).
     flow_error = models.TextField(blank=True, default="")
+    # Meta's raw error text for the same failure, shown to operators only.
+    flow_error_detail = models.TextField(blank=True, default="")
+    # When the Flow in ``flow_id`` was published. publish_conversation_flow only moves
+    # ``flow_id`` onto a new Flow once that Flow is published, so with this set,
+    # ``flow_id`` is a live Flow customers can be sent (see ``flow_is_live``).
     flow_published_at = models.DateTimeField(blank=True, null=True)
     # The WhatsApp Business Account the Flow lives in: a Flow can only be sent from a
     # number in the same WABA, so a different sending number means a new Flow.
@@ -694,6 +700,85 @@ class ConversationForm(models.Model):
         return self.name
 
     DEFAULT_THANKS = "Thanks - got everything I need!"
+
+    @property
+    def flow_is_live(self) -> bool:
+        """Whether a published Flow exists on WhatsApp for this form.
+
+        True while changes wait to be published, while a republish runs and after a
+        failed republish: customers already filling it in can still finish. It is *not*
+        "can be sent": answers are matched against the current questions, so a form is
+        only sent once its Flow is published with them (forms.can_start).
+        """
+        if not self.flow_id:
+            return False
+        if self.flow_status in (
+            self.FlowStatus.PUBLISHED,
+            self.FlowStatus.NEEDS_REPUBLISH,
+        ):
+            return True
+        # Mid-republish or after a failed one: live only if this Flow was published.
+        return bool(self.flow_published_at) and self.flow_status in (
+            self.FlowStatus.PUBLISHING,
+            self.FlowStatus.ERROR,
+        )
+
+    @property
+    def display_status(self) -> dict:
+        """The one status shown everywhere (list, page header, WhatsApp card).
+
+        ``{"key", "label", "reason"}``; ``key`` is the shared vocabulary
+        (draft · pending · live · paused · error) that components/status_badge.html colours.
+        """
+        if self.status == self.Status.ARCHIVED:
+            return {
+                "key": "paused",
+                "label": "Archived",
+                "reason": "Archived forms can't be sent.",
+            }
+        if self.status == self.Status.DRAFT:
+            return {
+                "key": "draft",
+                "label": "Draft",
+                "reason": "Make it ready to send when the questions are done.",
+            }
+        if self.presentation != self.Presentation.WHATSAPP_FLOW:
+            return {"key": "live", "label": "Live", "reason": ""}
+        if self.flow_status == self.FlowStatus.PUBLISHED and self.flow_id:
+            return {"key": "live", "label": "Live", "reason": ""}
+        if self.flow_is_live:
+            # The old version is on WhatsApp, but the form can't be sent until the
+            # current questions are published (answers are matched against them).
+            if self.flow_status == self.FlowStatus.PUBLISHING:
+                return {
+                    "key": "pending",
+                    "label": "Publishing…",
+                    "reason": "Publishing your changes…",
+                }
+            if self.flow_status == self.FlowStatus.ERROR:
+                return {
+                    "key": "error",
+                    "label": "Changes not published",
+                    "reason": f"Publish your changes before sending it again. {self.flow_error}".strip(),
+                }
+            return {
+                "key": "pending",
+                "label": "Changes not published",
+                "reason": "Publish your changes before sending it again. Customers already filling it in can finish.",
+            }
+        if self.flow_status == self.FlowStatus.PUBLISHING:
+            return {
+                "key": "pending",
+                "label": "Publishing…",
+                "reason": "This takes a few seconds.",
+            }
+        if self.flow_status == self.FlowStatus.ERROR:
+            return {"key": "error", "label": "Not published", "reason": self.flow_error}
+        return {
+            "key": "pending",
+            "label": "Not on WhatsApp yet",
+            "reason": "Publish it to WhatsApp before you can send it.",
+        }
 
     def build_flow_json(self) -> dict:
         from apps.conversations.flow_json import build

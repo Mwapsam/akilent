@@ -359,7 +359,15 @@ def _number(account):
     )
 
 
-def test_republish_updates_in_place_when_meta_allows(account):
+def _provider_error(message, code=""):
+    from apps.whatsapp.providers.base import WhatsAppProviderError
+
+    err = WhatsAppProviderError(message)
+    err.code = code
+    return err
+
+
+def test_a_draft_flow_is_updated_in_place(account):
     from apps.whatsapp.tasks import publish_conversation_flow
 
     _number(account)
@@ -367,7 +375,7 @@ def test_republish_updates_in_place_when_meta_allows(account):
         account,
         flow_id="OLD",
         flow_waba_id="WABA1",
-        flow_status=ConversationForm.FlowStatus.NEEDS_REPUBLISH,
+        flow_status=ConversationForm.FlowStatus.ERROR,
     )
     provider = MagicMock()
     with patch("apps.whatsapp.providers.get_whatsapp_provider", return_value=provider):
@@ -376,12 +384,14 @@ def test_republish_updates_in_place_when_meta_allows(account):
     assert (
         form.flow_status == ConversationForm.FlowStatus.PUBLISHED
         and form.flow_id == "OLD"
+        and form.flow_published_at is not None
     )
     provider.create_flow.assert_not_called()
+    provider.update_flow_json.assert_called_once()
 
 
-def test_republish_makes_a_new_flow_when_meta_refuses_the_edit(account):
-    from apps.whatsapp.providers.base import WhatsAppProviderError
+def test_a_live_flow_is_replaced_by_a_new_one(account):
+    """Meta can't change a published Flow's JSON: publish a new Flow, then retire the old."""
     from apps.whatsapp.tasks import publish_conversation_flow
 
     _number(account)
@@ -389,11 +399,91 @@ def test_republish_makes_a_new_flow_when_meta_refuses_the_edit(account):
         account,
         flow_id="OLD",
         flow_waba_id="WABA1",
-        flow_status=ConversationForm.FlowStatus.NEEDS_REPUBLISH,
+        flow_status=ConversationForm.FlowStatus.PUBLISHING,
+        flow_published_at=timezone.now(),
+    )
+    provider = MagicMock()
+    provider.create_flow.return_value = {"id": "NEW"}
+    with patch("apps.whatsapp.providers.get_whatsapp_provider", return_value=provider):
+        publish_conversation_flow(form)
+    form.refresh_from_db()
+    assert (
+        form.flow_id == "NEW"
+        and form.flow_status == ConversationForm.FlowStatus.PUBLISHED
+    )
+    assert [c.args[0] for c in provider.update_flow_json.call_args_list] == ["NEW"]
+    provider.publish_flow.assert_called_once_with("NEW")
+    provider.deprecate_flow.assert_called_once_with("OLD")
+
+
+def test_a_failed_republish_keeps_the_live_flow(account):
+    from apps.whatsapp.tasks import publish_conversation_flow
+
+    _number(account)
+    form = _form(
+        account,
+        flow_id="OLD",
+        flow_waba_id="WABA1",
+        flow_status=ConversationForm.FlowStatus.PUBLISHING,
+        flow_published_at=timezone.now(),
+        presentation=ConversationForm.Presentation.WHATSAPP_FLOW,
+    )
+    provider = MagicMock()
+    provider.create_flow.return_value = {"id": "NEW"}
+    provider.publish_flow.side_effect = _provider_error("Meta API 403 [200]: no", "200")
+    with patch("apps.whatsapp.providers.get_whatsapp_provider", return_value=provider):
+        publish_conversation_flow(form)
+    form.refresh_from_db()
+    assert (
+        form.flow_id == "OLD" and form.flow_status == ConversationForm.FlowStatus.ERROR
+    )
+    assert form.flow_is_live  # people already filling it in can finish
+    assert form.display_status["label"] == "Changes not published"
+    assert "allow every permission" in form.flow_error
+    assert "Meta API 403" in form.flow_error_detail
+    provider.deprecate_flow.assert_not_called()
+
+
+def test_the_old_flow_stays_live_while_a_template_button_opens_it(account):
+    from apps.whatsapp.models import MessageTemplate
+    from apps.whatsapp.tasks import publish_conversation_flow
+
+    _number(account)
+    MessageTemplate.objects.create(
+        account=account,
+        name="book_now",
+        content="Book now",
+        buttons=[{"type": "flow", "text": "Book", "flow_id": "OLD"}],
+    )
+    form = _form(
+        account,
+        flow_id="OLD",
+        flow_waba_id="WABA1",
+        flow_status=ConversationForm.FlowStatus.PUBLISHING,
+        flow_published_at=timezone.now(),
+    )
+    provider = MagicMock()
+    provider.create_flow.return_value = {"id": "NEW"}
+    with patch("apps.whatsapp.providers.get_whatsapp_provider", return_value=provider):
+        publish_conversation_flow(form)
+    form.refresh_from_db()
+    assert form.flow_id == "NEW"
+    provider.deprecate_flow.assert_not_called()
+
+
+def test_a_gone_draft_flow_is_replaced(account):
+    from apps.whatsapp.tasks import publish_conversation_flow
+
+    _number(account)
+    form = _form(
+        account,
+        flow_id="OLD",
+        flow_waba_id="WABA1",
+        flow_status=ConversationForm.FlowStatus.ERROR,
     )
     provider = MagicMock()
     provider.update_flow_json.side_effect = [
-        WhatsAppProviderError("published flows can't change"),
+        _provider_error("Meta API 400 [100/33]: does not exist", "100/33"),
         {},
     ]
     provider.create_flow.return_value = {"id": "NEW"}
@@ -404,7 +494,77 @@ def test_republish_makes_a_new_flow_when_meta_refuses_the_edit(account):
         form.flow_id == "NEW"
         and form.flow_status == ConversationForm.FlowStatus.PUBLISHED
     )
-    provider.deprecate_flow.assert_called_once_with("OLD")
+    provider.deprecate_flow.assert_not_called()  # a draft was never live
+
+
+def test_a_request_error_never_makes_a_new_flow(account):
+    """A bad request (code 100) would fail the same way on a new Flow."""
+    from apps.whatsapp.tasks import publish_conversation_flow
+
+    _number(account)
+    form = _form(
+        account,
+        flow_id="OLD",
+        flow_waba_id="WABA1",
+        flow_status=ConversationForm.FlowStatus.ERROR,
+    )
+    provider = MagicMock()
+    provider.update_flow_json.side_effect = _provider_error(
+        "Meta API 400 [100]: (#100) The parameter name is required.", "100"
+    )
+    with patch("apps.whatsapp.providers.get_whatsapp_provider", return_value=provider):
+        publish_conversation_flow(form)
+    form.refresh_from_db()
+    provider.create_flow.assert_not_called()
+    assert form.flow_status == ConversationForm.FlowStatus.ERROR
+    assert "problem on our side" in form.flow_error
+    assert "(#100)" not in form.flow_error
+    assert "(#100)" in form.flow_error_detail
+
+
+def test_a_first_publish_that_fails_keeps_the_draft_for_the_retry(account):
+    from apps.whatsapp.tasks import publish_conversation_flow
+
+    _number(account)
+    form = _form(account, presentation=ConversationForm.Presentation.WHATSAPP_FLOW)
+    provider = MagicMock()
+    provider.create_flow.return_value = {"id": "DRAFT1"}
+    provider.publish_flow.side_effect = _provider_error("Meta API 429 [4]: slow", "4")
+    with patch("apps.whatsapp.providers.get_whatsapp_provider", return_value=provider):
+        publish_conversation_flow(form)
+    form.refresh_from_db()
+    assert form.flow_id == "DRAFT1" and form.flow_published_at is None
+    assert not form.flow_is_live
+    assert form.display_status["key"] == "error"
+    assert "busy" in form.flow_error
+
+
+def test_validation_pointers_name_the_question(account):
+    from apps.whatsapp.tasks import publish_conversation_flow
+
+    _number(account)
+    form = _form(
+        account,
+        questions=[
+            {"key": "name", "label": "Name", "field_type": "text"},
+            {"key": "email", "label": "Email", "field_type": "email"},
+        ],
+    )
+    err = _provider_error("WhatsApp rejected the form: bad", "FLOW_VALIDATION")
+    err.problems = [
+        {
+            "error": "INVALID_PROPERTY_VALUE",
+            "message": "Invalid value",
+            "pointers": [{"path": "screens[0].layout.children[0].children[1].label"}],
+        }
+    ]
+    provider = MagicMock()
+    provider.create_flow.return_value = {"id": "N"}
+    provider.update_flow_json.side_effect = err
+    with patch("apps.whatsapp.providers.get_whatsapp_provider", return_value=provider):
+        publish_conversation_flow(form)
+    form.refresh_from_db()
+    assert form.flow_error.startswith("Question 2: WhatsApp didn't accept its wording")
 
 
 def test_meta_validation_errors_are_shown(account):

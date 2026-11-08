@@ -1,8 +1,8 @@
 """WhatsApp Flows feature -- dedicated test suite.
 
 Covers:
-  - Provider: create_flow / publish_flow (success + 4xx error) and the
-    intentional update_flow_json placeholder raise.
+  - Provider: create_flow / update_flow_json / publish_flow (success + 4xx
+    error), and the multipart parts Meta requires for the Flow JSON upload.
   - extract_reply: valid and malformed nfm_reply payloads.
   - forms.complete_from_flow: happy path, unmatched token, idempotency.
   - forms._start_flow / start_form (flow branch): FormError when unpublished,
@@ -167,6 +167,46 @@ class TestMetaProviderFlowMethods:
             "multipart/form-data; boundary="
         )
         assert prepared.headers["Authorization"].startswith("Bearer ")
+
+    def test_update_flow_json_sends_every_part_meta_requires(self):
+        """Meta's asset upload needs file, name=flow.json and asset_type=FLOW_JSON;
+        without name, every publish fails with "(#100) The parameter name is required"."""
+        provider = self._provider()
+        with patch.object(
+            provider._session,
+            "send",
+            return_value=_mock_response(200, {"success": True}),
+        ) as send:
+            provider.update_flow_json("flow_x", {"version": "7.3"})
+        body = send.call_args.args[0].body.decode()
+        crlf = chr(13) + chr(10)
+        assert f'name="name"{crlf}{crlf}flow.json{crlf}' in body
+        assert f'name="asset_type"{crlf}{crlf}FLOW_JSON{crlf}' in body
+        assert 'name="file"; filename="flow.json"' in body
+        assert '{"version": "7.3"}' in body
+
+    def test_update_flow_json_keeps_validation_problems(self):
+        provider = self._provider()
+        problems = [
+            {
+                "error": "INVALID_PROPERTY_VALUE",
+                "message": "Property name is missing",
+                "pointers": [
+                    {"path": "screens[0].layout.children[0].children[0].name"}
+                ],
+            }
+        ]
+        with patch.object(
+            provider._session,
+            "post",
+            return_value=_mock_response(
+                200, {"success": True, "validation_errors": problems}
+            ),
+        ):
+            with pytest.raises(WhatsAppProviderError) as caught:
+                provider.update_flow_json("flow_x", {"version": "7.3"})
+        assert caught.value.code == "FLOW_VALIDATION"
+        assert caught.value.problems == problems
 
     def test_update_flow_json_4xx_raises_provider_error(self):
         provider = self._provider()

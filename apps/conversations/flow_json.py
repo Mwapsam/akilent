@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any
 
 FLOW_JSON_VERSION = "7.3"
@@ -59,6 +60,7 @@ MAX_SCREENS = 10
 HELPER_LIMIT = 80
 TITLE_LIMIT = 30
 FOOTER_LIMIT = 35
+FIELD_NAME = re.compile(r"[A-Za-z0-9_]+")  # what Meta accepts as a component name
 
 
 class FlowJSONError(ValueError):
@@ -101,6 +103,13 @@ def check(questions: list, *, title: str = "", submit: str = "") -> list[str]:
         key = q.get("key") or ""
         if not key or key in seen:
             problems.append(f"Question {n} needs its own unique key.")
+        elif not FIELD_NAME.fullmatch(key):
+            # Meta rejects other characters in a field name; keys made by the builder
+            # already fit, so this catches old or hand-edited forms.
+            problems.append(
+                f"Question {n}: its field name “{key[:30]}” can only use letters, "
+                "numbers and underscores."
+            )
         seen.add(key)
         if ft in CHOICE_TYPES:
             options = [_clean(o) for o in q.get("options") or [] if _clean(o)]
