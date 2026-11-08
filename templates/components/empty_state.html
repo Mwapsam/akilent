@@ -5,7 +5,12 @@ Usage:
      action_url="/email/campaigns/new/" action_label="New campaign" %}
 action_overlay="drawer|modal" opens the action over the page (static/js/app.js "Overlay").
 compact=True for an empty list inside a card or drawer (less padding).
+line=True (D5): one muted line with its action as a link ("Nothing scheduled · Schedule a
+send →"), for a section of a busy page; the full state is for a page that is new.
 {% endcomment %}
+{% if line %}
+<p class="empty-line">{{ title }}{% if action_url and action_label %} · <a href="{{ action_url }}"{% if action_overlay %} data-overlay-open="{{ action_overlay }}"{% endif %}>{{ action_label }} <span aria-hidden="true">→</span></a>{% endif %}</p>
+{% else %}
 <div class="empty-state{% if compact %} empty-state--compact{% endif %}">
   {% if icon %}
     <span class="empty-state-icon">
@@ -18,3 +23,4 @@ compact=True for an empty list inside a card or drawer (less padding).
     <a href="{{ action_url }}" class="btn btn-primary btn-sm mt-4"{% if action_overlay %} data-overlay-open="{{ action_overlay }}"{% endif %}>{{ action_label }}</a>
   {% endif %}
 </div>
+{% endif %}

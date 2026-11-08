@@ -9,7 +9,7 @@ The poll is gated on document visibility — a backgrounded tab stops asking.
      hx-get="{% url 'dashboard-work-queue' %}"
      hx-trigger="every 30s [document.visibilityState === 'visible']"
      hx-swap="outerHTML"
-     class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+     class="grid grid-cols-2 lg:grid-cols-4 gap-x-10 gap-y-6">
 
   {% with waiting=customers_waiting_count missed=missed_count leads=new_leads_count due=followups_due_count %}
 

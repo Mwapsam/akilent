@@ -2563,3 +2563,41 @@ Plan: the design audit of 2026-11-08 (D1 colour and buttons → D2 graphite dark
   - HubSpot's "(Sample Contact)" rows: HubSpot's own demo data in the connected portal;
   - before/after screenshots of real pages: not taken.
 - **Verification:** the full suite is green. Tailwind rebuilt (4.3.3 standalone); landing.css changed only in unused theme variables.
+
+### Entry 47: D5 Dashboard, D4 Settings layout, D6 small fixes (2026-11-08)
+Plan: the design audit's D5 (fewer boxes, Dashboard first), D4 (Settings side list and two-column sections, per the user's spec), and the D6 items folded in.
+
+- **D5:**
+  - **Dashboard:**
+    - the work queue is four figures, not tiles: a label above a 28px number, no box or fill, and a small dot when there's work (amber yours, coral missed, teal leads);
+    - the quick-action cards are a row of secondary buttons;
+    - the panels are plain sections with 13px headings and hairline lists;
+    - empty sections are one muted line with their action (`empty_state.html line=True`);
+    - the email stats are figures;
+    - the plan's usage bar is amber;
+    - only the "Get more out of Akilent" recommendation stays a card.
+  - **Shared styles:**
+    - `.stat-card` is a figure everywhere it's used (no border, no icon tile);
+    - `.panel-primary` has no lifted card.
+  - **Content Studio's "Where your posts stand":** figures with labels above; Failed shows a coral figure and dot instead of a red box.
+  - **The composer's Send:** the neutral primary, with a grey well when disabled; the mic is secondary.
+- **D4, Settings:**
+  - a grouped side list (Account: Profile, Security · Workspace: Business, Team, Opening hours, AI, Optional tools, Integrations · Developer: API keys, Activity log) replaces the 10-tab row;
+  - at phone width it folds into "Settings · Profile";
+  - every page has one width (max 64rem) and no width caps;
+  - each settings group is a `.settings-section`: title and description on the left, fields on the right, hairlines between groups, stacking on phones;
+  - converted by script: Profile, Business, Security, Opening hours, Optional tools, Team (invite), two-factor, passkeys and email codes; AI's head by hand;
+  - the AI tools pages (report, knowledge base, playground) lose their card;
+  - `.btn-danger-outline` is ready for a last "can't be undone" section.
+- **D6:**
+  - checkboxes are drawn: a hairline box, the primary's fill when checked, both themes;
+  - the top bar's chip says "Waiting on a channel", matching the Dashboard;
+  - the thread's day label is pinned at its top while scrolling, so it's never half cut off;
+  - failed sends in a row with the same reason say it once ("5 messages not delivered ·" on the last), with a "Not sent" mark on each;
+  - Customers' Filter button is no-JS only, since the filters already apply as you type.
+- **Insights:** "1 1 customer is waiting" came from `_at_risk.html` printing each count before a sentence that already carries it. The other wording fixes are deployed, but stored insight titles are only rewritten by the nightly `generate_insights` run.
+- **Not done:**
+  - Inbox settings, Content Studio AI and Bio page, and Channels in the two-column sections;
+  - the sticky "Unsaved changes" bar (pages keep their Save buttons);
+  - the Insights redesign (proposed as the next D5 page).
+- **Verification:** the full suite is green apart from `test_import_5000_contacts`. Tailwind rebuilt.

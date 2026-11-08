@@ -1,11 +1,11 @@
 {% extends "accounts/settings_base.html" %}
 {% block settings_content %}
-<div class="card card-pad max-w-xl">
-  <h2 class="font-semibold mb-1">Opening hours</h2>
-  <p class="text-sm text-ink-subtle mb-4">
-    Tell Akilent when you're open. Automations use this to reply differently when
-    you're closed. Leave every day unticked and you'll be treated as always open.
-  </p>
+<section class="settings-section">
+  <div>
+    <h2 class="settings-section-title">Opening hours</h2>
+    <p class="settings-section-desc">Tell Akilent when you're open. Automations use this to reply differently when you're closed. Leave every day unticked and you'll be treated as always open.</p>
+  </div>
+  <div class="settings-section-body">
 
   {% if configured %}
   <p class="text-sm mb-4">
@@ -24,5 +24,6 @@
     <p class="text-sm text-ink-subtle">Only an owner or admin can change opening hours.</p>
     {% endif %}
   </form>
-</div>
+  </div>
+</section>
 {% endblock %}

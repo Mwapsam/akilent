@@ -3,12 +3,12 @@
 {# Messages render inline on this page, so the toast layer stays off. #}
 {% block toasts %}{% endblock %}
 {% block settings_content %}
-<div class="card card-pad max-w-xl">
-  <h2 class="font-semibold mb-1">Passkeys</h2>
-  <p class="text-sm text-ink-subtle mb-4">
-    Sign in with your phone's fingerprint, face or PIN, or with a security key.
-    Works for people who don't use an authenticator app.
-  </p>
+<section class="settings-section">
+  <div>
+    <h2 class="settings-section-title">Passkeys</h2>
+    <p class="settings-section-desc">Sign in with your phone's fingerprint, face or PIN, or with a security key. Works for people who don't use an authenticator app.</p>
+  </div>
+  <div class="settings-section-body">
 
   {% if messages %}
     {% for msg in messages %}
@@ -97,7 +97,8 @@
       <p id="passkey-add-error" class="text-sm tone-coral-fg" role="alert" hidden></p>
     </form>
   </div>
-</div>
+  </div>
+</section>
 
 <script src="{% static 'js/passkeys.js' %}" defer></script>
 <script>

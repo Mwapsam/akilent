@@ -86,7 +86,8 @@ def test_the_title_is_inbox_over_the_view_and_the_view_is_the_menu(shop):
 
 
 def test_an_open_conversation_has_no_yellow_button_but_send(shop):
-    """Send is yellow by its own class (.cv-send); every other action is tonal or quieter."""
+    """Send is the one primary by its own class (.cv-send, the neutral primary since D1);
+    every other action is tonal or quieter."""
     client, account = shop
     _template(account)  # the dialog's Send template is in the pane too
     chat = _chat(account)
@@ -110,9 +111,10 @@ def test_an_open_conversation_has_no_yellow_button_but_send(shop):
     assert ".cv-tpl-send:disabled { background: var(--tone-neutral-bg);" in css
     css = (settings.BASE_DIR / "assets" / "app.css").read_text(encoding="utf-8")
     assert (
-        '.cv-send:not(.cv-send--rec)[aria-label="Send"] { background: var(--color-amber-400);'
+        '.cv-send:not(.cv-send--rec)[aria-label="Send"] { background: var(--color-primary);'
         in css
     )
+    assert "amber" not in css[css.index(".cv-send:not(.cv-send--rec)") :][:400]
 
 
 # --- Menus that post -------------------------------------------------------------------

@@ -2,8 +2,11 @@
 {# Messages render inline on this page, so the toast layer stays off. #}
 {% block toasts %}{% endblock %}
 {% block settings_content %}
-<div class="card card-pad max-w-xl">
-  <h2 class="font-semibold mb-1">Two-factor authentication</h2>
+<section class="settings-section">
+  <div>
+    <h2 class="settings-section-title">Two-factor authentication</h2>
+  </div>
+  <div class="settings-section-body">
   {% if messages %}
     {% for msg in messages %}
       <div class="mb-4 alert {% if msg.level_tag == 'success' %}alert-success{% elif msg.level_tag == 'info' %}alert-info{% else %}alert-danger{% endif %}" role="{% if msg.level_tag == 'error' %}alert{% else %}status{% endif %}"><p>{{ msg }}</p></div>
@@ -90,5 +93,6 @@
       <p class="text-xs text-ink-subtle">Stuck? <a href="{% url 'help' %}" class="text-accent hover:text-accent-strong">Visit the help centre</a>.</p>
     </form>
   {% endif %}
-</div>
+  </div>
+</section>
 {% endblock %}

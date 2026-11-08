@@ -4,8 +4,11 @@
 <div class="mb-5">{% include "components/help_link.html" with slug="team" text="Read the team management guide" %}</div>
 
 {% if can_manage %}
-<div class="card card-pad mb-6">
-  <h2 class="font-semibold mb-4">Invite a teammate</h2>
+<section class="settings-section">
+  <div>
+    <h2 class="settings-section-title">Invite a teammate</h2>
+  </div>
+  <div class="settings-section-body">
   <form method="post" action="{% url 'invite-create' %}" class="flex flex-wrap gap-3">
     {% csrf_token %}
     <label class="sr-only" for="id_invite_email">Email</label>
@@ -21,7 +24,8 @@
     </button>
   </form>
   <p class="help mt-2">Members manage email &amp; mailboxes; admins can also manage the team. Invites expire in 7 days.</p>
-</div>
+  </div>
+</section>
 {% else %}
 <div class="mb-6 rounded-2xl border border-border tone-neutral px-5 py-3 text-sm">
   Only workspace owners and admins can invite or manage teammates.

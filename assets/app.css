@@ -38,6 +38,40 @@
 :root:not([data-surface="public"]) :is(h1, h2) { letter-spacing: -0.018em; }
 :root:not([data-surface="public"]) h3 { letter-spacing: -0.008em; }
 
+/* Checkboxes (D6, 2026-11-08): drawn, not the browser's bright white square, which was the
+   heaviest thing on the dark Customers list. A hairline box; checked, the primary's fill
+   with a tick. Switches (role="switch" / .switch) keep their own look. In @layer base, so
+   size utilities (h-4 w-4) still apply. */
+@layer base {
+  :root:not([data-surface="public"]) input[type="checkbox"]:not([role="switch"]):not(.switch) {
+    appearance: none; -webkit-appearance: none; margin: 0;
+    width: 1rem; height: 1rem; flex-shrink: 0; display: inline-grid; place-content: center;
+    border: 1px solid var(--color-border-strong); border-radius: 0.3125rem;
+    background-color: transparent; cursor: pointer; vertical-align: middle;
+    transition: background-color var(--duration-fast), border-color var(--duration-fast);
+  }
+  :root:not([data-surface="public"]) input[type="checkbox"]:not([role="switch"]):not(.switch):hover {
+    border-color: var(--color-ink-subtle);
+  }
+  :root:not([data-surface="public"]) input[type="checkbox"]:not([role="switch"]):not(.switch):is(:checked, :indeterminate) {
+    background-color: var(--color-primary); border-color: var(--color-primary);
+  }
+  :root:not([data-surface="public"]) input[type="checkbox"]:not([role="switch"]):not(.switch):checked::after {
+    content: ""; width: 0.5rem; height: 0.28rem; margin-top: -0.12rem;
+    border-left: 2px solid var(--color-on-primary); border-bottom: 2px solid var(--color-on-primary);
+    transform: rotate(-45deg);
+  }
+  :root:not([data-surface="public"]) input[type="checkbox"]:not([role="switch"]):not(.switch):indeterminate::after {
+    content: ""; width: 0.5rem; height: 2px; background: var(--color-on-primary);
+  }
+  :root:not([data-surface="public"]) input[type="checkbox"]:not([role="switch"]):not(.switch):focus-visible {
+    outline: 2px solid var(--color-focus-ring); outline-offset: 2px;
+  }
+  :root:not([data-surface="public"]) input[type="checkbox"]:not([role="switch"]):not(.switch):disabled {
+    opacity: 0.5; cursor: not-allowed;
+  }
+}
+
 /* Safe areas: notched phones put the home indicator and rounded corners inside
    the viewport once viewport-fit=cover is set. Anything pinned to an edge pads
    by these. They are 0 everywhere else. */
@@ -657,7 +691,7 @@
   .pill-scroll::-webkit-scrollbar { display: none; }
   .pill-scroll > * { flex-shrink: 0; }
   /* A native checkbox in the brand colour, sized to sit on the first line of its label. */
-  .checkbox { width: 1rem; height: 1rem; flex-shrink: 0; cursor: pointer; accent-color: var(--color-brand-600); }
+  .checkbox { width: 1rem; height: 1rem; flex-shrink: 0; cursor: pointer; } /* drawn in @layer base (D6) */
   .checkbox:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
 
   /* Dialog offset: room above a centred dialog only when the screen is tall
@@ -878,6 +912,47 @@
     color: var(--color-ink);
   }
   .metric-note { @apply text-xs; color: var(--color-ink-subtle); }
+
+  /* Settings (D4): a grouped side list, then two-column sections at one width. */
+  .settings-layout { @apply grid gap-6; }
+  @media (min-width: 768px) {
+    .settings-layout { grid-template-columns: 12rem minmax(0, 1fr); column-gap: 3rem; align-items: start; }
+    .settings-nav { position: sticky; top: 5rem; }
+    .settings-nav-summary { display: none; }
+  }
+  .settings-nav-fold > summary { list-style: none; }
+  .settings-nav-fold > summary::-webkit-details-marker { display: none; }
+  .settings-nav-summary {
+    @apply flex items-center justify-between rounded-lg px-3 min-h-9 text-sm cursor-pointer select-none;
+    background-color: var(--color-secondary-bg); color: var(--color-ink-subtle);
+  }
+  .settings-nav-summary::after { content: "▾"; font-size: .75rem; }
+  .settings-nav-groups { @apply flex flex-col gap-0.5 pt-2 md:pt-0; }
+  .settings-nav-group {
+    @apply text-xs font-medium uppercase px-2.5 pt-4 pb-1.5 first:pt-0;
+    letter-spacing: 0.04em; color: var(--color-ink-subtle);
+  }
+  .settings-nav-link {
+    @apply rounded-md px-2.5 py-1.5 text-sm transition-colors;
+    color: var(--color-ink-muted);
+  }
+  .settings-nav-link:hover { background-color: var(--color-secondary-bg); color: var(--color-ink); }
+  .settings-nav-link[aria-current="page"] { @apply font-medium; background-color: var(--color-secondary-bg); color: var(--color-ink); }
+  .settings-main { @apply min-w-0; max-width: 64rem; }
+
+  /* One settings group: what it is (left), its fields (right); a hairline between groups,
+     no card. Stacks at phone width. --danger: a last group for what can't be undone. */
+  .settings-section { @apply grid gap-x-10 gap-y-4 py-8; border-top: 1px solid var(--color-border); }
+  .settings-section:first-child { @apply pt-0; border-top: 0; }
+  @media (min-width: 768px) {
+    .settings-section { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+  }
+  .settings-section-title { @apply text-base font-semibold; color: var(--color-ink); }
+  .settings-section-desc { @apply mt-1 text-sm; color: var(--color-ink-subtle); }
+  .settings-section-body { @apply min-w-0 space-y-4; }
+  .settings-section--danger .settings-section-title { color: var(--tone-coral-fg); }
+  .btn-danger-outline { color: var(--tone-coral-fg); box-shadow: inset 0 0 0 1px var(--tone-coral-border); }
+  .btn-danger-outline:hover { background-color: var(--tone-coral-bg); }
 
   /* Tabs -------------------------------------------------------------- */
   .tabs { @apply flex items-stretch gap-1 border-b border-border overflow-x-auto; }
@@ -1255,20 +1330,30 @@
   .timeline-title { @apply text-sm font-medium; color: var(--color-ink); }
   .timeline-meta { @apply text-xs mt-0.5; color: var(--color-ink-subtle); }
 
+  /* One-line empty state (components/empty_state.html line=True). */
+  .empty-line { @apply text-sm py-1; color: var(--color-ink-subtle); }
+  .empty-line a { @apply font-medium; color: var(--color-ink); }
+  .empty-line a:hover { text-decoration: underline; text-underline-offset: 3px; }
+
   /* Stat card ----------------------------------------------------------- */
   /* The shape components/stat_card.html composes. Having it as a class lets
      the style guide show variants and keeps the partial declarative. */
-  .stat-card {
-    @apply bg-surface border border-border rounded-2xl p-5 sm:p-6;
-    box-shadow: var(--shadow-card);
+  /* A figure, not a card (D5): small uppercase label above a 28px tabular value, no box,
+     no icon tile. Laid out by its grid's gap, so a row of them reads as one line of
+     numbers. Same look as .metric and the work queue. */
+  .stat-card { @apply flex flex-col min-w-0; }
+  .stat-card-label {
+    @apply text-xs font-medium uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-ink-subtle);
   }
-  .stat-card-label { @apply text-sm font-medium; color: var(--color-ink-subtle); }
   .stat-card-value {
-    /* 2xl on phones, where 30px figures crowded a two-column grid; same scale as .work-tile-value. */
-    @apply mt-3 text-2xl sm:text-3xl font-semibold tracking-tight tabular-nums;
+    @apply mt-1 font-semibold tabular-nums;
+    font-size: 1.75rem; line-height: 2.25rem; letter-spacing: -0.02em;
     color: var(--color-ink);
   }
   .stat-card-sub { @apply mt-1 text-xs; color: var(--color-ink-subtle); }
+  .stat-card .stat-card-icon { display: none; }
   .stat-card-icon {
     @apply shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-xl;
     background-color: var(--tone-brand-bg);
@@ -1294,52 +1379,36 @@
   /* The dashboard's primary tiles. A tile with nothing in it stays quiet; a
      tile with work in it takes on its tone, so the page reads at a glance
      without the user parsing four numbers. */
+  /* The Dashboard's work queue (D5): figures, not tiles. No box or fill: the label sits above
+     a large tabular figure, and a small dot says there's work in it (brand amber for "yours
+     to do", coral for missed, teal for new leads). The whole figure is the link. */
   .work-tile {
-    @apply flex flex-col gap-1 rounded-xl border p-4 transition-colors;
-    border-color: var(--color-border);
-    background-color: var(--color-surface);
+    @apply flex flex-col gap-1 rounded-lg -m-2 p-2 transition-colors min-w-0;
     color: var(--color-ink-subtle);
     transition-timing-function: var(--ease-emphasized);
   }
-  .work-tile:hover {
-    border-color: var(--color-brand-300);
-    box-shadow: var(--shadow-pop);
-  }
+  .work-tile > svg { display: none; }
+  .work-tile:hover { background-color: var(--color-secondary-bg); }
   .work-tile-value {
-    @apply text-2xl sm:text-3xl font-semibold tracking-tight tabular-nums;
+    @apply font-semibold tabular-nums;
+    font-size: 1.75rem; line-height: 2.25rem; letter-spacing: -0.02em;
     color: var(--color-ink);
   }
-  .work-tile-label { @apply text-xs sm:text-sm leading-snug; }
-
-  /* Tones read the tint tokens, so a tile with work in it stays legible on a
-     dark canvas instead of becoming a light patch. */
-  .work-tile--active {
-    background-color: var(--tone-brand-bg);
-    border-color: var(--tone-brand-border);
-    color: var(--tone-brand-fg);
+  .work-tile-label {
+    @apply order-first inline-flex items-center gap-1.5 text-xs font-medium uppercase leading-4;
+    letter-spacing: 0.04em;
   }
-  .work-tile--active .work-tile-value { color: var(--tone-brand-strong); }
-  .work-tile--warn {
-    background-color: var(--tone-amber-bg);
-    border-color: var(--tone-amber-border);
-    color: var(--tone-amber-fg);
+  .work-tile:is(.work-tile--active, .work-tile--warn, .work-tile--good) .work-tile-label::before {
+    content: ""; width: .375rem; height: .375rem; border-radius: 999px; flex-shrink: 0;
+    background: var(--color-highlight);
   }
-  .work-tile--warn .work-tile-value { color: var(--tone-amber-strong); }
-  .work-tile--good {
-    background-color: var(--tone-teal-bg);
-    border-color: var(--tone-teal-border);
-    color: var(--tone-teal-fg);
-  }
-  .work-tile--good .work-tile-value { color: var(--tone-teal-strong); }
+  .work-tile--warn .work-tile-label::before { background: var(--color-coral-500) !important; }
+  .work-tile--good .work-tile-label::before { background: var(--color-teal-500) !important; }
 
   /* Section that carries the page's primary answer. Slightly lifted off the
      canvas so it out-ranks the cards below it without shouting. */
-  .panel-primary {
-    @apply rounded-2xl border p-5 sm:p-6;
-    background-color: var(--color-surface);
-    border-color: var(--color-border-strong);
-    box-shadow: var(--shadow-pop);
-  }
+  /* No box (D5): the page's first section reads first by place and type, not a lifted card. */
+  .panel-primary { @apply p-0; }
 
   /* Empty state --------------------------------------------------------- */
   /* HTMX in-flight state. hx-indicator puts .htmx-request on the named
@@ -1676,7 +1745,9 @@
   background-color: var(--cv-wallpaper);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' fill='none' stroke='%23000' stroke-opacity='.05' stroke-width='1.5' stroke-linecap='round'%3E%3Ccircle cx='20' cy='20' r='6'/%3E%3Cpath d='M60 12l6 10H54z'/%3E%3Crect x='92' y='14' width='14' height='10' rx='3'/%3E%3Cpath d='M14 70c6-8 14-8 20 0'/%3E%3Ccircle cx='70' cy='66' r='3'/%3E%3Cpath d='M96 60l8 8m0-8l-8 8'/%3E%3Cpath d='M20 104h14M27 97v14'/%3E%3Crect x='56' y='98' width='16' height='12' rx='2'/%3E%3Ccircle cx='100' cy='104' r='7'/%3E%3C/svg%3E"); }
 .cv-thread-inner { max-width: 50rem; margin: 0 auto; }
-.cv-day { display: flex; justify-content: center; margin: 1rem 0 .625rem; }
+/* The day ("Today") stays pinned at the thread's top while its messages scroll by (D6), so
+   it's never half cut off by the top edge and read as a chip clipped under the header. */
+.cv-day { display: flex; justify-content: center; margin: 1rem 0 .625rem; position: sticky; top: .5rem; z-index: 1; pointer-events: none; }
 .cv-day span { padding: .25rem .625rem; border-radius: .5rem; background: var(--cv-chip); color: var(--cv-stamp);
                font-size: .75rem; box-shadow: 0 1px .5px rgba(11,20,26,.13); }
 .cv-empty { display: flex; flex-direction: column; align-items: center; gap: .5rem; margin: 3rem auto; max-width: 18rem; padding: 1.25rem;
@@ -2177,9 +2248,16 @@
 .cv-h { font-size: .9375rem; line-height: 1.375rem; letter-spacing: -.008em; }
 .cv-h-name { letter-spacing: -.012em; }
 
-/* Yellow for the one main action: Send. The mic in its place (an empty reply box) stays navy. */
-.cv-send:not(.cv-send--rec)[aria-label="Send"] { background: var(--color-amber-400); color: var(--color-on-amber); }
-.cv-send:not(.cv-send--rec)[aria-label="Send"]:hover:not(:disabled) { background: var(--color-amber-500); }
+/* Send is the composer's one action, so it's the neutral primary (D1), like every primary
+   button; disabled it's a grey well, not a faded colour. The mic in its place (an empty
+   reply box) is a quiet secondary. */
+.cv-send { background: var(--color-secondary-bg); color: var(--color-ink); }
+.cv-send:not(.cv-send--rec)[aria-label="Send"] { background: var(--color-primary); color: var(--color-on-primary); }
+.cv-send:not(.cv-send--rec)[aria-label="Send"]:hover:not(:disabled) { background: var(--color-primary-hover); }
+.cv-send:disabled, .cv-send:not(.cv-send--rec)[aria-label="Send"]:disabled {
+  opacity: 1; background: var(--color-secondary-bg); color: var(--color-ink-subtle);
+}
+.cv-send--rec { background: var(--color-coral-600); color: #fff; }
 /* "New messages", floating over the thread: solid navy, so it reads over any bubble. */
 .cv-pill { display: inline-flex; align-items: center; gap: .375rem; height: 2rem; padding: 0 .875rem; border-radius: 999px;
            font-size: .8125rem; font-weight: 600; color: #fff; background: var(--color-brand-600); }

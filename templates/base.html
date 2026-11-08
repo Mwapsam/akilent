@@ -287,9 +287,9 @@
         {% comment %}Everything that can be done is done; a paused channel is all that's left, so a
         count would sit short of full for good.{% endcomment %}
         <button type="button" class="ob-launch" x-data @click="$dispatch('ob-toggle')"
-                aria-label="Setup paused: everything you can do now is done">
-          {% include "components/icon.html" with name="pause" class="w-4 h-4 text-ink-subtle" %}
-          <span class="hidden sm:inline">Setup paused</span>
+                aria-label="Waiting on a channel: setup is done for now" title="Setup is done for now. A channel is waiting on its provider.">
+          {% include "components/icon.html" with name="clock" class="w-4 h-4 text-ink-subtle" %}
+          <span class="hidden sm:inline">Waiting on a channel</span>
         </button>
         {% else %}
         <button type="button" class="ob-launch" x-data @click="$dispatch('ob-toggle')"

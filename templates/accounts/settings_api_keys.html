@@ -1,6 +1,6 @@
 {% extends "accounts/settings_base.html" %}
 {% block settings_content %}
-<div class="space-y-6 max-w-3xl">
+<div class="space-y-6">
 
   {% if new_key %}
   <div class="rounded-xl border border-amber-300 tone-amber-bg px-4 py-3" role="status">
@@ -12,8 +12,8 @@
   </div>
   {% endif %}
 
-  <div class="card card-pad">
-    <h2 class="font-semibold mb-1">API keys</h2>
+  <div>
+    <h2 class="settings-section-title">API keys</h2>
     <p class="text-sm text-ink-subtle mb-4">
       Keys let your own website or app use Akilent. Give each place its own key, so you can
       revoke one without breaking the others.

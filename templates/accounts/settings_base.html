@@ -1,58 +1,48 @@
 {% extends "base.html" %}
 {% block title %}Settings — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
+{% comment %}
+Settings (D4, 2026-11-08): a grouped side list instead of ten tabs in a row, and every page
+in the same two-column sections (.settings-section: what it is on the left, the fields on
+the right, a hairline between sections, no cards). One width for every page, so the right
+edge doesn't move between tabs. At phone width the list folds into "Settings · Profile" and
+the sections stack.
+{% endcomment %}
 {% block page_header %}
 <div class="mb-6">
   <h1 class="text-2xl font-semibold tracking-tight">Settings</h1>
-  <p class="text-sm text-ink-subtle mt-1">Your profile, business details, security, team and developer tools.</p>
 </div>
 {% endblock %}
 
 {% block content %}
-<div class="border-b border-border mb-6 -mt-2">
-  <nav class="flex gap-1 overflow-x-auto" aria-label="Settings">
-    <a href="{% url 'settings-profile' %}"
-       class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
-       {% if active_tab == 'profile' %}border-brand-600 text-accent-strong{% else %}border-transparent text-ink-subtle hover:text-ink{% endif %}"
-       {% if active_tab == 'profile' %}aria-current="page"{% endif %}>Profile</a>
-    <a href="{% url 'settings-business' %}"
-       class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
-       {% if active_tab == 'business' %}border-brand-600 text-accent-strong{% else %}border-transparent text-ink-subtle hover:text-ink{% endif %}"
-       {% if active_tab == 'business' %}aria-current="page"{% endif %}>Business</a>
-    <a href="{% url 'settings-security' %}"
-       class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
-       {% if active_tab == 'security' %}border-brand-600 text-accent-strong{% else %}border-transparent text-ink-subtle hover:text-ink{% endif %}"
-       {% if active_tab == 'security' %}aria-current="page"{% endif %}>Security</a>
-    <a href="{% url 'settings-team' %}"
-       class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
-       {% if active_tab == 'team' %}border-brand-600 text-accent-strong{% else %}border-transparent text-ink-subtle hover:text-ink{% endif %}"
-       {% if active_tab == 'team' %}aria-current="page"{% endif %}>Team</a>
-    <a href="{% url 'settings-hours' %}"
-       class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
-       {% if active_tab == 'hours' %}border-brand-600 text-accent-strong{% else %}border-transparent text-ink-subtle hover:text-ink{% endif %}"
-       {% if active_tab == 'hours' %}aria-current="page"{% endif %}>Opening hours</a>
-    <a href="{% url 'settings-ai' %}"
-       class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
-       {% if active_tab == 'ai' %}border-brand-600 text-accent-strong{% else %}border-transparent text-ink-subtle hover:text-ink{% endif %}"
-       {% if active_tab == 'ai' %}aria-current="page"{% endif %}>AI</a>
-    <a href="{% url 'settings-tools' %}"
-       class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
-       {% if active_tab == 'tools' %}border-brand-600 text-accent-strong{% else %}border-transparent text-ink-subtle hover:text-ink{% endif %}"
-       {% if active_tab == 'tools' %}aria-current="page"{% endif %}>Optional tools</a>
-    <a href="{% url 'settings-integrations' %}"
-       class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
-       {% if active_tab == 'integrations' %}border-brand-600 text-accent-strong{% else %}border-transparent text-ink-subtle hover:text-ink{% endif %}"
-       {% if active_tab == 'integrations' %}aria-current="page"{% endif %}>Integrations</a>
-    <a href="{% url 'settings-api-keys' %}"
-       class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
-       {% if active_tab == 'api_keys' %}border-brand-600 text-accent-strong{% else %}border-transparent text-ink-subtle hover:text-ink{% endif %}"
-       {% if active_tab == 'api_keys' %}aria-current="page"{% endif %}>API keys</a>
-    <a href="{% url 'logs:messages' %}"
-       class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
-       {% if active_tab == 'activity' %}border-brand-600 text-accent-strong{% else %}border-transparent text-ink-subtle hover:text-ink{% endif %}"
-       {% if active_tab == 'activity' %}aria-current="page"{% endif %}>Activity log</a>
-  </nav>
-</div>
+{% with t=active_tab %}
+<div class="settings-layout">
+  <nav class="settings-nav" aria-label="Settings">
+    <details class="settings-nav-fold" x-data x-init="if (window.matchMedia('(min-width: 768px)').matches) $el.open = true">
+      <summary class="settings-nav-summary">Settings · <span class="text-ink">{% if t == 'profile' %}Profile{% elif t == 'security' %}Security{% elif t == 'business' %}Business{% elif t == 'team' %}Team{% elif t == 'hours' %}Opening hours{% elif t == 'ai' %}AI{% elif t == 'tools' %}Optional tools{% elif t == 'integrations' %}Integrations{% elif t == 'api_keys' %}API keys{% elif t == 'activity' %}Activity log{% endif %}</span></summary>
+      <div class="settings-nav-groups">
+        <p class="settings-nav-group">Account</p>
+        <a href="{% url 'settings-profile' %}" class="settings-nav-link" {% if t == 'profile' %}aria-current="page"{% endif %}>Profile</a>
+        <a href="{% url 'settings-security' %}" class="settings-nav-link" {% if t == 'security' %}aria-current="page"{% endif %}>Security</a>
 
-{% block settings_content %}{% endblock %}
+        <p class="settings-nav-group">Workspace</p>
+        <a href="{% url 'settings-business' %}" class="settings-nav-link" {% if t == 'business' %}aria-current="page"{% endif %}>Business</a>
+        <a href="{% url 'settings-team' %}" class="settings-nav-link" {% if t == 'team' %}aria-current="page"{% endif %}>Team</a>
+        <a href="{% url 'settings-hours' %}" class="settings-nav-link" {% if t == 'hours' %}aria-current="page"{% endif %}>Opening hours</a>
+        <a href="{% url 'settings-ai' %}" class="settings-nav-link" {% if t == 'ai' %}aria-current="page"{% endif %}>AI</a>
+        <a href="{% url 'settings-tools' %}" class="settings-nav-link" {% if t == 'tools' %}aria-current="page"{% endif %}>Optional tools</a>
+        <a href="{% url 'settings-integrations' %}" class="settings-nav-link" {% if t == 'integrations' %}aria-current="page"{% endif %}>Integrations</a>
+
+        <p class="settings-nav-group">Developer</p>
+        <a href="{% url 'settings-api-keys' %}" class="settings-nav-link" {% if t == 'api_keys' %}aria-current="page"{% endif %}>API keys</a>
+        <a href="{% url 'logs:messages' %}" class="settings-nav-link" {% if t == 'activity' %}aria-current="page"{% endif %}>Activity log</a>
+      </div>
+    </details>
+  </nav>
+
+  <div class="settings-main">
+    {% block settings_content %}{% endblock %}
+  </div>
+</div>
+{% endwith %}
 {% endblock %}

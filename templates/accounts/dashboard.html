@@ -65,7 +65,7 @@
   {% endcomment %}
   <section class="panel-primary" aria-labelledby="work-queue-label">
     <div class="flex items-center justify-between gap-3 mb-4">
-      <h2 class="text-base font-semibold text-ink" id="work-queue-label">
+      <h2 class="text-sm font-semibold text-ink" id="work-queue-label">
         What needs your attention today
       </h2>
       <span class="hidden sm:inline text-xs text-ink-subtle">Updates automatically</span>
@@ -73,26 +73,14 @@
     {% include "accounts/_dashboard_work_queue.html" %}
   </section>
 
-  {# ── Quick actions ─────────────────────────────────────────── #}
-  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
-    <a href="/inbox/" class="card card-pad flex items-center gap-3 card-hover">
-      {% include "components/icon.html" with name="message-circle" class="w-5 h-5 text-accent shrink-0" %}
-      <span class="text-sm font-medium text-ink">Go to Inbox</span>
-    </a>
+  {# ── Quick actions: a row of quiet buttons, not four cards (D5) ── #}
+  <div class="flex flex-wrap gap-2 mt-8" aria-label="Quick actions">
+    <a href="/inbox/" class="btn btn-secondary">{% include "components/icon.html" with name="message-circle" class="w-4 h-4" %}Go to Inbox</a>
     {% if "email" in enabled_channels or WHATSAPP_ENABLED %}
-    <a href="{% if "email" in enabled_channels %}/email/campaigns/new/{% else %}/campaigns/new/{% endif %}" class="card card-pad flex items-center gap-3 card-hover">
-      {% include "components/icon.html" with name="send" class="w-5 h-5 text-accent shrink-0" %}
-      <span class="text-sm font-medium text-ink">Send campaign</span>
-    </a>
+    <a href="{% if "email" in enabled_channels %}/email/campaigns/new/{% else %}/campaigns/new/{% endif %}" class="btn btn-secondary">{% include "components/icon.html" with name="send" class="w-4 h-4" %}Send campaign</a>
     {% endif %}
-    <a href="/contacts/" class="card card-pad flex items-center gap-3 card-hover">
-      {% include "components/icon.html" with name="users" class="w-5 h-5 text-accent shrink-0" %}
-      <span class="text-sm font-medium text-ink">Add contacts</span>
-    </a>
-    <a href="/automations/" class="card card-pad flex items-center gap-3 card-hover">
-      {% include "components/icon.html" with name="workflow" class="w-5 h-5 text-accent shrink-0" %}
-      <span class="text-sm font-medium text-ink">Follow-up automation</span>
-    </a>
+    <a href="/contacts/" class="btn btn-secondary">{% include "components/icon.html" with name="users" class="w-4 h-4" %}Add contacts</a>
+    <a href="/automations/" class="btn btn-secondary">{% include "components/icon.html" with name="workflow" class="w-4 h-4" %}Follow-up automation</a>
   </div>
 
   {% comment %}
@@ -100,7 +88,7 @@
     Their aggregates are deliberately off the first byte. ───────────
   {% endcomment %}
   <div id="dashboard-panels"
-       class="space-y-6 mt-6"
+       class="space-y-10 mt-10"
        hx-get="{% url 'dashboard-panels' %}"
        hx-trigger="load"
        hx-swap="outerHTML"

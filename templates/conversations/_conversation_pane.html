@@ -263,7 +263,10 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
                       </span>
                     </div>
                   </div>
+                  {# One of a run of failures with the same reason: a mark here, the reason on the run's last (chat.js items). #}
+                  <div class="cv-fail is-mark" x-show="item.failMark" x-cloak>Not sent</div>
                   <div class="cv-fail" :class="{ 'is-unknown': item.m.unknown }" x-show="item.showFailure" x-data="{ why: false }">
+                    <strong class="font-medium" x-show="item.failRun > 1" x-cloak x-text="item.failRun + ' messages not delivered ·'"></strong>
                     <svg x-show="!item.m.failureFix || item.m.unknown" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
                     {% comment %}A failure that's about the WhatsApp account (billing, display name,
                     connection) rather than this message (views._failure gives only those a

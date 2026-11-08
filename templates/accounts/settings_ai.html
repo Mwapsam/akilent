@@ -1,15 +1,16 @@
 {% extends "accounts/settings_base.html" %}
 {% block settings_content %}
-<div class="card card-pad max-w-2xl space-y-4">
+<section class="settings-section">
   <div>
-    <h2 class="font-semibold mb-1">AI suggestions</h2>
-    <p class="text-sm text-ink-subtle">
+    <h2 class="settings-section-title">AI suggestions</h2>
+    <p class="settings-section-desc">
       When a customer writes and none of your automations answered, AI can draft a reply for your team.
       A person on your team reads the suggestion, edits it if needed, and presses Send.
       <strong>AI sends nothing on its own unless you choose automatic replies below</strong>, and then only for the
       kinds of question you tick. Everything else in Akilent works the same with AI switched off.
     </p>
   </div>
+  <div class="settings-section-body">
 
   {% if not site_configured %}
   <div class="alert alert-info">AI isn't set up on this Akilent installation yet. Ask your administrator to configure an AI provider.</div>
@@ -153,5 +154,6 @@
     </ul>
   </div>
   {% endif %}
-</div>
+  </div>
+</section>
 {% endblock %}

@@ -1,13 +1,11 @@
 {% extends "accounts/settings_base.html" %}
 {% block settings_content %}
-<div class="card card-pad max-w-xl">
-  <h2 class="font-semibold mb-1">Business details</h2>
-  <p class="text-sm text-ink-subtle mb-4">
-    Anti-spam law requires every marketing email to show the sender's physical
-    mailing address. We print these details at the bottom of each campaign you
-    send, so recipients know who is contacting them. Password resets and other
-    account emails don't need it.
-  </p>
+<section class="settings-section">
+  <div>
+    <h2 class="settings-section-title">Business details</h2>
+    <p class="settings-section-desc">Anti-spam law requires every marketing email to show the sender's physical mailing address. We print these details at the bottom of each campaign you send, so recipients know who is contacting them. Password resets and other account emails don't need it.</p>
+  </div>
+  <div class="settings-section-body">
 
   {% if has_address %}
   <div class="rounded-lg border border-border p-3 mb-5 text-sm">
@@ -51,5 +49,6 @@
     <p class="text-sm text-ink-subtle">Only an owner or admin can change business details.</p>
     {% endif %}
   </form>
-</div>
+  </div>
+</section>
 {% endblock %}

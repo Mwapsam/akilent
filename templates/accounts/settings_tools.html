@@ -1,12 +1,11 @@
 {% extends "accounts/settings_base.html" %}
 {% block settings_content %}
-<div class="card card-pad max-w-xl">
-  <h2 class="font-semibold mb-1">Optional tools</h2>
-  <p class="text-sm text-ink-subtle mb-4">
-    Akilent is about your customer conversations. These add extra sections to
-    it — turn one on if your business needs it, off if it doesn't. Nothing is
-    deleted either way.
-  </p>
+<section class="settings-section">
+  <div>
+    <h2 class="settings-section-title">Optional tools</h2>
+    <p class="settings-section-desc">Akilent is about your customer conversations. These add extra sections to it — turn one on if your business needs it, off if it doesn't. Nothing is deleted either way.</p>
+  </div>
+  <div class="settings-section-body">
   {% if not tools %}
   <p class="text-sm text-ink-subtle">Your plan doesn't include any optional tools. <a href="{% url 'billing:plans' %}" class="text-accent underline">See plans</a>.</p>
   {% else %}
@@ -24,5 +23,6 @@
     <button class="btn btn-primary" type="submit">Save</button>
   </form>
   {% endif %}
-</div>
+  </div>
+</section>
 {% endblock %}

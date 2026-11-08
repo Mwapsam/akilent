@@ -353,6 +353,23 @@ function registerChat() {
         if (a.type === 'msg' && b.type === 'msg' && a.m.direction === b.m.direction && !!a.m.byAi === !!b.m.byAi
             && !a.showFailure && this.minute(b.m.ts) - this.minute(a.m.ts) <= GROUP_MINUTES) a.showMeta = false;
       }
+      // Failed sends in a row for the same reason say it once (D6): every bubble keeps a small
+      // "Not sent" mark, and only the last of the run carries the reason and its actions, with
+      // how many it covers ("5 messages not delivered"). A message whose outcome is unknown is
+      // never folded: each one needs its own choice.
+      const msgs = out.filter((o) => o.type === 'msg');
+      for (let i = 0; i < msgs.length; i++) {
+        const a = msgs[i];
+        if (!a.showFailure || a.m.unknown || a.m.status !== 'failed') continue;
+        let j = i;
+        while (j + 1 < msgs.length && msgs[j + 1].showFailure && !msgs[j + 1].m.unknown
+               && msgs[j + 1].m.status === 'failed' && this.failureText(msgs[j + 1].m) === this.failureText(a.m)) j++;
+        if (j > i) {
+          for (let k = i; k < j; k++) { msgs[k].showFailure = false; msgs[k].failMark = true; }
+          msgs[j].failRun = j - i + 1;
+        }
+        i = j;
+      }
       return out;
     },
     minute(ts) { return Math.floor(new Date(ts).getTime() / 60000); },

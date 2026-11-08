@@ -95,7 +95,8 @@
   </select>
   {% endif %}
   {% if sort %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
-  <button class="btn btn-secondary btn-sm">Filter</button>
+  {# Search and the menus apply as you type (hx-trigger above); the button is for no-JS only. #}
+  <noscript><button class="btn btn-secondary btn-sm">Filter</button></noscript>
   {% if filtered %}<a href="{% url 'contacts:list' %}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
 </form>
 

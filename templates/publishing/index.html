@@ -15,28 +15,29 @@
 {% next_action_card %}
 
 {# Where every unfinished post stands: each post is in exactly one bucket. #}
-<div class="card card-pad mb-4">
-  <h2 class="font-semibold text-ink mb-3">Where your posts stand</h2>
-  {% comment %}Only the states that have posts in them get a tile; the empty ones are named
-  on one line underneath, so the card stays short.{% endcomment %}
-  <ul class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+<section class="mb-8" aria-labelledby="posts-stand">
+  <h2 id="posts-stand" class="text-sm font-semibold text-ink mb-3">Where your posts stand</h2>
+  {% comment %}Figures, not tiles (D5): a small label above each number, no box; a state that
+  needs you (Failed) says so with a coral figure and dot, not a red box. Only the states that
+  have posts in them are shown; the empty ones are named on one line underneath.{% endcomment %}
+  <ul class="flex flex-wrap gap-x-10 gap-y-4">
     {% for b in work.buckets %}{% if b.count %}
-    <li class="rounded-lg border border-border px-3 py-2{% if b.warn %} tone-coral-bg{% endif %}" data-bucket="{{ b.key }}">
-      {% if b.url %}<a href="{{ b.url }}" class="block" aria-label="{{ b.label }}: {{ b.count }} post{{ b.count|pluralize }}">{% endif %}
-        <p class="text-xl font-bold text-ink">{{ b.count }}</p>
-        <p class="text-xs text-ink-subtle">{{ b.label }}</p>
+    <li class="metric" data-bucket="{{ b.key }}">
+      {% if b.url %}<a href="{{ b.url }}" class="group block" aria-label="{{ b.label }}: {{ b.count }} post{{ b.count|pluralize }}">{% endif %}
+        <p class="metric-label flex items-center gap-1.5">{% if b.warn %}<span class="w-1.5 h-1.5 rounded-full bg-coral-500" aria-hidden="true"></span>{% endif %}{{ b.label }}</p>
+        <p class="metric-value{% if b.warn %} text-[var(--tone-coral-fg)]{% endif %} group-hover:underline decoration-1 underline-offset-4">{{ b.count }}</p>
       {% if b.url %}</a>{% endif %}
     </li>
     {% endif %}{% endfor %}
-    <li class="rounded-lg border border-border px-3 py-2">
-      <p class="text-xl font-bold text-ink">{{ published_this_month }}</p>
-      <p class="text-xs text-ink-subtle">Published this month</p>
+    <li class="metric">
+      <p class="metric-label">Published this month</p>
+      <p class="metric-value">{{ published_this_month }}</p>
     </li>
   </ul>
   {% if work.empty_labels %}
-  <p class="text-xs text-ink-subtle mt-3" data-empty-buckets>Nothing in: {{ work.empty_labels|join:", " }}.</p>
+  <p class="metric-note mt-3" data-empty-buckets>Nothing in: {{ work.empty_labels|join:", " }}.</p>
   {% endif %}
-</div>
+</section>
 
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 
