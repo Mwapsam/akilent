@@ -295,11 +295,14 @@ def test_the_reminders_tab_is_gone_and_its_link_lands_on_follow_ups(signed_in, t
 
 
 @pytest.mark.django_db
-def test_the_inbox_header_link_uses_the_badge_count(signed_in, team):
+def test_follow_ups_are_an_inbox_tab_counted_in_the_inbox_badge(signed_in, team):
+    """The header's Follow-ups link became the Inbox's Follow-ups tab; the count is in the
+    sidebar's Inbox badge (/inbox/badge/: unread + follow-ups due)."""
     html = signed_in.get("/inbox/").content.decode()
-    link = html[html.index("data-inbox-followups-link") :]
-    link = link[: link.index("</a>")]
-    assert 'hx-get="/inbox/followups/badge/"' in link
+    assert "data-inbox-followups-link" not in html
+    tabs = html[html.index('class="section-tabs ') :][:3000]
+    assert 'href="/inbox/followups/"' in tabs
+    assert 'hx-get="/inbox/badge/"' in html
     assert "Follow-ups due" not in html
 
 

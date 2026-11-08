@@ -1,0 +1,29 @@
+{% comment %}The current section's tabs (apps/core/sections.py), shown above the page by base.html
+on every page of a section with more than one tab: Inbox › Conversations · Comments ·
+Follow-ups, Customers › All customers · Interested · Orders, and so on.
+
+data-instant-tabs (static/js/app.js): the clicked tab takes the active look as its request
+starts, with data-skeleton if the page is slow. At phone width the row scrolls sideways
+(never wraps), with the active tab scrolled into view. A locked tab opens the locked page.
+Content Studio keeps its own tabs (publishing/_subnav.html); Inbox settings has its own.
+compact=True: less space below, for the full-height Inbox.{% endcomment %}
+{% load nav %}
+{% nav_sections as nav %}
+{% with sec=nav.current %}
+{% if sec and sec.show_tab_bar %}
+<div class="section-tabs-wrap {% if compact %}mb-2{% else %}mb-6 -mt-2{% endif %}">
+<nav class="section-tabs flex items-center gap-1 border-b border-border overflow-x-auto whitespace-nowrap snap-x [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+     aria-label="{{ sec.label }}"
+     data-instant-tabs data-active-class="border-accent text-accent" data-inactive-class="border-transparent text-ink-subtle hover:text-ink hover:border-gray-300"
+     x-data x-init="const a = $el.querySelector('[aria-current=page]'); const fit = () => $el.classList.toggle('is-scrollable', $el.scrollWidth > $el.clientWidth + 1); fit(); window.addEventListener('resize', fit, { passive: true }); if (a && $el.scrollWidth > $el.clientWidth) a.scrollIntoView({ inline: 'center', block: 'nearest' })">
+  {% for tab in sec.tabs %}
+  <a href="{{ tab.href }}" data-skeleton="{{ tab.skeleton }}"{% if tab.active %} aria-current="page"{% endif %}{% if tab.locked %} title="{{ tab.label }} (not in your plan)"{% endif %}
+     class="snap-start px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors inline-flex items-center gap-1
+       {% if tab.active %}border-accent text-accent{% else %}border-transparent text-ink-subtle hover:text-ink hover:border-gray-300{% endif %}">
+    {{ tab.label }}{% if tab.locked %} {% include "components/icon.html" with name="lock" class="w-3.5 h-3.5" %}<span class="sr-only">(locked)</span>{% endif %}
+  </a>
+  {% endfor %}
+</nav>
+</div>
+{% endif %}
+{% endwith %}

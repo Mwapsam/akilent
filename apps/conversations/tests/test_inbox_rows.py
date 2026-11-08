@@ -345,7 +345,7 @@ class TestInboxLayout:
             )
         ]
         assert 'name="channel"' in bar and 'class="inbox-views-btn"' in bar
-        assert "Follow-ups" in bar and "Set-up" in bar
+        assert "Inbox settings" in bar
         assert "hx-swap-oob" not in bar  # only the poll's copy swaps out of band
         frag = client.get(
             "/inbox/feed/?view=all", HTTP_HX_REQUEST="true"

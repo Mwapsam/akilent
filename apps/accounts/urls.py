@@ -14,6 +14,7 @@ urlpatterns = [
     path("signup/verify/", views.signup_verify, name="signup-verify"),
     path("onboarding/", views.onboarding, name="onboarding"),
     path("onboarding/tour-seen/", views.welcome_tour_seen, name="welcome-tour-seen"),
+    path("nav-notice-seen/", views.nav_notice_seen, name="nav-notice-seen"),
     path(
         "onboarding/next/<slug:key>/dismiss/",
         views.next_action_dismiss,

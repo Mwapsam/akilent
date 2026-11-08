@@ -7,6 +7,8 @@ app_name = "conversations"
 urlpatterns = [
     path("", views.inbox, name="inbox"),
     path("feed/", views.inbox_feed, name="inbox_feed"),
+    # The sidebar's Inbox count (unread for me + follow-ups due for me).
+    path("badge/", views.inbox_badge, name="inbox_badge"),
     # Instagram and Facebook comments in one place (comments_views).
     path("comments/", comments_views.comments_inbox, name="comments"),
     path("comments/post/", comments_views.comment_on_post, name="comments_post"),
@@ -40,6 +42,9 @@ urlpatterns = [
         name="followup_action",
     ),
     path("saved-replies/", views.saved_replies, name="saved_replies"),
+    # Inbox settings: Saved replies · Teams & routing.
+    path("settings/", views.inbox_settings, name="inbox_settings"),
+    path("settings/teams/", views.inbox_settings_teams, name="inbox_settings_teams"),
     path(
         "saved-replies/<int:pk>/delete/",
         views.saved_reply_delete,

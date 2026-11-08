@@ -1,57 +1,39 @@
 {% comment %}Primary nav. Shared by the desktop sidebar and the mobile drawer.
-Pass collapsible=True in the desktop sidebar so group labels + link text hide
-when the rail is collapsed (icons + tooltips remain).
-Active state comes from apps/core/templatetags/nav.py (path-prefix based).
-Arrow Up/Down move through every link in the nav; groups are labelling only.{% endcomment %}
+Pass collapsible=True in the desktop sidebar so link text hides when the rail is collapsed
+(icons + tooltips remain).
+
+The six main items come from apps/core/sections.py, the same registry as the tab bar under
+the page header (components/_section_tabs.html) and Ctrl+K: a main item is active on any of
+its tabs' pages, and hidden when all its tabs are hidden or locked. Connections stays its
+own item while Meta App Review is open (the reviewer instructions say Settings → Channels).
+Arrow Up/Down move through every link in the nav.{% endcomment %}
+{% load nav %}
+{% nav_sections as nav %}
 <nav class="flex-1 space-y-0.5 px-3" aria-label="Primary" @keydown.arrow-up="navFocusLink($event, 'up')" @keydown.arrow-down="navFocusLink($event, 'down')">
 
-  {% include "components/_nav_item.html" with href="/inbox/" label="Inbox" icon="message-circle" match="inbox" exclude="inbox/followups inbox/forms inbox/comments" collapsible=collapsible %}
-  {% include "components/_nav_item.html" with href="/dashboard/" label="Dashboard" icon="home" collapsible=collapsible %}
+  {% for s in nav.sections %}
+  {% include "components/_nav_item.html" with href=s.href label=s.label icon=s.icon match=s.match exclude=s.exclude active=s.active badge_url=s.badge_url collapsible=collapsible %}
+  {% endfor %}
 
-  <div role="group" aria-label="Work">
-    <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Work</p>
-    {% include "components/_nav_item.html" with href="/contacts/" label="Customers" icon="users" collapsible=collapsible %}
-    {% if "sales" not in tools_off %}
-    {% include "components/_nav_item.html" with href="/sales/" label="Interested" icon="building" match="sales" feature="sales" collapsible=collapsible %}
-    {% endif %}
-    {% if "orders" not in tools_off %}
-    {% include "components/_nav_item.html" with href="/orders/" label="Orders" icon="layout-template" match="orders" feature="orders" collapsible=collapsible %}
-    {% endif %}
-    {% if CAMPAIGNS_ENABLED %}{% include "components/_nav_item.html" with href="/campaigns/" label="Campaigns" icon="send" match="campaigns email/campaigns scheduled" collapsible=collapsible %}{% endif %}
-    {% if "instagram" in enabled_channels or "facebook" in enabled_channels %}
-    {% include "components/_nav_item.html" with href="/inbox/comments/" label="Comments" icon="chat" match="inbox/comments instagram/rules" collapsible=collapsible %}
-    {% endif %}
-    {% include "components/_nav_item.html" with href="/inbox/followups/" label="Follow-ups" icon="calendar" match="inbox/followups" collapsible=collapsible badge_url="/inbox/followups/badge/" %}
-    {% if released.support %}
-    {% include "components/_nav_item.html" with href="/support/" label="Support" icon="life-buoy" match="support" collapsible=collapsible %}
-    {% endif %}
-    {% include "components/_nav_item.html" with href="/publishing/" label="Content Studio" icon="image" match="publishing" feature="content_studio" collapsible=collapsible %}
-    {% include "components/_nav_item.html" with href="/automations/" label="Automations" icon="workflow" feature="automations" collapsible=collapsible %}
-    {% include "components/_nav_item.html" with href="/build/" label="Build" icon="sparkles" match="build" feature="automations" collapsible=collapsible %}
-    {% include "components/_nav_item.html" with href="/inbox/forms/" label="Forms" icon="list" match="inbox/forms" feature="automations" collapsible=collapsible %}
-    {% include "components/_nav_item.html" with href="/insights/" label="Insights" icon="bar-chart" match="insights email/insights" collapsible=collapsible %}
-    {% include "components/_nav_item.html" with href="/logs/messages/" label="Message history" icon="list" match="logs" collapsible=collapsible %}
-  </div>
-
-  {% if CAMPAIGNS_ENABLED %}
-  <div role="group" aria-label="Tools">
-    <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Tools</p>
-    {% include "components/_nav_item.html" with href="/email/templates/" label="Templates" icon="layout-template" collapsible=collapsible %}
-  </div>
-  {% endif %}
-
-  <div role="group" aria-label="Settings">
-    <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Settings</p>
-    {% if enabled_channels %}{% include "components/_nav_item.html" with href="/channels/" label="Connections" icon="mail" match="channels email/domains whatsapp instagram facebook" collapsible=collapsible %}{% endif %}
-    {% include "components/_nav_item.html" with href="/billing/plans/" label="Billing" icon="card" match="billing" collapsible=collapsible %}
+  <div class="pt-3 mt-3 border-t border-border space-y-0.5" role="group" aria-label="Account">
+    {% if enabled_channels %}{% include "components/_nav_item.html" with href="/channels/" label="Connections" icon="mail" match="channels email/domains whatsapp instagram facebook" exclude="instagram/rules whatsapp/templates" collapsible=collapsible %}{% endif %}
     {% url 'settings-profile' as settings_url %}
-    {% include "components/_nav_item.html" with href=settings_url label="Settings" icon="settings" match="settings" collapsible=collapsible %}
-  </div>
+    {% include "components/_nav_item.html" with href=settings_url label="Settings" icon="settings" match="settings logs" collapsible=collapsible %}
 
-  <div role="group" aria-label="Resources">
-    <p class="nav-group-label{% if collapsible %} hidden lg:block{% endif %}" {% if collapsible %}x-show="!$store.ui.sidebarCollapsed" x-cloak{% endif %} tabindex="-1">Resources</p>
-    {% include "components/_nav_item.html" with href="/help/" label="Help & guides" icon="life-buoy" match="help" collapsible=collapsible %}
-    {% include "components/_nav_item.html" with href="/docs/" label="Developer / API docs" icon="code-bracket" match="docs" collapsible=collapsible %}
+    {% comment %}Help: a small menu in place, not a page.{% endcomment %}
+    <div x-data="{ open: {% if '/help/' in request.path or '/docs/' in request.path or '/support/' in request.path %}true{% else %}false{% endif %} }">
+      <button type="button" class="nav-link w-full {% is_nav_active 'help docs support' as help_on %}{% if help_on %}nav-link-active{% endif %}" title="Help"
+              @click="open = !open" :aria-expanded="open" aria-controls="nav-help-{% if collapsible %}desktop{% else %}mobile{% endif %}">
+        {% include "components/icon.html" with name="life-buoy" class="w-5 h-5 shrink-0" %}
+        {% if collapsible %}<span class="hidden lg:inline" x-show="!$store.ui.sidebarCollapsed" x-cloak>Help</span>{% else %}<span>Help</span>{% endif %}
+        {% include "components/icon.html" with name="chevron-down" class="w-4 h-4 ml-auto shrink-0 transition-transform" %}
+      </button>
+      <div id="nav-help-{% if collapsible %}desktop{% else %}mobile{% endif %}" x-show="open" x-cloak class="space-y-0.5 {% if collapsible %}lg:pl-3{% else %}pl-3{% endif %}">
+        {% include "components/_nav_item.html" with href="/help/" label="Help & guides" icon="book-open" match="help" collapsible=collapsible %}
+        {% include "components/_nav_item.html" with href="/docs/" label="Developer / API docs" icon="code-bracket" match="docs" collapsible=collapsible %}
+        {% if released.support %}{% include "components/_nav_item.html" with href="/support/" label="Contact support" icon="mail" match="support" collapsible=collapsible %}{% endif %}
+      </div>
+    </div>
   </div>
 
   {% if is_operator and not viewing_as %}

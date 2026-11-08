@@ -2435,3 +2435,32 @@ Plan: the Inbox-area pages plan of 2026-11-08, Stage 1 (approved).
   - **Apply to existing comments** (last 30 days, up to 2000): a preview of how many will be hidden or flagged, then a background job (`apply_rules_to_existing`) with a progress card. Moderation only: no email, lead or DM, delete becomes hide, safe to run twice.
   - The activity log in plain words: "Already hidden", "Couldn't hide", "Lead · team emailed", never "None"; "team emailed" only when the email was really sent (`ModerationLog.emailed`, with `backfill`; migration `instagram/0021`).
 - **Verification:** `test_flow_status.py`, the publish tests in `test_forms_complete.py` and `test_flows.py` (multipart parts), `test_rule_lint_backfill.py` (23). conversations, instagram, facebook, whatsapp suites green; ruff and mypy clean. Prod live Flow publish on the WABA still to do.
+
+### Entry 43: Inbox pages Stage 2, the sidebar becomes six sections (2026-11-08)
+Plan: the Inbox-area pages plan of 2026-11-08, Stage 2 (Phase N of 2026-11-05, as revised).
+
+- **One registry** (`apps/core/sections.py`): Home · Inbox · Customers · Campaigns · Content Studio · Automations, each with its tabs. The sidebar (`components/_nav.html`), the tab bar and Ctrl+K all read it, worked out once per request (`{% nav_sections %}`, no queries). Every page keeps its URL; nothing redirects except the two set-up pages below.
+  - Tabs: Home › Overview · Insights; Inbox › Conversations · Comments (Instagram or Facebook on) · Follow-ups; Customers › All customers · Interested · Orders; Campaigns › Campaigns · Message templates; Automations › Automations · Forms · Build with AI · Why didn't it reply?
+  - A tab is hidden when it doesn't apply (channel off, optional tool switched off) and locked when the plan lacks it (opens the locked page). A main item with no usable tab is hidden. Exactly one main item is active, in the server render and after Back (each item's `data-nav-exclude` lists other sections' pages under its prefix: `/inbox/forms/` is Automations).
+- **The tab bar** (`components/_section_tabs.html`) renders once from `base.html` above any section page with more than one tab: `data-instant-tabs` and skeletons as in Content Studio; at phone width it scrolls sideways with faded edges and the current tab in view; the full-height Inbox gets a compact one. Content Studio keeps its own tabs.
+- **Kept for Meta App Review** (`docs/ops/instagram-app-review.md`): Connections stays in the sidebar, Settings › Integrations stays a tab, Content Studio › Channels is unchanged, and "Inbox → Comments" is now literally a tab.
+- **Below the six:** Connections, Settings (now with an **Activity log** tab: the old Message history, `logs/messages.html` extends the settings shell), and a **Help** menu (Help & guides, API docs, Contact support when released: `/support/` is businesses writing to Akilent, so it isn't an Inbox tab). Billing moved to the account menu as "Billing & plans".
+- **Inbox settings** (`conversations/inbox_settings_base.html`): Saved replies · Teams & routing (`/inbox/settings/teams/`, the teams and the routing rules on one page; `/inbox/teams/` and `/inbox/routing-rules/` go there, and their forms come back there). The inbox bar's Set-up menu and Follow-ups button became one Inbox settings link; Forms left that menu for Automations.
+- **Inbox badge** (`/inbox/badge/`): unread conversations for me (assigned to me, to nobody, or to one of my teams with nobody picked) plus follow-ups due for me. Unread is shared by the team like a shared mailbox. One badge per nav, and only the visible nav's copy asks (the existing intersect/visibility rule); it also refreshes on `inbox-refresh`.
+- **Ctrl+K** lists every section, tab and account page from the registry, and finds moved pages by their old names ("Message history: now Settings › Activity log").
+- **"Navigation got simpler"**: a one-time card for people who were members before 2026-11-08, listing where pages moved; "Got it" is remembered on the membership (`Membership.nav_notice_seen_at`, migration `accounts/0030`), so it doesn't come back on another device.
+- Help: Getting started says Home › Insights; other help paths (Inbox → Comments, Settings → Integrations, Settings → AI) still hold.
+- **Verification:** `apps/core/tests/test_nav_sections.py` (47):
+  - the sections for each gating;
+  - every old URL's section and tab;
+  - locked tabs and hidden sections;
+  - the browser excludes;
+  - the sidebar, the account menu and the tab bar;
+  - one badge per nav and its counting rules;
+  - Inbox settings and its redirects;
+  - Activity log in Settings;
+  - Ctrl+K and old names;
+  - the notice once and never for new members;
+  - query budgets: badge ≤ 12, registry 0.
+
+  Updated for the new layout: nav tags, billing lock, follow-ups surfaces, inbox bar, studio badge and Facebook rules-card tests. Tailwind rebuilt (4.3.3).

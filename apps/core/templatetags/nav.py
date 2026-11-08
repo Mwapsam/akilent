@@ -71,9 +71,65 @@ def nav_active(context, *targets, exact=False, exclude="", css="nav-link-active"
 
 
 @register.simple_tag(takes_context=True)
-def is_nav_active(context, *targets, exact=False, exclude=""):
-    """Boolean form of :func:`nav_active` — handy for ``aria-current``."""
+def is_nav_active(context, *targets, exact=False, exclude="", force=""):
+    """Boolean form of :func:`nav_active` — handy for ``aria-current``.
+
+    ``force`` (True/False) is a state already worked out, e.g. by the section registry,
+    which knows a main item is active on any of its tabs; "" means match ``targets``.
+    """
+    if force is not None and force != "":
+        return bool(force)
     return bool(nav_active(context, *targets, exact=exact, exclude=exclude))
+
+
+@register.simple_tag(takes_context=True)
+def nav_sections(context):
+    """The sidebar's sections and the current one (``apps.core.sections.build``), worked
+    out once per request: the desktop nav, the phone nav, the tab bar and Ctrl+K share it."""
+    from apps.core import sections
+
+    request = context.get("request")
+    cached = getattr(request, "_nav_sections", None) if request is not None else None
+    if cached is not None:
+        return cached
+    result = sections.build(context, _current_path(context))
+    if request is not None:
+        request._nav_sections = result
+    return result
+
+
+@register.simple_tag(takes_context=True)
+def nav_notice(context):
+    """Whether to show the one-time "Navigation got simpler" notice: to people who were
+    members before the sidebar changed and haven't closed it (Membership.nav_notice_seen_at).
+    Never while support views a workspace, never in a background request."""
+    from apps.accounts.utils import current_membership
+    from apps.core import sections
+    from apps.core.htmx import is_background
+
+    request = context.get("request")
+    if (
+        request is None
+        or not getattr(request, "user", None)
+        or not request.user.is_authenticated
+    ):
+        return False
+    if is_background(request):
+        return False
+    membership = current_membership(request)
+    return bool(
+        membership
+        and membership.nav_notice_seen_at is None
+        and membership.created_at < sections.NAV_CHANGED_AT
+    )
+
+
+@register.simple_tag(takes_context=True)
+def palette_pages(context):
+    """Ctrl+K's "Go to" items from the section registry (``sections.palette_items``)."""
+    from apps.core import sections
+
+    return sections.palette_items(context, nav_sections(context))
 
 
 @register.simple_tag
@@ -90,3 +146,11 @@ def nav_targets(*targets):
             candidate = "/" + candidate.strip("/") + "/"
         paths.append(candidate)
     return " ".join(paths)
+
+
+@register.simple_tag
+def nav_moved():
+    """(old name, where it is now) pairs for the "Navigation got simpler" notice."""
+    from apps.core import sections
+
+    return sections.MOVED

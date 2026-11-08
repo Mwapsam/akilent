@@ -142,8 +142,9 @@ def test_without_the_facebook_inbox_there_is_no_rules_card(client):
     client.force_login(user)
 
     html = client.get("/facebook/").content.decode()
+    page = html[html.index('<main id="main"') : html.index("</main>")]
 
-    assert "Comment rules" not in html
+    assert "Comment rules" not in page
 
 
 def test_diagnose_explains_an_instagram_only_rule():

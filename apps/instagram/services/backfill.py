@@ -151,3 +151,45 @@ def status_key(account_id: int) -> str:
 
 def lock_key(account_id: int) -> str:
     return f"comment-rules-backfill-lock:{account_id}"
+
+
+def get_status(account_id: int) -> dict | None:
+    """The background job's last status, or None; a cache outage never breaks the page."""
+    from django.core.cache import cache
+
+    try:
+        return cache.get(status_key(account_id))
+    except Exception:
+        logger.warning("rules backfill: status unavailable for account %s", account_id)
+        return None
+
+
+def set_status(account_id: int, value: dict, timeout: int) -> None:
+    from django.core.cache import cache
+
+    try:
+        cache.set(status_key(account_id), value, timeout)
+    except Exception:
+        logger.warning(
+            "rules backfill: couldn't save status for account %s", account_id
+        )
+
+
+def take_lock(account_id: int) -> bool:
+    """True if no other run is going (or the cache can't say: the per-comment log check
+    still stops anything being acted on twice)."""
+    from django.core.cache import cache
+
+    try:
+        return bool(cache.add(lock_key(account_id), 1, 60 * 60))
+    except Exception:
+        return True
+
+
+def release_lock(account_id: int) -> None:
+    from django.core.cache import cache
+
+    try:
+        cache.delete(lock_key(account_id))
+    except Exception:
+        pass

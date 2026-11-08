@@ -67,17 +67,19 @@ class PrimaryNavCurrentLinkTests(SimpleTestCase):
     Follow-ups and Forms pages too.
     """
 
+    # The sidebar's main item for each page (apps/core/sections.py): Follow-ups is an
+    # Inbox tab, Forms an Automations tab, Insights a Home tab, the Activity log Settings.
     ROUTES = {
         "/inbox/": "/inbox/",
         "/inbox/conv_abc/": "/inbox/",
-        "/inbox/followups/": "/inbox/followups/",
-        "/inbox/forms/": "/inbox/forms/",
-        "/inbox/forms/7/": "/inbox/forms/",
+        "/inbox/followups/": "/inbox/",
+        "/inbox/forms/": "/automations/",
+        "/inbox/forms/7/": "/automations/",
         "/dashboard/": "/dashboard/",
         "/contacts/12/": "/contacts/",
         "/publishing/calendar/": "/publishing/",
-        "/insights/": "/insights/",
-        "/logs/messages/": "/logs/messages/",
+        "/insights/": "/dashboard/",
+        "/logs/messages/": "/settings/",
     }
 
     def _current_links(self, path):

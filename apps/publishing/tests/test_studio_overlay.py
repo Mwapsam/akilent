@@ -530,12 +530,13 @@ def test_the_editor_loads_its_picture_apart_from_the_grids_copy(shop, settings):
     assert f'src="{asset.url}?cors=1" crossorigin="anonymous"' in html
 
 
-def test_the_follow_ups_badge_survives_an_in_place_navigation(shop):
+def test_the_inbox_badge_survives_an_in_place_navigation(shop):
     """The nav is re-rendered out of band on every in-place navigation; a new badge fetched its
-    count on load, twice per page (desktop and mobile navs)."""
+    count on load, twice per page (desktop and mobile navs). The sidebar's one badge is
+    the Inbox's (unread + follow-ups due)."""
     _account, client = shop
 
     html = client.get(reverse("publishing:library")).content.decode()
 
-    assert 'id="nav-badge-follow-ups-desktop" hx-preserve' in html
-    assert 'id="nav-badge-follow-ups-mobile" hx-preserve' in html
+    assert 'id="nav-badge-inbox-desktop" hx-preserve' in html
+    assert 'id="nav-badge-inbox-mobile" hx-preserve' in html

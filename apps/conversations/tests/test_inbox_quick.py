@@ -115,7 +115,8 @@ def test_the_bar_says_what_its_icons_are(shop):
     client, _, _ = shop
     html = client.get("/inbox/").content.decode()
     bar = html[html.index('id="inbox-bar"') :]
-    for tip in ("Filter by channel", "Follow-ups", "Inbox set-up"):
+    # Follow-ups is an Inbox tab now; the set-up menu became one Inbox settings link.
+    for tip in ("Filter by channel", "Inbox settings"):
         assert f'data-tooltip="{tip}"' in bar
 
 

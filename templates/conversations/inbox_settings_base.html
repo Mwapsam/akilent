@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% comment %}Inbox settings: the pages set up now and then rather than used all day. Tabs:
+Saved replies · Teams & routing. Pages extend this, set active_tab ("replies" | "teams") and
+fill inbox_settings_content. The section tab bar stays off here (apps/core/sections.py:
+these are Inbox "also" pages), so there is one row of tabs.{% endcomment %}
+{% block title %}Inbox settings — {{ site.app_name|default:"Akilent" }}{% endblock %}
+
+{% block page_header %}
+<div class="mb-6">
+  <nav class="mb-1 flex items-center gap-1.5 text-xs text-ink-subtle" aria-label="Breadcrumb">
+    <a href="{% url 'conversations:inbox' %}" class="hover:text-ink">Inbox</a>
+    <span aria-hidden="true">/</span><span class="text-ink">Settings</span>
+  </nav>
+  <h1 class="text-2xl font-semibold tracking-tight">Inbox settings</h1>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="border-b border-border mb-6 -mt-2">
+  <nav class="flex gap-1 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Inbox settings"
+       data-instant-tabs data-active-class="border-brand-600 text-accent-strong" data-inactive-class="border-transparent text-ink-subtle hover:text-ink">
+    <a href="{% url 'conversations:saved_replies' %}" data-skeleton="table"
+       class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
+       {% if active_tab == 'replies' %}border-brand-600 text-accent-strong{% else %}border-transparent text-ink-subtle hover:text-ink{% endif %}"
+       {% if active_tab == 'replies' %}aria-current="page"{% endif %}>Saved replies</a>
+    <a href="{% url 'conversations:inbox_settings_teams' %}" data-skeleton="table"
+       class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap
+       {% if active_tab == 'teams' %}border-brand-600 text-accent-strong{% else %}border-transparent text-ink-subtle hover:text-ink{% endif %}"
+       {% if active_tab == 'teams' %}aria-current="page"{% endif %}>Teams &amp; routing</a>
+  </nav>
+</div>
+
+{% block inbox_settings_content %}{% endblock %}
+{% endblock %}

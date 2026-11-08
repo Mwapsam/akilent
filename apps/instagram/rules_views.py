@@ -167,8 +167,6 @@ def _style(form: forms.BaseForm) -> forms.BaseForm:
 @comment_rules_required
 def comment_rules(request):
     """List both kinds of rule, with an add form for each."""
-    from django.core.cache import cache
-
     from apps.instagram.services import backfill
     from apps.instagram.services.rule_lint import lint_rules
 
@@ -190,7 +188,7 @@ def comment_rules(request):
         "instagram/comment_rules.html",
         {
             "lint_warnings": lint.page_level,
-            "backfill": cache.get(backfill.status_key(account.pk)),
+            "backfill": backfill.get_status(account.pk),
             "triggers": triggers,
             "moderation_rules": moderation_rules,
             # What the rules actually did, so a failure (e.g. a missing Meta
@@ -391,8 +389,6 @@ def comment_rules_apply_existing(request):
     """GET: what applying the moderation rules to the last 30 days of comments would do
     (a modal). POST: run it in the background. Hides or flags only: no messages, emails
     or leads."""
-    from django.core.cache import cache
-
     from apps.core.htmx import overlay_done, overlay_or_page
     from apps.instagram.services import backfill
     from apps.instagram.tasks import apply_rules_to_existing
@@ -402,14 +398,14 @@ def comment_rules_apply_existing(request):
         return redirect("instagram-comment-rules")
 
     if request.method == "POST":
-        if not cache.add(backfill.lock_key(account.pk), 1, 60 * 60):
+        if not backfill.take_lock(account.pk):
             return overlay_done(
                 request,
                 "Your rules are already being applied to older comments.",
                 reverse("instagram-comment-rules"),
                 level="info",
             )
-        cache.set(backfill.status_key(account.pk), {"state": "running"}, 60 * 60)
+        backfill.set_status(account.pk, {"state": "running"}, 60 * 60)
         apply_rules_to_existing.delay(account.pk, backfill.DAYS)
         return overlay_done(
             request,
@@ -430,8 +426,6 @@ def comment_rules_apply_existing(request):
 @comment_rules_required
 def comment_rules_apply_existing_status(request):
     """The progress card, polled while the background job runs."""
-    from django.core.cache import cache
-
     from apps.instagram.services import backfill
 
     account = get_current_account(request)
@@ -440,5 +434,5 @@ def comment_rules_apply_existing_status(request):
     return render(
         request,
         "instagram/_comment_rules_backfill_status.html",
-        {"backfill": cache.get(backfill.status_key(account.pk))},
+        {"backfill": backfill.get_status(account.pk)},
     )

@@ -1096,6 +1096,23 @@ def landing(request):
 
 @login_required
 @require_POST
+def nav_notice_seen(request):
+    """The "Navigation got simpler" notice was closed: don't show it to this person again."""
+    from django.http import HttpResponse
+
+    from apps.accounts.models import Membership
+    from apps.accounts.utils import viewing_as
+
+    account = get_current_account(request)
+    if account is not None and viewing_as(request) is None:
+        Membership.objects.filter(
+            user=request.user, account=account, nav_notice_seen_at__isnull=True
+        ).update(nav_notice_seen_at=timezone.now())
+    return HttpResponse(status=204)
+
+
+@login_required
+@require_POST
 def welcome_tour_seen(request):
     """The welcome tour was finished or closed: don't open it again for this person here."""
     from django.http import HttpResponse

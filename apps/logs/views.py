@@ -44,6 +44,7 @@ def message_list(request):
         "status": st,
         "status_choices": _STATUS_CHOICES,
         "show_quickstart": not total_ever,
+        "active_tab": "activity",  # Settings, Activity log tab
     }
     # HTMX asks for the results region on its own; a normal navigation gets
     # the whole page. Same view, same context.
@@ -108,6 +109,7 @@ def request_list(request):
         "page": page,
         "status_code": status_code,
         "path": path_q,
+        "active_tab": "activity",
     }
     if is_background(request):
         return render(request, "logs/_requests_results.html", context)

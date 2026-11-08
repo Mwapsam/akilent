@@ -793,6 +793,13 @@
   @keyframes akilent-fade-out { to { opacity: 0; } }
   @keyframes akilent-fade-in { from { opacity: 0; } }
 
+  /* Section tab bar (components/_section_tabs.html): when the row scrolls sideways (phones),
+     its edges fade so it reads as "more this way"; it never wraps. */
+  .section-tabs.is-scrollable {
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 1.25rem, #000 calc(100% - 1.25rem), transparent 100%);
+    mask-image: linear-gradient(to right, transparent 0, #000 1.25rem, #000 calc(100% - 1.25rem), transparent 100%);
+  }
+
   /* App shell nav ------------------------------------------------------- */
   .nav-link {
     @apply flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors;

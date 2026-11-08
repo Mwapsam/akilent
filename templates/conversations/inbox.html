@@ -4,6 +4,8 @@
 
 {% block main_class %}px-4 sm:px-6 py-4 sm:py-5 lg:py-2.5 max-w-[110rem] mx-auto{% endblock %}
 
+{% block section_tabs %}{% include "components/_section_tabs.html" with compact=True %}{% endblock %}
+
 {% block content %}
 {% comment %}One bar of about 44px above the list: the title (which is the view menu), the channel choice, and
 links to the neighbouring pages. It belongs to the list, so with two panes it sits over the list column
@@ -28,36 +30,12 @@ and data-inbox-url / data-inbox-title are what closing it goes back to.{% endcom
      {% if open_in_pane %}data-open="{{ detail_url }}"{% endif %}>
   <header class="inbox-bar inbox-tools" id="inbox-bar">
     {% include "conversations/_inbox_views.html" %}
-    {% comment %}Its number is the nav badge's own (followups_badge, the Mine tab's count),
-    loaded and refreshed the same way (components/_nav_item.html), so the two can never
-    disagree.{% endcomment %}
-    <a href="{% url 'conversations:followups_due' %}" class="inbox-bar-btn tooltip tooltip--below" data-tooltip="Follow-ups" data-inbox-followups-link>
-      {% include "components/icon.html" with name="calendar" class="w-4 h-4" %}
-      <span class="sr-only">Follow-ups</span>
-      <span class="inbox-bar-badge" hx-get="{% url 'conversations:followups_badge' %}" hx-swap="innerHTML" data-auto-refresh="followup-changed" hx-trigger="intersect once, every 300s [document.visibilityState === 'visible' && this.offsetParent !== null], sse:followup.due, sse:followup.updated, followup-changed from:body"></span>
+    {% comment %}Follow-ups and Comments are Inbox tabs now (components/_section_tabs.html);
+    the set-up pages are one Inbox settings page.{% endcomment %}
+    <a href="{% url 'conversations:inbox_settings' %}" class="inbox-bar-btn tooltip tooltip--below" data-tooltip="Inbox settings">
+      {% include "components/icon.html" with name="settings" class="w-4 h-4" %}
+      <span class="sr-only">Inbox settings</span>
     </a>
-    {% comment %}The set-up pages, opened now and then rather than all day: one menu
-    (cvMenu, static/js/chat.js) instead of four buttons.{% endcomment %}
-    <div class="cv-menu" x-data="cvMenu">
-      <button type="button" class="inbox-bar-btn tooltip tooltip--below" x-ref="trigger" @click="toggle()" aria-haspopup="menu" :aria-expanded="menuOpen" data-tooltip="Inbox set-up">
-        {% include "components/icon.html" with name="settings" class="w-4 h-4" %}
-        <span class="sr-only">Set-up</span>
-      </button>
-      <div class="cv-menu-panel" x-ref="menu" x-show="menuOpen" x-cloak x-transition.opacity role="menu" aria-label="Inbox set-up">
-        <a href="{% url 'conversations:saved_replies' %}" class="cv-menu-item" role="menuitem">
-          {% include "components/icon.html" with name="book-open" class="w-4 h-4" %}Saved replies
-        </a>
-        <a href="{% url 'conversations:teams' %}" class="cv-menu-item" role="menuitem">
-          {% include "components/icon.html" with name="users" class="w-4 h-4" %}Teams
-        </a>
-        <a href="{% url 'conversations:routing_rules' %}" class="cv-menu-item" role="menuitem">
-          {% include "components/icon.html" with name="workflow" class="w-4 h-4" %}Routing rules
-        </a>
-        <a href="{% url 'conversations:forms_list' %}" class="cv-menu-item" role="menuitem">
-          {% include "components/icon.html" with name="list" class="w-4 h-4" %}Forms
-        </a>
-      </div>
-    </div>
   </header>
   <div class="inbox-list-col" x-data="{ stale: false }"
        @ak-refresh-failed="if ($event.target.id === 'inbox-body') stale = true"

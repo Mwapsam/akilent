@@ -1875,6 +1875,57 @@ def followups_badge(request):
     return response
 
 
+def inbox_unread_for(user, account) -> int:
+    """Open, unread conversations this person is expected to look at: assigned to them,
+    or to nobody in particular, or to one of their teams with no one picked yet.
+
+    Unread is one flag per conversation, shared by the team like a shared mailbox: when
+    anyone opens it, it stops counting for everyone (Conversation.is_unread)."""
+    team_ids = list(
+        Team.objects.filter(account=account, members=user).values_list("id", flat=True)
+    )
+    mine = Q(assigned_to=user) | Q(assigned_to__isnull=True, assigned_team__isnull=True)
+    if team_ids:
+        mine |= Q(assigned_to__isnull=True, assigned_team_id__in=team_ids)
+    return (
+        hide_disabled_channels(
+            Conversation.objects.filter(
+                account=account, status=Conversation.Status.OPEN, is_unread=True
+            )
+        )
+        .filter(mine)
+        .count()
+    )
+
+
+@login_required
+def inbox_badge(request):
+    """The sidebar's Inbox count: unread conversations for me (inbox_unread_for) plus
+    follow-ups due for me (the Follow-ups tab's number). One element on the page asks;
+    the hidden copy of the nav doesn't (see components/_nav_item.html)."""
+    from apps.conversations import followups
+
+    account = get_current_account(request)
+    if account is None:
+        return HttpResponse("")
+    unread = inbox_unread_for(request.user, account)
+    due = followups.due_for(request.user, account)
+    total = unread + due
+    if not total:
+        return HttpResponse("")
+    parts = []
+    if unread:
+        parts.append(f"{unread} unread conversation{'s' if unread != 1 else ''}")
+    if due:
+        parts.append(f"{due} follow-up{'s' if due != 1 else ''} due")
+    label = " and ".join(parts)
+    tone = " inbox-tab-count--danger" if due else ""
+    return HttpResponse(
+        f'<span class="inbox-tab-count{tone}" aria-label="{label}" title="{label}">'
+        f"{total if total < 100 else '99+'}</span>"
+    )
+
+
 @login_required
 @require_POST
 def followup_emails(request):
@@ -1932,7 +1983,7 @@ def saved_replies(request):
     return render(
         request,
         "conversations/saved_replies.html",
-        {"account": account, "replies": replies},
+        {"account": account, "replies": replies, "active_tab": "replies"},
     )
 
 
@@ -1964,15 +2015,44 @@ def teams(request):
         else:
             Team.objects.create(account=account, name=name)
             messages.success(request, "Team added.")
-        return redirect("conversations:teams")
+    # Teams and routing rules are one Inbox settings page (inbox_settings_teams).
+    return redirect(reverse("conversations:inbox_settings_teams") + "#teams")
 
+
+@login_required
+def inbox_settings(request):
+    """Inbox settings opens on its first tab, Saved replies."""
+    return redirect("conversations:saved_replies")
+
+
+@login_required
+def inbox_settings_teams(request):
+    """Inbox settings › Teams & routing: the teams, and the rules that send a new
+    conversation to one, on one page (they only make sense together). The forms post to
+    the teams and routing_rules views, which come back here."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
     team_list = (
         Team.objects.filter(account=account)
         .annotate(member_count=Count("members"))
         .order_by("name")
     )
+    rules = (
+        RoutingRule.objects.filter(account=account)
+        .select_related("team")
+        .order_by("priority", "id")
+    )
     return render(
-        request, "conversations/teams.html", {"account": account, "teams": team_list}
+        request,
+        "conversations/inbox_settings_teams.html",
+        {
+            "account": account,
+            "teams": team_list,
+            "rules": rules,
+            "channel_choices": visible_choices(Conversation.Channel.choices),
+            "active_tab": "teams",
+        },
     )
 
 
@@ -2007,6 +2087,7 @@ def team_detail(request, pk):
             "team": team,
             "members": current_members,
             "available": available,
+            "active_tab": "teams",
         },
     )
 
@@ -2048,23 +2129,7 @@ def routing_rules(request):
                 priority=priority,
             )
             messages.success(request, "Routing rule added.")
-        return redirect("conversations:routing_rules")
-
-    rules = (
-        RoutingRule.objects.filter(account=account)
-        .select_related("team")
-        .order_by("priority", "id")
-    )
-    return render(
-        request,
-        "conversations/routing_rules.html",
-        {
-            "account": account,
-            "rules": rules,
-            "teams": Team.objects.filter(account=account).order_by("name"),
-            "channel_choices": visible_choices(Conversation.Channel.choices),
-        },
-    )
+    return redirect(reverse("conversations:inbox_settings_teams") + "#routing")
 
 
 @login_required
@@ -2076,7 +2141,7 @@ def routing_rule_toggle(request, pk):
     rule = get_object_or_404(RoutingRule, account=account, pk=pk)
     rule.is_active = not rule.is_active
     rule.save(update_fields=["is_active"])
-    return redirect("conversations:routing_rules")
+    return redirect(reverse("conversations:inbox_settings_teams") + "#routing")
 
 
 @login_required
@@ -2088,7 +2153,7 @@ def routing_rule_delete(request, pk):
     rule = get_object_or_404(RoutingRule, account=account, pk=pk)
     rule.delete()
     messages.success(request, "Routing rule removed.")
-    return redirect("conversations:routing_rules")
+    return redirect(reverse("conversations:inbox_settings_teams") + "#routing")
 
 
 _FORM_FIELD_TYPES = list(_FLOW_FIELD_TYPES)

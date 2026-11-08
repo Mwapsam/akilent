@@ -2,6 +2,7 @@
 destinations + quick actions. No backend in v1.
 Open programmatically with: window.dispatchEvent(new CustomEvent('palette-open')).
 {% endcomment %}
+{% load nav %}{% palette_pages as cmdk_pages %}{{ cmdk_pages|json_script:"cmdk-pages" }}
 <div x-data="commandPalette()"
      @keydown.window="onKey($event)"
      @palette-open.window="openPalette($event)">
@@ -42,7 +43,7 @@ Open programmatically with: window.dispatchEvent(new CustomEvent('palette-open')
 
           <ul class="max-h-80 overflow-y-auto py-1.5" role="listbox"
               id="cmdk-results" aria-label="Results">
-            <template x-for="(item, i) in filtered" :key="item.label">
+            <template x-for="(item, i) in filtered" :key="item.group + item.label + i">
               {% comment %}
                 role=option goes on the anchor rather than the li: an option
                 must not contain its own interactive element, and the anchor is
@@ -59,6 +60,7 @@ Open programmatically with: window.dispatchEvent(new CustomEvent('palette-open')
                    class="flex items-center gap-3 px-3 py-2 text-sm">
                   <span class="text-ink-subtle" x-text="item.group"></span>
                   <span x-text="item.label" class="font-medium"></span>
+                  <span x-show="item.hint" x-text="item.hint" class="ml-auto text-xs text-ink-subtle"></span>
                 </a>
               </li>
             </template>
@@ -81,21 +83,8 @@ Open programmatically with: window.dispatchEvent(new CustomEvent('palette-open')
       active: 0,
       trigger: null, // Track the element that triggered open for focus return
       items: [
-        { group: "Go to", label: "Dashboard", href: "/dashboard/" },
-        {% if CAMPAIGNS_ENABLED %}{ group: "Go to", label: "Campaigns", href: "/campaigns/" },
-        { group: "Go to", label: "Scheduled campaigns", href: "/campaigns/?status=scheduled" },{% endif %}
-        { group: "Go to", label: "Automations", href: "/automations/" },
-        { group: "Go to", label: "Customers", href: "/contacts/" },
-        { group: "Go to", label: "Insights", href: "/insights/" },
-        { group: "Go to", label: "Activity log", href: "/logs/messages/" },
-        {% if CAMPAIGNS_ENABLED %}{ group: "Go to", label: "Templates", href: "/email/templates/" },{% endif %}
-        {% if enabled_channels %}{ group: "Go to", label: "Channels", href: "/channels/" },{% endif %}
-        {% if "email" in enabled_channels %}{ group: "Go to", label: "Email domains", href: "/email/domains/" },{% endif %}
-        {% if WHATSAPP_ENABLED %}{ group: "Go to", label: "WhatsApp", href: "/whatsapp/numbers/" },{% endif %}
-        { group: "Go to", label: "Billing", href: "/billing/plans/" },
-        { group: "Go to", label: "Settings", href: "{% url 'settings-profile' %}" },
-        { group: "Go to", label: "Help & guides", href: "/help/" },
-        { group: "Go to", label: "API docs", href: "/docs/" },
+        ...JSON.parse((document.getElementById('cmdk-pages') || {}).textContent || '[]'),
+        // Pages come from the section registry (apps/core/sections.py, #cmdk-pages).
         {% if "email" in enabled_channels %}{ group: "Action", label: "New campaign", href: "/email/campaigns/new/" },
         { group: "Action", label: "Schedule a send", href: "/email/campaigns/new/" },
         { group: "Action", label: "Add domain", href: "/email/domains/create/" },
@@ -121,7 +110,7 @@ Open programmatically with: window.dispatchEvent(new CustomEvent('palette-open')
         const q = this.q.trim().toLowerCase();
         if (!q) return this.items;
         return this.items.filter((it) =>
-          (it.label + " " + it.group).toLowerCase().includes(q)
+          (it.label + " " + it.group + " " + (it.hint || "")).toLowerCase().includes(q)
         );
       },
       onKey(e) {

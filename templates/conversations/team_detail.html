@@ -1,10 +1,10 @@
-{% extends "base.html" %}
-{% block title %}{{ team.name }} — {{ site.app_name|default:"Akilent" }}{% endblock %}
+{% extends "conversations/inbox_settings_base.html" %}
+{% block title %}{{ team.name }} — Inbox settings{% endblock %}
 
-{% block content %}
-<header class="mb-6">
-  <p class="text-sm"><a href="{% url 'conversations:teams' %}" class="text-accent underline">Teams</a></p>
-  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">{{ team.name }}</h1>
+{% block inbox_settings_content %}
+<header class="mb-4">
+  <p class="text-sm"><a href="{% url 'conversations:inbox_settings_teams' %}#teams" class="text-ink-subtle hover:text-ink">← Teams &amp; routing</a></p>
+  <h2 class="text-lg font-semibold text-ink">{{ team.name }}</h2>
 </header>
 
 <div class="grid gap-6 lg:grid-cols-2">

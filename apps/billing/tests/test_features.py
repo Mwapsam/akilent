@@ -316,14 +316,27 @@ def test_owner_switched_off_points_to_settings(owner_client, account, plan):
 
 
 @pytest.mark.django_db
-def test_nav_shows_a_lock_for_a_feature_not_in_the_plan(owner_client, account, plan):
+def test_nav_hides_a_section_whose_every_tab_is_not_in_the_plan(
+    owner_client, account, plan
+):
+    """Every Automations tab needs the automations feature: no main item at all, and its
+    pages open the locked page (apps/core/sections.py)."""
+
+    def nav(html):
+        return html[html.index('aria-label="Primary"') :][:20000]
+
     page = owner_client.get("/inbox/").content.decode()
-    assert 'href="/billing/locked/automations/"' in page and "data-locked" in page
+    assert ">Automations<" not in nav(page)
     PlanFeature.objects.create(plan=plan, key="automations")
-    assert (
-        'href="/billing/locked/automations/"'
-        not in owner_client.get("/inbox/").content.decode()
-    )
+    page = owner_client.get("/inbox/").content.decode()
+    assert 'href="/automations/"' in nav(page)
+
+
+@pytest.mark.django_db
+def test_a_tab_not_in_the_plan_shows_a_lock(owner_client, account, plan):
+    page = owner_client.get("/contacts/").content.decode()
+    tabs = page[page.index('class="section-tabs ') :][:4000]
+    assert 'href="/billing/locked/sales/"' in tabs and "(locked)" in tabs
 
 
 @pytest.mark.django_db
