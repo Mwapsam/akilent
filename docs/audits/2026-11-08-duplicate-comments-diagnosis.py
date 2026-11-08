@@ -32,7 +32,13 @@ SOURCES = (
         "thread__instagram_account__account_id",
         "instagram_contact_id",
     ),
-    ("Facebook", FacebookComment, "thread__page_id", "thread__account_id", "facebook_contact_id"),
+    (
+        "Facebook",
+        FacebookComment,
+        "thread__page_id",
+        "thread__account_id",
+        "facebook_contact_id",
+    ),
 )
 
 for label, model, channel_account, workspace, author in SOURCES:
@@ -53,7 +59,14 @@ for label, model, channel_account, workspace, author in SOURCES:
         model.objects.filter(body__icontains=NEEDLE)
         .order_by("timestamp")
         .values_list(
-            "id", "comment_id", "thread_id", channel_account, workspace, author, "timestamp", "direction"
+            "id",
+            "comment_id",
+            "thread_id",
+            channel_account,
+            workspace,
+            author,
+            "timestamp",
+            "direction",
         )
     )
     for hit in hits:
@@ -64,11 +77,15 @@ for label, model, channel_account, workspace, author in SOURCES:
     for pk, cid, _t, _ca, _ws, who, ts, _d in hits:
         for other_cid, other_ts in seen.get(who, []):
             if other_cid != cid and abs(ts - other_ts) <= timedelta(minutes=5):
-                print(f"    author {who}: {other_cid} @ {other_ts:%Y-%m-%d %H:%M:%S} and {cid} @ {ts:%Y-%m-%d %H:%M:%S}")
+                print(
+                    f"    author {who}: {other_cid} @ {other_ts:%Y-%m-%d %H:%M:%S} and {cid} @ {ts:%Y-%m-%d %H:%M:%S}"
+                )
         seen.setdefault(who, []).append((cid, ts))
 
 print("\n===== D. Instagram webhook events carrying the reported comment ids =====")
-ids = set(Comment.objects.filter(body__icontains=NEEDLE).values_list("comment_id", flat=True))
+ids = set(
+    Comment.objects.filter(body__icontains=NEEDLE).values_list("comment_id", flat=True)
+)
 comment_events = WebhookEventLog.objects.filter(
     event_type=WebhookEventLog.EventType.COMMENT
 ).annotate(payload_text=Cast("raw_payload", TextField()))
