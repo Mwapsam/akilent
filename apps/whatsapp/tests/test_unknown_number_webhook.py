@@ -67,9 +67,10 @@ class UnknownNumberWebhookTest(TestCase):
         )
 
     def test_unknown_number_on_known_waba_alerts_owners_once(self):
-        with patch(NOTIFY) as notify, self.assertLogs(
-            "apps.whatsapp.tasks", level="ERROR"
-        ) as logs:
+        with (
+            patch(NOTIFY) as notify,
+            self.assertLogs("apps.whatsapp.tasks", level="ERROR") as logs,
+        ):
             e1 = self._event(_payload("new_9"))
             process_whatsapp_event(e1.id)
             e2 = self._event(_payload("new_9") | {"x": 1})
@@ -78,15 +79,18 @@ class UnknownNumberWebhookTest(TestCase):
         e1.refresh_from_db()
         self.assertFalse(e1.processed)
         self.assertIn("new_9", e1.error_message)
-        self.assertTrue(any("unknown number" in m and "new_9" in m for m in logs.output))
+        self.assertTrue(
+            any("unknown number" in m and "new_9" in m for m in logs.output)
+        )
         notify.assert_called_once()
         self.assertEqual(notify.call_args.args[0], self.account)
         self.assertIn("+15550001111", notify.call_args.kwargs["text"])
 
     def test_unknown_waba_logs_but_does_not_notify(self):
-        with patch(NOTIFY) as notify, self.assertLogs(
-            "apps.whatsapp.tasks", level="ERROR"
-        ) as logs:
+        with (
+            patch(NOTIFY) as notify,
+            self.assertLogs("apps.whatsapp.tasks", level="ERROR") as logs,
+        ):
             process_whatsapp_event(self._event(_payload("new_9", waba="other")).id)
         notify.assert_not_called()
         self.assertTrue(any("owning_accounts=none" in m for m in logs.output))
