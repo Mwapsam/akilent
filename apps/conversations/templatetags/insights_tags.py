@@ -22,6 +22,25 @@ def duration_minutes(minutes):
 
 
 @register.filter
+def share(part, whole):
+    """A rate that's honest about its sample: "73%" from enough, "1 of 1" from a handful
+    (below ``reporting.MIN_SAMPLE``), "—" from nothing. Never "100%" from one conversation."""
+    part, whole = int(part or 0), int(whole or 0)
+    if not whole:
+        return "—"
+    if whole < reporting.MIN_SAMPLE:
+        return f"{part} of {whole}"
+    return f"{round(part / whole * 100)}%"
+
+
+@register.filter
+def thin(n) -> bool:
+    """Something to show, but too little to call it a rate or a trend yet."""
+    n = int(n or 0)
+    return 0 < n < reporting.MIN_SAMPLE
+
+
+@register.filter
 def hour12(hour: int) -> str:
     """0 -> "12am", 13 -> "1pm", 18 -> "6pm"."""
     hour = int(hour)

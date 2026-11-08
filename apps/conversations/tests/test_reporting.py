@@ -199,7 +199,11 @@ class TestRecovery:
         assert rec["became_leads"] == 1
         assert rec["paid_orders"] == 1
 
-    def test_a_reply_before_the_reminder_does_not_count(self, account):
+    def test_answered_within_24_hours_is_not_missed_whatever_the_reminders_say(
+        self, account
+    ):
+        """One rule for missed (reporting._outcome): no reply within 24 hours. A reminder on a
+        conversation that was answered in time doesn't make it missed."""
         start = NOW - timedelta(days=2)
         conv = enquiry(account, start, reply_after=timedelta(minutes=1))
         reminder = FollowUp.objects.create(
@@ -215,9 +219,8 @@ class TestRecovery:
         )
         period = reporting.Period(start, NOW)
         rec = reporting.recovery(account, period)
-        assert rec["missed"] == 1
-        assert rec["recovered"] == 0
-        assert rec["rate_pct"] == 0
+        assert rec["missed"] == 0
+        assert rec["missed"] == reporting.response(account, period)["missed"]
 
     def test_no_missed_conversations_is_a_dash_not_zero_percent(self, account):
         period = reporting.Period(NOW - timedelta(days=7), NOW)
@@ -437,7 +440,8 @@ class TestProofBar:
             direction=OUT,
             body="Sorry!",
             status="sent",
-            timestamp=week_start + timedelta(days=1, hours=2),
+            timestamp=week_start
+            + timedelta(days=1, hours=3),  # 25 hours: missed, then answered
         )
         paid_conv = enquiry(
             account, week_start + timedelta(hours=3), reply_after=timedelta(minutes=1)

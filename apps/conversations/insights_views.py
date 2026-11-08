@@ -1,8 +1,10 @@
 """Business Health: what Akilent did for this business. See ``apps.conversations.reporting``.
 
-Rendered in one request, like the page it replaces (``apps.email.views.insights``) — Insights is
-read by opening it, not by polling, so there's no lazy HTMX split here the way the dashboard has
-one for its background aggregates.
+Rendered in one request, like the page it replaces (``apps.email.views.insights``). Every figure
+is for the one chosen period, except what's labelled "right now" (``at_risk``), the weekly trend
+and this month's goals. While the page is open its body re-reads itself quietly in the background
+(``insights/_body.html``, returned alone for a background request), so it never goes stale
+without a jump or a spinner.
 """
 
 from __future__ import annotations
@@ -133,9 +135,11 @@ def insights(request):
         else []
     )
 
+    from apps.core.htmx import is_background
+
     return render(
         request,
-        "insights/index.html",
+        "insights/_body.html" if is_background(request) else "insights/index.html",
         {
             "account": account,
             "days": days,
@@ -152,12 +156,14 @@ def insights(request):
             "period_choices": reporting.PERIODS,
             "period_locked": period_locked,
             "has_history": has_history,
-            "proof": reporting.proof(account, now=now),
+            # The proof bar follows the chosen period (against the one before it), so the page
+            # never shows a "this week" median beside a 30-day one.
+            "proof": reporting.proof(account, week=period, now=now),
             "at_risk": reporting.at_risk(account, now),
             "starting_point": conversations_api.starting_point(account, now),
-            "response": reporting.response(account, period, rows),
+            "response": reporting.response(account, period, rows, now=now),
             "resolution": reporting.resolution(account, period),
-            "recovery": reporting.recovery(account, period),
+            "recovery": reporting.recovery(account, period, rows, now=now),
             "followups": followup_completion(account, days=days, now=now),
             "peak_hours": peak_hours,
             "peak_labels": peak_labels,

@@ -4,7 +4,8 @@ Rows with nothing to act on are already left out by the view layer.
 {% endcomment %}
 <section class="card card-pad space-y-3" aria-labelledby="at-risk-h">
   <div class="flex items-center justify-between gap-3">
-    <h2 id="at-risk-h" class="font-semibold text-ink">Opportunities at risk</h2>
+    {% comment %}Right now, not for the period: these are the inbox's own live counts.{% endcomment %}
+    <h2 id="at-risk-h" class="font-semibold text-ink">Opportunities at risk <span class="font-normal text-ink-subtle">· right now</span></h2>
     {% if at_risk.actions %}
     <span class="text-xs text-ink-subtle">{{ at_risk.actions|length }} action{{ at_risk.actions|length|pluralize }}</span>
     {% endif %}

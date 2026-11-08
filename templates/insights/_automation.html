@@ -24,8 +24,8 @@ No composite score; the one estimate (time saved) always shows its formula.
       </div>
       <div>
         {% if automation.ai %}
-        <p class="stat-value">{% if automation.ai.used_pct is not None %}{{ automation.ai.used_pct }}%{% else %}—{% endif %}</p>
-        <p class="stat-label">AI suggestions used{% if automation.ai.suggested %} ({{ automation.ai.used }} of {{ automation.ai.suggested }}){% endif %}</p>
+        <p class="stat-value">{{ automation.ai.used|share:automation.ai.suggested }}</p>
+        <p class="stat-label">AI suggestions used{% if automation.ai.suggested and not automation.ai.suggested|thin %} ({{ automation.ai.used }} of {{ automation.ai.suggested }}){% endif %}</p>
         {% else %}
         <p class="stat-value">—</p>
         <p class="stat-label">AI isn't turned on</p>
@@ -33,8 +33,8 @@ No composite score; the one estimate (time saved) always shows its formula.
       </div>
       {% if forms.sent %}
       <div>
-        <p class="stat-value">{% if forms.completion_pct is not None %}{{ forms.completion_pct }}%{% else %}—{% endif %}</p>
-        <p class="stat-label">of forms finished ({{ forms.completed }} of {{ forms.sent }})</p>
+        <p class="stat-value">{{ forms.completed|share:forms.sent }}</p>
+        <p class="stat-label">of forms finished{% if not forms.sent|thin %} ({{ forms.completed }} of {{ forms.sent }}){% endif %}</p>
       </div>
       {% endif %}
       <div>

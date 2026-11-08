@@ -6,9 +6,6 @@
   <div>
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Insights</h1>
     <p class="mt-1 text-sm text-ink-muted">What Akilent is doing for your business.</p>
-    {% comment %}Every figure on this page is worked out when it loads, so this time is when
-    all of them were true. Refresh re-reads the page in place (a boosted link to itself).{% endcomment %}
-    <p class="mt-0.5 text-xs text-ink-subtle" data-insights="as-of">Figures as of {% now "H:i" %} · <a href="{{ request.get_full_path }}" class="underline hover:text-ink">Refresh</a></p>
   </div>
   <form method="get" class="flex items-center gap-2"
         x-data="{ busy: false }" @submit="busy = true">
@@ -24,35 +21,5 @@
   </form>
 </header>
 
-{% if period_locked %}
-<div class="alert alert-info mb-6" role="status">
-  {% include "components/icon.html" with name="lock" %}
-  <span>The 90-day view is available on higher plans. Showing the last 30 days. <a href="{% url 'billing:plans' %}" class="underline">Upgrade</a></span>
-</div>
-{% endif %}
-
-<div class="mb-8">
-  {% include "insights/_intelligence.html" %}
-</div>
-
-<div class="space-y-6 mb-8">
-  {% include "insights/_proof.html" %}
-  {% include "insights/_at_risk.html" %}
-</div>
-
-<div class="space-y-10">
-  {% include "insights/_response.html" %}
-  {% include "insights/_sales.html" %}
-  {% if journey %}{% include "insights/_journey.html" %}{% endif %}
-  {% include "insights/_automation.html" %}
-  {% include "insights/_channels.html" %}
-  {% include "insights/_momentum.html" %}
-  {% include "insights/_goals.html" %}
-</div>
-
-{% if "email" in enabled_channels %}
-<div class="mt-10">
-  {% include "insights/_email.html" %}
-</div>
-{% endif %}
+{% include "insights/_body.html" %}
 {% endblock %}

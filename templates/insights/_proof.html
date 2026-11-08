@@ -1,12 +1,14 @@
 {% comment %}
-The proof bar: this week against last week, in one sentence and three tiles. ``proof`` comes from
-apps.conversations.reporting.proof. Counts only, never causes, per the messaging truth rule.
+The proof bar: the chosen period against the one before it, in one sentence and three tiles.
+``proof`` comes from apps.conversations.reporting.proof (given the page's period, so it agrees
+with every other figure here). Counts only, never causes, per the messaging truth rule. Below
+reporting.MIN_SAMPLE replies the median says how few it's from and shows no change.
 {% endcomment %}
 {% load insights_tags %}
 <section class="card card-pad space-y-4" aria-labelledby="proof-h">
   {% if proof.active %}
     <div>
-      <h2 id="proof-h" class="font-semibold text-ink">This week, Akilent helped your business</h2>
+      <h2 id="proof-h" class="font-semibold text-ink">In the last {{ days }} days, Akilent helped your business</h2>
       {% if proof.sentence %}
       <p class="mt-1 text-sm text-ink-muted">{{ proof.sentence }}.</p>
       {% endif %}
@@ -15,9 +17,14 @@ apps.conversations.reporting.proof. Counts only, never causes, per the messaging
       <div>
         <p class="stat-value">{{ proof.median.seconds|duration }}</p>
         <p class="stat-label">median first reply</p>
+        {% if proof.median.replied|thin %}
+        <p class="stat-delta text-ink-subtle">From {{ proof.median.replied }} repl{{ proof.median.replied|pluralize:"y,ies" }}, not enough for a trend yet</p>
+        {% elif proof.median.automatic %}
+        <p class="stat-delta text-ink-subtle">{{ proof.median.automatic }} of {{ proof.median.replied }} first replies sent automatically</p>
+        {% endif %}
         {% if proof.median.change is not None %}
         <p class="stat-delta {% if proof.median.change < 0 %}stat-delta--down{% elif proof.median.change > 0 %}stat-delta--up{% else %}text-ink-subtle{% endif %}">
-          <span aria-hidden="true">{% if proof.median.change < 0 %}↓{% elif proof.median.change > 0 %}↑{% else %}→{% endif %}</span><span class="sr-only">{% if proof.median.change < 0 %}improved{% elif proof.median.change > 0 %}worsened{% else %}unchanged{% endif %},</span> {{ proof.median.change|duration }} vs last week
+          <span aria-hidden="true">{% if proof.median.change < 0 %}↓{% elif proof.median.change > 0 %}↑{% else %}→{% endif %}</span><span class="sr-only">{% if proof.median.change < 0 %}improved{% elif proof.median.change > 0 %}worsened{% else %}unchanged{% endif %},</span> {{ proof.median.change|duration }} vs the {{ days }} days before
         </p>
         {% endif %}
       </div>
@@ -38,8 +45,8 @@ apps.conversations.reporting.proof. Counts only, never causes, per the messaging
     </div>
     <p class="text-xs text-ink-subtle">Every number comes from recorded conversations, follow-ups and orders.</p>
   {% else %}
-    <h2 id="proof-h" class="font-semibold text-ink">This week, Akilent helped your business</h2>
-    <p class="text-sm text-ink-muted">No customer activity yet this week. Once customers message you on a connected channel, this page fills in automatically.</p>
+    <h2 id="proof-h" class="font-semibold text-ink">In the last {{ days }} days, Akilent helped your business</h2>
+    <p class="text-sm text-ink-muted">No customer activity in the last {{ days }} days. Once customers message you on a connected channel, this page fills in automatically.</p>
   {% endif %}
   {% if can_manage_goals %}
   <form method="post" action="/insights/report-settings/" class="pt-2 border-t border-border">

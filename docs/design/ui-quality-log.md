@@ -2601,3 +2601,20 @@ Plan: the design audit's D5 (fewer boxes, Dashboard first), D4 (Settings side li
   - the sticky "Unsaved changes" bar (pages keep their Save buttons);
   - the Insights redesign (proposed as the next D5 page).
 - **Verification:** the full suite is green apart from `test_import_5000_contacts`. Tailwind rebuilt.
+
+
+### Entry 48: D4–D6 follow-ups, then Insights step 1, the fixes (2026-11-08)
+
+- **Follow-ups from the D4–D6 walkthrough:**
+  - The Settings phone picker showed on desktop: its "hide from md" rule came before the rule that showed it. It now comes after.
+  - Dashboard: "Follow-ups due" with "whole team" as a muted line under the number, so the labels stay on one line and the numbers line up. Dots mean "there's work": highlight, or coral for missed. The teal lead dot is gone.
+  - "Your starting point" is one plain section with hairline rows. Durations use `reporting.duration` everywhere ("18h 21m", not "1101 min").
+  - Security: "Current password" (with a matching wrong-password message), one password hint instead of Django's four rules, and the guide link in the first section's description.
+- **Insights step 1:**
+  - **One source:** `reporting._outcome` sorts each enquiry as answered (a real reply within 24 hours), missed (24 hours passed without one) or pending (still inside its 24 hours). `response()` and `recovery()` both use it, so "not answered within 24 hours" and "missed" are one number. Recovery is now "missed, then answered later", not "a missed-reminder was made". Snapshots taken before this keep the old counts.
+  - **Small samples:** `reporting.MIN_SAMPLE = 5`. Below it, `|share` gives "1 of 1" instead of "100%", with "Not enough data yet". The median says how few replies it comes from, and no "vs before" change is shown. When some first replies were automatic, the median says how many (that's why it can be 4 seconds).
+  - **One period:** the proof bar follows the chosen period, against the one before it ("In the last 30 days…", "vs the 30 days before"). "Opportunities at risk" is labelled "right now". Labels no longer repeat "last N days".
+  - **Quiet refresh:** the body is `insights/_body.html`, returned alone for a background request. It re-reads itself every 5 minutes and when you come back to the tab, never while a form in it has focus. It uses `data-auto-refresh` (no busy state, no error toast) and `hx-disinherit="*"`. Refresh swaps it in place.
+- **Tests:** `apps/conversations/tests/test_insights_step1.py` and `apps/accounts/tests/test_d6_polish.py`. Recovery, weekly report and proof tests were updated to the one rule. The full suite is green.
+- **Production:** run `generate_insights()` once so stored insight titles pick up the earlier wording fixes.
+- **Next:** the remaining Settings-style pages as one batch, then Insights steps 2 (layout) and 3 (charts).

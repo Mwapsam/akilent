@@ -48,7 +48,7 @@ WeeklySnapshot). The Starting point card is this pillar's baseline row: "since y
         <tr>
           <td data-label="Week of">{{ row.week_start|date:"j M" }}</td>
           <td data-label="Conversations">{{ row.conversations }}</td>
-          <td data-label="Answered">{% if row.answered_pct is not None %}{{ row.answered_pct }}%{% else %}—{% endif %}</td>
+          <td data-label="Answered">{{ row.answered|share:row.conversations }}</td>
           <td data-label="Median reply">{{ row.median_first_reply_seconds|duration }}</td>
           <td data-label="Recovered">{{ row.recovered }} of {{ row.missed }}</td>
           <td data-label="Leads">{{ row.interested }}</td>

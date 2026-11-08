@@ -1,6 +1,7 @@
 {% comment %}
 Pillar: sales from conversations. ``sales`` from apps.conversations.reporting.sales.
 {% endcomment %}
+{% load insights_tags %}
 <section class="space-y-4" aria-labelledby="sales-h">
   <h2 id="sales-h" class="text-lg font-semibold text-ink">Sales from conversations</h2>
   <p class="text-sm text-ink-muted">Did conversations turn into money?</p>
@@ -22,8 +23,9 @@ Pillar: sales from conversations. ``sales`` from apps.conversations.reporting.sa
         <p class="stat-label">paid orders</p>
       </div>
       <div>
-        <p class="stat-value">{% if sales.lead_to_sale_pct is not None %}{{ sales.lead_to_sale_pct }}%{% else %}—{% endif %}</p>
+        <p class="stat-value">{{ sales.leads_bought|share:sales.leads }}</p>
         <p class="stat-label">lead-to-sale conversion</p>
+        {% if sales.leads|thin %}<p class="stat-delta text-ink-subtle">Not enough data yet for a rate</p>{% endif %}
       </div>
     </div>
   </div>

@@ -1,0 +1,51 @@
+{% comment %}
+Everything on Insights below the title and the period picker. Returned alone for a background
+request (insights_views.insights), so the page re-reads itself quietly while it's open: every
+5 minutes and when you come back to the tab, never while you're typing in one of its forms,
+and with no spinner or jump. Refresh does the same at once. hx-disinherit keeps the
+boosted forms and links inside from picking up this element's swap.
+
+One period: every figure here is for the chosen "last N days", except what says "right now"
+(Opportunities at risk), the weekly trend and this month's goals.
+{% endcomment %}
+<div id="insights-body"
+     hx-get="{{ request.get_full_path }}"
+     hx-trigger="every 300s [document.visibilityState === 'visible' && !document.activeElement.closest('#insights-body form')], visibilitychange[document.visibilityState === 'visible'] from:document"
+     hx-swap="outerHTML"
+     hx-sync="this:replace"
+     hx-disinherit="*"
+     data-auto-refresh>
+<p class="-mt-4 mb-6 text-xs text-ink-subtle" data-insights="as-of">Last {{ days }} days · figures as of {% now "H:i" %} · <button type="button" class="underline hover:text-ink" hx-get="{{ request.get_full_path }}" hx-target="#insights-body" hx-swap="outerHTML">Refresh</button></p>
+
+{% if period_locked %}
+<div class="alert alert-info mb-6" role="status">
+  {% include "components/icon.html" with name="lock" %}
+  <span>The 90-day view is available on higher plans. Showing the last 30 days. <a href="{% url 'billing:plans' %}" class="underline">Upgrade</a></span>
+</div>
+{% endif %}
+
+<div class="mb-8">
+  {% include "insights/_intelligence.html" %}
+</div>
+
+<div class="space-y-6 mb-8">
+  {% include "insights/_proof.html" %}
+  {% include "insights/_at_risk.html" %}
+</div>
+
+<div class="space-y-10">
+  {% include "insights/_response.html" %}
+  {% include "insights/_sales.html" %}
+  {% if journey %}{% include "insights/_journey.html" %}{% endif %}
+  {% include "insights/_automation.html" %}
+  {% include "insights/_channels.html" %}
+  {% include "insights/_momentum.html" %}
+  {% include "insights/_goals.html" %}
+</div>
+
+{% if "email" in enabled_channels %}
+<div class="mt-10">
+  {% include "insights/_email.html" %}
+</div>
+{% endif %}
+</div>

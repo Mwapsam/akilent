@@ -128,7 +128,8 @@ class TestBuildEmail:
             direction=OUT,
             body="sorry, here",
             status="sent",
-            timestamp=week.start + timedelta(hours=3),
+            timestamp=week.start
+            + timedelta(hours=26),  # past its 24 hours: missed, then answered
         )
         email = weekly_report.build_email(account, week, full=False)
         assert "Recovery rate" in email["text_body"]

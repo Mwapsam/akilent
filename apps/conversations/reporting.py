@@ -22,12 +22,12 @@ from decimal import Decimal
 from statistics import median
 
 from django.conf import settings
-from django.db.models import Count, Exists, Max, Min, OuterRef, Q, Subquery, Sum
+from django.db.models import Count, Exists, OuterRef, Q, Subquery, Sum
 from django.db.models.fields import CharField
 from django.db.models.fields.json import KT
 from django.utils import timezone
 
-from apps.conversations.models import Conversation, FollowUp, InsightGoal, Message
+from apps.conversations.models import Conversation, InsightGoal, Message
 from apps.conversations.state import RESPONSE_STATUSES
 
 ANSWER_WITHIN = timedelta(hours=24)
@@ -37,6 +37,9 @@ PEAK_MIN_ENQUIRIES = 20  # below this, "your busiest time" would be noise
 PEAK_WIDTH = 2  # hours
 DEFAULT_MINUTES_PER_REPLY = 2
 PERIODS = (7, 30, 90)
+# Below this many, a rate reads "1 of 1" instead of "100%", a median says how few it's from,
+# and no "vs before" change is shown: one conversation is an anecdote, not a trend.
+MIN_SAMPLE = 5
 
 
 @dataclass(frozen=True)
@@ -147,19 +150,53 @@ def _median(values) -> float | None:
 # ---- pillar 1: customer response -------------------------------------------------------------
 
 
-def response(account, period: Period, rows: list[dict] | None = None) -> dict:
-    """Are we responding fast enough? Median first reply, share answered within 24 hours."""
+def _outcome(row, now: datetime) -> str:
+    """ "answered" (a real reply within 24 hours), "missed" (24 hours passed without one) or
+    "pending" (still inside its 24 hours, no reply yet). The one rule behind every "answered",
+    "unanswered" and "missed" count on Insights, the Starting point and the weekly report."""
+    wait = _wait_seconds(row)
+    if wait is not None and wait <= ANSWER_WITHIN.total_seconds():
+        return "answered"
+    if row["first_in"] + ANSWER_WITHIN <= now:
+        return "missed"
+    return "pending"
+
+
+def response(
+    account,
+    period: Period,
+    rows: list[dict] | None = None,
+    now: datetime | None = None,
+) -> dict:
+    """Are we responding fast enough? Median first reply, share answered within 24 hours.
+
+    An enquiry still inside its first 24 hours with no reply isn't counted either way yet
+    (``pending``), so a message from an hour ago never reads as unanswered. ``unanswered`` and
+    ``missed`` are the same number: no reply within 24 hours.
+    """
+    now = now or timezone.now()
     rows = first_replies(account, period.start, period.end) if rows is None else rows
+    outcomes = [_outcome(r, now) for r in rows]
+    answered = outcomes.count("answered")
+    missed = outcomes.count("missed")
     waits = [_wait_seconds(r) for r in rows]
-    answered = sum(
-        1 for w in waits if w is not None and w <= ANSWER_WITHIN.total_seconds()
-    )
     median_seconds = _median(waits)
     return {
         "enquiries": len(rows),
         "answered": answered,
-        "unanswered": len(rows) - answered,
-        "answered_pct": pct(answered, len(rows)),
+        "unanswered": missed,
+        "missed": missed,
+        "pending": outcomes.count("pending"),
+        "settled": answered + missed,
+        "answered_pct": pct(answered, answered + missed),
+        # What the median is worked out from, and how many of those first replies were sent
+        # automatically: a 4-second median is the automations, and the page says so.
+        "replied": sum(1 for w in waits if w is not None),
+        "automatic_first_replies": sum(
+            1
+            for r in rows
+            if r["first_reply"] is not None and r["replied_by"] in AUTOMATIC
+        ),
         "median_first_reply_seconds": round(median_seconds)
         if median_seconds is not None
         else None,
@@ -207,74 +244,60 @@ def forms(account, period: Period) -> dict:
     }
 
 
-def recovery(account, period: Period) -> dict:
-    """Missed conversations (recovery made a follow-up in the period) and what became of them.
+def recovery(
+    account,
+    period: Period,
+    rows: list[dict] | None = None,
+    now: datetime | None = None,
+) -> dict:
+    """Missed enquiries (no reply within 24 hours, the same rule as ``response``) and what
+    became of them.
 
-    A conversation counts as recovered once the business really replied after the reminder was
-    made; a reply before it doesn't count. Leads and paid orders are those credited to a recovered
-    conversation after its reminder.
+    One source with ``response``: ``missed`` here is always ``response()["missed"]`` for the same
+    period, so the page can't say "1 unanswered" beside "no missed conversations". A missed
+    enquiry counts as recovered once the business really replied, however late. Leads and paid
+    orders are those credited to a recovered conversation after its 24 hours ran out.
     """
     from apps.commerce.models import Order
     from apps.crm.models import Lead
 
-    reminders = (
-        FollowUp.objects.filter(
-            account=account,
-            source=FollowUp.Source.MISSED,
-            conversation__isnull=False,
-            created_at__gte=period.start,
-            created_at__lt=period.end,
-        )
-        .values("conversation_id")
-        .annotate(reminded_at=Min("created_at"))
-    )
-    reminded = {r["conversation_id"]: r["reminded_at"] for r in reminders}
-    if not reminded:
-        return {
-            "missed": 0,
-            "recovered": 0,
-            "rate_pct": None,
-            "became_leads": 0,
-            "paid_orders": 0,
-        }
-    # The latest reply, not the first: an earlier reply predates the reminder, and any reply at or
-    # after it means the conversation was picked back up.
-    latest_reply = dict(
-        Message.objects.filter(
-            conversation_id__in=list(reminded),
-            direction=Message.Direction.OUTBOUND,
-            status__in=RESPONSE_STATUSES,
-        )
-        .values("conversation_id")
-        .annotate(latest=Max("timestamp"))
-        .values_list("conversation_id", "latest")
-    )
-    recovered = {
-        cid
-        for cid, at in reminded.items()
-        if latest_reply.get(cid) is not None and latest_reply[cid] >= at
+    now = now or timezone.now()
+    rows = first_replies(account, period.start, period.end) if rows is None else rows
+    missed_rows = [r for r in rows if _outcome(r, now) == "missed"]
+    late = {
+        r["id"]: r["first_in"] + ANSWER_WITHIN
+        for r in missed_rows
+        if r["first_reply"] is not None
     }
-    leads = sum(
-        1
-        for cid, created in Lead.objects.filter(
-            account=account, conversation_id__in=list(recovered)
-        ).values_list("conversation_id", "created_at")
-        if created >= reminded[cid]
+    leads = (
+        sum(
+            1
+            for cid, created in Lead.objects.filter(
+                account=account, conversation_id__in=list(late)
+            ).values_list("conversation_id", "created_at")
+            if created >= late[cid]
+        )
+        if late
+        else 0
     )
-    paid = sum(
-        1
-        for cid, paid_at in Order.objects.filter(
-            account=account,
-            conversation_id__in=list(recovered),
-            status=Order.Status.PAID,
-            paid_at__isnull=False,
-        ).values_list("conversation_id", "paid_at")
-        if paid_at >= reminded[cid]
+    paid = (
+        sum(
+            1
+            for cid, paid_at in Order.objects.filter(
+                account=account,
+                conversation_id__in=list(late),
+                status=Order.Status.PAID,
+                paid_at__isnull=False,
+            ).values_list("conversation_id", "paid_at")
+            if paid_at >= late[cid]
+        )
+        if late
+        else 0
     )
     return {
-        "missed": len(reminded),
-        "recovered": len(recovered),
-        "rate_pct": pct(len(recovered), len(reminded)),
+        "missed": len(missed_rows),
+        "recovered": len(late),
+        "rate_pct": pct(len(late), len(missed_rows)),
         "became_leads": leads,
         "paid_orders": paid,
     }
@@ -954,10 +977,16 @@ def proof(account, week: Period | None = None, now: datetime | None = None) -> d
     before = week.previous()
     rows_now = first_replies(account, week.start, week.end)
     rows_before = first_replies(account, before.start, before.end)
-    median_now = response(account, week, rows_now)["median_first_reply_seconds"]
-    median_before = response(account, before, rows_before)["median_first_reply_seconds"]
+    resp_now = response(account, week, rows_now, now=now)
+    resp_before = response(account, before, rows_before, now=now)
+    median_now = resp_now["median_first_reply_seconds"]
+    median_before = resp_before["median_first_reply_seconds"]
+    # A change is only shown when both sides have enough replies to mean something.
+    comparable = (
+        resp_now["replied"] >= MIN_SAMPLE and resp_before["replied"] >= MIN_SAMPLE
+    )
     replied_now = customers_replied(account, week)
-    rec = recovery(account, week)
+    rec = recovery(account, week, rows_now, now=now)
     money_now = revenue(account, week)
     money_before = revenue(account, before)
     paid_now = sum(r["orders"] for r in money_now)
@@ -982,7 +1011,9 @@ def proof(account, week: Period | None = None, now: datetime | None = None) -> d
         "replied": replied_now,
         "median": {
             "seconds": median_now,
-            "change": change(median_now, median_before),
+            "change": change(median_now, median_before) if comparable else None,
+            "replied": resp_now["replied"],
+            "automatic": resp_now["automatic_first_replies"],
         },
         "recovered": rec,
         "paid": {
@@ -1016,7 +1047,7 @@ def period_metrics(account, start: datetime, end: datetime) -> dict:
     period = Period(start, end)
     rows = first_replies(account, start, end)
     resp = response(account, period, rows)
-    rec = recovery(account, period)
+    rec = recovery(account, period, rows)
     money = revenue(account, period)
     from apps.crm.models import Lead
 

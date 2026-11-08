@@ -1,6 +1,8 @@
 {% comment %}
 Pillar 1: customer response. ``response``, ``recovery``, ``peak_hours``, ``team`` from
-apps.conversations.reporting, for the selected ``days`` period.
+apps.conversations.reporting, for the selected ``days`` period. One rule for answered/missed
+(reporting._outcome), so "not answered within 24 hours" and "missed" are the same number.
+Rates use |share (below reporting.MIN_SAMPLE they read "1 of 1", never "100%").
 {% endcomment %}
 {% load insights_tags charts %}
 <section class="space-y-4" aria-labelledby="response-h">
@@ -12,24 +14,32 @@ apps.conversations.reporting, for the selected ``days`` period.
       <div>
         <p class="stat-value">{{ response.median_first_reply_seconds|duration }}</p>
         <p class="stat-label">median first reply</p>
+        {% if response.replied|thin %}
+        <p class="stat-delta text-ink-subtle">From {{ response.replied }} repl{{ response.replied|pluralize:"y,ies" }}, not enough data yet</p>
+        {% elif response.automatic_first_replies %}
+        <p class="stat-delta text-ink-subtle">{{ response.automatic_first_replies }} of {{ response.replied }} sent automatically</p>
+        {% endif %}
       </div>
       <div>
-        <p class="stat-value">{% if response.answered_pct is not None %}{{ response.answered_pct }}%{% else %}—{% endif %}</p>
-        <p class="stat-label">conversations answered within 24 hours{% if response.enquiries %} ({{ response.answered }} of {{ response.enquiries }}){% endif %}</p>
+        <p class="stat-value">{{ response.answered|share:response.settled }}</p>
+        <p class="stat-label">answered within 24 hours{% if response.settled and not response.settled|thin %} ({{ response.answered }} of {{ response.settled }}){% endif %}</p>
+        {% if response.settled|thin %}<p class="stat-delta text-ink-subtle">Not enough data yet for a rate</p>{% endif %}
+        {% if response.pending %}<p class="stat-delta text-ink-subtle">{{ response.pending }} still inside {{ response.pending|pluralize:"its,their" }} 24 hours</p>{% endif %}
       </div>
       <div>
-        <p class="stat-value">{% if recovery.rate_pct is not None %}{{ recovery.rate_pct }}%{% else %}—{% endif %}</p>
+        <p class="stat-value">{{ recovery.recovered|share:recovery.missed }}</p>
         <p class="stat-label">
-          {% if recovery.missed %}{{ recovery.recovered }} of {{ recovery.missed }} missed conversations recovered{% else %}no missed conversations this period{% endif %}
+          {% if recovery.missed %}of {{ recovery.missed }} missed (no reply within 24 hours) answered later{% else %}none missed: every enquiry answered within 24 hours{% endif %}
         </p>
       </div>
       <div>
-        <p class="stat-value">{% if followups.completion_pct is not None %}{{ followups.completion_pct }}%{% else %}—{% endif %}</p>
-        <p class="stat-label">of follow-ups completed, last {{ followups.days }} days{% if followups.due %} ({{ followups.completed }} of {{ followups.due }}{% if followups.on_time_pct is not None %}, {{ followups.on_time_pct }}% on time{% endif %}){% endif %}</p>
+        <p class="stat-value">{{ followups.completed|share:followups.due }}</p>
+        <p class="stat-label">follow-ups completed{% if followups.due and not followups.due|thin %} ({{ followups.completed }} of {{ followups.due }}{% if followups.on_time_pct is not None %}, {{ followups.on_time_pct }}% on time{% endif %}){% endif %}</p>
       </div>
       <div>
         <p class="stat-value">{{ resolution.median_resolution_seconds|duration }}</p>
-        <p class="stat-label">median time to resolve{% if resolution.resolved %} ({{ resolution.resolved }} closed this period){% endif %}</p>
+        <p class="stat-label">median time to resolve{% if resolution.resolved %} ({{ resolution.resolved }} closed){% endif %}</p>
+        {% if resolution.resolved|thin %}<p class="stat-delta text-ink-subtle">Not enough data yet</p>{% endif %}
       </div>
     </div>
 
