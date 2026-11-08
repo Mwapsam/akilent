@@ -15,8 +15,8 @@ Rows with nothing to act on are already left out by the view layer.
     {% for a in at_risk.actions %}
     <li class="flex items-center justify-between gap-3 p-3">
       <span class="text-sm text-ink">
-        {# The sentence carries its own number ("1 customer is waiting…"); printing a.count in
-           front of it read "1 1 customer…". #}
+        {% comment %}The sentence carries its own number ("1 customer is waiting…"); printing
+        a.count in front of it read "1 1 customer…".{% endcomment %}
         {{ a.text }}
       </span>
       <a href="{{ a.url }}" class="btn btn-ghost btn-sm shrink-0">{{ a.cta }}</a>
