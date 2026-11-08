@@ -13,7 +13,7 @@ It answers, for Instagram and Facebook:
   D. Did the same comment arrive in several webhook events?   -> event dedupe key bug
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.db.models import Count, TextField
 from django.db.models.functions import Cast
@@ -60,7 +60,7 @@ for label, model, channel_account, workspace, author in SOURCES:
         print("   ", hit)
 
     print("C. same text + same author within 5 min, different ids:")
-    seen = {}
+    seen: dict[int | None, list[tuple[str, datetime]]] = {}
     for pk, cid, _t, _ca, _ws, who, ts, _d in hits:
         for other_cid, other_ts in seen.get(who, []):
             if other_cid != cid and abs(ts - other_ts) <= timedelta(minutes=5):

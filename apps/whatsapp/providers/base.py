@@ -275,3 +275,5 @@ class WhatsAppProviderError(Exception):
     code: str = ""
     retryable: bool = True
     ambiguous: bool = False
+    # Meta's validation_errors for a rejected Flow JSON upload (code FLOW_VALIDATION).
+    problems: list | None = None
