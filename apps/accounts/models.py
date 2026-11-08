@@ -144,9 +144,6 @@ class Membership(models.Model):
     # When this person finished or closed the welcome tour in this workspace. Kept here,
     # not only in the browser, so it doesn't come back on every new browser or device.
     welcome_tour_seen_at = models.DateTimeField(null=True, blank=True)
-    # The one-time "Navigation got simpler" notice was closed (sidebar consolidation,
-    # 2026-11): remembered here, so it doesn't come back on another browser or device.
-    nav_notice_seen_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -1,0 +1,13 @@
+{% comment %}How a message will look to the customer: one bubble, server-rendered with the same
+markup and styles as the editors' live previews (.wa-preview / .wa-bubble, assets/app.css;
+static/js/whatsapp-template-preview.js). Used by saved replies, automatic replies to comments,
+and anywhere else a message is listed rather than edited.
+
+  {% include "components/_message_bubble.html" with text=reply.body %}
+
+Args: text (required), header, footer, buttons (a list of labels), label (screen-reader name,
+default "Message preview"), compact=True for a list row (no frame, at most 4 lines).{% endcomment %}
+<div class="wa-preview{% if compact %} wa-preview--compact{% endif %}" role="group" aria-label="{{ label|default:'Message preview' }}">
+  <div class="wa-bubble">{% if header %}<p class="font-semibold mb-1">{{ header }}</p>{% endif %}<span class="{% if compact %}line-clamp-4{% endif %}">{{ text }}</span>{% if footer %}<p class="text-xs text-ink-subtle mt-1">{{ footer }}</p>{% endif %}</div>
+  {% for b in buttons %}<div class="wa-button">{{ b }}</div>{% endfor %}
+</div>

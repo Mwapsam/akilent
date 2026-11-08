@@ -99,32 +99,6 @@ def nav_sections(context):
 
 
 @register.simple_tag(takes_context=True)
-def nav_notice(context):
-    """Whether to show the one-time "Navigation got simpler" notice: to people who were
-    members before the sidebar changed and haven't closed it (Membership.nav_notice_seen_at).
-    Never while support views a workspace, never in a background request."""
-    from apps.accounts.utils import current_membership
-    from apps.core import sections
-    from apps.core.htmx import is_background
-
-    request = context.get("request")
-    if (
-        request is None
-        or not getattr(request, "user", None)
-        or not request.user.is_authenticated
-    ):
-        return False
-    if is_background(request):
-        return False
-    membership = current_membership(request)
-    return bool(
-        membership
-        and membership.nav_notice_seen_at is None
-        and membership.created_at < sections.NAV_CHANGED_AT
-    )
-
-
-@register.simple_tag(takes_context=True)
 def palette_pages(context):
     """Ctrl+K's "Go to" items from the section registry (``sections.palette_items``)."""
     from apps.core import sections
@@ -146,11 +120,3 @@ def nav_targets(*targets):
             candidate = "/" + candidate.strip("/") + "/"
         paths.append(candidate)
     return " ".join(paths)
-
-
-@register.simple_tag
-def nav_moved():
-    """(old name, where it is now) pairs for the "Navigation got simpler" notice."""
-    from apps.core import sections
-
-    return sections.MOVED

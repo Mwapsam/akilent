@@ -130,6 +130,6 @@ def test_template_list_explains_each_status(logged_in):  # noqa: F811
         body = client.get("/email/templates/?channel=whatsapp").content.decode()
     if "rejected_one" not in body:
         pytest.skip("WhatsApp templates tab not available in this configuration")
-    assert "Meta didn't approve it, so it can't be sent" in body
+    assert "approve it, so it can" in body  # the apostrophes arrive escaped
     assert "Meta is reviewing it" in body
     assert "every 30 minutes" in body

@@ -924,11 +924,22 @@ class Event(models.Model):
         return f"{self.type} @ {self.occurred_at.isoformat()}"
 
 
+class _LiveSavedReplies(models.Manager):
+    """Saved replies that haven't been deleted: every read (the list, the composer's menu)."""
+
+    def get_queryset(self):
+        return super().get_queryset().filter(deleted_at__isnull=True)
+
+
 class SavedReply(models.Model):
     """A reusable, plain-text canned reply a business writes once for its
     agents (R2.1). Deliberately no variable substitution or channel scoping —
     that's what a WhatsApp ``MessageTemplate`` is for; this is only ever
-    inserted into the free-text composer draft, never sent on its own."""
+    inserted into the free-text composer draft, never sent on its own.
+
+    Deleting one sets ``deleted_at`` so the toast's Undo can bring it back
+    (apps/core/undo.py); ``objects`` never returns a deleted one, and
+    ``purge_deleted_saved_replies`` removes them for good after 30 days."""
 
     account = models.ForeignKey(
         "accounts.Account", on_delete=models.CASCADE, related_name="saved_replies"
@@ -936,6 +947,10 @@ class SavedReply(models.Model):
     title = models.CharField(max_length=100)
     body = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
+
+    objects = _LiveSavedReplies()
+    all_objects = models.Manager()
 
     class Meta:
         ordering = ["title"]

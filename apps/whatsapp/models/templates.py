@@ -134,5 +134,58 @@ class MessageTemplate(models.Model):
             )
         return out
 
+    # Meta's status in the shared vocabulary (components/status_badge.html), with what it
+    # means for sending.
+    _STATUS: dict[str, tuple[str, str, str]] = {
+        ApprovalStatus.APPROVED: ("live", "Approved", "Ready to send."),
+        ApprovalStatus.PENDING: (
+            "pending",
+            "Pending Meta approval",
+            "Meta is reviewing it. Most reviews finish within a day.",
+        ),
+        ApprovalStatus.REJECTED: (
+            "error",
+            "Rejected",
+            "Meta didn't approve it, so it can't be sent.",
+        ),
+        ApprovalStatus.PAUSED: (
+            "error",
+            "Paused by Meta",
+            "Meta paused it, usually after customer feedback. It can't be sent while paused.",
+        ),
+        ApprovalStatus.DELETED: ("paused", "Deleted", ""),
+        ApprovalStatus.DRAFT: ("draft", "Draft", "Not submitted to Meta."),
+    }
+
+    @property
+    def display_status(self) -> dict:
+        key, label, reason = self._STATUS.get(
+            self.approval_status, ("draft", "Draft", "")
+        )
+        if (
+            self.approval_status
+            in (
+                self.ApprovalStatus.REJECTED,
+                self.ApprovalStatus.PAUSED,
+            )
+            and self.rejection_reason
+        ):
+            reason = self.rejection_reason
+        return {"key": key, "label": label, "reason": reason}
+
+    @property
+    def display_name(self) -> str:
+        """For reading only ("order_update" → "Order update"); sends use ``name``."""
+        from apps.core.display import readable_name
+
+        return readable_name(self.name)
+
+    @property
+    def is_sample(self) -> bool:
+        """One of Meta's example templates every new WhatsApp account comes with."""
+        from apps.core.display import SAMPLE_TEMPLATE_NAMES
+
+        return self.name in SAMPLE_TEMPLATE_NAMES
+
     def __str__(self):
         return f"{self.name} [{self.approval_status}]"

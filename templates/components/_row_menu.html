@@ -1,0 +1,17 @@
+{% comment %}A row's ⋯ menu (the settings list, components/_settings_list.html). Rendered by
+{% row_menu "Actions for Store hours" %} … {% endrow_menu %} (apps/core/templatetags/ui.py).
+The slot holds menu items: <a class="row-menu-item"> or a <form> with a
+<button class="row-menu-item">. Same behaviour as components/_dropdown.html (Esc, click
+outside, focus kept in the menu while open). The list has no overflow clipping, so the
+menu shows in full on the last rows too.{% endcomment %}
+<div class="relative inline-block" x-data="{ open: false, trigger: null }" @keydown.escape="open = false; trigger && trigger.focus()">
+  <button type="button" class="btn btn-ghost btn-sm btn-icon"
+          @click="trigger = $event.currentTarget; open = !open"
+          :aria-expanded="open" aria-haspopup="menu" aria-label="{{ label }}" title="More actions">
+    {% include "components/icon.html" with name="ellipsis" class="w-5 h-5" %}
+  </button>
+  <div x-show="open" x-cloak x-transition.opacity x-trap="open" @click.outside="open = false"
+       class="absolute right-0 mt-1 w-48 card shadow-pop p-1" style="z-index: var(--z-dropdown)" role="menu" aria-label="{{ label }}">
+    {{ slot }}
+  </div>
+</div>

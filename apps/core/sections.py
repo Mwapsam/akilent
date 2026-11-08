@@ -19,7 +19,6 @@ instructions say Settings → Channels (``docs/ops/instagram-app-review.md``).
 
 from __future__ import annotations
 
-import datetime
 from dataclasses import dataclass, field
 
 
@@ -218,26 +217,6 @@ SECTIONS: tuple[Section, ...] = (
             ),
         ),
     ),
-)
-
-# When the sidebar became six sections: people who joined before see the one-time
-# "Navigation got simpler" notice; people who joined after never knew the old one.
-NAV_CHANGED_AT = datetime.datetime(2026, 11, 8, tzinfo=datetime.UTC)
-
-# Pages that left the sidebar, with where they live now: Ctrl+K finds them by their old
-# name, and the one-time "Navigation got simpler" notice lists them.
-MOVED = (
-    ("Dashboard", "Home"),
-    ("Interested", "Customers \u203a Interested"),
-    ("Orders", "Customers \u203a Orders"),
-    ("Comments", "Inbox \u203a Comments"),
-    ("Follow-ups", "Inbox \u203a Follow-ups"),
-    ("Templates", "Campaigns \u203a Message templates"),
-    ("Forms", "Automations \u203a Forms"),
-    ("Build", "Automations \u203a Build with AI"),
-    ("Insights", "Home \u203a Insights"),
-    ("Message history", "Settings \u203a Activity log"),
-    ("Billing", "your account menu"),
 )
 
 

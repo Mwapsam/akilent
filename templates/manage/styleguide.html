@@ -336,5 +336,46 @@
     </div>
   </section>
 
+  {# ── Shared list components (Inbox pages plan, Stage 3) ───────── #}
+  <section>
+    <h2 class="text-lg font-semibold text-ink mb-3">Status badge (draft · pending · live · paused · error)</h2>
+    <div class="flex flex-wrap items-center gap-2">
+      {% include "components/status_badge.html" with status=sg_statuses.draft %}
+      {% include "components/status_badge.html" with status=sg_statuses.pending %}
+      {% include "components/status_badge.html" with status=sg_statuses.live %}
+      {% include "components/status_badge.html" with status=sg_statuses.paused %}
+      {% include "components/status_badge.html" with status=sg_statuses.error show_reason=True %}
+    </div>
+    <p class="mt-2 text-xs text-ink-subtle">components/status_badge.html with a {key, label, reason} dict: ConversationForm.display_status, MessageTemplate.display_status, rules' display_status.</p>
+  </section>
+
+  <section>
+    <h2 class="text-lg font-semibold text-ink mb-3">Settings list, row menu, message preview</h2>
+    {% include "components/_settings_list.html" with title="Saved replies" count=2 add_url="#" add_label="Add a saved reply" %}
+    <ul class="slist">
+      <li class="slist-row">
+        <div class="slist-main">
+          <p class="slist-title">Store hours</p>
+          <div class="mt-1.5">{% include "components/_message_bubble.html" with text="We're open Mon–Sat, 9am–6pm." compact=True %}</div>
+        </div>
+        <div class="slist-side">
+          {% include "components/status_badge.html" with status=sg_statuses.live %}
+          {% row_menu "Actions for Store hours" %}<a href="#" class="row-menu-item" role="menuitem">Edit</a><button type="button" class="row-menu-item row-menu-item--danger" role="menuitem">Delete</button>{% endrow_menu %}
+        </div>
+      </li>
+      <li class="slist-row">
+        <div class="slist-main"><p class="slist-title">Delivery</p><p class="slist-meta">2 questions · finished 4 of 9</p></div>
+        <div class="slist-side">{% row_menu "Actions for Delivery" %}<a href="#" class="row-menu-item" role="menuitem">Edit</a>{% endrow_menu %}</div>
+      </li>
+    </ul>
+    <div class="mt-4">{% include "components/_message_bubble.html" with text="Your order is on its way." header="Order update" footer="Reply STOP to opt out" buttons=sg_buttons %}</div>
+  </section>
+
+  <section>
+    <h2 class="text-lg font-semibold text-ink mb-3">Times ({% templatetag openblock %} when value {% templatetag closeblock %})</h2>
+    <p class="text-sm text-ink">{% when sg_times.0 %} · {% when sg_times.1 %} · {% when sg_times.2 %} · {% when sg_times.3 %}</p>
+    <p class="mt-2 text-xs text-ink-subtle">In the workspace's time zone, exact time on hover (apps/core/display.py). Undo: toasts from apps/core/undo.py.</p>
+  </section>
+
 </div>
 {% endblock %}

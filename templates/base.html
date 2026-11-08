@@ -396,7 +396,6 @@
       {% if request.shell_swap %}<template data-main-class="{% else %}<main id="main" tabindex="-1" hx-history-elt class="{% endif %}{% if user.is_authenticated %}{% block main_class %}px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-7xl mx-auto{% endblock %}{% else %}min-h-full{% endif %}">{% if request.shell_swap %}</template>{% endif %}
         {% comment %}The section's tabs (Inbox › Conversations · Comments · Follow-ups…), from
         apps/core/sections.py; a page with its own layout can empty this block.{% endcomment %}
-        {% if user.is_authenticated %}{% include "components/_nav_notice.html" %}{% endif %}
         {% if user.is_authenticated %}{% block section_tabs %}{% include "components/_section_tabs.html" %}{% endblock %}{% endif %}
         {% block page_header %}{% endblock %}
         {% block content %}{% endblock %}

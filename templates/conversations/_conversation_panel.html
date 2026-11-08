@@ -302,7 +302,7 @@ and the row in the list.{% endcomment %}
     {% with latest=notes.0 %}
     <div class="cv-note">
       <p class="whitespace-pre-wrap break-words">{{ latest.body }}</p>
-      <p class="text-xs text-ink-subtle mt-1.5" title="{{ latest.created_at|date:'Y-m-d H:i' }}">{{ latest.author|default:"—" }} · {{ latest.created_at|timesince }} ago</p>
+      <p class="text-xs text-ink-subtle mt-1.5" title="{{ latest.created_at|date:'Y-m-d H:i' }}">{{ latest.author|default:"—" }} · {% when latest.created_at %}</p>
     </div>
     {% endwith %}
     {% if notes|length > 1 %}
@@ -312,7 +312,7 @@ and the row in the list.{% endcomment %}
         {% for n in notes|slice:"1:" %}
         <li class="cv-note">
           <p class="whitespace-pre-wrap break-words">{{ n.body }}</p>
-          <p class="text-xs text-ink-subtle mt-1.5" title="{{ n.created_at|date:'Y-m-d H:i' }}">{{ n.author|default:"—" }} · {{ n.created_at|timesince }} ago</p>
+          <p class="text-xs text-ink-subtle mt-1.5" title="{{ n.created_at|date:'Y-m-d H:i' }}">{{ n.author|default:"—" }} · {% when n.created_at %}</p>
         </li>
         {% endfor %}
       </ul>

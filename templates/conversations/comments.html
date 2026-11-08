@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ui %}
 {% block title %}Comments — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
@@ -55,7 +56,7 @@
       <div class="flex flex-wrap items-start justify-between gap-2">
         <div class="min-w-0">
           <p class="text-sm text-ink"><span class="font-medium">{{ c.author }}</span>
-            <span class="text-ink-subtle text-xs ml-1">{{ c.timestamp|timesince }} ago</span></p>
+            <span class="text-ink-subtle text-xs ml-1">{% when c.timestamp %}</span></p>
           <p class="mt-1 text-sm {% if c.state == 'deleted' %}line-through text-ink-subtle{% else %}text-ink-muted{% endif %}">{{ c.body|default:"(no text)" }}</p>
           <div class="mt-1 flex flex-wrap gap-1">
             {% if thread.intent %}<span class="badge badge-success">Wants to buy</span>{% endif %}
@@ -87,7 +88,7 @@
         {% for r in thread.replies %}
         <li class="text-sm">
           <span class="font-medium {% if r.outbound %}text-brand{% else %}text-ink{% endif %}">{{ r.author }}</span>
-          <span class="text-ink-subtle text-xs ml-1">{{ r.timestamp|timesince }} ago</span>
+          <span class="text-ink-subtle text-xs ml-1">{% when r.timestamp %}</span>
           {% if r.state == 'hidden' %}<span class="badge badge-neutral ml-1">Hidden</span>{% endif %}
           <p class="text-ink-muted {% if r.state == 'deleted' %}line-through{% endif %}">{{ r.body }}</p>
           {% if not read_only and not r.outbound and r.state != 'deleted' %}
@@ -136,7 +137,7 @@
     <ul class="space-y-1">
       {% for b in post.business_comments %}
       <li class="text-sm text-ink-muted">{{ b.body }}
-        <span class="text-xs ml-1 {% if b.status == 'failed' %}text-coral-700{% else %}text-ink-subtle{% endif %}">{% if b.status == 'sent' %}Posted {{ b.sent_at|timesince }} ago{% elif b.status == 'failed' %}Not posted: {{ b.last_error|truncatechars:120 }}{% else %}{{ b.get_status_display }}{% endif %}</span></li>
+        <span class="text-xs ml-1 {% if b.status == 'failed' %}text-coral-700{% else %}text-ink-subtle{% endif %}">{% if b.status == 'sent' %}Posted {% when b.sent_at %}{% elif b.status == 'failed' %}Not posted: {{ b.last_error|truncatechars:120 }}{% else %}{{ b.get_status_display }}{% endif %}</span></li>
       {% endfor %}
     </ul>
   </div>

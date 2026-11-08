@@ -314,8 +314,17 @@ def comment_rule_toggle(request, kind: str, pk: int):
     )
     rule.is_active = not rule.is_active
     rule.save(update_fields=["is_active", "updated_at"])
-    messages.success(
-        request, f'Rule "{rule.name}" {"switched on" if rule.is_active else "paused"}.'
+    from apps.accounts.utils import flash
+    from apps.core.undo import undo_url
+
+    flash(
+        request,
+        "success",
+        f'Rule "{rule.name}" {"switched on" if rule.is_active else "paused"}.',
+        # Pausing by mistake is the costly one: comments go unanswered meanwhile.
+        undo=None
+        if rule.is_active
+        else undo_url(request, "rule_pause", rule.pk, kind=kind),
     )
     return redirect("instagram-comment-rules")
 

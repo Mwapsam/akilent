@@ -803,6 +803,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.core.webhook_replay.replay_held_webhooks",
         "schedule": 120.0,  # backstop for the replay kicked off when a channel is switched on
     },
+    "purge-deleted-saved-replies": {
+        "task": "apps.conversations.tasks.purge_deleted_saved_replies",
+        "schedule": 86400.0,  # a deleted saved reply's Undo lasts seconds; keep it 30 days
+    },
     "prune-webhook-logs": {
         "task": "apps.core.webhook_replay.prune_webhook_logs",
         "schedule": 86400.0,  # raw webhook bodies are customer data; keep them 30/90 days

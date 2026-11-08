@@ -220,3 +220,60 @@ def ago(value, now=None):
         else local.year == now.year
     )
     return date_format(local, "j M" if same_year else "j M Y")
+
+
+def _workspace_zone(context):
+    """The current workspace's time zone, looked up once per request (UTC if none)."""
+    from zoneinfo import ZoneInfo
+
+    request = context.get("request")
+    cached = getattr(request, "_ak_zone", None) if request is not None else None
+    if cached is not None:
+        return cached
+    zone = ZoneInfo("UTC")
+    account = context.get("account")
+    if account is None and request is not None and getattr(request, "user", None):
+        try:
+            from apps.accounts.utils import get_current_account
+
+            account = get_current_account(request)
+        except Exception:
+            account = None
+    if account is not None:
+        from apps.conversations.followups import business_zone
+
+        zone = business_zone(account)
+    if request is not None:
+        request._ak_zone = zone
+    return zone
+
+
+@register.simple_tag(takes_context=True)
+def when(context, value):
+    """``{% when comment.timestamp %}``: "12 days ago" / "yesterday" / "8 Nov, 13:29", in the
+    workspace's time zone, as a <time> with the exact time on hover (apps.core.display)."""
+    from django.utils.html import format_html
+
+    from apps.core.display import full_text, when_text
+
+    if not value:
+        return ""
+    zone = _workspace_zone(context)
+    return format_html(
+        '<time datetime="{}" title="{}">{}</time>',
+        value.isoformat(),
+        full_text(value, zone),
+        when_text(value, zone),
+    )
+
+
+@register.simple_block_tag
+def row_menu(content, label="More actions"):
+    """A row's ⋯ menu: ``{% row_menu "Actions for X" %}<a class="row-menu-item">…{% endrow_menu %}``
+    (components/_row_menu.html)."""
+    return mark_safe(  # nosec B703 B308
+        render_to_string(
+            "components/_row_menu.html",
+            {"slot": mark_safe(content), "label": label},  # nosec B703 B308
+        )
+    )

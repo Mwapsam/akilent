@@ -1,55 +1,29 @@
 {% extends "conversations/inbox_settings_base.html" %}
+{% load ui %}
 {% block title %}Saved replies — Inbox settings{% endblock %}
 
 {% block inbox_settings_content %}
 <p class="mb-4 text-sm text-ink-subtle">Write a reply once, reuse it from any conversation's composer.</p>
-
-<div class="grid gap-6 lg:grid-cols-3">
-  <section class="lg:col-span-2">
-    {% if replies %}
-    <div class="table-wrap">
-      <table class="table table--cards">
-        <thead><tr><th>Title</th><th>Message</th><th></th></tr></thead>
-        <tbody>
-          {% for r in replies %}
-          <tr>
-            <td data-label="Title">{{ r.title }}</td>
-            <td data-label="Message" class="text-ink-subtle">{{ r.body|truncatechars:80 }}</td>
-            <td>
-              <form method="post" action="{% url 'conversations:saved_reply_delete' r.pk %}"
-                    data-confirm="Delete this saved reply?" data-confirm-danger data-confirm-label="Delete">
-                {% csrf_token %}
-                <button class="btn btn-ghost btn-sm">Delete</button>
-              </form>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+{% url 'conversations:saved_replies' as list_url %}
+{% include "components/_settings_list.html" with title="Saved replies" count=replies|length add_url=list_url|add:"?add=1" add_label="Add a saved reply" empty_icon="chat" empty_title="No saved replies yet" empty_message="Add your most common answers so nobody has to retype them." %}
+{% if replies %}
+<ul class="slist">
+  {% for r in replies %}
+  <li class="slist-row">
+    <div class="slist-main">
+      <p class="slist-title">{{ r.title }}</p>
+      <div class="mt-1.5">{% include "components/_message_bubble.html" with text=r.body compact=True label="How "|add:r.title|add:" reads" %}</div>
     </div>
-    {% else %}
-    <div class="table-wrap">
-      {% include "components/empty_state.html" with icon="chat" title="No saved replies yet" message="Add your most common answers so agents don't have to retype them every time." %}
+    <div class="slist-side">
+      {% row_menu "Actions for "|add:r.title %}
+        <form method="post" action="{% url 'conversations:saved_reply_delete' r.pk %}" hx-boost="false">
+          {% csrf_token %}
+          <button class="row-menu-item row-menu-item--danger" role="menuitem">Delete</button>
+        </form>
+      {% endrow_menu %}
     </div>
-    {% endif %}
-  </section>
-
-  <section>
-    <div class="card card-pad">
-      <h2 class="font-semibold mb-3">Add a saved reply</h2>
-      <form method="post" class="space-y-3">
-        {% csrf_token %}
-        <div>
-          <label class="label" for="reply-title">Title</label>
-          <input id="reply-title" name="title" class="input" placeholder="e.g. Store hours" required />
-        </div>
-        <div>
-          <label class="label" for="reply-body">Message</label>
-          <textarea id="reply-body" name="body" rows="4" class="input" placeholder="We're open Mon-Sat, 9am-6pm." required></textarea>
-        </div>
-        <button class="btn btn-primary btn-sm w-full">Save</button>
-      </form>
-    </div>
-  </section>
-</div>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
 {% endblock %}

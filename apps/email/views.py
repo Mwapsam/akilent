@@ -950,6 +950,17 @@ def templates_list(request):
         )
         for t in whatsapp_templates:
             t.can_edit = can_edit(t)  # type: ignore[attr-defined]
+        # Real templates first; Meta's samples (hidden until "Show samples") after.
+        whatsapp_templates.sort(key=lambda t: (t.is_sample, t.name, t.language_code))
+    template_filters = {
+        "template_categories": [
+            (value, label)
+            for value, label in _wa_categories()
+            if any(t.category == value for t in whatsapp_templates)
+        ],
+        "template_languages": sorted({t.language_code for t in whatsapp_templates}),
+        "sample_count": sum(1 for t in whatsapp_templates if t.is_sample),
+    }
 
     return render(
         request,
@@ -965,8 +976,15 @@ def templates_list(request):
             "email_enabled": email_enabled,
             "whatsapp_enabled": whatsapp_enabled,
             "whatsapp_templates": whatsapp_templates,
+            **template_filters,
         },
     )
+
+
+def _wa_categories():
+    from apps.whatsapp.models import MessageTemplate
+
+    return MessageTemplate.Category.choices
 
 
 @login_required

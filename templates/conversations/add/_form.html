@@ -1,0 +1,15 @@
+{% comment %}Add a form (modal from Automations › Forms, or its own page). Saving opens the new
+form's editor.{% endcomment %}
+<form method="post" action="{% url 'conversations:forms_list' %}" class="space-y-3"{% if not in_overlay %} hx-boost="false"{% endif %}>
+  {% csrf_token %}
+  {% if error %}<p class="text-sm text-coral-700" role="alert">{{ error }}</p>{% endif %}
+  <div>
+    <label class="label" for="form-name">Name</label>
+    <input id="form-name" name="name" class="input" placeholder="e.g. New customer intake" value="{{ values.name }}" required autofocus />
+  </div>
+  <p class="text-xs text-ink-subtle">You add the questions next. Nothing is sent until you make it ready.</p>
+  <div class="flex justify-end gap-2">
+    {% if in_overlay %}<button type="button" class="btn btn-ghost btn-sm" data-overlay-close>Cancel</button>{% else %}<a href="{% url 'conversations:forms_list' %}" class="btn btn-ghost btn-sm">Cancel</a>{% endif %}
+    <button class="btn btn-primary btn-sm">Add form</button>
+  </div>
+</form>

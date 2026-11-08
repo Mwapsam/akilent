@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% comment %}The page form of a small modal (apps.core.htmx.overlay_or_page): the same partial,
+for a direct link, a refresh or no JavaScript. Needs: overlay_partial, page_title,
+back_url, back_label.{% endcomment %}
+{% block title %}{{ page_title }} — {{ site.app_name|default:"Akilent" }}{% endblock %}
+
+{% block content %}
+<header class="mb-6">
+  {% if back_url %}<nav class="mb-1 flex items-center gap-1.5 text-xs text-ink-subtle" aria-label="Breadcrumb">
+    <a href="{{ back_url }}" class="hover:text-ink">{{ back_label }}</a>
+    <span aria-hidden="true">/</span><span class="text-ink">{{ page_title }}</span>
+  </nav>{% endif %}
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">{{ page_title }}</h1>
+</header>
+<div class="card card-pad max-w-xl">{% include overlay_partial %}</div>
+{% endblock %}

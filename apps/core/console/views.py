@@ -1372,10 +1372,38 @@ def styleguide(request):
     See docs/design/akilent-ui-spec.md §7. The chart samples include the two shapes that break naive
     scaling — a flat series and a single reading.
     """
+    import datetime
+
+    from django.utils import timezone
+
+    now = timezone.now()
     return render(
         request,
         "manage/styleguide.html",
         {
+            # The shared status vocabulary, list and time samples (components/status_badge.html).
+            "sg_statuses": {
+                "draft": {"key": "draft", "label": "Draft", "reason": ""},
+                "pending": {
+                    "key": "pending",
+                    "label": "Pending",
+                    "reason": "Meta is reviewing it.",
+                },
+                "live": {"key": "live", "label": "Live", "reason": ""},
+                "paused": {"key": "paused", "label": "Paused", "reason": ""},
+                "error": {
+                    "key": "error",
+                    "label": "Error",
+                    "reason": "Question 2 needs a field name.",
+                },
+            },
+            "sg_buttons": ["Track my order"],
+            "sg_times": [
+                now - datetime.timedelta(minutes=5),
+                now - datetime.timedelta(days=1),
+                now - datetime.timedelta(days=12),
+                now - datetime.timedelta(days=45),
+            ],
             "styleguide_days": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
             "styleguide_series": [
                 ("Opens", [42, 58, 51, 74, 66, 31, 39]),

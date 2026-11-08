@@ -162,7 +162,15 @@ def moderate(request, channel: str, pk: int):
     action = request.POST.get("action", "")
     try:
         comments.moderate(account, channel, pk, action, request.user)
-        messages.success(request, _DONE.get(action, "Done."))
+        undo = None
+        if action == "hide":
+            from apps.core.undo import undo_url
+
+            # The Undo unhides it on Instagram/Facebook too (undo_handlers.comment_hide).
+            undo = undo_url(request, "comment_hide", pk, channel=channel)
+        from apps.accounts.utils import flash
+
+        flash(request, "success", _DONE.get(action, "Done."), undo=undo)
     except comments.CommentError as exc:
         messages.error(request, str(exc))
     return _back(request)

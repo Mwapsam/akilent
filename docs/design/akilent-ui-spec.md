@@ -692,3 +692,18 @@ sample, brand-accurate channel previews, prose tables with their own scroll rule
 `drift_exceptions.toml` with a reason each. The dark-theme text bridge at the end of
 `assets/app.css` is temporary: delete each line once its utility has left `templates/`.
 
+
+## 19. Shared components (Inbox pages plan, 2026-11-08)
+
+Built once, used by Forms, Message templates, Saved replies, Teams and the comment rules; meant for Automations, Campaigns and Settings next. Samples on `/manage/styleguide/`.
+
+| Component | Where | Contract |
+|---|---|---|
+| Section tabs | `components/_section_tabs.html`, `apps/core/sections.py` | One registry for the sidebar, the tab bar and Ctrl+K. Rendered by `base.html` on any section page with more than one tab; a page can empty `{% block section_tabs %}`. |
+| Settings list | `components/_settings_list.html` + `.slist` | Head (title, count, **Add** opening a modal via `?add=1` + `data-overlay-open="modal"`) and empty state; the page draws `<ul class="slist">` rows: `.slist-main` (`.slist-title`, `.slist-meta`), `.slist-side` (status, then the ⋯ menu). No overflow clipping, so menus on the last row show in full. |
+| Row menu | `{% row_menu "Actions for X" %}…{% endrow_menu %}` | ⋯ button; items are `.row-menu-item` links or buttons (`--danger` for destructive). Esc and click outside close it. |
+| Add in a modal | `conversations.views._add_overlay`, `components/_overlay_page.html` | The same form as a modal or a page. A bad save re-renders in the modal (422); a good one closes it with a toast (`overlay_done`) or goes on to what was made (`HX-Redirect`). |
+| Status badge | `components/status_badge.html` | `{key, label, reason}`; keys draft · pending · live · paused · error. Models expose `display_status` (forms, WhatsApp templates, comment rules). `components/status.html` stays for the message lifecycle. |
+| Message preview | `components/_message_bubble.html` | Server-rendered `.wa-preview` / `.wa-bubble`, the markup of the editors' live previews (`whatsapp-template-preview.js`); `compact=True` in list rows. |
+| Times | `{% when value %}` (`apps/core/display.py`) | "just now / 5 min ago / 3 hours ago / yesterday / 12 days ago", then "8 Nov, 13:29" (+ year), in the workspace's time zone, exact time on hover. Replaces `timesince`. |
+| Undo | `apps/core/undo.py` (`undo_url`, `/undo/`) | A signed, 90-second token naming the action, person and workspace; each app registers a handler that undoes for real (unhiding a comment calls Meta). Offered on Follow-up Done, pausing a comment rule, hiding a comment and deleting a saved reply (kept 30 days, `SavedReply.deleted_at`). |

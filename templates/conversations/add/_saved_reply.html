@@ -1,0 +1,17 @@
+{% comment %}Add a saved reply (modal from Inbox settings › Saved replies, or its own page).{% endcomment %}
+<form method="post" action="{% url 'conversations:saved_replies' %}" class="space-y-3"{% if not in_overlay %} hx-boost="false"{% endif %}>
+  {% csrf_token %}
+  {% if error %}<p class="text-sm text-coral-700" role="alert">{{ error }}</p>{% endif %}
+  <div>
+    <label class="label" for="reply-title">Title</label>
+    <input id="reply-title" name="title" class="input" placeholder="e.g. Store hours" value="{{ values.title }}" required autofocus />
+  </div>
+  <div>
+    <label class="label" for="reply-body">Message</label>
+    <textarea id="reply-body" name="body" rows="4" class="input" placeholder="We're open Mon-Sat, 9am-6pm." required>{{ values.body }}</textarea>
+  </div>
+  <div class="flex justify-end gap-2">
+    {% if in_overlay %}<button type="button" class="btn btn-ghost btn-sm" data-overlay-close>Cancel</button>{% else %}<a href="{% url 'conversations:saved_replies' %}" class="btn btn-ghost btn-sm">Cancel</a>{% endif %}
+    <button class="btn btn-primary btn-sm">Save reply</button>
+  </div>
+</form>

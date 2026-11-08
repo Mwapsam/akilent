@@ -299,3 +299,17 @@ def send_weekly_reports() -> int:
         except Exception:
             logger.exception("send_weekly_reports: failed for account %s", account.pk)
     return sent
+
+
+@shared_task(queue="celery")
+def purge_deleted_saved_replies(days: int = 30) -> int:
+    """Remove saved replies deleted more than ``days`` ago (their Undo is long gone)."""
+    import datetime
+
+    from django.utils import timezone
+
+    from apps.conversations.models import SavedReply
+
+    cutoff = timezone.now() - datetime.timedelta(days=days)
+    deleted, _ = SavedReply.all_objects.filter(deleted_at__lt=cutoff).delete()
+    return deleted

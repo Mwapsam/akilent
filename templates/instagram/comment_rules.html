@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ui %}
 {% block title %}Comment rules — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
@@ -102,7 +103,7 @@
         </span>
         <span class="flex items-center gap-2">
           {% with shown=log.display_outcome %}{% if shown %}<span class="badge badge-{{ shown.tone }}">{{ shown.label }}</span>{% endif %}{% endwith %}
-          <span class="text-ink-subtle">{{ log.occurred_at|timesince }} ago</span>
+          <span class="text-ink-subtle">{% when log.occurred_at %}</span>
         </span>
       </div>
       <p class="mt-1 text-gray-700">“{% if log.facebook_comment %}{{ log.facebook_comment.body|truncatechars:140 }}{% else %}{{ log.comment.body|truncatechars:140 }}{% endif %}”</p>

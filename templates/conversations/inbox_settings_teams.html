@@ -1,48 +1,29 @@
 {% extends "conversations/inbox_settings_base.html" %}
+{% load ui %}
 {% block title %}Teams & routing — Inbox settings{% endblock %}
 
 {% block inbox_settings_content %}
-<section id="teams" class="mb-10 scroll-mt-24" aria-labelledby="teams-title">
-  <h2 id="teams-title" class="text-lg font-semibold text-ink">Teams</h2>
-  <p class="mt-1 mb-4 text-sm text-ink-subtle">Who is responsible for a conversation (Sales, Support), kept separate from which person owns it.</p>
-<div class="grid gap-6 lg:grid-cols-3">
-  <section class="lg:col-span-2">
-    {% if teams %}
-    <div class="table-wrap">
-      <table class="table table--cards">
-        <thead><tr><th>Team</th><th>Members</th><th></th></tr></thead>
-        <tbody>
-          {% for team in teams %}
-          <tr>
-            <td data-label="Team">{{ team.name }}</td>
-            <td data-label="Members" class="text-ink-subtle">{{ team.member_count }}</td>
-            <td><a href="{% url 'conversations:team_detail' team.pk %}" class="btn btn-ghost btn-sm">Manage</a></td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% else %}
-    <div class="table-wrap">
-      {% include "components/empty_state.html" with icon="users" title="No teams yet" message="Add a team, then send conversations to it with a routing rule below." %}
-    </div>
-    {% endif %}
-  </section>
-
-  <section>
-    <div class="card card-pad">
-      <h2 class="font-semibold mb-3">Add a team</h2>
-      <form method="post" action="{% url 'conversations:teams' %}" class="space-y-3">
-        {% csrf_token %}
-        <div>
-          <label class="label" for="team-name">Name</label>
-          <input id="team-name" name="name" class="input" placeholder="e.g. Sales" required />
-        </div>
-        <button class="btn btn-primary btn-sm w-full">Add team</button>
-      </form>
-    </div>
-  </section>
-</div>
+<section id="teams" class="mb-10 scroll-mt-24" aria-label="Teams">
+  <p class="mb-4 text-sm text-ink-subtle">Teams say who is responsible for a conversation (Sales, Support), separately from which person owns it.</p>
+  {% url 'conversations:teams' as teams_url %}
+  {% include "components/_settings_list.html" with title="Teams" count=teams|length add_url=teams_url|add:"?add=1" add_label="Add a team" empty_icon="users" empty_title="No teams yet" empty_message="Add a team, then send conversations to it with a routing rule below." %}
+  {% if teams %}
+  <ul class="slist">
+    {% for team in teams %}
+    <li class="slist-row">
+      <div class="slist-main">
+        <a href="{% url 'conversations:team_detail' team.pk %}" class="slist-title hover:underline">{{ team.name }}</a>
+        <p class="slist-meta">{{ team.member_count }} member{{ team.member_count|pluralize }}</p>
+      </div>
+      <div class="slist-side">
+        {% row_menu "Actions for "|add:team.name %}
+          <a href="{% url 'conversations:team_detail' team.pk %}" class="row-menu-item" role="menuitem">Manage members</a>
+        {% endrow_menu %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
 </section>
 
 <section id="routing" class="scroll-mt-24" aria-labelledby="routing-title">

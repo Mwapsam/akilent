@@ -15,6 +15,7 @@ from apps.accounts.views import (
     passkey_signin_options,
     recovery_sign_in,
 )
+from apps.core import undo as core_undo
 from apps.core import views as core_views
 from apps.core import views_events
 from apps.publishing.public_views import bio_page, go_link
@@ -135,6 +136,8 @@ urlpatterns = [
     path("ai/", include("apps.ai.urls", namespace="ai")),
     path("scheduled/", include("apps.scheduler.urls", namespace="scheduler")),
     path("billing/", include("apps.billing.urls", namespace="billing")),
+    # A toast's Undo (apps/core/undo.py).
+    path("undo/", core_undo.undo, name="undo"),
     path("manage/", include("apps.core.urls", namespace="core")),
     path("api/", include("apps.api.urls")),
     path("api/chat/", include("apps.chatbot.api.urls")),

@@ -1,13 +1,11 @@
-"""The sidebar's six sections, their tabs, the Inbox badge, Inbox settings, Ctrl+K and the
-one-time "Navigation got simpler" notice (apps/core/sections.py)."""
+"""The sidebar's six sections, their tabs, the Inbox badge, Inbox settings and Ctrl+K
+(apps/core/sections.py)."""
 
-import datetime
 import json
 import re
 
 import pytest
 from django.contrib.auth.models import User
-from django.utils import timezone
 
 from apps.accounts.models import Account, Membership, Team
 from apps.core import sections
@@ -274,31 +272,6 @@ def test_ctrl_k_finds_every_page_and_old_names(owner_client):
     old = {i["label"]: i["hint"] for i in items if i["hint"]}
     assert old["Message history"] == "now Settings \u203a Activity log"
     assert old["Billing & plans"] == "in your account menu"
-
-
-# ── The one-time notice ─────────────────────────────────────────────────────
-
-
-def test_the_notice_shows_to_earlier_members_until_closed(owner, owner_client):
-    user, account = owner
-    Membership.objects.filter(user=user).update(
-        created_at=sections.NAV_CHANGED_AT - datetime.timedelta(days=30)
-    )
-    assert "Navigation got simpler" in owner_client.get("/dashboard/").content.decode()
-    assert owner_client.post("/nav-notice-seen/").status_code == 204
-    assert (
-        "Navigation got simpler" not in owner_client.get("/dashboard/").content.decode()
-    )
-    assert Membership.objects.get(user=user).nav_notice_seen_at is not None
-
-
-def test_new_members_never_see_the_notice(owner, owner_client):
-    Membership.objects.filter(user=owner[0]).update(created_at=timezone.now())
-    if timezone.now() >= sections.NAV_CHANGED_AT:
-        assert (
-            "Navigation got simpler"
-            not in owner_client.get("/dashboard/").content.decode()
-        )
 
 
 def test_the_inbox_badge_stays_cheap(

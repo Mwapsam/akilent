@@ -1,0 +1,18 @@
+{% comment %}The head of a settings list: its name and count, and "Add" opening a modal. With no
+items it shows the empty state instead of the list. The page then draws its rows:
+
+  {% include "components/_settings_list.html" with title="Saved replies" count=replies|length add_url=add_url add_label="Add a saved reply" empty_icon="chat" empty_title="No saved replies yet" empty_message="…" %}
+  {% if replies %}<ul class="slist">{% for r in replies %}<li class="slist-row">…{% row_menu %}…{% endrow_menu %}</li>{% endfor %}</ul>{% endif %}
+
+A row: .slist-main (.slist-title, .slist-meta) and .slist-side (a status badge, then the
+⋯ menu, components/_row_menu.html). Used by Forms, Message templates, Saved replies and
+Teams.{% endcomment %}
+<div class="mb-3 flex items-center justify-between gap-3 flex-wrap">
+  <h2 class="text-lg font-semibold text-ink">{{ title }}{% if count %} <span class="text-sm font-normal text-ink-subtle tabular-nums">{{ count }}</span>{% endif %}</h2>
+  {% if add_url %}<a href="{{ add_url }}" data-overlay-open="modal" class="btn btn-primary btn-sm">{{ add_label }}</a>{% endif %}
+</div>
+{% if not count %}
+<div class="slist">
+  {% include "components/empty_state.html" with icon=empty_icon title=empty_title message=empty_message %}
+</div>
+{% endif %}

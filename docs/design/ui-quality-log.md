@@ -2448,7 +2448,7 @@ Plan: the Inbox-area pages plan of 2026-11-08, Stage 2 (Phase N of 2026-11-05, a
 - **Inbox settings** (`conversations/inbox_settings_base.html`): Saved replies · Teams & routing (`/inbox/settings/teams/`, the teams and the routing rules on one page; `/inbox/teams/` and `/inbox/routing-rules/` go there, and their forms come back there). The inbox bar's Set-up menu and Follow-ups button became one Inbox settings link; Forms left that menu for Automations.
 - **Inbox badge** (`/inbox/badge/`): unread conversations for me (assigned to me, to nobody, or to one of my teams with nobody picked) plus follow-ups due for me. Unread is shared by the team like a shared mailbox. One badge per nav, and only the visible nav's copy asks (the existing intersect/visibility rule); it also refreshes on `inbox-refresh`.
 - **Ctrl+K** lists every section, tab and account page from the registry, and finds moved pages by their old names ("Message history: now Settings › Activity log").
-- **"Navigation got simpler"**: a one-time card for people who were members before 2026-11-08, listing where pages moved; "Got it" is remembered on the membership (`Membership.nav_notice_seen_at`, migration `accounts/0030`), so it doesn't come back on another device.
+- **"Navigation got simpler"**: built, then removed the same day at the user's request (not to be shown to users); `Membership.nav_notice_seen_at` added in `accounts/0030` is dropped by `accounts/0031`. Ctrl+K still finds moved pages by their old names.
 - Help: Getting started says Home › Insights; other help paths (Inbox → Comments, Settings → Integrations, Settings → AI) still hold.
 - **Verification:** `apps/core/tests/test_nav_sections.py` (47):
   - the sections for each gating;
@@ -2464,3 +2464,28 @@ Plan: the Inbox-area pages plan of 2026-11-08, Stage 2 (Phase N of 2026-11-05, a
   - query budgets: badge ≤ 12, registry 0.
 
   Updated for the new layout: nav tags, billing lock, follow-ups surfaces, inbox bar, studio badge and Facebook rules-card tests. Tailwind rebuilt (4.3.3).
+
+### Entry 44: Inbox pages Stage 3, shared list components and undo (2026-11-08)
+Plan: the Inbox-area pages plan of 2026-11-08, Stage 3 (components 1, 3, 4, 5 and undo). Documented in `docs/design/akilent-ui-spec.md` §19 and on the styleguide.
+
+- **Settings list** (`components/_settings_list.html` + `.slist*` CSS, `{% row_menu %}` → `components/_row_menu.html`): a head with count and an Add button that opens a modal (`?add=1` through `overlay_or_page`; errors come back in the modal as 422), rows with a ⋯ menu, and the shared empty state. Adopted by Saved replies, Teams (Inbox settings › Teams & routing), Forms and WhatsApp Message templates. Add partials are in `templates/conversations/add/`.
+- **Message templates:** search, category/status/language filters and a Show samples switch (Meta's `hello_world` and `3p_direct_integration_test_template` are marked Sample and hidden by default, sorted last). The readable name ("Order update") sits over the raw name in `<code>`. That's display only: `display_name` isn't a field, and every send uses `name`. ⋯ Preview / Edit / Duplicate / Delete… replace the bare icons.
+- **Message preview** (`components/_message_bubble.html`): the existing `.wa-preview` markup (WhatsApp's own colours kept) with a compact variant. Used for saved replies and automatic-reply rules. `whatsapp-template-preview.js` shares the markup and CSS but wasn't refactored.
+- **Status badge** (`components/status_badge.html`, Draft · Pending · Live · Paused · Error + reason): `MessageTemplate.display_status` (`whatsapp/_template_status.html` is now a wrapper), `ConversationForm.display_status`, and `display_status` on `CommentTrigger`/`ModerationRule`.
+- **Times** (`{% when value %}`, `apps/core/display.py`): "just now · 5 min ago · 3 hours ago · yesterday · 12 days ago", then "8 Nov, 13:29" (with the year if it isn't this year), counted on the workspace's calendar (`followups.business_zone`). The output is `<time datetime title>` with the exact time on hover. It replaces `timesince` on Comments, Comment rules, Form answers and the conversation panel. Tested at 23:59/00:01, at New Year and with a UTC/workspace mismatch.
+- **Undo** (`apps/core/undo.py`, `/undo/`, signed for 90s, a registry of handlers):
+  - Follow-up Done → reopen;
+  - Pause rule → resume;
+  - Hide comment → unhides at Meta, then locally;
+  - Delete saved reply → restore.
+
+  Saved replies are soft-deleted (`deleted_at`, `conversations/0031`; the default manager hides them on every read path, and `all_objects` is used only for undo and purge). They're purged after 30 days by a daily Celery beat task. Bulk hide undo comes with bulk select in Stage 4.
+- **Verification:** `apps/core/tests/test_shared_components.py`:
+  - time boundaries;
+  - status mappers;
+  - readable names and the raw-name send;
+  - the settings-list pages and Add modals;
+  - each undo action, including Meta unhide and an expired or forged token;
+  - saved-reply read paths and the purge.
+
+  The full suite is green apart from the known `test_import_5000_contacts` failure and a scheduler drainer test that is flaky in the parallel run (it passes alone). The template-list test was updated for escaped apostrophes, and the pending reason is shown again. Tailwind rebuilt (4.3.3).

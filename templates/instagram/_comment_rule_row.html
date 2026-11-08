@@ -4,14 +4,14 @@
     <div class="min-w-0">
       <p class="font-semibold text-ink">
         {{ rule.name }}
-        {% if not rule.is_active %}<span class="badge badge-neutral ml-1">Paused</span>{% endif %}
+        {% if not rule.is_active %}<span class="ml-1">{% include "components/status_badge.html" with status=rule.display_status %}</span>{% endif %}
       </p>
       <p class="text-sm text-gray-600">
         {{ summary }}{% if rule.keywords %}: <span class="font-mono text-xs">{{ rule.keywords }}</span>{% endif %}
         {% if badge %}<span class="badge badge-neutral ml-1 text-xs">{{ badge }}</span>{% endif %}
         {% if show_channels %}<span class="badge badge-info ml-1 text-xs">{{ rule.get_channels_display }}</span>{% endif %}
       </p>
-      <p class="mt-1 text-sm text-ink-subtle break-words">{{ detail }}</p>
+      {% if kind == "reply" and detail %}<div class="mt-2">{% include "components/_message_bubble.html" with text=detail compact=True label="The reply they get" %}</div>{% else %}<p class="mt-1 text-sm text-ink-subtle break-words">{{ detail }}</p>{% endif %}
       {% for w in lint %}
       <div class="mt-2 flex items-start gap-2 text-sm {% if w.severity == 'warning' %}text-amber-800{% else %}text-ink-subtle{% endif %}">
         <span aria-hidden="true">{% if w.severity == 'warning' %}⚠{% else %}ⓘ{% endif %}</span>

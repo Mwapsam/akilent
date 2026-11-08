@@ -1,8 +1,4 @@
-{% comment %}A WhatsApp template's status badge (MessageTemplate.ApprovalStatus): Meta's own status.
-Pass `t`, and `explain=True` to add a line on what it means for sending (the Templates list).{% endcomment %}
-{% if t.approval_status == 'approved' %}<span class="badge badge-success">Approved</span>{% if explain %}<span class="block mt-1 text-xs text-ink-subtle">Ready to send.</span>{% endif %}
-{% elif t.approval_status == 'rejected' %}<span class="badge badge-danger">Rejected</span>{% if explain %}<span class="block mt-1 text-xs text-ink-subtle">{% if t.rejection_reason %}{{ t.rejection_reason }}{% else %}Meta didn't approve it, so it can't be sent.{% endif %}</span>{% endif %}
-{% elif t.approval_status == 'paused' %}<span class="badge badge-danger">Paused by Meta</span>{% if explain %}<span class="block mt-1 text-xs text-ink-subtle">{% if t.rejection_reason %}{{ t.rejection_reason }}{% else %}Meta paused it, usually after customer feedback. It can't be sent while paused.{% endif %}</span>{% endif %}
-{% elif t.approval_status == 'pending' %}<span class="badge badge-warning">Pending Meta approval</span>{% if explain %}<span class="block mt-1 text-xs text-ink-subtle">Meta is reviewing it. Most reviews finish within a day.</span>{% endif %}
-{% elif t.approval_status == 'deleted' %}<span class="badge badge-neutral">Deleted</span>
-{% else %}<span class="badge badge-neutral">Draft (local only)</span>{% if explain %}<span class="block mt-1 text-xs text-ink-subtle">Not submitted to Meta.</span>{% endif %}{% endif %}
+{% comment %}A WhatsApp template's status badge: Meta's status in the shared vocabulary
+(MessageTemplate.display_status, components/status_badge.html). Pass `t`, and `explain=True`
+to add a line on what it means for sending (the Templates list).{% endcomment %}
+{% with status=t.display_status %}{% include "components/status_badge.html" with status=status show_reason=False %}{% if explain and status.reason %}<span class="block mt-1 text-xs text-ink-subtle">{{ status.reason }}</span>{% endif %}{% endwith %}

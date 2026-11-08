@@ -96,6 +96,17 @@ class ModerationRule(models.Model):
             models.Index(fields=["account", "is_active", "priority"]),
         ]
 
+    @property
+    def display_status(self) -> dict:
+        """Live or Paused, in the shared vocabulary (components/status_badge.html)."""
+        if self.is_active:
+            return {"key": "live", "label": "Live", "reason": ""}
+        return {
+            "key": "paused",
+            "label": "Paused",
+            "reason": "It doesn't act on comments until you switch it on.",
+        }
+
     def keyword_list(self) -> list[str]:
         return [k.strip().lower() for k in self.keywords.split(",") if k.strip()]
 

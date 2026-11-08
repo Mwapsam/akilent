@@ -1775,7 +1775,15 @@ def followup_complete(request, pk):
             followup=followup,
             by=request.user,
         )
-        messages.success(request, followup_copy.MARKED_DONE)
+        from apps.accounts.utils import flash
+        from apps.core.undo import undo_url
+
+        flash(
+            request,
+            "success",
+            followup_copy.MARKED_DONE,
+            undo=undo_url(request, "followup_done", followup.pk),
+        )
     except ActionError as exc:
         messages.error(request, str(exc))
     return _back(request, "conversations:followups_due")
@@ -1956,20 +1964,76 @@ def _back(request, default: str):
     return redirect(default)
 
 
+def _add_overlay(
+    request,
+    partial: str,
+    title: str,
+    back_url: str,
+    back_label: str,
+    *,
+    error: str = "",
+    values: dict | None = None,
+    status: int = 200,
+):
+    """An "Add …" form: in a modal over its list (``?add=1`` with data-overlay-open), or as
+    its own page (components/_overlay_page.html). A failed save re-renders it with the
+    error (422); a good one closes it (overlay_done) or goes on to what was made."""
+    from apps.core.htmx import overlay_or_page
+
+    return overlay_or_page(
+        request,
+        partial,
+        "components/_overlay_page.html",
+        {
+            "overlay_partial": partial,
+            "page_title": title,
+            "back_url": back_url,
+            "back_label": back_label,
+            "error": error,
+            "values": values or {},
+        },
+        kind="modal",
+        title=title,
+        status=status,
+    )
+
+
 @login_required
 def saved_replies(request):
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
+    from apps.core.htmx import is_overlay, overlay_done
+
+    back = reverse("conversations:saved_replies")
     if request.method == "POST":
         title = request.POST.get("title", "").strip()
         body = request.POST.get("body", "").strip()
         if not title or not body:
-            messages.error(request, "A saved reply needs both a title and a message.")
-        else:
-            SavedReply.objects.create(account=account, title=title, body=body)
-            messages.success(request, "Saved reply added.")
-        return redirect("conversations:saved_replies")
+            error = "A saved reply needs both a title and a message."
+            if is_overlay(request):
+                return _add_overlay(
+                    request,
+                    "conversations/add/_saved_reply.html",
+                    "Add a saved reply",
+                    back,
+                    "Saved replies",
+                    error=error,
+                    values={"title": title, "body": body},
+                    status=422,
+                )
+            messages.error(request, error)
+            return redirect(back)
+        SavedReply.objects.create(account=account, title=title, body=body)
+        return overlay_done(request, "Saved reply added.", back)
+    if request.GET.get("add"):
+        return _add_overlay(
+            request,
+            "conversations/add/_saved_reply.html",
+            "Add a saved reply",
+            back,
+            "Saved replies",
+        )
     replies = SavedReply.objects.filter(account=account).order_by("title")
     if is_background(request) and request.GET.get("menu"):
         # The composer's Saved replies menu, filled the first time it opens rather than
@@ -1993,10 +2057,19 @@ def saved_reply_delete(request, pk):
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
+    from apps.core.htmx import action_done
+    from apps.core.undo import undo_url
+
     reply = get_object_or_404(SavedReply, account=account, pk=pk)
-    reply.delete()
-    messages.success(request, "Saved reply removed.")
-    return redirect("conversations:saved_replies")
+    # Kept for 30 days so the toast's Undo can bring it back (SavedReply.deleted_at).
+    reply.deleted_at = timezone.now()
+    reply.save(update_fields=["deleted_at"])
+    return action_done(
+        request,
+        f"Saved reply “{reply.title}” deleted.",
+        reverse("conversations:saved_replies"),
+        undo=undo_url(request, "saved_reply_delete", reply.pk),
+    )
 
 
 @login_required
@@ -2006,17 +2079,42 @@ def teams(request):
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
+    from apps.core.htmx import is_overlay, overlay_done
+
+    # Teams and routing rules are one Inbox settings page (inbox_settings_teams).
+    back = reverse("conversations:inbox_settings_teams") + "#teams"
     if request.method == "POST":
         name = request.POST.get("name", "").strip()
+        error = ""
         if not name:
-            messages.error(request, "A team needs a name.")
+            error = "A team needs a name."
         elif Team.objects.filter(account=account, name=name).exists():
-            messages.error(request, "A team with that name already exists.")
-        else:
-            Team.objects.create(account=account, name=name)
-            messages.success(request, "Team added.")
-    # Teams and routing rules are one Inbox settings page (inbox_settings_teams).
-    return redirect(reverse("conversations:inbox_settings_teams") + "#teams")
+            error = "A team with that name already exists."
+        if error:
+            if is_overlay(request):
+                return _add_overlay(
+                    request,
+                    "conversations/add/_team.html",
+                    "Add a team",
+                    back,
+                    "Teams & routing",
+                    error=error,
+                    values={"name": name},
+                    status=422,
+                )
+            messages.error(request, error)
+            return redirect(back)
+        Team.objects.create(account=account, name=name)
+        return overlay_done(request, "Team added.", back)
+    if request.GET.get("add"):
+        return _add_overlay(
+            request,
+            "conversations/add/_team.html",
+            "Add a team",
+            back,
+            "Teams & routing",
+        )
+    return redirect(back)
 
 
 @login_required
@@ -2188,13 +2286,36 @@ def forms_list(request):
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
+    from apps.core.htmx import is_overlay
+
+    back = reverse("conversations:forms_list")
     if request.method == "POST":
         name = request.POST.get("name", "").strip()
         if not name:
+            if is_overlay(request):
+                return _add_overlay(
+                    request,
+                    "conversations/add/_form.html",
+                    "Add a form",
+                    back,
+                    "Forms",
+                    error="A form needs a name.",
+                    status=422,
+                )
             messages.error(request, "A form needs a name.")
-            return redirect("conversations:forms_list")
+            return redirect(back)
         form = ConversationForm.objects.create(account=account, name=name[:150])
-        return redirect("conversations:form_detail", pk=form.pk)
+        detail = reverse("conversations:form_detail", args=[form.pk])
+        if is_overlay(request):
+            # From the modal: straight on to the new form's questions.
+            response = HttpResponse(status=204)
+            response["HX-Redirect"] = detail
+            return response
+        return redirect(detail)
+    if request.GET.get("add"):
+        return _add_overlay(
+            request, "conversations/add/_form.html", "Add a form", back, "Forms"
+        )
     forms_qs = (
         ConversationForm.objects.filter(account=account)
         .annotate(
