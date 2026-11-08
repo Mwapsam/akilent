@@ -918,7 +918,6 @@
   @media (min-width: 768px) {
     .settings-layout { grid-template-columns: 12rem minmax(0, 1fr); column-gap: 3rem; align-items: start; }
     .settings-nav { position: sticky; top: 5rem; }
-    .settings-nav-summary { display: none; }
   }
   .settings-nav-fold > summary { list-style: none; }
   .settings-nav-fold > summary::-webkit-details-marker { display: none; }
@@ -927,6 +926,8 @@
     background-color: var(--color-secondary-bg); color: var(--color-ink-subtle);
   }
   .settings-nav-summary::after { content: "▾"; font-size: .75rem; }
+  /* The picker is for phone width only. After the rule above, which would otherwise win. */
+  @media (min-width: 768px) { .settings-nav-summary { display: none; } }
   .settings-nav-groups { @apply flex flex-col gap-0.5 pt-2 md:pt-0; }
   .settings-nav-group {
     @apply text-xs font-medium uppercase px-2.5 pt-4 pb-1.5 first:pt-0;
@@ -1395,15 +1396,17 @@
     color: var(--color-ink);
   }
   .work-tile-label {
-    @apply order-first inline-flex items-center gap-1.5 text-xs font-medium uppercase leading-4;
+    @apply order-first inline-flex items-center gap-1.5 text-xs font-medium uppercase leading-4 whitespace-nowrap min-w-0;
     letter-spacing: 0.04em;
   }
-  .work-tile:is(.work-tile--active, .work-tile--warn, .work-tile--good) .work-tile-label::before {
+  /* A muted line under the number, so every label stays on one line. */
+  .work-tile-note { @apply -mt-1 text-xs leading-4; color: var(--color-ink-subtle); }
+  /* A dot means there's work: highlight, or coral for missed. */
+  .work-tile:is(.work-tile--active, .work-tile--warn) .work-tile-label::before {
     content: ""; width: .375rem; height: .375rem; border-radius: 999px; flex-shrink: 0;
     background: var(--color-highlight);
   }
   .work-tile--warn .work-tile-label::before { background: var(--color-coral-500) !important; }
-  .work-tile--good .work-tile-label::before { background: var(--color-teal-500) !important; }
 
   /* Section that carries the page's primary answer. Slightly lifted off the
      canvas so it out-ranks the cards below it without shouting. */

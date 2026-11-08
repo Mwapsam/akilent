@@ -17,6 +17,7 @@ from datetime import timedelta
 from django.db import IntegrityError
 from django.utils import timezone
 
+from apps.conversations import reporting
 from apps.conversations.models import Benchmark
 
 WINDOW = timedelta(days=7)
@@ -96,7 +97,8 @@ def card(account, connected_at, now=None) -> dict | None:
 
 def _comparison(before: dict, after: dict) -> list[dict]:
     def minutes(value):
-        return "—" if value is None else f"{value} min"
+        # The one duration format ("45m", "18h 21m"), as on Insights.
+        return reporting.duration(None if value is None else value * 60)
 
     return [
         {

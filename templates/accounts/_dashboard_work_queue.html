@@ -30,7 +30,7 @@ The poll is gated on document visibility — a backgrounded tab stops asking.
   </a>
 
   <a href="/sales/"
-     class="work-tile{% if leads %} work-tile--good{% endif %}"
+     class="work-tile{% if leads %} work-tile--active{% endif %}"
      aria-label="{{ leads }} new lead{{ leads|pluralize }} — open sales">
     {% include "components/icon.html" with name="building" class="w-5 h-5 shrink-0" %}
     <span class="work-tile-value">{{ leads }}</span>
@@ -44,7 +44,8 @@ The poll is gated on document visibility — a backgrounded tab stops asking.
      aria-label="{{ due }} follow-up{{ due|pluralize }} due for the whole team — open follow-ups" data-tile="followups">
     {% include "components/icon.html" with name="bell" class="w-5 h-5 shrink-0" %}
     <span class="work-tile-value">{{ due }}</span>
-    <span class="work-tile-label">follow-up{{ due|pluralize }} due · whole team</span>
+    <span class="work-tile-label">follow-up{{ due|pluralize }} due</span>
+    <span class="work-tile-note">whole team</span>
   </a>
 
   {% if not waiting and not missed and not leads and not due %}

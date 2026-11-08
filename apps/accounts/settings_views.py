@@ -38,6 +38,19 @@ logger = logging.getLogger(__name__)
 MANAGE_ROLES = (Membership.Role.OWNER, Membership.Role.ADMIN)
 
 
+class _PasswordChangeForm(PasswordChangeForm):
+    """Django's form in our words: "current password", not "old"."""
+
+    error_messages = {
+        **PasswordChangeForm.error_messages,
+        "password_incorrect": "That isn't your current password. Please try again.",
+    }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["old_password"].label = "Current password"
+
+
 def _account_and_membership(request):
     """Return ``(account, membership)`` for the request's current workspace."""
     account = get_current_account(request)
@@ -199,7 +212,7 @@ def settings_security(request):
         account.security_reviewed_at = timezone.now()
         account.save(update_fields=["security_reviewed_at"])
     if request.method == "POST":
-        form = PasswordChangeForm(request.user, request.POST)
+        form = _PasswordChangeForm(request.user, request.POST)
         if form.is_valid():
             user = form.save()
             # Keep the user signed in after their password hash changes.
@@ -215,7 +228,7 @@ def settings_security(request):
             messages.success(request, "Password changed.")
             return redirect("settings-security")
     else:
-        form = PasswordChangeForm(request.user)
+        form = _PasswordChangeForm(request.user)
     from django_otp.plugins.otp_totp.models import TOTPDevice
 
     totp_enabled = TOTPDevice.objects.filter(user=request.user, confirmed=True).exists()

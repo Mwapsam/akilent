@@ -1,10 +1,10 @@
 {% extends "accounts/settings_base.html" %}
 {% block settings_content %}
-<div class="mb-5">{% include "components/help_link.html" with slug="security" text="Security &amp; sign-in guide" %}</div>
 <section class="settings-section">
   <div>
     <h2 class="settings-section-title">Change password</h2>
     <p class="settings-section-desc">Choose a strong password you don't use anywhere else.</p>
+    <p class="mt-2 text-sm">{% include "components/help_link.html" with slug="security" text="Security &amp; sign-in guide" %}</p>
   </div>
   <div class="settings-section-body">
 
@@ -19,6 +19,8 @@
     {% csrf_token %}
     {% for field in form %}
       <div>
+        {% comment %}"Current password" (the view's form), and one short hint for the new
+        password instead of its four rules; a rule's own message shows only when it fails.{% endcomment %}
         <label for="{{ field.id_for_label }}" class="label">{{ field.label }}</label>
         {% if field.name == "old_password" %}
           {% include "components/password_field.html" with id=field.id_for_label name=field.name autocomplete="current-password" error=field.errors %}
@@ -26,7 +28,7 @@
           {% include "components/password_field.html" with id=field.id_for_label name=field.name autocomplete="new-password" error=field.errors %}
         {% endif %}
         {% if field.errors %}<p class="field-error">{{ field.errors|join:" " }}</p>
-        {% elif field.help_text %}<div class="help [&>ul]:list-disc [&>ul]:pl-4 [&>ul]:space-y-0.5">{{ field.help_text|safe }}</div>{% endif %}
+        {% elif field.name == "new_password1" %}<p class="help">At least 8 characters, not common or all numbers.</p>{% endif %}
       </div>
     {% endfor %}
     <button class="btn btn-primary" type="submit">Update password</button>
