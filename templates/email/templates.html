@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% load ui %}
 {% load static %}
-{% block title %}Templates — {{ site.app_name|default:"Akilent" }}{% endblock %}
+{% block title %}Message templates — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
 
 <header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
   <div class="min-w-0">
-    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Templates</h1>
+    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Message templates</h1>
     <p class="mt-1 text-sm text-ink-muted">
       {% if channel == 'whatsapp' %}Templates approved by Meta for use in replies, workflows and campaigns.
       {% else %}Reusable subject/body content with <code>{% verbatim %}{{ variable }}{% endverbatim %}</code> interpolation, usable in single sends and bulk campaigns.{% endif %}
@@ -240,11 +240,11 @@ form below. Nothing is saved until the owner presses Create template.{% endcomme
   </form>
 </div>
 
-<script src="{% static 'js/template-starter-picker.js' %}"></script>
 {% if ai_on %}
 
 {% if ai_draft %}
-<script>
+<script data-shell-safe>
+  // Safe to run again after an in-place navigation: it only (re)defines three window functions.
   // Rewrites work on the drafted parts; Akilent rebuilds the fields server-side and "Use this" copies them in.
   (function () {
     let parts = JSON.parse(document.getElementById('email-ai-parts').textContent);
@@ -363,7 +363,6 @@ requests.post(
 
 {% include "email/_api_code_modal.html" %}
 {% include "email/_preview_modal.html" %}
-<script src="{% static 'js/code-tabs.js' %}"></script>
 
 {% else %}
 <div class="card mb-8">

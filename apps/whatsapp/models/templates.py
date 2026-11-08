@@ -137,7 +137,7 @@ class MessageTemplate(models.Model):
     # Meta's status in the shared vocabulary (components/status_badge.html), with what it
     # means for sending.
     _STATUS: dict[str, tuple[str, str, str]] = {
-        ApprovalStatus.APPROVED: ("live", "Approved", "Ready to send."),
+        ApprovalStatus.APPROVED: ("live", "Live", "Approved by Meta. Ready to send."),
         ApprovalStatus.PENDING: (
             "pending",
             "Pending Meta approval",

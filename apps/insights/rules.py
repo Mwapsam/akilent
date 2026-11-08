@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+from django.db.models import Min
 from django.utils import timezone
 
 
@@ -122,6 +123,10 @@ def rule_lead_followup_gap(account):
     )
 
 
+def _iso(value) -> str:
+    return value.isoformat() if value else ""
+
+
 def rule_unanswered_conversations(account):
     """Conversations waiting on agent for more than 2 hours."""
     from apps.conversations.state import OVERDUE_WAITING, needs_attention
@@ -141,12 +146,22 @@ def rule_unanswered_conversations(account):
         account=account,
         type="unanswered_conversations",
         severity=Insight.Severity.URGENT if count >= 5 else Insight.Severity.WARNING,
-        title=f"{count} unanswered conversation{'s' if count != 1 else ''} need attention",
+        title=(
+            f"{count} unanswered conversations need attention"
+            if count != 1
+            else "1 unanswered conversation needs attention"
+        ),
         body=(
             f"{count} conversation{'s are' if count != 1 else ' is'} waiting for a response "
             f"and {'have' if count != 1 else 'has'} been for more than 2 hours."
         ),
-        evidence={"count": count, "threshold_hours": 2},
+        # "since": how long the longest wait has gone on, which is the issue's age (the
+        # insight row itself can be weeks old: it's updated, not recreated).
+        evidence={
+            "count": count,
+            "threshold_hours": 2,
+            "since": _iso(overdue_qs.aggregate(m=Min("last_message_at"))["m"]),
+        },
         evidence_count=count,
         suggested_action={
             "action": "inbox",
@@ -368,8 +383,8 @@ def rule_instagram_high_engagement_contact(account):
         title=f"{count} highly engaged Instagram contact{'s' if count != 1 else ''} worth a DM",
         body=(
             f"{count} Instagram contact{'s have' if count != 1 else ' has'} commented on 3 or more "
-            f"posts in the past 14 days. High comment frequency predicts purchase intent — "
-            f"{'they are' if count != 1 else 'this person is'} prime candidates for a proactive message."
+            "posts in the past 14 days. People who comment this often are often close to "
+            f"buying, so {'they are' if count != 1 else 'this is'} worth a message from you."
         ),
         evidence={
             "count": count,
@@ -466,8 +481,9 @@ def rule_facebook_high_engagement_contact(account):
         title=f"{count} highly engaged Facebook contact{'s' if count != 1 else ''} worth a message",
         body=(
             f"{count} {'people have' if count != 1 else 'person has'} commented on 3 or more "
-            f"of your Facebook posts in the past 14 days — "
-            f"{'they are' if count != 1 else 'this person is'} prime candidates for a proactive message."
+            "of your Facebook posts in the past 14 days. People who comment this often are "
+            f"often close to buying, so {'they are' if count != 1 else 'this is'} worth a "
+            "message from you."
         ),
         evidence={
             "count": count,

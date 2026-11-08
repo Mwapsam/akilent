@@ -3,13 +3,19 @@
 {% block title %}Comments — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
-<header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+{% comment %}
+The Comments tab of the Inbox: one list of comments on the business's Instagram and
+Facebook posts, newest first, each with its post beside it and its replies beneath. Not
+answered by default. Hidden and deleted ones fold into "3 hidden · show"; "Load more"
+pages on. Select comments to hide (with Undo) or permanently delete them together.
+{% endcomment %}
+<header class="mb-5 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
   <div>
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Comments</h1>
     <p class="mt-1 text-sm text-ink-subtle">Comments on your Instagram and Facebook posts. Reply in public, send a private message, or hide what shouldn't be there.</p>
   </div>
   {% if channels %}
-  <a href="{% url 'instagram-comment-rules' %}" class="btn btn-secondary btn-sm">Comment rules</a>
+  <a href="{% url 'instagram-comment-rules' %}" class="btn btn-secondary btn-sm">Rules</a>
   {% endif %}
 </header>
 
@@ -19,118 +25,38 @@
 </div>
 {% else %}
 
-<nav class="tabs mb-3" aria-label="Channel">
-  <a href="?filter={{ filter_by }}" class="tab {% if not channel %}tab-active{% endif %}">All</a>
-  {% for ch in channels %}
-  <a href="?channel={{ ch }}&filter={{ filter_by }}" class="tab {% if channel == ch %}tab-active{% endif %}">{% if ch == "instagram" %}Instagram{% else %}Facebook{% endif %}</a>
-  {% endfor %}
-</nav>
-<nav class="mb-5 flex flex-wrap gap-2 text-sm" aria-label="Show">
-  <a href="?channel={{ channel }}&filter=all" class="badge {% if filter_by == 'all' %}badge-info{% else %}badge-neutral{% endif %}">Everything</a>
-  <a href="?channel={{ channel }}&filter=unanswered" class="badge {% if filter_by == 'unanswered' %}badge-info{% else %}badge-neutral{% endif %}">Not answered</a>
-  <a href="?channel={{ channel }}&filter=intent" class="badge {% if filter_by == 'intent' %}badge-info{% else %}badge-neutral{% endif %}">Wants to buy</a>
-  <a href="?channel={{ channel }}&filter=flagged" class="badge {% if filter_by == 'flagged' %}badge-info{% else %}badge-neutral{% endif %}">Flagged</a>
-  {% if post_id %}<a href="?channel={{ channel }}&filter={{ filter_by }}" class="badge badge-neutral">One post · show all</a>{% endif %}
-</nav>
+<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+  <nav class="flex flex-wrap gap-2 text-sm" aria-label="Show">
+    {% for key, label in filters %}
+    <a href="?{% if channel %}channel={{ channel }}&{% endif %}filter={{ key }}{% if post_id %}&{% if post %}post={{ post.post_id|urlencode }}{% else %}variant={{ post_id }}{% endif %}{% endif %}"
+       class="badge {% if filter_by == key %}badge-info{% else %}badge-neutral{% endif %}" {% if filter_by == key %}aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </nav>
+  {% if channels|length > 1 %}
+  <nav class="tabs" aria-label="Channel">
+    <a href="?filter={{ filter_by }}" class="tab {% if not channel %}tab-active{% endif %}">All</a>
+    {% for ch in channels %}
+    <a href="?channel={{ ch }}&filter={{ filter_by }}" class="tab {% if channel == ch %}tab-active{% endif %}">{% if ch == "instagram" %}Instagram{% else %}Facebook{% endif %}</a>
+    {% endfor %}
+  </nav>
+  {% endif %}
+</div>
 
-{% with next_url=request.get_full_path %}
-{% for post in posts %}
-<section class="card mb-5" aria-labelledby="post-{{ forloop.counter }}">
-  <header class="px-4 sm:px-5 py-3 border-b border-border flex flex-wrap items-center justify-between gap-2">
-    <div class="min-w-0">
-      <h2 id="post-{{ forloop.counter }}" class="text-sm font-semibold text-ink truncate">{{ post.label }}</h2>
-      <div class="mt-1 flex items-center gap-2 text-xs text-ink-subtle">
-        {% include "components/channel_tag.html" with channel=post.channel compact=True %}
-        <span>{{ post.threads|length }} comment{{ post.threads|length|pluralize }}</span>
+{% if post %}
+<section class="card mb-4" aria-label="This post" data-post-header>
+  <div class="px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex items-center gap-3 min-w-0">
+      {% include "publishing/_media_thumb.html" with url=post_ref.thumb size="w-12 h-12" alt=post.label %}
+      <div class="min-w-0">
+        <p class="text-sm font-semibold text-ink truncate">{{ post.label }}</p>
+        <p class="mt-0.5 flex items-center gap-2 text-xs text-ink-subtle">
+          {% include "components/channel_tag.html" with channel=post.channel compact=True %}
+          {% if post_ref.url %}<a href="{{ post_ref.url }}" target="_blank" rel="noopener" class="underline">View the post</a>{% endif %}
+        </p>
       </div>
     </div>
-    {% if not post_id %}<a href="?channel={{ post.channel }}&post={{ post.post_id|urlencode }}" class="text-xs underline text-ink-subtle">Only this post</a>{% endif %}
-  </header>
-
-  {% if post.threads %}
-  <ul class="divide-y divide-border">
-    {% for thread in post.threads %}
-    <li class="px-4 sm:px-5 py-4">
-      {% with c=thread.root %}
-      {% if c %}
-      <div class="flex flex-wrap items-start justify-between gap-2">
-        <div class="min-w-0">
-          <p class="text-sm text-ink"><span class="font-medium">{{ c.author }}</span>
-            <span class="text-ink-subtle text-xs ml-1">{% when c.timestamp %}</span></p>
-          <p class="mt-1 text-sm {% if c.state == 'deleted' %}line-through text-ink-subtle{% else %}text-ink-muted{% endif %}">{{ c.body|default:"(no text)" }}</p>
-          <div class="mt-1 flex flex-wrap gap-1">
-            {% if thread.intent %}<span class="badge badge-success">Wants to buy</span>{% endif %}
-            {% if c.state == 'flagged' %}<span class="badge badge-warning">Flagged</span>{% endif %}
-            {% if c.state == 'hidden' %}<span class="badge badge-neutral">Hidden</span>{% endif %}
-            {% if c.state == 'deleted' %}<span class="badge badge-neutral">Deleted</span>{% endif %}
-            {% if thread.conversation_public_id %}<a href="{% url 'conversations:detail' thread.conversation_public_id %}" class="badge badge-info">In the inbox</a>{% endif %}
-          </div>
-        </div>
-        {% if not read_only and c.state != 'deleted' %}
-        <div class="flex flex-wrap gap-1">
-          {% if c.state == 'flagged' %}
-          <form method="post" action="{% url 'conversations:comments_moderate' thread.channel c.pk %}" hx-boost="false">{% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}"><input type="hidden" name="action" value="approve"><button class="btn btn-ghost btn-sm">Looks fine</button></form>
-          {% endif %}
-          <form method="post" action="{% url 'conversations:comments_moderate' thread.channel c.pk %}" hx-boost="false">{% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}">
-            {% if c.hidden %}<input type="hidden" name="action" value="unhide"><button class="btn btn-ghost btn-sm">Unhide</button>
-            {% else %}<input type="hidden" name="action" value="hide"><button class="btn btn-ghost btn-sm">Hide</button>{% endif %}
-          </form>
-          <form method="post" action="{% url 'conversations:comments_moderate' thread.channel c.pk %}" hx-boost="false">{% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}"><input type="hidden" name="action" value="delete">
-            <button class="btn btn-ghost btn-sm" data-confirm="Delete this comment from the post? This can't be undone." data-confirm-danger data-confirm-label="Delete">Delete</button></form>
-        </div>
-        {% endif %}
-      </div>
-      {% endif %}
-      {% endwith %}
-
-      {% if thread.replies %}
-      <ul class="mt-3 ml-4 pl-3 border-l border-border space-y-2">
-        {% for r in thread.replies %}
-        <li class="text-sm">
-          <span class="font-medium {% if r.outbound %}text-brand{% else %}text-ink{% endif %}">{{ r.author }}</span>
-          <span class="text-ink-subtle text-xs ml-1">{% when r.timestamp %}</span>
-          {% if r.state == 'hidden' %}<span class="badge badge-neutral ml-1">Hidden</span>{% endif %}
-          <p class="text-ink-muted {% if r.state == 'deleted' %}line-through{% endif %}">{{ r.body }}</p>
-          {% if not read_only and not r.outbound and r.state != 'deleted' %}
-          <form method="post" action="{% url 'conversations:comments_moderate' thread.channel r.pk %}" hx-boost="false" class="inline">{% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}">
-            {% if r.hidden %}<input type="hidden" name="action" value="unhide"><button class="text-xs underline text-ink-subtle">Unhide</button>
-            {% else %}<input type="hidden" name="action" value="hide"><button class="text-xs underline text-ink-subtle">Hide</button>{% endif %}
-          </form>
-          {% endif %}
-        </li>
-        {% endfor %}
-      </ul>
-      {% endif %}
-
-      {% if not read_only and thread.root and thread.root.state != 'deleted' %}
-      <details class="mt-3">
-        <summary class="text-sm text-brand cursor-pointer select-none">Reply</summary>
-        <div class="mt-2 grid gap-3 sm:grid-cols-2">
-          <form method="post" action="{% url 'conversations:comments_reply' thread.channel thread.root.pk %}" hx-boost="false">
-            {% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}"><input type="hidden" name="client_key" value="{{ client_key }}-r{{ thread.pk }}">
-            <label class="label" for="reply-{{ thread.channel }}-{{ thread.pk }}">Public reply</label>
-            <textarea id="reply-{{ thread.channel }}-{{ thread.pk }}" name="body" rows="2" class="input" maxlength="2000" required placeholder="Everyone can see this"></textarea>
-            <button class="btn btn-secondary btn-sm mt-2">Post reply</button>
-          </form>
-          {% if not thread.conversation_public_id and not thread.root.outbound %}
-          <form method="post" action="{% url 'conversations:comments_private_reply' thread.channel thread.root.pk %}" hx-boost="false">
-            {% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}"><input type="hidden" name="client_key" value="{{ client_key }}-d{{ thread.pk }}">
-            <label class="label" for="dm-{{ thread.channel }}-{{ thread.pk }}">Private message</label>
-            <textarea id="dm-{{ thread.channel }}-{{ thread.pk }}" name="body" rows="2" class="input" maxlength="1000" required placeholder="Only they see this"></textarea>
-            <p class="text-xs text-ink-subtle mt-1">One private message per comment, within 7 days of it. Their answer lands in your inbox.</p>
-            <button class="btn btn-primary btn-sm mt-2">Send privately</button>
-          </form>
-          {% endif %}
-        </div>
-      </details>
-      {% endif %}
-    </li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <p class="px-4 sm:px-5 py-4 text-sm text-ink-subtle">No comments yet.</p>
-  {% endif %}
-
+    <a href="?filter={{ filter_by }}" class="btn btn-ghost btn-sm">All posts</a>
+  </div>
   {% if post.business_comments %}
   <div class="px-4 sm:px-5 py-3 border-t border-border">
     <p class="text-xs font-medium text-ink-subtle mb-1">Your comments on this post</p>
@@ -142,25 +68,50 @@
     </ul>
   </div>
   {% endif %}
-
   {% if not read_only %}
   <form method="post" action="{% url 'conversations:comments_post' %}" hx-boost="false" class="px-4 sm:px-5 py-3 border-t border-border flex flex-col sm:flex-row gap-2">
     {% csrf_token %}
     <input type="hidden" name="next" value="{{ next_url }}">
     <input type="hidden" name="channel" value="{{ post.channel }}">
     <input type="hidden" name="post_id" value="{{ post.post_id }}">
-    <input type="hidden" name="client_key" value="{{ client_key }}-p{{ forloop.counter }}">
-    <label class="sr-only" for="post-comment-{{ forloop.counter }}">Comment on this post</label>
-    <input id="post-comment-{{ forloop.counter }}" name="body" class="input flex-1" maxlength="2000" required placeholder="Comment on this post as your business">
+    <input type="hidden" name="client_key" value="{{ client_key }}-p">
+    <label class="sr-only" for="post-comment">Comment on this post</label>
+    <input id="post-comment" name="body" class="input flex-1" maxlength="2000" required placeholder="Comment on this post as your business">
     <button class="btn btn-secondary btn-sm">Comment</button>
   </form>
   {% endif %}
 </section>
-{% empty %}
-<div class="card">
-  {% include "components/empty_state.html" with icon="chat" title="Nothing here yet" message="Comments on your posts appear here as they come in." %}
+{% endif %}
+
+{% if threads or collapsed %}
+<div x-data="{ n: 0, where: '', sync() { const on = [...$root.querySelectorAll('input[name=items]:checked')]; this.n = on.length; this.where = [...new Set(on.map(b => b.dataset.channelLabel))].join(' and '); }, clear() { $root.querySelectorAll('input[name=items]:checked').forEach(b => b.checked = false); this.sync(); } }"
+     @change="sync()" @htmx:after-swap="sync()">
+  <ul class="card divide-y divide-border" aria-label="Comments" data-comment-list>
+    {% include "conversations/_comment_items.html" %}
+  </ul>
+
+  {% if not read_only %}
+  <form id="comments-bulk" method="post" action="{% url 'conversations:comments_bulk' %}" hx-boost="false"
+        x-show="n" x-cloak x-transition.opacity
+        class="sticky bottom-4 z-10 mt-4 mx-auto w-fit card shadow-pop px-3 py-2 flex flex-wrap items-center gap-2" aria-label="Selected comments">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next_url }}">
+    <span class="text-sm text-ink" x-text="n + ' selected'" aria-live="polite"></span>
+    <button name="action" value="hide" class="btn btn-secondary btn-sm">Hide</button>
+    <button name="action" value="delete" class="btn btn-danger btn-sm" data-confirm-danger data-confirm-label="Delete permanently"
+            :data-confirm="'Permanently delete ' + n + ' comment' + (n === 1 ? '' : 's') + ' from ' + where + '? This can\'t be undone.'">Delete…</button>
+    <button type="button" class="btn btn-ghost btn-sm" @click="clear()">Clear</button>
+  </form>
+  {% endif %}
 </div>
-{% endfor %}
-{% endwith %}
+{% else %}
+<div class="card">
+  {% if filter_by == "unanswered" %}
+  {% include "components/empty_state.html" with icon="check-circle" title="Every comment has an answer" message="New comments that nobody has replied to appear here." action_label="See everything" action_url="?filter=all" %}
+  {% else %}
+  {% include "components/empty_state.html" with icon="chat" title="Nothing here yet" message="Comments on your posts appear here as they come in." %}
+  {% endif %}
+</div>
+{% endif %}
 {% endif %}
 {% endblock %}

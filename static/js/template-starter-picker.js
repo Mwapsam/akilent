@@ -11,7 +11,8 @@
   function init() {
     var picker = document.getElementById("starter-template-picker");
     var buttonRow = document.getElementById("starter-template-buttons");
-    if (!picker || !buttonRow) return;
+    if (!picker || !buttonRow || buttonRow.dataset.startersInit) return;
+    buttonRow.dataset.startersInit = "1";
 
     var starters;
     try {
@@ -42,5 +43,8 @@
     });
   }
 
-  document.addEventListener("DOMContentLoaded", init);
+  // Loaded with the shell (templates/base.html): runs on every page, in place or not, and
+  // does nothing where there's no picker.
+  if (window.akilent && window.akilent.onPage) window.akilent.onPage(init);
+  else document.addEventListener("DOMContentLoaded", init);
 })();

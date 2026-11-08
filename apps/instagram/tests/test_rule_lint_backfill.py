@@ -93,8 +93,9 @@ class LintTest(TestCase):
         later = make_rule(self.account, keywords="crypto", priority=20)
         assert _kinds(lint_rules(self.account), later.pk) == []
 
-    def test_potential_lead_gets_a_soft_note_not_a_warning(self):
-        """A lead rule on service/help/link/contact tags most comments (the audit's case)."""
+    def test_potential_lead_on_common_words_is_a_warning(self):
+        """A lead rule on service/help/link/contact opens a lead for most comments (the
+        audit's case): in the banner, not only a quiet note on the row."""
         rule = make_rule(
             self.account,
             name="Potential lead",
@@ -104,9 +105,15 @@ class LintTest(TestCase):
         )
         result = lint_rules(self.account)
         [warning] = result.for_rule("moderation", rule.pk)
-        assert warning.kind == "broad" and warning.severity == "note"
+        assert warning.kind == "broad" and warning.severity == "warning"
         assert "“service”" in warning.message and "“price”" not in warning.message
-        assert result.page_level == []
+        assert "open a lead" in warning.message
+        assert result.page_level == [warning]
+
+    def test_a_flag_only_rule_on_common_words_is_a_note(self):
+        rule = make_rule(self.account, keywords="help, info", moderation_action=A.FLAG)
+        [warning] = lint_rules(self.account).for_rule("moderation", rule.pk)
+        assert warning.severity == "note"
 
     def test_a_hide_rule_on_common_words_is_a_warning(self):
         rule = make_rule(self.account, keywords="price, dm")

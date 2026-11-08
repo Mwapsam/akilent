@@ -1,3 +1,4 @@
+{% load ui %}
 {% comment %}
 Business intelligence: AI-generated observations from apps.insights. Surfaced above the
 Business Health metrics so owners see what needs attention before reading the numbers.
@@ -68,7 +69,7 @@ an automation mapping (pass ``frozenset(BusinessPolicy.INSIGHT_TYPE_TO_TRIGGER)`
             <p class="mt-1 text-sm text-ink-muted leading-relaxed">{{ insight.body }}</p>
             {% endif %}
             <p class="mt-1.5 text-xs text-ink-subtle tabular-nums">
-              <span data-insight="spotted">Spotted <time datetime="{{ insight.created_at|date:'c' }}">{{ insight.created_at|timesince }} ago</time></span>{% if insight.evidence_count %} · {{ insight.evidence_count }} record{{ insight.evidence_count|pluralize }} affected{% endif %}
+              <span data-insight="spotted">{% if insight.issue_since %}Started {% when insight.issue_since %}{% else %}Checked {% when insight.updated_at %}{% endif %}</span>{% if insight.evidence_count %} · {{ insight.evidence_count }} record{{ insight.evidence_count|pluralize }} affected{% endif %}
             </p>
           </div>
         </div>

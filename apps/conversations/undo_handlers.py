@@ -36,6 +36,25 @@ def comment_hide(request, account, pk, extra) -> str:
     return "Comment visible again."
 
 
+def comment_hide_many(request, account, pk, extra) -> str:
+    """Unhide the comments a bulk Hide just hid, each on Instagram/Facebook."""
+    from apps.conversations import comments
+
+    items = []
+    for raw in extra.get("items") or []:
+        channel, _, comment_pk = str(raw).partition(":")
+        if comment_pk.isdigit():
+            items.append((channel, int(comment_pk)))
+    done, failed, error = comments.moderate_many(account, items, "unhide", request.user)
+    if not done:
+        raise UndoError(f"Couldn't unhide them: {error}")
+    n = len(done)
+    words = f"{n} comment{'' if n == 1 else 's'} visible again."
+    if failed:
+        words += f" {len(failed)} still hidden: {error}"
+    return words
+
+
 def saved_reply_delete(request, account, pk, extra) -> str:
     """Bring back a saved reply that was just deleted."""
     from apps.conversations.models import SavedReply

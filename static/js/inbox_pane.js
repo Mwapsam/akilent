@@ -363,14 +363,24 @@
       list.querySelectorAll(".inbox-row").forEach(function (r) { map[pathOf(r.href)] = rowText(r); });
       return map;
     }
+    // The row that had focus before the poll re-rendered the list, by path, so focus (and
+    // with it J/K and Enter) stays on the same conversation even if rows moved.
+    var focusedPath = null;
     function onBeforeListSwap(e) {
       before = e.detail && e.detail.target === list && !list.classList.contains("is-fresh") ? rowTexts() : null;
+      var f = document.activeElement && document.activeElement.closest ? document.activeElement.closest(".inbox-row") : null;
+      focusedPath = e.detail && e.detail.target === list && f && list.contains(f) ? pathOf(f.href) : null;
     }
 
     // The list poll re-renders every row; keep the open conversation highlighted.
     function onAfterSwap(e) {
       if (!e.detail || e.detail.target !== list) return;
       if (split.dataset.open) selectRow(rowFor(split.dataset.open));
+      if (focusedPath) {
+        var again = rowFor(focusedPath);
+        if (again && document.activeElement === document.body) again.focus({ preventScroll: true });
+        focusedPath = null;
+      }
       if (!before) return;
       var was = before;
       before = null;
@@ -436,8 +446,10 @@
         var rows = Array.prototype.filter.call(list.querySelectorAll(".inbox-row"), function (r) { return r.offsetParent !== null; });
         if (!rows.length) return;
         e.preventDefault();
-        var at = rows.findIndex(function (r) { return r.getAttribute("aria-current") === "true"; });
-        if (at === -1) at = rows.findIndex(function (r) { return r === document.activeElement; });
+        // From the focused row (what the person sees as "here"), else the open one.
+        var focused = document.activeElement && document.activeElement.closest ? document.activeElement.closest(".inbox-row") : null;
+        var at = focused ? rows.indexOf(focused) : -1;
+        if (at === -1) at = rows.findIndex(function (r) { return r.getAttribute("aria-current") === "true"; });
         var next = rows[Math.min(rows.length - 1, Math.max(0, at === -1 ? 0 : at + (key === "j" ? 1 : -1)))];
         next.focus({ preventScroll: true });
         next.scrollIntoView({ block: "nearest" });
@@ -445,6 +457,20 @@
         openInPane(next.href, split.dataset.open ? "replace" : true, true);
         var after = rows[rows.indexOf(next) + (key === "j" ? 1 : -1)];
         if (after) setTimeout(function () { prefetch(after.href); }, PREFETCH_HOVER_MS);
+        return;
+      }
+      if (key === "Enter") {
+        // Enter opens the row that has focus, never the one open before (rows are links,
+        // but the list poll may have re-rendered them between the keys).
+        var row = document.activeElement && document.activeElement.closest ? document.activeElement.closest(".inbox-row") : null;
+        if (!row || !list.contains(row)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (row.getAttribute("aria-current") === "true" && open && !split.classList.contains("is-loading")) {
+          focusPaneHeading();
+          return;
+        }
+        openInPane(row.href, true);
         return;
       }
       if (!open) return;

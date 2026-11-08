@@ -8,7 +8,7 @@ chat (it never completes anything); Done, Later and More act on the leading foll
 customer's other open follow-ups stay one tap away underneath.
 {% endcomment %}
 {% with f=row.main.followup %}
-<li class="px-4 py-4" x-data="{ panel: '' }" data-followup-row="{{ row.contact.public_id }}">
+<li class="px-4 py-4" x-data="{ panel: '' }" data-row data-followup-row="{{ row.contact.public_id }}">
   <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
     <div class="min-w-0">
       <p class="font-medium text-ink break-words">

@@ -2489,3 +2489,40 @@ Plan: the Inbox-area pages plan of 2026-11-08, Stage 3 (components 1, 3, 4, 5 an
   - saved-reply read paths and the purge.
 
   The full suite is green apart from the known `test_import_5000_contacts` failure and a scheduler drainer test that is flaky in the parallel run (it passes alone). The template-list test was updated for escaped apostrophes, and the pending reason is shown again. Tailwind rebuilt (4.3.3).
+
+### Entry 45: Inbox pages Stage 4, plus the 2026-11-08 production walkthrough's quick fixes (2026-11-08)
+Plan: the Inbox-area pages plan, Stage 4, and item 1 of the user's production walkthrough (with the small consistency items it named).
+
+- **Comments** (`comments.comment_feed`, `_comment_thread.html`, `_comment_items.html`):
+  - one list across Instagram and Facebook, newest first, **Not answered** by default (one post, from its row or Content Studio, defaults to Everything);
+  - each comment shows its post (picture, caption, link to the live post) and its replies nested beneath;
+  - posts with no comments aren't listed;
+  - "Load more" pages on by time (`?before=`, answered with just the rows);
+  - hidden and deleted comments fold into "3 hidden · show";
+  - ⋯ per comment;
+  - bulk select with **Hide** (Undo unhides each at Meta, partial failures reported, `undo_handlers.comment_hide_many`) and **Delete…** ("Permanently delete 7 comments from Instagram and Facebook? This can't be undone.");
+  - channel tabs only when both channels are on;
+  - queries are constant in the number of comments and replies (tested).
+- **Follow-ups:** rows are `[data-row]` (J/K, Enter). Later's presets are worked out on the workspace's clock: "In 1 hour", "This evening, 18:00" (until 17:00), "Tomorrow, 9:00", "Next week, Sun 15 Nov, 9:00" (`followups.later_choices`, `"evening"` choice). The email setting is a switch. Done's Undo is from Stage 3. "Open chat" stays a page (as planned).
+- **Why didn't it reply?:** opens as a drawer from a conversation's ⋯ menu (`overlay_or_page`, static). The page's picker is a search (`?pick=1&q=`).
+- **No full reloads:**
+  - `/automations/` shipped an inline `templatePicker()`, which made `<main>` unboosted, so its tab links to `/build/` and `/email/templates/` fully reloaded too;
+  - Message templates (email tab) loaded `template-starter-picker.js` and `code-tabs.js`;
+  - all of these now load with the shell (`static/js/page_factories.js`, `akilent.onPage`), and the AI draft inline script is `data-shell-safe`;
+  - `apps/core/tests/test_no_full_reload.py` checks every section tab plus the Stage 4 pages.
+- **J/K then Enter:** Enter opens the focused row; J/K step from the focused row; the 8-second list poll puts focus back on the same conversation (`inbox_pane.js`).
+- **Inbox badge:** one request per poll. A hidden `data-badge-source` in the desktop nav asks; both navs' badges and the inbox's "Follow-ups to do" copy it (`app.js syncBadges`, `data-due`).
+- **Stored Flow errors:** errors saved before Stage 1a in Meta's raw wording are translated when shown (`flow_errors.readable`, `ConversationForm.flow_error_text`). Operators keep the raw text under Details.
+- **Rule lint:** a lead or email-the-team rule on common words ("Potential lead": service, help, link, contact) is now a banner warning; flag-only rules keep the quieter note.
+- **Consistency:**
+  - Meta's Approved shows as **Live** ("Approved by Meta. Ready to send.");
+  - the Templates page is titled "Message templates", like its tab;
+  - Insights wording is fixed: "1 unanswered conversation needs attention", "worth a message from you", and the alert email's verb;
+  - each insight shows when its issue started ("Started 3 hours ago", the longest wait) or when it was last checked, not when the insight row was created;
+  - "Reload for the latest" became a Refresh link.
+- **Alpine "Unexpected identifier 's'":** not reproduced. `apps/conversations/tests/test_alpine_quotes.py` renders the inbox, a conversation, its pane and panel on WhatsApp, Facebook and Instagram, with apostrophes in every name, message, saved reply, template, team and note, and finds no broken expression. It stays as a guard; the failing expression is needed from the console.
+- **Verification:**
+  - `test_inbox_tabs_stage4.py` (14), `test_no_full_reload.py` (19), `test_alpine_quotes.py` (3) and `test_stored_flow_errors.py` (3);
+  - lint, badge and automation-list tests updated;
+  - the app suites are green apart from the known `test_import_5000_contacts`;
+  - Tailwind rebuilt (4.3.3 standalone binary).

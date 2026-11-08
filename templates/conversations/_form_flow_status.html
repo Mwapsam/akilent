@@ -9,10 +9,10 @@
       {% if status.key == "live" and form.flow_status == "published" and form.flow_published_at %} since {{ form.flow_published_at|date:"j M Y, H:i" }}{% endif %}
     </p>
     {% if status.reason and status.key != "draft" %}<p class="text-xs mt-1 {% if form.flow_status == 'error' %}text-red-700{% else %}text-ink-subtle{% endif %}">{{ status.reason }}</p>{% endif %}
-    {% if is_operator and form.flow_error_detail %}
+    {% if is_operator and form.flow_error_raw %}
     <details class="mt-1 text-xs text-ink-subtle">
       <summary class="cursor-pointer">Details (operators)</summary>
-      <pre class="mt-1 whitespace-pre-wrap break-words">{{ form.flow_error_detail }}</pre>
+      <pre class="mt-1 whitespace-pre-wrap break-words">{{ form.flow_error_raw }}</pre>
     </details>
     {% endif %}
   </div>

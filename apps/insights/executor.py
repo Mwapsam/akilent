@@ -363,12 +363,13 @@ def _execute_notify_owner(policy, targets, account) -> dict:
     count = target["count"]
     noun = "conversation" if target["type"] == "conversation" else "customer"
     plural = noun if count == 1 else f"{noun}s"
+    need = "needs" if count == 1 else "need"
     sent = notify_team(
         account,
         to="owners",
-        subject=f"{policy.name}: {count} {plural} need attention",
+        subject=f"{policy.name}: {count} {plural} {need} attention",
         text=(
-            f'Your rule "{policy.name}" found {count} {plural} that need attention. '
+            f'Your rule "{policy.name}" found {count} {plural} that {need} attention. '
             "Open the inbox to follow them up."
         ),
         path=reverse("conversations:inbox"),

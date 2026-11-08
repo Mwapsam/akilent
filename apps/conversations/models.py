@@ -724,6 +724,23 @@ class ConversationForm(models.Model):
         )
 
     @property
+    def flow_error_text(self) -> str:
+        """The last publish error for owners. Errors stored before they were translated
+        (Meta's raw "(#100) The parameter name is required.") are translated here."""
+        from apps.conversations.flow_errors import readable
+
+        return readable(self.flow_error)
+
+    @property
+    def flow_error_raw(self) -> str:
+        """What operators see under Details: the stored detail, or the raw stored error."""
+        from apps.conversations.flow_errors import is_raw
+
+        return self.flow_error_detail or (
+            self.flow_error if is_raw(self.flow_error) else ""
+        )
+
+    @property
     def display_status(self) -> dict:
         """The one status shown everywhere (list, page header, WhatsApp card).
 
@@ -759,7 +776,7 @@ class ConversationForm(models.Model):
                 return {
                     "key": "error",
                     "label": "Changes not published",
-                    "reason": f"Publish your changes before sending it again. {self.flow_error}".strip(),
+                    "reason": f"Publish your changes before sending it again. {self.flow_error_text}".strip(),
                 }
             return {
                 "key": "pending",
@@ -773,7 +790,11 @@ class ConversationForm(models.Model):
                 "reason": "This takes a few seconds.",
             }
         if self.flow_status == self.FlowStatus.ERROR:
-            return {"key": "error", "label": "Not published", "reason": self.flow_error}
+            return {
+                "key": "error",
+                "label": "Not published",
+                "reason": self.flow_error_text,
+            }
         return {
             "key": "pending",
             "label": "Not on WhatsApp yet",

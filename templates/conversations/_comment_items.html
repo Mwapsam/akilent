@@ -1,0 +1,23 @@
+{% comment %}
+One page of the Comments list: the comments, then the hidden or deleted ones folded into
+"3 hidden · show", then "Load more". The first page is included by comments.html; the
+next pages are answered with just this (comments_views.comments_inbox, ?before=), and
+replace the Load more row they were asked from.
+{% endcomment %}
+{% for thread in threads %}{% include "conversations/_comment_thread.html" %}{% endfor %}
+{% if collapsed %}
+<li class="px-4 sm:px-5 py-2" x-data="{ show: false }" data-collapsed-comments>
+  <button type="button" class="text-xs text-ink-subtle underline" @click="show = !show" :aria-expanded="show">
+    <span x-text="show ? 'Hide again' : '{{ collapsed|length }} hidden · show'">{{ collapsed|length }} hidden · show</span>
+  </button>
+  <ul x-show="show" x-cloak class="mt-2 -mx-4 sm:-mx-5 divide-y divide-border border-t border-border">
+    {% for thread in collapsed %}{% include "conversations/_comment_thread.html" %}{% endfor %}
+  </ul>
+</li>
+{% endif %}
+{% if more_url %}
+<li class="px-4 sm:px-5 py-3 text-center" data-load-more>
+  <a href="{{ more_url }}" class="btn btn-ghost btn-sm"
+     hx-get="{{ more_url }}" hx-target="closest li" hx-swap="outerHTML" hx-push-url="false">Load more</a>
+</li>
+{% endif %}

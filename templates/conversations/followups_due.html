@@ -17,7 +17,8 @@
 {% comment %}
 The Follow-ups page: customers your team needs to get back to, one row per customer, in
 Waiting / Due / Coming up. Behaviour and words: docs/design/followups-interaction-contract.md.
-It is a to-do list, not a dashboard: no metrics beyond the two tab counts.
+It is a to-do list, not a dashboard: no metrics beyond the two tab counts. Rows are
+[data-row], so J/K step through them and Enter opens the customer.
 {% endcomment %}
 <header class="mb-5">
   <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">{{ copy.PAGE_TITLE }}</h1>
@@ -55,11 +56,11 @@ It is a to-do list, not a dashboard: no metrics beyond the two tab counts.
 {% comment %}The email switch sits on the left, with room below (pb-24): the floating setup
 launcher sits in the bottom-right corner and covered it there.{% endcomment %}
 <footer class="mt-2 pb-24 flex flex-col items-start gap-2 text-sm text-ink-subtle" data-followup-footer>
-  <form method="post" action="{% url 'conversations:followup_emails' %}" hx-boost="false" class="flex flex-wrap items-center gap-2">
+  <form method="post" action="{% url 'conversations:followup_emails' %}" hx-boost="false">
     {% csrf_token %}
     <input type="hidden" name="on" value="{% if emails_on %}0{% else %}1{% endif %}">
-    <span>{{ copy.EMAILS_TOGGLE_LABEL }}</span>
-    <button class="btn btn-ghost btn-sm" aria-pressed="{{ emails_on|yesno:'true,false' }}">{% if emails_on %}On{% else %}Off{% endif %}</button>
+    <label class="switch-row text-sm text-ink-muted"><input type="checkbox" role="switch" class="switch" {% if emails_on %}checked{% endif %} onchange="this.form.requestSubmit()"> {{ copy.EMAILS_TOGGLE_LABEL }}</label>
+    <noscript><button class="btn btn-ghost btn-sm">{% if emails_on %}Turn off{% else %}Turn on{% endif %}</button></noscript>
   </form>
   <p>Times are {{ zone_name }}. <a href="{% url 'help-article' 'follow-ups' %}" class="underline">How follow-ups work</a></p>
 </footer>

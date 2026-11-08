@@ -256,6 +256,33 @@ def _broad(rule, rule_kind: str) -> list[RuleWarning]:
             )
         else:
             parts.append(f"“{k}” is short enough to match inside other words")
+    # A rule that opens a lead or emails the team on nearly every comment buries the real
+    # ones (and fills Customers with people who only said hello): warned, not just noted.
+    acts = isinstance(rule, ModerationRule) and rule.automation_trigger in (
+        ModerationRule.AutomationTrigger.CREATE_PROPOSAL,
+        ModerationRule.AutomationTrigger.NOTIFY_STAFF,
+    )
+    if not risky and acts and common:
+        opens = (
+            "open a lead"
+            if rule.automation_trigger
+            == ModerationRule.AutomationTrigger.CREATE_PROPOSAL
+            else "email your team"
+        )
+        message = (
+            f"Catches too much: {'; '.join(parts)}, so it would {opens} for most "
+            "comments. Use phrases people only write when they mean it, like "
+            "“how much is” or “do you deliver”."
+        )
+        return [
+            RuleWarning(
+                kind="broad",
+                severity="warning",
+                message=message,
+                rule_kind=rule_kind,
+                rule_pk=rule.pk,
+            )
+        ]
     if risky:
         what = (
             "it would answer almost every comment automatically"

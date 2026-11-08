@@ -137,7 +137,7 @@ def test_a_send_uses_the_raw_template_name(owner):
 @pytest.mark.parametrize(
     "status, key, label",
     [
-        ("approved", "live", "Approved"),
+        ("approved", "live", "Live"),
         ("pending", "pending", "Pending Meta approval"),
         ("rejected", "error", "Rejected"),
         ("paused", "error", "Paused by Meta"),

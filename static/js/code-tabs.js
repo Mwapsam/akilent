@@ -67,9 +67,13 @@
     });
   }
 
-  document.addEventListener("DOMContentLoaded", function () {
-    initAll(document);
-  });
+  // Loaded with the shell (templates/base.html), so also after in-place navigations;
+  // initTabs/initCopy skip groups they've already set up.
+  if (window.akilent && window.akilent.onPage) {
+    window.akilent.onPage(function () { initAll(document); });
+  } else {
+    document.addEventListener("DOMContentLoaded", function () { initAll(document); });
+  }
 
   window.CodeTabs = { init: initAll };
 })();

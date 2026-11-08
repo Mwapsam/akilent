@@ -188,12 +188,15 @@ def test_the_section_tab_bar_shows_on_a_section_page(owner_client):
     assert re.search(r'href="/insights/"[^>]*>\s*Insights', html)
 
 
-def test_the_inbox_badge_renders_once_per_nav(owner_client):
+def test_the_inbox_badge_is_asked_for_once(owner_client):
+    """One element asks; the desktop and phone badges copy its answer (app.js syncBadges)."""
     html = owner_client.get("/dashboard/").content.decode()
-    assert (
-        html.count('hx-get="/inbox/badge/"') == 2
-    )  # desktop + phone nav; only the shown one asks
-    assert html.count('hx-get="/inbox/followups/badge/"') == 0
+    assert html.count('hx-get="/inbox/badge/"') == 1
+    assert html.count('data-badge-mirror="inbox"') == 2
+    assert html.count('hx-get="/inbox/followups/badge/') == 0
+    inbox = owner_client.get("/inbox/").content.decode()
+    assert inbox.count('hx-get="/inbox/badge/"') == 1
+    assert "/inbox/followups/badge/?plain" not in inbox  # copied from data-due
 
 
 def test_the_inbox_badge_counts_what_is_mine(owner, owner_client):
@@ -227,7 +230,11 @@ def test_the_inbox_badge_counts_what_is_mine(owner, owner_client):
 
 
 def test_an_empty_inbox_badge_is_empty(owner_client):
-    assert owner_client.get("/inbox/badge/").content == b""
+    # Nothing to show, but it still says no follow-ups are due (for "Follow-ups to do").
+    assert (
+        owner_client.get("/inbox/badge/").content
+        == b'<span hidden data-due="0"></span>'
+    )
 
 
 def test_inbox_settings_pages(owner_client):

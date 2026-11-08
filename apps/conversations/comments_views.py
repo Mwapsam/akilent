@@ -14,8 +14,14 @@ from apps.conversations import comments
 
 @login_required
 def comments_inbox(request):
-    """Recent comments on the business's posts, grouped by post, with actions."""
+    """The Comments tab: one list of comments on the business's posts, newest first, each
+    with its post and its replies beneath. Not answered by default; "Load more" pages on
+    (``?before=``, answered with just the next rows)."""
     import uuid
+
+    from django.utils.dateparse import parse_datetime
+
+    from apps.core.htmx import is_background, partial_response
 
     account = get_current_account(request)
     if account is None:
@@ -24,37 +30,70 @@ def comments_inbox(request):
     channel = request.GET.get("channel", "")
     if channel not in channels:
         channel = ""
-    filter_by = request.GET.get("filter", "all")
-    if filter_by not in comments.FILTERS:
-        filter_by = "all"
     post_id = request.GET.get("post", "")[:100]
     variant = request.GET.get("variant", "")
     variant_id = int(variant) if variant.isdigit() else None
-    posts = (
-        comments.posts_with_comments(
+    # One post (from its row or from Content Studio) shows all its comments by default.
+    default = "all" if post_id or variant_id else "unanswered"
+    filter_by = request.GET.get("filter", default)
+    if filter_by not in comments.FEED_FILTERS:
+        filter_by = default
+    before = parse_datetime(request.GET.get("before", "") or "")
+    threads, cursor = (
+        comments.comment_feed(
             account,
             channel=channel,
             filter_by=filter_by,
             post_id=post_id,
             variant_id=variant_id,
+            before=before,
         )
         if channels
-        else []
+        else ([], None)
     )
-    return render(
-        request,
-        "conversations/comments.html",
-        {
-            "account": account,
-            "channels": channels,
-            "channel": channel,
-            "filter_by": filter_by,
-            "post_id": post_id or variant,
-            "posts": posts,
-            "client_key": uuid.uuid4().hex,
-            "read_only": viewing_as(request) is not None,
-        },
+    header = (
+        comments.post_header(account, channel, post_id, variant_id)
+        if channels and (post_id or variant_id)
+        else None
     )
+    query = request.GET.copy()
+    query.pop("before", None)
+    ctx = {
+        "account": account,
+        "channels": channels,
+        "channel": channel,
+        "filter_by": filter_by,
+        "filters": FILTER_LABELS,
+        "post_id": post_id or variant,
+        "post": header[0] if header else None,
+        "post_ref": header[1] if header else None,
+        "threads": [t for t in threads if not t.collapsed],
+        "collapsed": [t for t in threads if t.collapsed],
+        "more_url": ("?" + _with(query, before=cursor.isoformat()) if cursor else ""),
+        "client_key": uuid.uuid4().hex,
+        "read_only": viewing_as(request) is not None,
+        "next_url": "?" + query.urlencode() if query else request.path,
+    }
+    if before is not None and is_background(request):
+        return partial_response(
+            render(request, "conversations/_comment_items.html", ctx)
+        )
+    return render(request, "conversations/comments.html", ctx)
+
+
+FILTER_LABELS = (
+    ("unanswered", "Not answered"),
+    ("all", "Everything"),
+    ("intent", "Wants to buy"),
+    ("flagged", "Flagged"),
+)
+
+
+def _with(query, **changes) -> str:
+    q = query.copy()
+    for key, value in changes.items():
+        q[key] = value
+    return q.urlencode()
 
 
 def _back(request):
@@ -173,4 +212,46 @@ def moderate(request, channel: str, pk: int):
         flash(request, "success", _DONE.get(action, "Done."), undo=undo)
     except comments.CommentError as exc:
         messages.error(request, str(exc))
+    return _back(request)
+
+
+@login_required
+@require_POST
+def bulk(request):
+    """Hide or permanently delete the selected comments (``items``: "channel:pk")."""
+    account, response = _guard(request)
+    if response:
+        return response
+    action = request.POST.get("action", "")
+    items = []
+    for raw in request.POST.getlist("items")[:200]:
+        channel, _, pk = raw.partition(":")
+        if channel in comments.CHANNELS and pk.isdigit():
+            items.append((channel, int(pk)))
+    if not items:
+        messages.error(request, "Select at least one comment.")
+        return _back(request)
+    if action not in ("hide", "delete"):
+        messages.error(request, "Unknown action.")
+        return _back(request)
+    from apps.accounts.utils import flash
+
+    done, failed, error = comments.moderate_many(account, items, action, request.user)
+    n = len(done)
+    noun = f"{n} comment{'' if n == 1 else 's'}"
+    if action == "hide":
+        words = f"Hid {noun}."
+    else:
+        words = f"Deleted {noun}."
+    if failed:
+        words += f" {len(failed)} couldn't be {'hidden' if action == 'hide' else 'deleted'}: {error}"
+    undo = None
+    if action == "hide" and done:
+        from apps.core.undo import undo_url
+
+        # Undo unhides each one on Instagram/Facebook (undo_handlers.comment_hide_many).
+        undo = undo_url(
+            request, "comment_hide_many", 0, items=[f"{c}:{pk}" for c, pk in done]
+        )
+    flash(request, "warning" if failed else "success", words, undo=undo)
     return _back(request)

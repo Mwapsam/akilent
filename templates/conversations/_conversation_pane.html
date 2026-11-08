@@ -144,6 +144,9 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
             <a href="{% url 'contacts:detail' conversation.contact.public_id %}" class="cv-menu-item" role="menuitem">
               {% include "components/icon.html" with name="user" class="w-4 h-4" %}View customer profile
             </a>
+            <a href="{% url 'automation:why-not' %}?conversation={{ conversation.public_id }}" data-overlay-open="drawer" data-overlay-size="lg" class="cv-menu-item" role="menuitem" @click="close()" data-why-not>
+              {% include "components/icon.html" with name="question" class="w-4 h-4" %}Why didn't it reply?
+            </a>
           </div>
         </div>
         <button type="button" class="cv-iconbtn cv-info-btn" x-ref="infoBtn" @click="toggleInfo()"

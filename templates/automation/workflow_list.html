@@ -50,33 +50,7 @@
 {% endfor %}
 
 {{ template_data|json_script:"tpl-data" }}
-<script>
-  // Live preview of a template follow-up: shows what a named customer and a nameless customer would each receive.
-  function templatePicker() {
-    const data = JSON.parse(document.getElementById('tpl-data').textContent);
-    const picks = {};
-    data.templates.forEach(t => t.blanks.forEach(b => { picks[t.pk + '__' + b.name] = b.default; }));
-    return {
-      tpl: '', picks: picks, lits: {},
-      render(named) {
-        const t = data.templates.find(x => String(x.pk) === this.tpl);
-        if (!t) return '';
-        let out = t.content;
-        t.blanks.forEach(b => {
-          const k = t.pk + '__' + b.name, p = this.picks[k];
-          let v;
-          if (p === 'first_name') v = named ? 'Ada' : 'there';
-          else if (p === 'full_name') v = named ? 'Ada Mwape' : 'there';
-          else if (p === 'phone') v = '+260 97 1234567';
-          else if (p === 'business') v = data.business;
-          else v = this.lits[k] || '…';
-          out = out.split('{' + '{' + b.name + '}' + '}').join(v);
-        });
-        return out;
-      },
-    };
-  }
-</script>
+{# templatePicker() is in static/js/page_factories.js, loaded with the shell. #}
 
 {% for starter in engagement_starters %}
 {% if not starter.installed and starter.team %}

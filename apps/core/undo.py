@@ -10,6 +10,7 @@ Handlers live with their app and are named here as dotted paths (no import cycle
 * ``followup_done``: reopen a follow-up marked done;
 * ``rule_pause``: switch a comment rule back on;
 * ``comment_hide``: unhide a comment on Instagram/Facebook;
+* ``comment_hide_many``: unhide the comments a bulk Hide hid (partial failures reported);
 * ``saved_reply_delete``: bring back a deleted saved reply.
 
 A handler takes ``(request, account, pk, extra)`` and returns the toast's words, or raises
@@ -33,6 +34,7 @@ HANDLERS = {
     "followup_done": "apps.conversations.undo_handlers.followup_done",
     "rule_pause": "apps.instagram.undo_handlers.rule_pause",
     "comment_hide": "apps.conversations.undo_handlers.comment_hide",
+    "comment_hide_many": "apps.conversations.undo_handlers.comment_hide_many",
     "saved_reply_delete": "apps.conversations.undo_handlers.saved_reply_delete",
 }
 

@@ -1064,6 +1064,27 @@
     else document.addEventListener("alpine:init", function () { window.Alpine.data(name, factory); });
   };
 
+  // The sidebar's Inbox badge: one hidden element asks (data-badge-source, in the desktop
+  // nav, kept across navigations) and every badge shown copies its answer: the desktop and
+  // phone navs (data-badge-mirror) and the inbox's "Follow-ups to do" (data-badge-due, from
+  // the answer's data-due). One request per poll, whichever nav is on screen.
+  function syncBadges() {
+    document.querySelectorAll("[data-badge-source]").forEach(function (src) {
+      const key = src.getAttribute("data-badge-source");
+      const count = src.querySelector(".inbox-tab-count");
+      const html = count ? count.outerHTML : "";
+      document.querySelectorAll('[data-badge-mirror="' + key + '"]').forEach(function (m) {
+        if (m.innerHTML !== html) m.innerHTML = html;
+      });
+      const due = src.querySelector("[data-due]");
+      if (!due) return;
+      document.querySelectorAll('[data-badge-due="' + key + '"]').forEach(function (m) {
+        m.textContent = due.getAttribute("data-due");
+      });
+    });
+  }
+  document.addEventListener("htmx:afterSettle", syncBadges);
+
   // Navigate in place from script (command palette, toasts). Falls back to a page load.
   akilent.navigate = function (url) {
     const main = mainEl();

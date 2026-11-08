@@ -1141,13 +1141,14 @@ def why_not(request):
 
     from apps.automation import explain
     from apps.automation.workflow_engine import explain_enrollment
-    from apps.conversations import attribution
     from apps.conversations.models import Message
     from apps.whatsapp import api as whatsapp_api
 
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
+    if request.GET.get("pick"):
+        return _why_not_choices(request, account)
 
     inbound = Message.objects.filter(
         account=account, direction=Message.Direction.INBOUND
@@ -1173,7 +1174,6 @@ def why_not(request):
         "message": None,
         "verdicts": [],
         "notes": [],
-        "choices": attribution.recent_choices(account),
     }
     if latest is not None:
         conversation, contact = latest.conversation, latest.conversation.contact
@@ -1225,4 +1225,55 @@ def why_not(request):
                 ),
             }
         )
-    return render(request, "automation/why_not.html", ctx)
+    from apps.core.htmx import overlay_or_page
+
+    # From a conversation's ⋯ menu it opens as a drawer over the chat (static: no polling).
+    return overlay_or_page(
+        request,
+        "automation/_why_not_body.html",
+        "automation/why_not.html",
+        ctx,
+        title="Why didn't it reply?",
+    )
+
+
+def _why_not_choices(request, account):
+    """The picker's search: conversations the customer wrote in, by name, phone or email."""
+    from django.db.models import Q
+
+    from apps.conversations import attribution
+    from apps.conversations.models import Conversation, Message
+
+    q = (request.GET.get("q") or "").strip()[:80]
+    if not q:
+        choices = attribution.recent_choices(account, limit=8)
+    else:
+        rows = (
+            Conversation.objects.filter(
+                account=account, messages__direction=Message.Direction.INBOUND
+            )
+            .filter(
+                Q(contact__first_name__icontains=q)
+                | Q(contact__last_name__icontains=q)
+                | Q(contact__phone__icontains=q)
+                | Q(contact__email__icontains=q)
+            )
+            .select_related("contact")
+            .distinct()
+            .order_by("-last_message_at", "-id")[:12]
+        )
+        choices = [
+            {
+                "public_id": c.public_id,
+                "customer": c.contact.full_name
+                or c.contact.phone
+                or c.contact.email
+                or "Customer",
+                "channel": c.get_channel_display(),
+                "last_message_at": c.last_message_at,
+            }
+            for c in rows
+        ]
+    return render(
+        request, "automation/_why_not_choices.html", {"choices": choices, "q": q}
+    )

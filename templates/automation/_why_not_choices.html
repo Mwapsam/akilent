@@ -1,0 +1,12 @@
+{% comment %}Search results for the "Check a different conversation" picker on Why didn't it reply?{% endcomment %}
+{% if choices %}
+<ul class="card divide-y divide-border max-h-72 overflow-y-auto text-sm" role="listbox" aria-label="Conversations">
+  {% for c in choices %}
+  <li><a href="{% url 'automation:why-not' %}?conversation={{ c.public_id }}" class="block px-3 py-2 hover:bg-surface-muted" role="option">
+    <span class="font-medium text-ink">{{ c.customer }}</span>
+    <span class="text-xs text-ink-subtle"> · {{ c.channel }} · {{ c.last_message_at|date:"j M, H:i" }}</span></a></li>
+  {% endfor %}
+</ul>
+{% elif q %}
+<p class="px-1 py-2 text-sm text-ink-subtle">No conversation matches “{{ q }}”.</p>
+{% endif %}

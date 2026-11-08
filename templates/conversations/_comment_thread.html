@@ -1,0 +1,103 @@
+{% load ui %}
+{% comment %}
+One comment on the Comments list (conversations/comments.html): the visitor's comment with
+its post beside it, its replies nested beneath, and its actions. Needs: thread, next_url,
+client_key, read_only.
+
+A row is [data-row], so J/K step through comments. The checkbox belongs to the bulk form
+(form="comments-bulk") outside the list, so the per-comment forms here aren't nested in it.
+{% endcomment %}
+{% with c=thread.root p=thread.post %}
+<li class="px-4 sm:px-5 py-4" data-row data-comment-thread="{{ thread.channel }}-{{ thread.pk }}">
+  <div class="flex items-start gap-3">
+    {% if not read_only and c and c.state != 'deleted' and not c.outbound %}
+    <input type="checkbox" class="checkbox mt-1" name="items" value="{{ thread.channel }}:{{ c.pk }}" form="comments-bulk"
+           data-channel-label="{% if thread.channel == 'instagram' %}Instagram{% else %}Facebook{% endif %}"
+           aria-label="Select {{ c.author }}'s comment">
+    {% endif %}
+    {% if p %}
+    <a href="?channel={{ thread.channel }}&post={{ thread.post_id|urlencode }}" class="shrink-0" title="Comments on {{ p.label }}">
+      {% include "publishing/_media_thumb.html" with url=p.thumb size="w-10 h-10" alt=p.label %}
+    </a>
+    {% endif %}
+    <div class="min-w-0 flex-1">
+      {% if c %}
+      <div class="flex flex-wrap items-start justify-between gap-2">
+        <div class="min-w-0">
+          <p class="text-sm text-ink">
+            <a href="?channel={{ thread.channel }}&post={{ thread.post_id|urlencode }}" class="font-medium hover:underline">{{ c.author }}</a>
+            <span class="text-ink-subtle text-xs ml-1">{% when c.timestamp %}</span>
+          </p>
+          <p class="mt-1 text-sm break-words {% if c.state == 'deleted' %}line-through text-ink-subtle{% else %}text-ink-muted{% endif %}">{{ c.body|default:"(no text)" }}</p>
+          <div class="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-ink-subtle">
+            {% include "components/channel_tag.html" with channel=thread.channel compact=True %}
+            {% if p %}<span class="truncate max-w-[16rem]">on {% if p.url %}<a href="{{ p.url }}" target="_blank" rel="noopener" class="underline hover:text-ink">{{ p.label }}</a>{% else %}{{ p.label }}{% endif %}</span>{% endif %}
+            {% if thread.intent %}<span class="badge badge-success">Wants to buy</span>{% endif %}
+            {% if c.state == 'flagged' %}<span class="badge badge-warning">Flagged</span>{% endif %}
+            {% if c.state == 'hidden' %}<span class="badge badge-neutral">Hidden</span>{% endif %}
+            {% if c.state == 'deleted' %}<span class="badge badge-neutral">Deleted</span>{% endif %}
+            {% if thread.conversation_public_id %}<a href="{% url 'conversations:detail' thread.conversation_public_id %}" class="badge badge-info">In the inbox</a>{% elif thread.answered %}<span class="badge badge-neutral">Answered</span>{% endif %}
+          </div>
+        </div>
+        {% if not read_only and c.state != 'deleted' and not c.outbound %}
+        {% row_menu "Actions for "|add:c.author|add:"'s comment" %}
+          {% if c.state == 'flagged' %}
+          <form method="post" action="{% url 'conversations:comments_moderate' thread.channel c.pk %}" hx-boost="false">{% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}"><input type="hidden" name="action" value="approve"><button class="row-menu-item" role="menuitem">Looks fine</button></form>
+          {% endif %}
+          <form method="post" action="{% url 'conversations:comments_moderate' thread.channel c.pk %}" hx-boost="false">{% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}">
+            {% if c.hidden %}<input type="hidden" name="action" value="unhide"><button class="row-menu-item" role="menuitem">Unhide</button>
+            {% else %}<input type="hidden" name="action" value="hide"><button class="row-menu-item" role="menuitem">Hide</button>{% endif %}
+          </form>
+          <a href="?channel={{ thread.channel }}&post={{ thread.post_id|urlencode }}" class="row-menu-item" role="menuitem">All comments on this post</a>
+          <form method="post" action="{% url 'conversations:comments_moderate' thread.channel c.pk %}" hx-boost="false">{% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}"><input type="hidden" name="action" value="delete">
+            <button class="row-menu-item row-menu-item--danger" role="menuitem" data-confirm="Permanently delete this comment from {% if thread.channel == 'instagram' %}Instagram{% else %}Facebook{% endif %}? This can't be undone." data-confirm-danger data-confirm-label="Delete">Delete…</button></form>
+        {% endrow_menu %}
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {% if thread.replies %}
+      <ul class="mt-3 pl-3 border-l border-border space-y-2" aria-label="Replies">
+        {% for r in thread.replies %}
+        <li class="text-sm">
+          <span class="font-medium {% if r.outbound %}text-brand{% else %}text-ink{% endif %}">{{ r.author }}</span>
+          <span class="text-ink-subtle text-xs ml-1">{% when r.timestamp %}</span>
+          {% if r.state == 'hidden' %}<span class="badge badge-neutral ml-1">Hidden</span>{% endif %}
+          <p class="text-ink-muted break-words {% if r.state == 'deleted' %}line-through{% endif %}">{{ r.body }}</p>
+          {% if not read_only and not r.outbound and r.state != 'deleted' %}
+          <form method="post" action="{% url 'conversations:comments_moderate' thread.channel r.pk %}" hx-boost="false" class="inline">{% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}">
+            {% if r.hidden %}<input type="hidden" name="action" value="unhide"><button class="text-xs underline text-ink-subtle">Unhide</button>
+            {% else %}<input type="hidden" name="action" value="hide"><button class="text-xs underline text-ink-subtle">Hide</button>{% endif %}
+          </form>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+
+      {% if not read_only and c and c.state != 'deleted' %}
+      <details class="mt-2">
+        <summary class="text-sm text-brand cursor-pointer select-none">Reply</summary>
+        <div class="mt-2 grid gap-3 sm:grid-cols-2">
+          <form method="post" action="{% url 'conversations:comments_reply' thread.channel c.pk %}" hx-boost="false">
+            {% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}"><input type="hidden" name="client_key" value="{{ client_key }}-r{{ thread.channel }}{{ thread.pk }}">
+            <label class="label" for="reply-{{ thread.channel }}-{{ thread.pk }}">Public reply</label>
+            <textarea id="reply-{{ thread.channel }}-{{ thread.pk }}" name="body" rows="2" class="input" maxlength="2000" required placeholder="Everyone can see this"></textarea>
+            <button class="btn btn-secondary btn-sm mt-2">Post reply</button>
+          </form>
+          {% if not thread.conversation_public_id and not c.outbound %}
+          <form method="post" action="{% url 'conversations:comments_private_reply' thread.channel c.pk %}" hx-boost="false">
+            {% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}"><input type="hidden" name="client_key" value="{{ client_key }}-d{{ thread.channel }}{{ thread.pk }}">
+            <label class="label" for="dm-{{ thread.channel }}-{{ thread.pk }}">Private message</label>
+            <textarea id="dm-{{ thread.channel }}-{{ thread.pk }}" name="body" rows="2" class="input" maxlength="1000" required placeholder="Only they see this"></textarea>
+            <p class="text-xs text-ink-subtle mt-1">One private message per comment, within 7 days of it. Their answer lands in your inbox.</p>
+            <button class="btn btn-primary btn-sm mt-2">Send privately</button>
+          </form>
+          {% endif %}
+        </div>
+      </details>
+      {% endif %}
+    </div>
+  </div>
+</li>
+{% endwith %}

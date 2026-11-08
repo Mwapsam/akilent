@@ -148,19 +148,18 @@ BOOSTED = {
 
 @pytest.mark.django_db
 def test_the_outcome_message_survives_the_full_page_load(client, owner):
-    """Pause posts (boosted), redirects to the list, and htmx fetches the list. The list ships
-    its own scripts, so the shell throws that render away and loads the page for real; the
-    "paused" message it had already used up never showed. It's kept for the real load now."""
+    """Pause posts (boosted), redirects to the list, and htmx fetches the list. The list
+    used to ship its own script and needed a real page load; it swaps in place now
+    (templatePicker is in static/js/page_factories.js), and the "paused" message comes
+    with that swap."""
     _wf(owner, "live", Workflow.Status.PUBLISHED)
     resp = client.post("/automations/live/pause/", **BOOSTED)
     assert resp.status_code == 302
     followed = client.get(resp["Location"], **BOOSTED)
-    assert followed.has_header("HX-Redirect")  # the list needs a real page load
-    page = client.get(resp["Location"]).content.decode()
-    assert (
-        'id="flash-messages"' in page
-        and "Live" in page.split('id="flash-messages"', 1)[1][:300]
-    )
+    assert not followed.has_header("HX-Redirect")  # swapped in place
+    page = followed.content.decode()
+    assert 'id="flash-messages"' in page
+    assert "is paused" in page.split('id="flash-messages"', 1)[1][:300]
 
 
 @pytest.mark.django_db

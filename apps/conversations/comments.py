@@ -45,6 +45,18 @@ class CommentItem:
 
 
 @dataclass
+class PostRef:
+    """The post a comment is on, as the Comments list shows it beside the comment."""
+
+    channel: str
+    post_id: str
+    label: str
+    thumb: str = ""  # a media URL (Content Studio posts); "" shows a placeholder
+    url: str = ""  # the live post, when known
+    variant_id: int | None = None
+
+
+@dataclass
 class ThreadItem:
     channel: str
     pk: int  # the thread row
@@ -57,6 +69,12 @@ class ThreadItem:
     answered: bool
     flagged: bool
     variant_id: int | None = None  # the Content Studio channel that published the post
+    post: PostRef | None = None  # set by comment_feed
+
+    @property
+    def collapsed(self) -> bool:
+        """Hidden or deleted at the root: folded into "3 hidden · show" on the page."""
+        return self.root is not None and self.root.state in ("hidden", "deleted")
 
 
 @dataclass
@@ -634,3 +652,244 @@ def _apply(channel: str, comment, action: str) -> tuple[str, str]:
     comment.moderation_state = S.DELETED
     comment.save(update_fields=["moderation_state"])
     return ModerationLog.Outcome.APPLIED, ""
+
+
+# ---------------------------------------------------------------------------
+# The Comments list: one flat list of comments, newest first, a page at a time
+# ---------------------------------------------------------------------------
+
+FEED_FILTERS = ("unanswered", "all", "intent", "flagged")
+FEED_PAGE = 20
+
+
+def comment_feed(
+    account,
+    *,
+    channel: str = "",
+    filter_by: str = "unanswered",
+    post_id: str = "",
+    variant_id: int | None = None,
+    before: datetime | None = None,
+    limit: int = FEED_PAGE,
+) -> tuple[list[ThreadItem], datetime | None]:
+    """Comment threads (a visitor's comment with its replies) across both channels, newest
+    first, each with its post. Returns the page and the cursor for "Load more" (None at
+    the end). Queries don't grow with the number of comments or replies: per channel one
+    for the threads and one for their comments, then one or two for the posts.
+
+    "Not answered" (the default): nobody replied, publicly or in private, and it isn't
+    deleted. Posts without comments never appear; a post is reached through its comments.
+    """
+    if filter_by not in FEED_FILTERS:
+        filter_by = "unanswered"
+    rows: list[ThreadItem] = []
+    for ch in usable_channels(account):
+        if channel and ch != channel:
+            continue
+        qs = _feed_queryset(account, ch, filter_by, post_id, variant_id)
+        if before is not None:
+            qs = qs.filter(received_at__lt=before)
+        rows += [
+            _thread_item(ch, t) for t in qs.order_by("-received_at", "-pk")[: limit + 1]
+        ]
+    rows.sort(key=lambda t: (t.received_at, t.pk), reverse=True)
+    page, more = rows[:limit], len(rows) > limit
+    _attach_posts(account, page)
+    return page, (page[-1].received_at if more and page else None)
+
+
+def _feed_queryset(account, channel, filter_by, post_id, variant_id):
+    from django.db.models import Exists, OuterRef
+
+    qs: Any
+    comments_model: Any
+    if channel == INSTAGRAM:
+        from apps.instagram.models.comment import Comment, CommentThread
+
+        qs = CommentThread.objects.filter(
+            instagram_account__account=account
+        ).select_related("instagram_contact", "conversation")
+        comments_model, contact_field = Comment, "instagram_contact"
+    else:
+        from apps.facebook.models.comment import (
+            FacebookComment,
+            FacebookCommentThread,
+        )
+
+        qs = FacebookCommentThread.objects.filter(account=account).select_related(
+            "facebook_contact", "conversation"
+        )
+        comments_model, contact_field = FacebookComment, "facebook_contact"
+    if post_id:
+        qs = qs.filter(post_id=post_id)
+    if variant_id:
+        qs = qs.filter(content_variant_id=variant_id)
+    if filter_by == "unanswered":
+        replied = comments_model.objects.filter(
+            thread=OuterRef("pk"), direction="outbound"
+        )
+        deleted = comments_model.objects.filter(
+            thread=OuterRef("pk"),
+            comment_id=OuterRef("comment_id"),
+            moderation_state="deleted",
+        )
+        qs = (
+            qs.filter(conversation__isnull=True)
+            .exclude(Exists(replied))
+            .exclude(Exists(deleted))
+        )
+    elif filter_by == "intent":
+        qs = qs.exclude(intent="")
+    elif filter_by == "flagged":
+        qs = qs.filter(
+            Exists(
+                comments_model.objects.filter(
+                    thread=OuterRef("pk"), moderation_state="flagged"
+                )
+            )
+        )
+    return qs.prefetch_related(
+        Prefetch(
+            "comments",
+            queryset=comments_model.objects.select_related(contact_field).order_by(
+                "timestamp", "pk"
+            ),
+        )
+    )
+
+
+def _ig_author(c) -> str:
+    contact = c.instagram_contact
+    return f"@{contact.username}" if contact.username else contact.name or "Someone"
+
+
+def _fb_author(c) -> str:
+    return c.facebook_contact.name or "Someone"
+
+
+def _thread_item(channel: str, thread) -> ThreadItem:
+    author = _ig_author if channel == INSTAGRAM else _fb_author
+    items = [
+        CommentItem(
+            channel=channel,
+            pk=c.pk,
+            comment_id=c.comment_id,
+            author="You" if c.direction == "outbound" else author(c),
+            body=c.body,
+            timestamp=c.timestamp,
+            outbound=c.direction == "outbound",
+            state=c.moderation_state,
+            hidden=c.is_hidden,
+        )
+        for c in thread.comments.all()
+    ]
+    root = next((c for c in items if c.comment_id == thread.comment_id), None)
+    return ThreadItem(
+        channel=channel,
+        pk=thread.pk,
+        post_id=thread.post_id,
+        root=root,
+        replies=[c for c in items if c is not root],
+        intent=thread.intent,
+        conversation_public_id=(
+            thread.conversation.public_id if thread.conversation else ""
+        ),
+        received_at=thread.received_at,
+        answered=bool(thread.conversation_id) or any(c.outbound for c in items),
+        flagged=any(c.state == "flagged" for c in items),
+        variant_id=thread.content_variant_id,
+    )
+
+
+def _attach_posts(account, threads: list[ThreadItem]) -> None:
+    """Each thread's post: its Content Studio caption and picture when Akilent posted it
+    (one query, two when some threads aren't linked to a post yet)."""
+    from django.db.models import Q
+
+    from apps.publishing.models import ContentPostVariant
+
+    if not threads:
+        return
+    by_pk: dict[int, Any] = {}
+    by_ref: dict[tuple[str, str], Any] = {}
+    linked = {t.variant_id for t in threads if t.variant_id}
+    if linked:
+        for v in ContentPostVariant.objects.select_related("post").filter(
+            pk__in=linked, post__account=account
+        ):
+            by_pk[v.pk] = v
+    ids = {t.post_id for t in threads if t.variant_id not in by_pk}
+    if ids:
+        for v in (
+            ContentPostVariant.objects.select_related("post")
+            .filter(post__account=account, platform__in=CHANNELS)
+            .filter(Q(publication_id__in=ids) | Q(metadata__fb_post_id__in=ids))
+        ):
+            by_ref.setdefault((v.platform, _variant_post_ref(v)), v)
+            by_ref.setdefault((v.platform, v.publication_id), v)
+    for t in threads:
+        found = by_pk.get(t.variant_id) if t.variant_id else None
+        t.post = post_ref(
+            t.channel, t.post_id, found or by_ref.get((t.channel, t.post_id))
+        )
+
+
+def post_ref(channel: str, post_id: str, variant=None) -> PostRef:
+    text, thumb, url, vid = "", "", "", None
+    if variant is not None:
+        text = variant.caption or variant.post.caption or ""
+        media = variant.media_urls or variant.post.media_urls or []
+        thumb = media[0] if media else ""
+        url = variant.publication_url or ""
+        vid = variant.pk
+    if not url and channel == FACEBOOK and post_id:
+        url = f"https://www.facebook.com/{post_id}"
+    label = (text.strip().splitlines() or [""])[0][:80] or (
+        "Instagram post" if channel == INSTAGRAM else "Facebook post"
+    )
+    return PostRef(channel, post_id, label, thumb, url, vid)
+
+
+def post_header(account, channel: str, post_id: str, variant_id=None):
+    """One post for the Comments list narrowed to it: its name and picture, the business's
+    own comments on it, and what to comment on as the business. (PostItem, PostRef), or
+    None when the post can't be found on a usable channel."""
+    from apps.publishing.models import ContentPostVariant
+
+    variant = None
+    if variant_id:
+        variant = (
+            ContentPostVariant.objects.select_related("post")
+            .filter(pk=variant_id, post__account=account)
+            .first()
+        )
+        if variant is not None:
+            channel = channel or variant.platform
+            post_id = post_id or _variant_post_ref(variant)
+    if channel not in usable_channels(account) or not post_id:
+        return None
+    if variant is None:
+        found = _published_variants(account, channel, post_id)
+        variant = found[0] if found else None
+    ref = post_ref(channel, post_id, variant)
+    item = PostItem(channel, post_id, ref.label, variant)
+    item.business_comments = _business_comments(account, item)
+    return item, ref
+
+
+def moderate_many(account, items: list[tuple[str, int]], action: str, user):
+    """Hide, unhide or delete several comments. Each goes to Instagram/Facebook on its own,
+    so one refusal doesn't stop the rest. Returns (done, failed, first error)."""
+    if action not in ("hide", "unhide", "delete"):
+        raise CommentError("Unknown action.")
+    done: list[tuple[str, int]] = []
+    failed: list[tuple[str, int]] = []
+    first_error = ""
+    for channel, pk in items:
+        try:
+            moderate(account, channel, pk, action, user)
+            done.append((channel, pk))
+        except CommentError as exc:
+            failed.append((channel, pk))
+            first_error = first_error or str(exc)
+    return done, failed, first_error

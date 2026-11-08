@@ -54,6 +54,19 @@ class Insight(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     resolved_at = models.DateTimeField(blank=True, null=True)
 
+    @property
+    def issue_since(self):
+        """When the issue itself began (evidence "since", e.g. the longest wait), if the
+        rule records it; the insight row can be much older, since it's updated in place."""
+        from django.utils.dateparse import parse_datetime
+
+        raw = (
+            (self.evidence or {}).get("since")
+            if isinstance(self.evidence, dict)
+            else None
+        )
+        return parse_datetime(raw) if raw else None
+
     class Meta:
         ordering = ["-created_at"]
         indexes = [

@@ -1117,7 +1117,7 @@ def _followup_context(
             and open_followup.source not in followup_service.WAITING_SOURCES
             and open_followup.created_at < last_at
         )
-        out["later_choices"] = followup_service.LATER_CHOICES
+        out["later_choices"] = followup_service.later_choices(account)
     return out
 
 
@@ -1691,7 +1691,7 @@ def followups_due(request):
             "teammates": teammates,
             "emails_on": bool(membership and membership.followup_emails),
             "zone_name": now.astimezone(zone).tzname(),
-            "later_choices": followups.LATER_CHOICES,
+            "later_choices": followups.later_choices(account, now),
         },
     )
 
@@ -1910,7 +1910,8 @@ def inbox_unread_for(user, account) -> int:
 def inbox_badge(request):
     """The sidebar's Inbox count: unread conversations for me (inbox_unread_for) plus
     follow-ups due for me (the Follow-ups tab's number). One element on the page asks;
-    the hidden copy of the nav doesn't (see components/_nav_item.html)."""
+    every badge shown copies it (components/_nav_item.html, app.js syncBadges). ``data-due``
+    carries the follow-ups due alone, for the inbox's "Follow-ups to do"."""
     from apps.conversations import followups
 
     account = get_current_account(request)
@@ -1920,7 +1921,8 @@ def inbox_badge(request):
     due = followups.due_for(request.user, account)
     total = unread + due
     if not total:
-        return HttpResponse("")
+        # Still says how many follow-ups are due (none), for the inbox's "Follow-ups to do".
+        return HttpResponse('<span hidden data-due="0"></span>')
     parts = []
     if unread:
         parts.append(f"{unread} unread conversation{'s' if unread != 1 else ''}")
@@ -1929,8 +1931,8 @@ def inbox_badge(request):
     label = " and ".join(parts)
     tone = " inbox-tab-count--danger" if due else ""
     return HttpResponse(
-        f'<span class="inbox-tab-count{tone}" aria-label="{label}" title="{label}">'
-        f"{total if total < 100 else '99+'}</span>"
+        f'<span class="inbox-tab-count{tone}" data-due="{due}" aria-label="{label}" '
+        f'title="{label}">{total if total < 100 else "99+"}</span>'
     )
 
 

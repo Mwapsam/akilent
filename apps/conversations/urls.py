@@ -12,6 +12,7 @@ urlpatterns = [
     # Instagram and Facebook comments in one place (comments_views).
     path("comments/", comments_views.comments_inbox, name="comments"),
     path("comments/post/", comments_views.comment_on_post, name="comments_post"),
+    path("comments/bulk/", comments_views.bulk, name="comments_bulk"),
     path(
         "comments/<str:channel>/<int:pk>/reply/",
         comments_views.reply,

@@ -20,6 +20,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 _TOMORROW_HOUR = 9
+_EVENING_HOUR = 18
 
 # The choices offered when setting or snoozing a reminder.
 CHOICES = (
@@ -32,6 +33,24 @@ CHOICES = (
 # What Later offers wherever a follow-up is moved (the page and the side panel), beside
 # "Pick a date".
 LATER_CHOICES = tuple(c for c in CHOICES if c[0] in ("1h", "tomorrow", "next_week"))
+
+
+def later_choices(
+    account, now: datetime.datetime | None = None
+) -> list[tuple[str, str]]:
+    """Later's presets with the time each one means in the workspace's time zone: "In 1
+    hour", "This evening, 18:00" (until an hour before), "Tomorrow, 9:00" and "Next week,
+    Sun 15 Nov, 9:00"."""
+    local = (now or timezone.now()).astimezone(business_zone(account))
+    out = [("1h", "In 1 hour")]
+    if local.hour < _EVENING_HOUR - 1:
+        out.append(("evening", f"This evening, {_EVENING_HOUR}:00"))
+    out.append(("tomorrow", f"Tomorrow, {_TOMORROW_HOUR}:00"))
+    week = local + datetime.timedelta(days=7)
+    out.append(
+        ("next_week", f"Next week, {week:%a} {week.day} {week:%b}, {_TOMORROW_HOUR}:00")
+    )
+    return out
 
 
 def business_zone(account) -> ZoneInfo:
@@ -54,6 +73,11 @@ def resolve_due_at(
         return now + datetime.timedelta(hours=1)
     if choice == "3h":
         return now + datetime.timedelta(hours=3)
+    if choice == "evening":
+        local = local_now.replace(hour=_EVENING_HOUR, minute=0, second=0, microsecond=0)
+        if local <= local_now:
+            raise ValueError("It's already evening. Pick another time.")
+        return local.astimezone(datetime.UTC)
     if choice in ("tomorrow", "next_week"):
         days = 1 if choice == "tomorrow" else 7
         local = (local_now + datetime.timedelta(days=days)).replace(
@@ -547,7 +571,7 @@ def customer_panel(account, contact, viewer, *, chat=None, now=None) -> dict:
         + f"?list=team&contact={contact.public_id}",
         "all_label": copy.all_for(name),
         "empty": copy.no_followups_for(name),
-        "later_choices": LATER_CHOICES,
+        "later_choices": later_choices(account, now),
         "copy": copy,
     }
 

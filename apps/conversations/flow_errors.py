@@ -184,3 +184,25 @@ def humanize_flow_error(
     except Exception:  # a translation must never break the publish task
         pass
     return GENERIC
+
+
+# What the publish task stored before errors were translated (Stage 1a): the provider's own
+# text, e.g. "Meta API 400 [100]: (#100) The parameter name is required."
+_RAW = re.compile(r"Meta API \d{3}\s*\[(\d+)(?:/(\d+))?\]|\(#(\d+)\)")
+
+
+def is_raw(text: str) -> bool:
+    return bool(text and _RAW.search(text))
+
+
+def readable(text: str) -> str:
+    """A stored error as owners should read it: already-translated text as is, Meta's raw
+    text (stored before the fix) translated from its code."""
+    if not is_raw(text):
+        return text
+    m = _RAW.search(text)
+    assert m is not None
+    code = m.group(1) or m.group(3) or ""
+    if m.group(2):
+        code = f"{code}/{m.group(2)}"
+    return humanize_flow_error(code=code, message=text)
