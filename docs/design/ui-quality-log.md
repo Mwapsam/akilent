@@ -2637,3 +2637,31 @@ Plan: the design audit's D5 (fewer boxes, Dashboard first), D4 (Settings side li
   - Channels has: Instagram, Facebook Page, Review before publishing, Recent failures, and a closing **danger section** for Disconnect (`btn-danger-outline`). Connect stays on the Facebook section (App Review path kept).
 - **Tests:** `apps/accounts/tests/test_settings_batch.py`. The full suite is green. Tailwind rebuilt.
 - **Next:** Insights step 2 (layout), then step 3 (charts).
+
+
+### Entry 50: Insights step 2, the layout (2026-11-09)
+
+- **Order on the page:**
+  1. Period picker (now inside the refreshing body, so tab switches and refreshes keep it in step)
+  2. Four headline numbers
+  3. What needs you
+  4. Tabs
+  5. Under every tab: goals, the weekly trend, all observations, and the weekly-email switch
+- **Headline** (`reporting.headline`, `insights/_headline.html`, D5 figures):
+  - The four numbers: median first reply, answered within 24 hours, leads from conversations, and paid orders from conversations (with revenue).
+  - Each is shown against the period before it. Rates and medians compare only when both periods have `MIN_SAMPLE`; counts always compare.
+  - This month's goal for the metric, with on track or behind, shows when a goal is set.
+  - The old proof bar's sentence sits above the numbers.
+- **What needs you** (`apps/conversations/attention.py`, `insights/_attention.html`):
+  - At most three one-line items, with "N more" linking to all observations.
+  - Sources are the live counts and set-up gaps from `at_risk`, plus open observations.
+  - Observations that repeat a live count (`unanswered_conversations`, `lead_followup_gap`) are left out. Instagram/Facebook pairs are merged into one line ("4 engaged contacts worth a message (Facebook 1, Instagram 3)").
+  - Each item says when it started: the longest wait, the oldest due follow-up, or the observation's start. A coral dot means customers waiting too long; a highlight dot means something to do.
+  - Also on Home (dashboard panels) when there's something. Home leaves out set-up gaps, which its Setup section already lists.
+- **Tabs:**
+  - Response · Sales (with channel performance) · Content (customer journey, email) · Automation.
+  - Selected with `?tab=` and switched in place (hx-get with push-url). Plain links without scripts.
+  - Only the open tab's figures are worked out (`_tab_context`).
+- **Removed:** `_proof.html` and `_at_risk.html`, which the headline and What needs you replace (the weekly email still uses `reporting.proof`/`at_risk`). Cards inside the tab sections are gone too; "All observations" keeps its cards for now.
+- **Tests:** `test_insights_step2.py` (new). Journey, attribution and full-render tests now read the right tab. The full suite is green apart from `test_import_5000_contacts` under parallel load (it passes alone).
+- **Next:** step 3, charts (one per tab with a metric switcher, plus funnel bars).

@@ -1027,6 +1027,117 @@ def proof(account, week: Period | None = None, now: datetime | None = None) -> d
     }
 
 
+def _leads_from_conversations(account, period: Period) -> int:
+    from apps.crm.models import Lead
+
+    return Lead.objects.filter(
+        account=account,
+        conversation__isnull=False,
+        created_at__gte=period.start,
+        created_at__lt=period.end,
+    ).count()
+
+
+def headline(
+    account,
+    period: Period,
+    rows: list[dict] | None = None,
+    *,
+    now: datetime | None = None,
+    goals: dict | None = None,
+) -> dict:
+    """The four numbers at the top of Insights, each against the period before it.
+
+    ``{"reply", "answered", "leads", "paid", "sentence", "active"}``. Each figure is
+    ``{"value", "before", "change", "comparable", "goal"}``: ``change`` is None unless both
+    periods have at least ``MIN_SAMPLE`` to compare (a rate or median from three conversations
+    isn't a trend), and ``goal`` is this month's goal row for that metric from
+    ``goal_progress``, if one is set. Counts (leads, paid orders) always compare.
+    """
+    now = now or timezone.now()
+    before = period.previous()
+    rows = first_replies(account, period.start, period.end) if rows is None else rows
+    rows_before = first_replies(account, before.start, before.end)
+    resp = response(account, period, rows, now=now)
+    resp_before = response(account, before, rows_before, now=now)
+
+    goal_for: dict[str, dict] = {}
+    for g in (goals or {}).get("goals", []):
+        goal_for.setdefault(g["metric"], g)
+
+    def compare(value, value_before, enough):
+        return change(value, value_before) if enough else None
+
+    reply_ok = resp["replied"] >= MIN_SAMPLE and resp_before["replied"] >= MIN_SAMPLE
+    answered_ok = resp["settled"] >= MIN_SAMPLE and resp_before["settled"] >= MIN_SAMPLE
+    leads_now = _leads_from_conversations(account, period)
+    leads_before = _leads_from_conversations(account, before)
+    money = revenue(account, period)
+    paid_now = sum(r["orders"] for r in money)
+    paid_before = sum(r["orders"] for r in revenue(account, before))
+
+    replied = customers_replied(account, period)
+    parts = []
+    if replied:
+        parts.append(f"{replied} customer{'' if replied == 1 else 's'} got a reply")
+    if resp["missed"]:
+        rec = recovery(account, period, rows, now=now)
+        if rec["recovered"]:
+            n = rec["recovered"]
+            parts.append(
+                f"{n} missed conversation{' was' if n == 1 else 's were'} picked back up"
+            )
+    if paid_now:
+        parts.append(
+            f"{paid_now} paid order{'' if paid_now == 1 else 's'} came from customer conversations"
+        )
+
+    return {
+        "reply": {
+            "value": resp["median_first_reply_seconds"],
+            "before": resp_before["median_first_reply_seconds"],
+            "change": compare(
+                resp["median_first_reply_seconds"],
+                resp_before["median_first_reply_seconds"],
+                reply_ok,
+            ),
+            "comparable": reply_ok,
+            "replied": resp["replied"],
+            "automatic": resp["automatic_first_replies"],
+            "goal": goal_for.get(InsightGoal.Metric.MEDIAN_FIRST_REPLY),
+        },
+        "answered": {
+            "value": resp["answered_pct"],
+            "answered": resp["answered"],
+            "settled": resp["settled"],
+            "before": resp_before["answered_pct"],
+            "change": compare(
+                resp["answered_pct"], resp_before["answered_pct"], answered_ok
+            ),
+            "comparable": answered_ok,
+            "goal": goal_for.get(InsightGoal.Metric.ANSWERED_PCT),
+        },
+        "leads": {
+            "value": leads_now,
+            "before": leads_before,
+            "change": leads_now - leads_before,
+            "comparable": True,
+            "goal": goal_for.get(InsightGoal.Metric.LEADS),
+        },
+        "paid": {
+            "value": paid_now,
+            "before": paid_before,
+            "change": paid_now - paid_before,
+            "comparable": True,
+            "revenue": money,
+            "goal": goal_for.get(InsightGoal.Metric.PAID_ORDERS)
+            or goal_for.get(InsightGoal.Metric.REVENUE),
+        },
+        "sentence": oxford_join(parts),
+        "active": bool(rows or replied or paid_now or leads_now),
+    }
+
+
 def oxford_join(parts: list[str]) -> str:
     """ "a" / "a and b" / "a, b, and c" — never built in a template, where the comma logic would
     be one more thing to get wrong per clause count."""

@@ -1304,11 +1304,15 @@ def dashboard_panels(request):
     if ob.get_state(account, essentials_only=True, request=request)["complete"]:
         next_recommended = ob.get_state(account, request=request)["next_recommended"]
 
+    from apps.conversations.attention import attention
+
     return render(
         request,
         "accounts/_dashboard_panels.html",
         {
             "account": account,
+            # Insights' "What needs you", the same three lines (set-up gaps are in Setup).
+            "attention": attention(account, include_setup=False),
             "subscription": subscription,
             "usage_warnings": billing_api.usage_warnings(account),
             "starting_point": conversations_api.starting_point(account),

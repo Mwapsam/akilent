@@ -42,12 +42,29 @@ def _period(request, account, now) -> tuple[reporting.Period, int, bool]:
     return reporting.last_days(days, now), days, locked
 
 
+TABS = (
+    ("response", "Response"),
+    ("sales", "Sales"),
+    ("content", "Content"),
+    ("automation", "Automation"),
+)
+
+
+def _tab(request) -> str:
+    tab = request.GET.get("tab", "")
+    return tab if tab in dict(TABS) else TABS[0][0]
+
+
 @login_required
 def insights(request):
+    """Insights: four headline numbers, what needs you (at most three lines), then one tab of
+    detail at a time (Response · Sales · Content · Automation) and, under every tab, goals and
+    the weekly trend. Only the open tab's figures are worked out."""
     from apps.accounts.api import is_account_admin
     from apps.billing.limits import LimitChecker
     from apps.conversations import api as conversations_api
-    from apps.email.views import email_analytics_context
+    from apps.conversations.attention import attention
+    from apps.core.htmx import is_background
 
     account = get_current_account(request)
     if account is None:
@@ -55,23 +72,13 @@ def insights(request):
 
     now = timezone.now()
     period, days, period_locked = _period(request, account, now)
+    tab = _tab(request)
     has_history = LimitChecker(account).has_feature("detailed_analytics")
     goals = reporting.goal_progress(account, now=now)
     goal_limit = None if has_history else FREE_GOAL_LIMIT
     rows = reporting.first_replies(account, period.start, period.end)
-    peak_hours = reporting.peak_hours(account, period, rows)
 
-    from apps.conversations.performance import followup_completion
-
-    # Shaped for the chart here, not in the template, for the same reason the email engagement
-    # chart is: a template can't check a chart drawn from mismatched columns, and that's wrong
-    # without looking wrong.
-    from apps.conversations.templatetags.insights_tags import hour12
-
-    peak_labels = [hour12(h) for h in range(24)]
-    peak_series = [("Enquiries", peak_hours.get("hours", [0] * 24))]
-
-    from django.db.models import Count, Q
+    from django.db.models import Count, Prefetch, Q
 
     from apps.insights.models import BusinessPolicy, Insight, RecommendationLog
 
@@ -82,8 +89,6 @@ def insights(request):
         Insight.Severity.OPPORTUNITY: 2,
         Insight.Severity.INFO: 3,
     }
-    from django.db.models import Prefetch
-
     raw_insights = list(
         Insight.objects.filter(
             account=account,
@@ -101,7 +106,6 @@ def insights(request):
         .order_by("-created_at")
     )
     raw_insights.sort(key=lambda i: severity_order.get(i.severity, 9))
-
     rec_stats = RecommendationLog.objects.filter(
         account=account,
         recommended_at__gte=period.start,
@@ -110,93 +114,120 @@ def insights(request):
         acted_on=Count("id", filter=Q(status=RecommendationLog.Status.ACCEPTED)),
         dismissed=Count("id", filter=Q(status=RecommendationLog.Status.DISMISSED)),
     )
+    at_risk = reporting.at_risk(account, now)
 
-    from django.urls import reverse
-
-    from apps.publishing import api as publishing_api
-
-    journey = publishing_api.journey(account, period)
-    journey_steps = (
-        [
-            {"value": journey["clicks"], "label": "chat link clicks", "href": ""},
-            {"value": journey["chats"], "label": "chats from posts", "href": ""},
-            {
-                "value": journey["leads"],
-                "label": "leads from posts",
-                "href": reverse("crm:sales"),
-            },
-            {
-                "value": journey["orders"],
-                "label": "orders from posts",
-                "href": reverse("commerce:orders"),
-            },
-        ]
-        if journey
-        else []
+    context = {
+        "account": account,
+        "days": days,
+        "tab": tab,
+        "tabs": TABS,
+        "period_choices": reporting.PERIODS,
+        "period_locked": period_locked,
+        "has_history": has_history,
+        "headline": reporting.headline(account, period, rows, now=now, goals=goals),
+        "attention": attention(
+            account, now=now, at_risk=at_risk, insights=raw_insights
+        ),
+        "at_risk": at_risk,
+        "intelligence_insights": raw_insights,
+        "rec_stats": rec_stats,
+        # Keys of insight types that have a known automation mapping.  The
+        # template uses this to guard the Automate button so the same set of
+        # types is checked in both places — no divergence between client and server.
+        "automatable_insight_types": frozenset(BusinessPolicy.INSIGHT_TYPE_TO_TRIGGER),
+        "starting_point": conversations_api.starting_point(account, now),
+        "momentum": reporting.momentum(account),
+        "goals": goals,
+        "goal_limit": goal_limit,
+        "goal_limit_reached": goal_limit is not None and goals["total"] >= goal_limit,
+        "can_manage_goals": is_account_admin(request.user, account),
+        "goal_metrics": reporting.GOAL_METRICS,
+        "weekly_report_enabled": getattr(
+            InsightSettings.objects.filter(account=account).first(),
+            "weekly_report",
+            True,
+        ),
+        # Revenue can have one goal per currency, so it's never excluded here; every other
+        # metric is single-goal, so once it's set it drops off the "add a goal" choices.
+        "existing_goal_metrics": {
+            g.metric
+            for g in InsightGoal.objects.filter(account=account)
+            if g.metric != InsightGoal.Metric.REVENUE
+        },
+    }
+    context.update(
+        _tab_context(tab, request, account, period, days, rows, now, has_history)
     )
-
-    from apps.core.htmx import is_background
 
     return render(
         request,
         "insights/_body.html" if is_background(request) else "insights/index.html",
-        {
-            "account": account,
-            "days": days,
-            "journey": journey,
-            "journey_steps": journey_steps,
-            "intelligence_insights": raw_insights,
-            "rec_stats": rec_stats,
-            # Keys of insight types that have a known automation mapping.  The
-            # template uses this to guard the Automate button so the same set of
-            # types is checked in both places — no divergence between client and server.
-            "automatable_insight_types": frozenset(
-                BusinessPolicy.INSIGHT_TYPE_TO_TRIGGER
-            ),
-            "period_choices": reporting.PERIODS,
-            "period_locked": period_locked,
-            "has_history": has_history,
-            # The proof bar follows the chosen period (against the one before it), so the page
-            # never shows a "this week" median beside a 30-day one.
-            "proof": reporting.proof(account, week=period, now=now),
-            "at_risk": reporting.at_risk(account, now),
-            "starting_point": conversations_api.starting_point(account, now),
+        context,
+    )
+
+
+def _tab_context(tab, request, account, period, days, rows, now, has_history) -> dict:
+    """The figures for the open tab only."""
+    if tab == "response":
+        from apps.conversations.performance import followup_completion
+
+        # Shaped for the chart here, not in the template, for the same reason the email
+        # engagement chart is: a template can't check a chart drawn from mismatched columns,
+        # and that's wrong without looking wrong.
+        from apps.conversations.templatetags.insights_tags import hour12
+
+        peak_hours = reporting.peak_hours(account, period, rows)
+        return {
             "response": reporting.response(account, period, rows, now=now),
             "resolution": reporting.resolution(account, period),
             "recovery": reporting.recovery(account, period, rows, now=now),
             "followups": followup_completion(account, days=days, now=now),
             "peak_hours": peak_hours,
-            "peak_labels": peak_labels,
-            "peak_series": peak_series,
+            "peak_labels": [hour12(h) for h in range(24)],
+            "peak_series": [("Enquiries", peak_hours.get("hours", [0] * 24))],
             "team": reporting.team(account, period, rows),
-            "automation": reporting.automation_impact(account, period, rows),
-            "forms": reporting.forms(account, period),
+        }
+    if tab == "sales":
+        return {
             "sales": reporting.sales(account, period),
             "channels": reporting.channels(account, period, rows)
             if has_history
             else [],
-            "momentum": reporting.momentum(account),
-            "goals": goals,
-            "goal_limit": goal_limit,
-            "goal_limit_reached": goal_limit is not None
-            and goals["total"] >= goal_limit,
-            "can_manage_goals": is_account_admin(request.user, account),
-            "goal_metrics": reporting.GOAL_METRICS,
-            "weekly_report_enabled": getattr(
-                InsightSettings.objects.filter(account=account).first(),
-                "weekly_report",
-                True,
-            ),
-            # Revenue can have one goal per currency, so it's never excluded here; every other
-            # metric is single-goal, so once it's set it drops off the "add a goal" choices.
-            "existing_goal_metrics": {
-                g.metric
-                for g in InsightGoal.objects.filter(account=account)
-                if g.metric != InsightGoal.Metric.REVENUE
-            },
+        }
+    if tab == "content":
+        from django.urls import reverse
+
+        from apps.email.views import email_analytics_context
+        from apps.publishing import api as publishing_api
+
+        journey = publishing_api.journey(account, period)
+        journey_steps = (
+            [
+                {"value": journey["clicks"], "label": "chat link clicks", "href": ""},
+                {"value": journey["chats"], "label": "chats from posts", "href": ""},
+                {
+                    "value": journey["leads"],
+                    "label": "leads from posts",
+                    "href": reverse("crm:sales"),
+                },
+                {
+                    "value": journey["orders"],
+                    "label": "orders from posts",
+                    "href": reverse("commerce:orders"),
+                },
+            ]
+            if journey
+            else []
+        )
+        return {
+            "journey": journey,
+            "journey_steps": journey_steps,
             **email_analytics_context(account, request),
-        },
-    )
+        }
+    return {
+        "automation": reporting.automation_impact(account, period, rows),
+        "forms": reporting.forms(account, period),
+    }
 
 
 def _goals_redirect(request):

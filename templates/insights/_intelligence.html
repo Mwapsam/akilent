@@ -10,8 +10,8 @@ an automation mapping (pass ``frozenset(BusinessPolicy.INSIGHT_TYPE_TO_TRIGGER)`
 <section class="space-y-3" aria-labelledby="intelligence-h">
   <div class="flex items-center justify-between gap-3">
     <div>
-      <h2 id="intelligence-h" class="text-lg font-semibold text-ink">What needs your attention</h2>
-      <p class="text-sm text-ink-muted">Akilent observed these in your business data.</p>
+      <h2 id="intelligence-h" class="text-sm font-semibold text-ink">All observations</h2>
+      <p class="text-sm text-ink-subtle">What Akilent noticed in your business data, with what to do about each.</p>
     </div>
     <div class="flex items-center gap-3">
       <span class="text-xs text-ink-subtle">{{ intelligence_insights|length }} insight{{ intelligence_insights|length|pluralize }}</span>
@@ -136,8 +136,6 @@ an automation mapping (pass ``frozenset(BusinessPolicy.INSIGHT_TYPE_TO_TRIGGER)`
   </ul>
 </section>
 {% else %}
-<div class="card card-pad flex items-center gap-3 text-sm text-ink-subtle">
-  {% include "components/icon.html" with name="check-circle" class="w-5 h-5 shrink-0 tone-teal-fg" %}
-  <span>Business health looks good — no open observations right now.</span>
-</div>
+<h2 class="text-sm font-semibold text-ink mb-2">All observations</h2>
+<p class="empty-line">No open observations right now.</p>
 {% endif %}

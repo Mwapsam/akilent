@@ -4,7 +4,7 @@ quiet refresh.
 - one rule for answered / missed (reporting._outcome): "not answered within 24 hours" and
   "missed" are the same number, and an enquiry still inside its 24 hours is neither;
 - below reporting.MIN_SAMPLE a rate reads "1 of 1", never "100%", and no change is shown;
-- the proof bar follows the page's period; "Opportunities at risk" says it's right now;
+- the headline follows the page's period; "What needs you" says it's right now;
 - the body re-reads itself in the background and comes back alone for that request.
 """
 
@@ -109,10 +109,13 @@ def test_the_page_uses_one_period_and_says_what_is_right_now(shop):
     client, account = shop
     _enquiry(account, NOW - timedelta(days=3), reply_after=timedelta(minutes=4))
     page = client.get("/insights/?period=7").content.decode()
-    assert "In the last 7 days, Akilent helped your business" in page
+    assert "In the last 7 days, 1 customer got a reply." in page
     assert "This week, Akilent" not in page and "vs last week" not in page
-    assert "Last 7 days · figures as of" in page
-    assert 'class="font-normal text-ink-subtle">· right now</span>' in page
+    assert '<option value="7" selected>' in " ".join(page.split())
+    assert (
+        'What needs you <span class="font-normal text-ink-subtle">· right now</span>'
+        in page
+    )
     # One answered enquiry: a count, not "100%".
     response = page[page.index('id="response-h"') :]
     assert "1 of 1" in response and "100%" not in response
@@ -129,4 +132,7 @@ def test_the_body_refreshes_quietly_and_comes_back_alone(shop):
 
     partial = client.get("/insights/", HTTP_HX_REQUEST="true").content.decode()
     assert partial.lstrip().startswith('<div id="insights-body"')
-    assert "<html" not in partial and 'id="period"' not in partial
+    # The body alone: no page title (the period picker is part of the body, so a tab
+    # switch or a refresh keeps it in step).
+    assert "<html" not in partial and "<h1" not in partial
+    assert 'id="period"' in partial

@@ -10,7 +10,7 @@ context dict).
     <h2 id="email-h" class="text-lg font-semibold text-ink">Email</h2>
     {% if has_analytics and domains %}
     <form method="get" class="flex items-center gap-2">
-      {% if request.GET.period %}<input type="hidden" name="period" value="{{ request.GET.period }}">{% endif %}
+      {% if request.GET.period %}<input type="hidden" name="period" value="{{ request.GET.period }}">{% endif %}<input type="hidden" name="tab" value="content">
       <label class="sr-only" for="domain">Domain</label>
       <select id="domain" name="domain" class="select sm:w-56" onchange="this.form.submit()">
         {% for d in domains %}

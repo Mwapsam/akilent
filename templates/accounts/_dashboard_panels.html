@@ -5,12 +5,15 @@ hx-trigger of its own, so it loads exactly once.
 
 D5 (2026-11-08): sections, not cards. Each is a small heading over its content, separated
 by space; lists have hairline rows; an empty section is one muted line with its action.
-Only the recommendation is a card: it's one thing you act on or move past.
+Only the recommendation is a card: it's one thing you act on or move past. "What needs you"
+is Insights' action list (apps.conversations.attention), shown only when there is something.
 {% endcomment %}
 {% load static %}
 <div id="dashboard-panels" class="space-y-10 mt-10">
 
   {% include "billing/_usage_warnings.html" %}
+
+  {% if attention.items %}{% include "insights/_attention.html" with more_url="/insights/#observations" %}{% endif %}
 
   {% if next_recommended %}
   <div class="card card-pad flex flex-wrap items-center gap-4" data-testid="next-recommended">

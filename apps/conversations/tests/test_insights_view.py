@@ -51,16 +51,16 @@ def test_insights_renders_at_the_new_url(logged_in):
 
 
 @pytest.mark.django_db
-def test_opportunities_at_risk_renders_before_email(logged_in):
+def test_what_needs_you_leads_and_email_is_on_the_content_tab(logged_in):
     client, account = logged_in
     _convo(account, (IN, 30, "delivered"))  # waiting for a reply
 
     body = client.get("/insights/").content.decode()
     assert "customer is waiting for a reply" in body
-    # Conversation content renders before the Email section, not after.
-    assert body.index("Opportunities at risk") < body.index(
-        '<h2 id="email-h" class="text-lg font-semibold text-ink">Email</h2>'
-    )
+    assert body.index('data-insights="headline"') < body.index("What needs you")
+    assert 'id="email-h"' not in body  # the Response tab is open
+    content = client.get("/insights/?tab=content").content.decode()
+    assert "What needs you" in content and 'data-insights-panel="content"' in content
 
 
 @pytest.mark.django_db

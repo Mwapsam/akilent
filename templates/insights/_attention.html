@@ -1,0 +1,38 @@
+{% comment %}
+What needs you: at most three one-line items (apps.conversations.attention), on Insights and on
+Home. Live counts and observations in one list, nothing said twice; each says when the issue
+started where that's known. A dot marks the kind: coral is customers waiting too long,
+highlight is something to do, none is set-up. ``more_url`` is where "N more" goes (the full
+list of observations on Insights). An observation's action is a POST: it records that you
+acted on it.
+{% endcomment %}
+{% load ui %}
+<section aria-labelledby="attention-h" data-insights="attention">
+  <div class="flex items-center justify-between gap-3 mb-2">
+    <h2 id="attention-h" class="text-sm font-semibold text-ink">What needs you <span class="font-normal text-ink-subtle">· right now</span></h2>
+    {% if attention.more %}<a href="{{ more_url|default:'#observations' }}" class="inline-flex items-center min-h-6 text-sm text-ink-subtle hover:text-ink">{{ attention.more }} more <span aria-hidden="true" class="ml-1">→</span></a>{% endif %}
+  </div>
+  {% if attention.items %}
+  <ul class="divide-y divide-border border-t border-border">
+    {% for item in attention.items %}
+    <li class="flex items-center gap-3 py-2.5" data-attention="{{ item.key }}">
+      <span class="w-1.5 h-1.5 rounded-full shrink-0 {% if item.tone == 'coral' %}bg-coral-500{% elif item.tone == 'highlight' %}bg-highlight{% else %}bg-transparent{% endif %}" aria-hidden="true"></span>
+      <p class="flex-1 min-w-0 text-sm text-ink">
+        <span class="sm:truncate">{{ item.text }}</span>
+        {% if item.since %}<span class="text-xs text-ink-subtle whitespace-nowrap"> · started {% when item.since %}</span>{% endif %}
+      </p>
+      {% if item.act_pk %}
+      <form method="post" action="{% url 'insight-act' item.act_pk %}" class="shrink-0">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-ghost btn-sm">{{ item.cta }}</button>
+      </form>
+      {% else %}
+      <a href="{% if item.url == '#observations' %}{{ more_url|default:'#observations' }}{% else %}{{ item.url }}{% endif %}" class="btn btn-ghost btn-sm shrink-0">{{ item.cta }}</a>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty-line">Nothing needs you right now.</p>
+  {% endif %}
+</section>

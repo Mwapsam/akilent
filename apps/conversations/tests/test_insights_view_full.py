@@ -150,9 +150,12 @@ def test_every_populated_branch_renders(client, account):
     )
     snapshots.capture(account, connected, NOW)
 
-    resp = client.get("/insights/?period=90")
-    assert resp.status_code == 200
-    body = resp.content.decode()
+    # Each tab works out only its own figures (Insights step 2), so read all of them.
+    body = ""
+    for tab in ("response", "sales", "content", "automation"):
+        resp = client.get(f"/insights/?period=90&tab={tab}")
+        assert resp.status_code == 200
+        body += resp.content.decode()
     assert "Your busiest time is" in body
     assert "out-of-hours customers reached" in body
     assert "Greeter" in body  # per-workflow sales table

@@ -1,0 +1,61 @@
+{% comment %}
+The four numbers at the top of Insights (reporting.headline): median first reply, answered
+within 24 hours, leads and paid orders from conversations, each against the period before it
+and, when one is set, this month's goal. A rate or median shows no change until both periods
+have reporting.MIN_SAMPLE behind them; counts always compare. Figures, not boxes (D5).
+Counts only, never causes, per the messaging truth rule.
+{% endcomment %}
+{% load insights_tags %}
+{% with h=headline %}
+<section aria-labelledby="headline-h" data-insights="headline">
+  <h2 id="headline-h" class="sr-only">The last {{ days }} days</h2>
+  {% if h.sentence %}<p class="mb-5 text-sm text-ink-muted">In the last {{ days }} days, {{ h.sentence }}.</p>{% endif %}
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-x-10 gap-y-6">
+
+    <div class="metric">
+      <p class="metric-label">Median first reply</p>
+      <p class="metric-value">{{ h.reply.value|duration }}</p>
+      {% if h.reply.change is not None %}
+      <p class="metric-note"><span aria-hidden="true">{% if h.reply.change < 0 %}↓{% elif h.reply.change > 0 %}↑{% else %}→{% endif %}</span><span class="sr-only">{% if h.reply.change < 0 %}faster by{% elif h.reply.change > 0 %}slower by{% else %}unchanged{% endif %}</span> {{ h.reply.change|duration }} vs the {{ days }} days before</p>
+      {% elif h.reply.replied|thin %}
+      <p class="metric-note">From {{ h.reply.replied }} repl{{ h.reply.replied|pluralize:"y,ies" }}, not enough for a trend</p>
+      {% endif %}
+      {% if h.reply.automatic %}<p class="metric-note">{{ h.reply.automatic }} of {{ h.reply.replied }} sent automatically</p>{% endif %}
+      {% if h.reply.goal %}<p class="metric-note{% if h.reply.goal.on_track %} tone-teal-fg{% endif %}">Goal {{ h.reply.goal.target|floatformat:0 }} min{% if h.reply.goal.on_track is not None %} · {{ h.reply.goal.on_track|yesno:"on track,behind" }}{% endif %}</p>{% endif %}
+    </div>
+
+    <div class="metric">
+      <p class="metric-label">Answered within 24 hours</p>
+      <p class="metric-value">{{ h.answered.answered|share:h.answered.settled }}</p>
+      {% if h.answered.change is not None %}
+      <p class="metric-note"><span aria-hidden="true">{% if h.answered.change > 0 %}↑{% elif h.answered.change < 0 %}↓{% else %}→{% endif %}</span> {% if h.answered.change > 0 %}+{% endif %}{{ h.answered.change }} points vs the {{ days }} days before</p>
+      {% elif h.answered.settled|thin %}
+      <p class="metric-note">Not enough data yet for a rate</p>
+      {% endif %}
+      {% if h.answered.goal %}<p class="metric-note{% if h.answered.goal.on_track %} tone-teal-fg{% endif %}">Goal {{ h.answered.goal.target|floatformat:0 }}%{% if h.answered.goal.on_track is not None %} · {{ h.answered.goal.on_track|yesno:"on track,behind" }}{% endif %}</p>{% endif %}
+    </div>
+
+    <div class="metric">
+      <p class="metric-label">Leads from conversations</p>
+      <p class="metric-value">{{ h.leads.value }}</p>
+      {% if h.leads.value or h.leads.before %}
+      <p class="metric-note">{% if h.leads.change > 0 %}+{% endif %}{{ h.leads.change }} vs the {{ days }} days before</p>
+      {% endif %}
+      {% if h.leads.goal %}<p class="metric-note{% if h.leads.goal.on_track %} tone-teal-fg{% endif %}">This month {{ h.leads.goal.actual|floatformat:0 }} of {{ h.leads.goal.target|floatformat:0 }}{% if h.leads.goal.on_track is not None %} · {{ h.leads.goal.on_track|yesno:"on track,behind" }}{% endif %}</p>{% endif %}
+    </div>
+
+    <div class="metric">
+      <p class="metric-label">Paid orders from conversations</p>
+      <p class="metric-value">{{ h.paid.value }}</p>
+      {% if h.paid.revenue %}<p class="metric-note">{% for r in h.paid.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+      {% if h.paid.value or h.paid.before %}
+      <p class="metric-note">{% if h.paid.change > 0 %}+{% endif %}{{ h.paid.change }} vs the {{ days }} days before</p>
+      {% endif %}
+      {% if h.paid.goal %}<p class="metric-note{% if h.paid.goal.on_track %} tone-teal-fg{% endif %}">This month {% if h.paid.goal.unit == "money" %}{{ h.paid.goal.currency }} {% endif %}{{ h.paid.goal.actual|floatformat:0 }} of {{ h.paid.goal.target|floatformat:0 }}{% if h.paid.goal.on_track is not None %} · {{ h.paid.goal.on_track|yesno:"on track,behind" }}{% endif %}</p>{% endif %}
+    </div>
+  </div>
+  {% if not h.active %}
+  <p class="mt-4 empty-line">No customer activity in the last {{ days }} days. Once customers message you on a connected channel, this fills in by itself.</p>
+  {% endif %}
+</section>
+{% endwith %}

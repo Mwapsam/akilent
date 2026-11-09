@@ -255,7 +255,7 @@ def test_insights_shows_what_is_not_credited_to_a_post(world):
     world.guess_order(contact, conversation, "60.00", "ZMW")
     world.chat(from_post=False)
 
-    html = world.client.get("/insights/").content.decode()
+    html = world.client.get("/insights/?tab=content").content.decode()
 
     assert 'data-journey="not-from-posts"' in html
     assert "ZMW 60.00 (1 order)" in html

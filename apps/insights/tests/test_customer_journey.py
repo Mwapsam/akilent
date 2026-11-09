@@ -57,7 +57,7 @@ def test_insights_shows_the_journey_with_links_to_each_post(demo, client):
     from django.contrib.auth.models import User
 
     client.force_login(User.objects.get(email=OWNER_EMAIL))
-    html = client.get("/insights/").content.decode()
+    html = client.get("/insights/?tab=content").content.decode()
     assert "Your customer journey" in html
     assert "Posts that started chats" in html
     for post in journey(demo, reporting.last_days(30))["top"]:
@@ -74,7 +74,7 @@ def test_untracked_steps_say_so_instead_of_zero(user_account):
 def test_untracked_steps_render_with_a_way_to_start(user_account, client):
     user, _ = user_account
     client.force_login(user)
-    html = client.get("/insights/").content.decode()
+    html = client.get("/insights/?tab=content").content.decode()
     assert "Not tracked yet" in html
     assert "Add a WhatsApp chat link to a post" in html
 
