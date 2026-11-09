@@ -2665,3 +2665,25 @@ Plan: the design audit's D5 (fewer boxes, Dashboard first), D4 (Settings side li
 - **Removed:** `_proof.html` and `_at_risk.html`, which the headline and What needs you replace (the weekly email still uses `reporting.proof`/`at_risk`). Cards inside the tab sections are gone too; "All observations" keeps its cards for now.
 - **Tests:** `test_insights_step2.py` (new). Journey, attribution and full-render tests now read the right tab. The full suite is green apart from `test_import_5000_contacts` under parallel load (it passes alone).
 - **Next:** step 3, charts (one per tab with a metric switcher, plus funnel bars).
+
+
+### Entry 51: Insights step 3, the charts (2026-11-09)
+
+- **Series** (`reporting.trend`):
+  - The chosen period in the business's time zone: days for 7 and 30 days, Monday weeks for 90 ("w/c 3 Nov").
+  - Same rules as the figures: `_outcome` decides answered and missed. Median reply is in minutes, and a day with no replies is None (a gap, never 0). Leads and paid orders come from conversations.
+  - Revenue is shown in the main currency only (the one with the most paid in the period); a second currency is never added to it.
+  - Automatic vs people first replies.
+- **One chart per tab** (`insights/_tab_chart.html`, reusing `{% line_chart %}`, so hover crosshair, legend, "View as table" and dark mode come with it), all on one axis:
+  - Response: Reply time | Answered vs missed.
+  - Sales: Leads | Paid orders | Revenue (when there is any).
+  - Automation: who sent the first reply (automatic vs people, two series, one unit).
+  - The switcher is a segmented control (`.seg`, aria-pressed). It remembers the choice per tab in sessionStorage (`chartSwitch` in page_factories.js), so the quiet refresh keeps it, and falls back when a remembered chart isn't there. Hidden without scripts (x-cloak), when every chart shows stacked.
+- **Funnel bars** (`{% funnel %}`, `components/charts/_funnel.html`, `.funnel*`):
+  - One hue, each bar against the first step, with its number beside it.
+  - After the first step, the rate vs the step before: "42%", or "3 of 4" below 5.
+  - "Not tracked yet" for a step nobody measures.
+  - Sales: wrote in → interested → pipeline → won → paid. Content: chat link clicks → chats → leads → orders from posts, under a "N posts published; X paid from posts" line. Content has no line chart; its funnel is its chart.
+- **Palette:** `--chart-series-1/2` (blue-600/teal-600; dark blue-500/teal-600) run through the dataviz validator: all checks pass in light and dark (dark tritan ΔE 4.9, covered by legend, tooltip and table).
+- **Tests:** `test_insights_step3.py`. The full suite is green apart from `test_import_5000_contacts` under parallel load.
+- **Not done:** a look in a real browser (labels, phone width, dark mode).

@@ -6,9 +6,24 @@
  *
  * - templatePicker(): Automations › "Follow up with a template": a live preview of what a
  *   named and a nameless customer would each receive (reads #tpl-data).
+ * - chartSwitch(key, choices): Insights › a tab's metric switcher. Remembers the chosen chart
+ *   for the tab in sessionStorage, so the page's quiet 5-minute refresh doesn't reset it.
  */
 (function () {
   "use strict";
+
+  window.chartSwitch = function (key, choices) {
+    var stored = null;
+    try { stored = window.sessionStorage.getItem("ak-chart:" + key); } catch (e) { /* private mode */ }
+    return {
+      // A remembered chart this page no longer has (no revenue this period) falls back.
+      metric: choices.indexOf(stored) !== -1 ? stored : choices[0],
+      pick: function (m) {
+        this.metric = m;
+        try { window.sessionStorage.setItem("ak-chart:" + key, m); } catch (e) { /* ignore */ }
+      },
+    };
+  };
 
   window.templatePicker = function () {
     var el = document.getElementById("tpl-data");

@@ -166,8 +166,93 @@ def insights(request):
     )
 
 
+def _charts(tab, trend) -> list[dict]:
+    """The open tab's chart, one per metric for its switcher: ``{"key", "label", "title",
+    "series", "labels", "unit"}``, ``series`` being ``(name, values)`` pairs on one axis
+    (one unit per chart, never two scales). Shaped here, not in the template, so a chart
+    can't be drawn from mismatched columns."""
+    unit, labels = trend["unit"], trend["labels"]
+
+    def chart(key, label, title, series):
+        return {
+            "key": key,
+            "label": label,
+            "title": title,
+            "series": series,
+            "labels": labels,
+            "unit": unit,
+        }
+
+    if tab == "response":
+        return [
+            chart(
+                "reply",
+                "Reply time",
+                "Median first reply, in minutes",
+                [("Median first reply (min)", trend["reply_minutes"])],
+            ),
+            chart(
+                "answered",
+                "Answered vs missed",
+                "Enquiries answered within 24 hours, and missed",
+                [
+                    ("Answered within 24 hours", trend["answered"]),
+                    ("Missed", trend["missed"]),
+                ],
+            ),
+        ]
+    if tab == "sales":
+        charts = [
+            chart(
+                "leads",
+                "Leads",
+                "Leads from conversations",
+                [("Leads", trend["leads"])],
+            ),
+            chart(
+                "paid",
+                "Paid orders",
+                "Paid orders from conversations",
+                [("Paid orders", trend["paid"])],
+            ),
+        ]
+        if trend["revenue"]:
+            currency = trend["revenue"]["currency"] or "Revenue"
+            charts.append(
+                chart(
+                    "revenue",
+                    "Revenue",
+                    f"Revenue from conversations, {currency}",
+                    [(currency, trend["revenue"]["values"])],
+                )
+            )
+        return charts
+    if tab == "automation":
+        return [
+            chart(
+                "first",
+                "First replies",
+                "Who sent the first reply",
+                [
+                    ("Sent automatically", trend["automatic"]),
+                    ("Sent by people", trend["people"]),
+                ],
+            )
+        ]
+    return []
+
+
 def _tab_context(tab, request, account, period, days, rows, now, has_history) -> dict:
-    """The figures for the open tab only."""
+    """The figures for the open tab only, and its chart."""
+    context = _tab_figures(tab, request, account, period, days, rows, now, has_history)
+    if tab != "content":
+        charts = _charts(tab, reporting.trend(account, period, rows, now=now))
+        context["charts"] = charts
+        context["chart_keys"] = [c["key"] for c in charts]
+    return context
+
+
+def _tab_figures(tab, request, account, period, days, rows, now, has_history) -> dict:
     if tab == "response":
         from apps.conversations.performance import followup_completion
 
@@ -188,8 +273,17 @@ def _tab_context(tab, request, account, period, days, rows, now, has_history) ->
             "team": reporting.team(account, period, rows),
         }
     if tab == "sales":
+        sales = reporting.sales(account, period)
+        f = sales["funnel"]
         return {
-            "sales": reporting.sales(account, period),
+            "sales": sales,
+            "sales_funnel": [
+                {"label": "Wrote in", "value": f["wrote_in"]},
+                {"label": "Tracked as interested", "value": f["leads"]},
+                {"label": "In your pipeline", "value": f["deals"]},
+                {"label": "Deals won", "value": f["won"]},
+                {"label": "Paid orders", "value": f["paid"]},
+            ],
             "channels": reporting.channels(account, period, rows)
             if has_history
             else [],
@@ -203,16 +297,16 @@ def _tab_context(tab, request, account, period, days, rows, now, has_history) ->
         journey = publishing_api.journey(account, period)
         journey_steps = (
             [
-                {"value": journey["clicks"], "label": "chat link clicks", "href": ""},
-                {"value": journey["chats"], "label": "chats from posts", "href": ""},
+                {"value": journey["clicks"], "label": "Chat link clicks", "href": ""},
+                {"value": journey["chats"], "label": "Chats from posts", "href": ""},
                 {
                     "value": journey["leads"],
-                    "label": "leads from posts",
+                    "label": "Leads from posts",
                     "href": reverse("crm:sales"),
                 },
                 {
                     "value": journey["orders"],
-                    "label": "orders from posts",
+                    "label": "Orders from posts",
                     "href": reverse("commerce:orders"),
                 },
             ]

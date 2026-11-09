@@ -1138,6 +1138,118 @@ def headline(
     }
 
 
+# ---- charts: the chosen period, day by day (week by week for 90 days) -----------------------
+
+WEEKLY_AFTER_DAYS = 31
+
+
+def trend(
+    account,
+    period: Period,
+    rows: list[dict] | None = None,
+    *,
+    now: datetime | None = None,
+) -> dict:
+    """The period in buckets, for each Insights tab's chart, in the business's time zone.
+
+    Days for 7 and 30 days, weeks (Monday to Sunday) for 90. Same rules as the figures above
+    the charts: ``_outcome`` for answered and missed, a median only where there were replies
+    (None, a gap in the line, where there weren't: never a made-up 0), leads and paid orders
+    from conversations. ``{"weekly", "labels", "reply_minutes", "answered", "missed",
+    "leads", "paid", "revenue": {"currency", "values"} | None, "automatic", "people"}``,
+    each a list as long as ``labels``. Revenue is the business's main currency (the one with
+    the most paid in the period); a second currency is never added to it.
+    """
+    from datetime import date
+
+    from apps.crm.models import Lead
+
+    now = now or timezone.now()
+    rows = first_replies(account, period.start, period.end) if rows is None else rows
+    zone = business_zone(account)
+    weekly = period.days > WEEKLY_AFTER_DAYS
+    first_day = timezone.localtime(period.start, zone).date()
+    last_day = timezone.localtime(period.end - timedelta(microseconds=1), zone).date()
+
+    def bucket_start(day: date) -> date:
+        return day - timedelta(days=day.weekday()) if weekly else day
+
+    starts: list[date] = []
+    day = bucket_start(first_day)
+    step = timedelta(days=7 if weekly else 1)
+    while day <= last_day:
+        starts.append(day)
+        day += step
+    index = {d: i for i, d in enumerate(starts)}
+
+    def at(moment) -> int | None:
+        return index.get(bucket_start(timezone.localtime(moment, zone).date()))
+
+    n = len(starts)
+    waits: list[list[float]] = [[] for _ in range(n)]
+    answered, missed = [0] * n, [0] * n
+    automatic, people = [0] * n, [0] * n
+    for row in rows:
+        i = at(row["first_in"])
+        if i is None:
+            continue
+        outcome = _outcome(row, now)
+        if outcome == "answered":
+            answered[i] += 1
+        elif outcome == "missed":
+            missed[i] += 1
+        wait = _wait_seconds(row)
+        if wait is not None:
+            waits[i].append(wait)
+            if row["replied_by"] in AUTOMATIC:
+                automatic[i] += 1
+            else:
+                people[i] += 1
+
+    leads = [0] * n
+    for created in Lead.objects.filter(
+        account=account,
+        conversation__isnull=False,
+        created_at__gte=period.start,
+        created_at__lt=period.end,
+    ).values_list("created_at", flat=True):
+        i = at(created)
+        if i is not None:
+            leads[i] += 1
+
+    paid = [0] * n
+    by_currency: dict[str, list[float]] = {}
+    for paid_at, currency, total in _paid_from_conversations(
+        account, period
+    ).values_list("paid_at", "currency", "total"):
+        i = at(paid_at)
+        if i is None:
+            continue
+        paid[i] += 1
+        by_currency.setdefault(currency or "", [0.0] * n)[i] += float(total or 0)
+    main = max(by_currency, key=lambda c: sum(by_currency[c]), default=None)
+
+    def label(d: date) -> str:
+        text = f"{d.day} {d.strftime('%b')}"
+        return f"w/c {text}" if weekly else text
+
+    return {
+        "weekly": weekly,
+        "unit": "Week" if weekly else "Day",
+        "labels": [label(d) for d in starts],
+        "reply_minutes": [round(median(w) / 60, 1) if w else None for w in waits],
+        "answered": answered,
+        "missed": missed,
+        "leads": leads,
+        "paid": paid,
+        "revenue": {"currency": main, "values": by_currency[main]}
+        if main is not None
+        else None,
+        "automatic": automatic,
+        "people": people,
+    }
+
+
 def oxford_join(parts: list[str]) -> str:
     """ "a" / "a and b" / "a, b, and c" — never built in a template, where the comma logic would
     be one more thing to get wrong per clause count."""

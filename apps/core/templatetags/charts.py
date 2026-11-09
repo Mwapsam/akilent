@@ -94,3 +94,40 @@ def stacked_bar(segments, label=""):
     for seg in built:
         seg["tone"] = tones.get(seg["label"], "series-1")
     return {"segments": built, "label": label}
+
+
+@register.inclusion_tag("components/charts/_funnel.html")
+def funnel(steps, label="", min_sample=5):
+    """A funnel as horizontal bars, each step against the first: ``steps`` is a list of
+    ``{"label", "value", "href"?}``. A step whose value is None isn't measured yet and draws
+    no bar ("Not tracked yet"), never a zero. Each measured step after the first says how it
+    compares with the measured step before it: "42%" from ``min_sample`` or more, "3 of 4"
+    from fewer (a rate from a handful isn't one).
+    """
+    rows = []
+    top = max((float(s["value"]) for s in steps if s.get("value")), default=0.0)
+    previous = None
+    for step in steps:
+        value = step.get("value")
+        row = {
+            "label": step["label"],
+            "value": value,
+            "href": step.get("href", ""),
+            "width": 0.0,
+            "of_previous": "",
+        }
+        if value is not None:
+            row["width"] = round(float(value) / top * 100, 1) if top else 0.0
+            if previous:
+                if previous >= min_sample:
+                    row["of_previous"] = f"{round(value / previous * 100)}%"
+                else:
+                    row["of_previous"] = f"{value} of {previous}"
+            previous = value
+        rows.append(row)
+    return {
+        "rows": rows,
+        "label": label,
+        # Any steps at all: unmeasured ones say "Not tracked yet", zeros draw as zeros.
+        "measured": bool(rows),
+    }

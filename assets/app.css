@@ -1197,6 +1197,28 @@
   .chart-swatch--series-1 { background: var(--chart-series-1); }
   .chart-swatch--series-2 { background: var(--chart-series-2); }
 
+  /* A chart's metric switcher (Insights tabs): a quiet segmented control above one chart.
+     Hidden until scripts run (x-cloak); without them every chart shows, one under another. */
+  .seg { @apply inline-flex items-center gap-0.5 rounded-lg p-0.5; background-color: var(--color-secondary-bg); }
+  .seg-btn {
+    @apply inline-flex items-center min-h-7 rounded-md px-2.5 text-xs font-medium transition-colors;
+    color: var(--color-ink-subtle);
+  }
+  .seg-btn:hover { color: var(--color-ink); }
+  .seg-btn[aria-pressed="true"] { background-color: var(--color-surface); color: var(--color-ink); box-shadow: 0 0 0 1px var(--color-border); }
+
+  /* Funnel bars (components/charts/_funnel.html): label, then a bar against the first step
+     with its number beside it. One hue; 4px rounded data end; recessive track. */
+  .funnel { @apply space-y-2.5; }
+  .funnel-row { @apply grid items-center gap-x-4 gap-y-1 text-sm; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 640px) { .funnel-row { grid-template-columns: 11rem minmax(0, 1fr); } }
+  .funnel-label { @apply min-w-0 truncate; color: var(--color-ink-muted); }
+  .funnel-track { @apply flex items-center gap-2 min-w-0; }
+  .funnel-bar { @apply block h-2.5 shrink-0; border-radius: 0 4px 4px 0; background: var(--chart-series-1); max-width: calc(100% - 6rem); }
+  .funnel-value { @apply shrink-0 font-medium; color: var(--color-ink); }
+  .funnel-rate { @apply font-normal; color: var(--color-ink-subtle); }
+  .funnel-untracked { @apply text-xs; color: var(--color-ink-subtle); }
+
   /* The y-axis labels are absolutely positioned against this box, so the
      plot needs room for them on the left. */
   .chart-plot { @apply relative w-full pl-8; }

@@ -4,43 +4,14 @@ apps.publishing.results.journey. A step that can't be measured yet is None and r
 "Not tracked yet", never 0. Counts only, from explicit evidence (tracked links and
 comment replies), per the messaging truth rule.
 {% endcomment %}
+{% load charts %}
 <section class="space-y-4" aria-labelledby="journey-h">
   <h2 id="journey-h" class="text-lg font-semibold text-ink">Your customer journey</h2>
   <p class="text-sm text-ink-muted">From the posts you publish to the orders customers pay.</p>
 
   <div class="space-y-5">
-    <ol class="grid grid-cols-2 sm:grid-cols-3 gap-x-8 gap-y-5">
-      <li>
-        <a href="{% url 'publishing:index' %}" class="block hover:text-accent">
-          <p class="stat-value">{{ journey.posts }}</p>
-          <p class="stat-label">post{{ journey.posts|pluralize }} published</p>
-        </a>
-      </li>
-      {% for step in journey_steps %}
-      <li>
-        {% if step.value is None %}
-          <p class="text-sm font-medium text-ink-subtle leading-7">Not tracked yet</p>
-          <p class="stat-label">{{ step.label }}</p>
-        {% elif step.href %}
-          <a href="{{ step.href }}" class="block hover:text-accent">
-            <p class="stat-value">{{ step.value }}</p>
-            <p class="stat-label">{{ step.label }}</p>
-          </a>
-        {% else %}
-          <p class="stat-value">{{ step.value }}</p>
-          <p class="stat-label">{{ step.label }}</p>
-        {% endif %}
-      </li>
-      {% endfor %}
-      <li>
-        {% if journey.revenue is None %}
-          <p class="text-sm font-medium text-ink-subtle leading-7">Not tracked yet</p>
-        {% else %}
-          <p class="stat-value">{% for r in journey.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}</p>
-        {% endif %}
-        <p class="stat-label">paid from posts</p>
-      </li>
-    </ol>
+    <p class="text-sm text-ink-muted"><a href="{% url 'publishing:index' %}" class="font-medium text-ink hover:underline tabular-nums">{{ journey.posts }} post{{ journey.posts|pluralize }}</a> published{% if journey.revenue %}; {% for r in journey.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %} and {% endif %}{% endfor %} paid from posts{% elif journey.revenue is None %}; money paid from posts: not tracked yet{% endif %}.</p>
+    {% funnel journey_steps label="From your posts to orders" %}
 
     {% if journey.chats is None %}
     <p class="text-sm text-ink-muted border-t border-border pt-4">

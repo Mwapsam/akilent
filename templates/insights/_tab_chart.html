@@ -1,0 +1,31 @@
+{% comment %}
+The open tab's chart (insights_views._charts): one chart, and a switcher when the tab has
+more than one metric. One unit per chart, never two axes. The switcher is a segmented control
+(aria-pressed buttons) that shows one chart at a time and remembers the choice for the tab
+(chartSwitch in static/js/page_factories.js), so the quiet refresh keeps it. Without scripts
+the switcher stays hidden and every chart shows. The period is the page's: days, or weeks for
+90 days.
+{% endcomment %}
+{% load charts %}
+{% if charts %}
+<section class="space-y-3" aria-label="Over the last {{ days }} days" data-insights-chart
+         x-data="chartSwitch('{{ tab }}', {{ chart_keys|safe }})">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <h2 class="text-sm font-semibold text-ink">Over the last {{ days }} days</h2>
+    {% if charts|length > 1 %}
+    <div class="seg" role="group" aria-label="Chart" x-cloak>
+      {% for c in charts %}
+      <button type="button" class="seg-btn" @click="pick('{{ c.key }}')"
+              :aria-pressed="(metric === '{{ c.key }}').toString()"
+              aria-pressed="{% if forloop.first %}true{% else %}false{% endif %}">{{ c.label }}</button>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% for c in charts %}
+  <div data-chart-key="{{ c.key }}"{% if charts|length > 1 %} x-show="metric === '{{ c.key }}'"{% endif %}>
+    {% line_chart c.series c.labels title=c.title unit=c.unit %}
+  </div>
+  {% endfor %}
+</section>
+{% endif %}

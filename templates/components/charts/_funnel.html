@@ -1,0 +1,27 @@
+{% comment %}A funnel as horizontal bars. Rendered by {% funnel %}.
+
+Each bar is the step's size against the first step, one hue (it's one series: identity, not
+state), with its number written beside it, so nothing is read from the bar alone, and no
+table view is needed: every value is on screen as text. After the first step, a muted note
+says how it compares with the step before ("42%", or "3 of 4" from a handful). A step not
+measured yet draws no bar and says so, never a zero. Horizontal because the step names are
+long; at phone width the name sits above its bar.{% endcomment %}
+{% if measured %}
+<ol class="funnel" {% if label %}aria-label="{{ label }}"{% endif %}>
+  {% for r in rows %}
+  <li class="funnel-row">
+    <span class="funnel-label">{% if r.href %}<a href="{{ r.href }}" class="hover:underline">{{ r.label }}</a>{% else %}{{ r.label }}{% endif %}</span>
+    <span class="funnel-track">
+      {% if r.value is None %}
+      <span class="funnel-untracked">Not tracked yet</span>
+      {% else %}
+      <span class="funnel-bar" style="width: max({{ r.width }}%, {% if r.value %}4px{% else %}0px{% endif %})" title="{{ r.label }}: {{ r.value }}"></span>
+      <span class="funnel-value tabular-nums">{{ r.value }}{% if r.of_previous %} <span class="funnel-rate">· {{ r.of_previous }}</span>{% endif %}</span>
+      {% endif %}
+    </span>
+  </li>
+  {% endfor %}
+</ol>
+{% else %}
+<p class="chart-empty" data-chart="empty">{% if label %}{{ label }}: {% endif %}nothing recorded for this period yet.</p>
+{% endif %}

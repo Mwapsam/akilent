@@ -61,6 +61,7 @@ One period: every figure here is for the chosen "last N days", except what says 
 </nav>
 
 <div class="mt-8 space-y-10" data-insights-panel="{{ tab }}">
+  {% include "insights/_tab_chart.html" %}
   {% if tab == "response" %}
     {% include "insights/_response.html" %}
   {% elif tab == "sales" %}
