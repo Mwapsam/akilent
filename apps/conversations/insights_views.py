@@ -223,12 +223,14 @@ def _tab_figures(tab, request, account, period, days, rows, now, has_history) ->
         f = sales["funnel"]
         return {
             "sales": sales,
+            # People at each step, each step the people of the step before who got that
+            # far (reporting.narrowing), so it only ever narrows.
             "sales_funnel": [
                 {"label": "Wrote in", "value": f["wrote_in"]},
-                {"label": "Tracked as interested", "value": f["leads"]},
+                {"label": "Interested", "value": f["leads"]},
                 {"label": "In your pipeline", "value": f["deals"]},
-                {"label": "Deals won", "value": f["won"]},
-                {"label": "Paid orders", "value": f["paid"]},
+                {"label": "Won", "value": f["won"]},
+                {"label": "Paid", "value": f["paid"]},
             ],
             "channels": reporting.channels(account, period, rows)
             if has_history
@@ -243,7 +245,8 @@ def _tab_figures(tab, request, account, period, days, rows, now, has_history) ->
         journey = publishing_api.journey(account, period)
         journey_steps = (
             [
-                {"value": journey["clicks"], "label": "Chat link clicks", "href": ""},
+                # Clicks aren't a step: a chat can also start from a reply to a comment,
+                # so they're in the sentence above the funnel instead.
                 {"value": journey["chats"], "label": "Chats from posts", "href": ""},
                 {
                     "value": journey["leads"],

@@ -116,7 +116,8 @@ def test_panels_fragment_renders(client, account):
     assert resp.status_code == 200
     body = resp.content.decode()
     assert "Upcoming sends" in body
-    assert "Recent activity" in body
+    # Renamed to what it is: email sends, and only with email on.
+    assert "Recent activity" not in body
     assert "Setup" in body
     # Loads once — it must not re-trigger itself after the swap.
     assert 'hx-trigger="load"' not in body

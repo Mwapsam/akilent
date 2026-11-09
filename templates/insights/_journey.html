@@ -10,8 +10,8 @@ comment replies), per the messaging truth rule.
   <p class="text-sm text-ink-muted">From the posts you publish to the orders customers pay.</p>
 
   <div class="space-y-5">
-    <p class="text-sm text-ink-muted"><a href="{% url 'publishing:index' %}" class="font-medium text-ink hover:underline tabular-nums">{{ journey.posts }} post{{ journey.posts|pluralize }}</a> published{% if journey.revenue %}; {% for r in journey.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %} and {% endif %}{% endfor %} paid from posts{% elif journey.revenue is None %}; money paid from posts: not tracked yet{% endif %}.</p>
-    {% funnel journey_steps label="From your posts to orders" %}
+    <p class="text-sm text-ink-muted"><a href="{% url 'publishing:index' %}" class="font-medium text-ink hover:underline tabular-nums">{{ journey.posts }} post{{ journey.posts|pluralize }}</a> published{% if journey.clicks is not None %}, <span class="tabular-nums">{{ journey.clicks }}</span> chat-link click{{ journey.clicks|pluralize }}{% endif %}{% if journey.revenue %}; {% for r in journey.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %} and {% endif %}{% endfor %} paid from posts{% elif journey.revenue is None %}; money paid from posts: not tracked yet{% endif %}.</p>
+    {% funnel journey_steps label="People who started a chat from a post, and how far they got" %}
 
     {% if journey.chats is None %}
     <p class="text-sm text-ink-muted border-t border-border pt-4">

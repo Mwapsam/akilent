@@ -2749,3 +2749,15 @@ Plan: the design audit's D5 (fewer boxes, Dashboard first), D4 (Settings side li
 - **Tests:**
   - New: `apps/instagram/tests/test_rule_builder.py`, `apps/conversations/tests/test_forms_editor_builder.py`, and `TestRoutingRuleBuilder` in `test_routing_settings.py`.
   - Updated: `test_comment_rules_ui` (422) and `test_settings_batch` (routing modal).
+
+### Entry 54: Insights review step 1, funnels that only narrow and one count of chats (2026-11-09)
+
+- **Funnels count people, and only ever narrow:**
+  - `reporting.narrowing(stages)` takes the sets of contact ids at each stage. Each later stage is the first stage's people who reached that stage or any later one. A customer who paid counts as interested, even with no lead tracked. "In your pipeline 1" can no longer sit under "Interested 0".
+  - Sales funnel: Wrote in → Interested → In your pipeline → Won → Paid. Its label is "People who wrote in, and how far they got".
+- **One source for chats from posts:**
+  - `results.journey` credits each chat in the period to the first post it came through. The posts list now adds up to the "Chats from posts" count: a chat through two posts used to show 3 chats beside 4 posts with 1 each.
+  - Leads and orders from posts are the people from those chats.
+  - Clicks aren't a funnel step any more, because a chat can also start from a reply to a comment. They're in the sentence above the funnel ("2 posts published, 14 chat-link clicks").
+- **Missed is a number:** "0 missed (no reply within 24 hours)", never "—". When there are misses, the line below says "N answered later".
+- **Tests:** `apps/insights/tests/test_insights_trust.py`; `test_insights_step3` has the new funnel label.

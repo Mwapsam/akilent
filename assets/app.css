@@ -496,6 +496,14 @@
     color: var(--color-ink);
   }
   .inbox-tab-count--danger { background-color: var(--tone-coral-bg); color: var(--tone-coral-fg); }
+  /* The Inbox badge: its number is customers waiting; a follow-up due is a dot, on the
+     number or (nothing waiting) on its own, so the two are never added into one count. */
+  .inbox-tab-count--due { position: relative; }
+  .inbox-tab-count--due::after {
+    content: ""; position: absolute; top: -2px; right: -2px; width: 7px; height: 7px; border-radius: 9999px;
+    background-color: var(--color-coral-500); box-shadow: 0 0 0 2px var(--color-surface);
+  }
+  .inbox-tab-count--dot { min-width: 0 !important; width: 8px; height: 8px; padding: 0 !important; border-radius: 9999px; background-color: var(--color-coral-500); }
 
   /* Edge to edge on a phone: the card's side margins and border cost 34px of
      a 360px screen, which is most of a contact's surname. */

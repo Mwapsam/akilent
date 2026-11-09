@@ -530,6 +530,23 @@ def workflow_sales(account, period: Period) -> list[dict]:
 # ---- pillar 3: sales -------------------------------------------------------------------------
 
 
+def narrowing(stages: list[set]) -> list[int]:
+    """Funnel counts that only ever narrow. ``stages`` are sets of people (contact ids),
+    first stage first. Each later stage counts the people of the first stage who reached
+    it *or any stage after it*: a customer who paid was interested, even if nobody tracked
+    them as a lead. So a later stage can never be bigger than an earlier one, and every
+    count is the same people as the stage before, or fewer."""
+    if not stages:
+        return []
+    reached: set = set()
+    cumulative: list[set] = []
+    for stage in reversed(stages[1:]):
+        reached = reached | stage
+        cumulative.append(reached)
+    cohort = stages[0]
+    return [len(cohort)] + [len(cohort & s) for s in reversed(cumulative)]
+
+
 def _paid_from_conversations(account, period: Period):
     from apps.commerce.models import Order
 
@@ -588,18 +605,39 @@ def sales(account, period: Period) -> dict:
         .annotate(n=Count("id"))
         .values_list("method", "n")
     )
-    wrote_in = (
+
+    def people(qs, field="contact_id") -> set:
+        return set(qs.values_list(field, flat=True).distinct())
+
+    wrote_in = people(
         Message.objects.filter(
             account=account,
             direction=Message.Direction.INBOUND,
             timestamp__gte=period.start,
             timestamp__lt=period.end,
-        )
-        .values("conversation__contact")
-        .distinct()
-        .count()
+        ),
+        "conversation__contact_id",
     )
     deals = Deal.objects.filter(account=account, conversation__isnull=False)
+    # People, not records, so the stages can't contradict each other ("in your pipeline"
+    # above "interested"): see ``narrowing``.
+    stages = narrowing(
+        [
+            wrote_in,
+            people(leads),
+            people(
+                deals.filter(created_at__gte=period.start, created_at__lt=period.end)
+            ),
+            people(
+                deals.filter(
+                    status=Deal.Status.WON,
+                    closed_at__gte=period.start,
+                    closed_at__lt=period.end,
+                )
+            ),
+            people(paid),
+        ]
+    )
     return {
         "revenue": revenue(account, period),
         "leads": lead_counts["total"],
@@ -608,19 +646,8 @@ def sales(account, period: Period) -> dict:
         "paid_orders": paid.count(),
         "named": methods.get(A.Method.EXPLICIT, 0),
         "recent": methods.get(A.Method.RECENT_CONVERSATION, 0),
-        "funnel": {
-            "wrote_in": wrote_in,
-            "leads": lead_counts["total"],
-            "deals": deals.filter(
-                created_at__gte=period.start, created_at__lt=period.end
-            ).count(),
-            "won": deals.filter(
-                status=Deal.Status.WON,
-                closed_at__gte=period.start,
-                closed_at__lt=period.end,
-            ).count(),
-            "paid": paid.count(),
-        },
+        # People who wrote in during the period, and how far they got.
+        "funnel": dict(zip(("wrote_in", "leads", "deals", "won", "paid"), stages)),
     }
 
 

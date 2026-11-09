@@ -291,7 +291,7 @@ def comment_rule_edit(request, kind: str, pk: int | None = None):
 
         lint = lint_rules(account).for_rule(kind, instance.pk)
     if instance is not None:
-        title = f"Edit “{instance.name}”"
+        title = f"Edit “{cast('CommentTrigger | ModerationRule', instance).name}”"
     else:
         title = "New private-reply rule" if kind == "reply" else "New moderation rule"
     return overlay_or_page(

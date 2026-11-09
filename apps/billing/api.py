@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from datetime import timedelta
 
 from django.db import models, transaction
 
@@ -984,3 +985,86 @@ def get_current_usage(account: Account) -> UsageSummary | None:
 def get_email_usage(account: Account) -> int:
     """Get total email usage for an account (emails sent this billing period)."""
     return UsageSummary.get_current_email_usage(account)
+
+
+# ── Home ─────────────────────────────────────────────────────────────────────
+
+HOME_NOTICE_DAYS = 7
+
+
+def home_notice(subscription, now=None) -> dict | None:
+    """What the plan needs from the owner, for a slim line on Home, or None.
+
+    Home shows billing only when something needs action: no plan, a payment that didn't go
+    through, a renewal that's due but hasn't gone through yet (never "Active · renews" on a
+    date already past), a trial or a cancelled plan ending soon, or a renewal within
+    HOME_NOTICE_DAYS. ``{"tone": "warning"|"info", "text", "action", "href"}``.
+    """
+    from django.utils import timezone
+
+    from apps.billing.models import Subscription
+
+    now = now or timezone.now()
+    plans = "/billing/plans/"
+    if subscription is None:
+        return {
+            "tone": "info",
+            "text": "No active plan.",
+            "action": "Choose a plan",
+            "href": plans,
+        }
+    end = subscription.current_period_end
+
+    def day(when) -> str:
+        if not when:
+            return ""
+        local = timezone.localtime(when)
+        return f"{local.day} {local:%b}"
+
+    if subscription.status == Subscription.PAST_DUE:
+        return {
+            "tone": "warning",
+            "text": f"Your {subscription.plan.name} renewal didn't go through.",
+            "action": "Pay now",
+            "href": plans,
+        }
+    if subscription.status == Subscription.TRIALING:
+        trial_end = subscription.trial_ends_at or end
+        if trial_end and trial_end - now <= timedelta(days=HOME_NOTICE_DAYS):
+            return {
+                "tone": "info" if trial_end > now else "warning",
+                "text": f"Your trial ends {day(trial_end)}."
+                if trial_end > now
+                else f"Your trial ended {day(trial_end)}.",
+                "action": "Choose a plan",
+                "href": plans,
+            }
+        return None
+    if subscription.status != Subscription.ACTIVE or not end:
+        return None
+    if subscription.cancel_at_period_end:
+        if end - now <= timedelta(days=HOME_NOTICE_DAYS):
+            return {
+                "tone": "warning",
+                "text": f"Your {subscription.plan.name} plan ends {day(end)}.",
+                "action": "Keep it",
+                "href": plans,
+            }
+        return None
+    if end <= now:
+        # Renewing: a provider-run renewal waits up to two days, a charge may be settling,
+        # and the hourly renewal job moves it on. Say so, never "Active · renews <past>".
+        return {
+            "tone": "warning",
+            "text": f"Your {subscription.plan.name} renewal was due {day(end)} and hasn't gone through yet.",
+            "action": "Check billing",
+            "href": plans,
+        }
+    if end - now <= timedelta(days=HOME_NOTICE_DAYS):
+        return {
+            "tone": "info",
+            "text": f"Your {subscription.plan.name} plan renews {day(end)}.",
+            "action": "Manage plan",
+            "href": plans,
+        }
+    return None

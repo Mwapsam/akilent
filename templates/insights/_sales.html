@@ -32,7 +32,7 @@ Pillar: sales from conversations. ``sales`` from apps.conversations.reporting.sa
 
   <div class="space-y-4 border-t border-border pt-6">
     <h3 class="text-base font-semibold text-ink">From conversation to sale</h3>
-    {% funnel sales_funnel label="From conversation to sale" %}
+    {% funnel sales_funnel label="People who wrote in, and how far they got" %}
     {% if sales.named or sales.recent %}
     <p class="text-xs text-ink-subtle border-t border-border pt-4">Of paid orders credited to a conversation: {{ sales.named }} named it explicitly, {{ sales.recent }} used the customer's most recent chat.</p>
     {% endif %}

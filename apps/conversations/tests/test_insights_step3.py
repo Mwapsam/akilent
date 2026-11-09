@@ -117,8 +117,10 @@ def test_the_sales_tab_draws_its_funnel(shop):
     client, account = shop
     _enquiry(account, NOW - timedelta(days=2), timedelta(minutes=3))
     page = client.get("/insights/?tab=sales").content.decode()
-    funnel = page[page.index('aria-label="From conversation to sale"') :]
-    assert "Wrote in" in funnel and "Paid orders" in funnel
+    funnel = page[
+        page.index('aria-label="People who wrote in, and how far they got"') :
+    ]
+    assert "Wrote in" in funnel and "Paid" in funnel
     assert 'class="funnel-bar"' in funnel
 
 

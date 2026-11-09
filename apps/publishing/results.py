@@ -9,6 +9,7 @@ recent-conversation guess, so these are lower bounds, and the card says so.
 
 from __future__ import annotations
 
+from collections import Counter
 from decimal import Decimal
 from typing import Any
 
@@ -192,19 +193,38 @@ def journey(account, period) -> dict | None:
     if not chats_tracked:
         return out
 
-    out["chats"] = (
+    # One source for chats from posts: each chat started from a post in the period is
+    # credited to the first post it came through, so the posts list adds up to the count
+    # (a customer who tapped two posts' links is one chat, not two).
+    first_post: dict[int, int] = {}
+    chat_people: dict[int, int] = {}
+    for conversation_id, post_id, contact_id in (
         entry_points.filter(**during("matched_at"))
-        .values("conversation")
-        .distinct()
-        .count()
-    )
+        .order_by("matched_at", "pk")
+        .values_list("conversation_id", "post_id", "conversation__contact_id")
+    ):
+        if conversation_id not in first_post:
+            first_post[conversation_id] = post_id
+            chat_people[conversation_id] = contact_id
+    out["chats"] = len(first_post)
     from_posts = post_credit_q()
-    out["leads"] = Lead.objects.filter(
-        from_posts, account=account, **during("created_at")
-    ).count()
-    out["orders"] = Order.objects.filter(
-        from_posts, account=account, **during("created_at")
-    ).count()
+    # Leads and orders from posts are counted as people from those chats, so the funnel
+    # only narrows (chats → leads → orders; apps.conversations.reporting.narrowing).
+    from apps.conversations.reporting import narrowing
+
+    lead_people = set(
+        Lead.objects.filter(
+            from_posts, account=account, **during("created_at")
+        ).values_list("contact_id", flat=True)
+    )
+    order_people = set(
+        Order.objects.filter(
+            from_posts, account=account, **during("created_at")
+        ).values_list("contact_id", flat=True)
+    )
+    _, out["leads"], out["orders"] = narrowing(
+        [set(chat_people.values()), lead_people, order_people]
+    )
     all_paid = Order.objects.filter(
         account=account, status=Order.Status.PAID, **during("paid_at")
     )
@@ -252,15 +272,12 @@ def journey(account, period) -> dict | None:
         all_paid.exclude(from_posts).exclude(guessed)
     )
     # The posts behind the numbers, so each one opens its own results card.
-    out["top"] = list(
-        ContentPost.objects.filter(
-            account=account,
-            entry_points__matched_at__gte=period.start,
-            entry_points__matched_at__lt=period.end,
-        )
-        .annotate(chats=Count("entry_points__conversation", distinct=True))
-        .order_by("-chats", "-pk")[:5]
-    )
+    per_post = Counter(first_post.values())
+    posts = ContentPost.objects.in_bulk(list(per_post))
+    for pk, post in posts.items():
+        # The template reads post.chats (an annotation before this was counted in Python).
+        setattr(post, "chats", per_post[pk])  # noqa: B010
+    out["top"] = sorted(posts.values(), key=lambda p: (-per_post[p.pk], -p.pk))[:5]
     return out
 
 

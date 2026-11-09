@@ -1314,6 +1314,7 @@ def dashboard_panels(request):
             # Insights' "What needs you", the same three lines (set-up gaps are in Setup).
             "attention": attention(account, include_setup=False),
             "subscription": subscription,
+            "plan_notice": billing_api.home_notice(subscription),
             "usage_warnings": billing_api.usage_warnings(account),
             "starting_point": conversations_api.starting_point(account),
             "next_recommended": next_recommended,

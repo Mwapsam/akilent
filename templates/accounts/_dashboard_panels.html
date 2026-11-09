@@ -13,6 +13,16 @@ is Insights' action list (apps.conversations.attention), shown only when there i
 
   {% include "billing/_usage_warnings.html" %}
 
+  {% comment %}The plan only when it needs something (billing_api.home_notice): no plan, a
+  payment that didn't go through, a renewal due but not through yet, a trial or a cancelled
+  plan ending soon, or a renewal within a week. Never "Active · renews" on a past date.{% endcomment %}
+  {% if plan_notice %}
+  <div class="alert {% if plan_notice.tone == 'warning' %}alert-warning{% else %}alert-info{% endif %} flex flex-wrap items-center justify-between gap-3" role="status" data-plan-notice>
+    <p class="text-sm">{{ plan_notice.text }}</p>
+    <a href="{{ plan_notice.href }}" class="btn btn-secondary btn-sm">{{ plan_notice.action }}</a>
+  </div>
+  {% endif %}
+
   {% if attention.items %}{% include "insights/_attention.html" %}{% endif %}
 
   {% if next_recommended %}
@@ -131,11 +141,13 @@ is Insights' action list (apps.conversations.attention), shown only when there i
   </section>
   {% endif %}
 
-  {# ── Recent activity ───────────────────────────────────────────────── #}
-  <section aria-labelledby="dash-activity">
+  {% comment %}Email sends: only what it is. It was "Recent activity", which read as wrong
+  ("No messages sent yet") beside conversations and replies.{% endcomment %}
+  {% if "email" in enabled_channels %}
+  <section aria-labelledby="dash-sends">
     <div class="flex items-center justify-between mb-2">
-      <h2 id="dash-activity" class="text-sm font-semibold text-ink">Recent activity</h2>
-      <a href="/logs/messages/" class="inline-flex items-center min-h-6 text-sm text-ink-subtle hover:text-ink">View activity log <span aria-hidden="true" class="ml-1">→</span></a>
+      <h2 id="dash-sends" class="text-sm font-semibold text-ink">Recent email sends</h2>
+      <a href="/logs/messages/" class="inline-flex items-center min-h-6 text-sm text-ink-subtle hover:text-ink">Email log <span aria-hidden="true" class="ml-1">→</span></a>
     </div>
     {% if recent_sends %}
       <div class="table-scroll border-t border-border">
@@ -158,49 +170,8 @@ is Insights' action list (apps.conversations.attention), shown only when there i
         </table>
       </div>
     {% else %}
-      {% include "components/empty_state.html" with line=True title="No messages sent yet" %}
+      {% include "components/empty_state.html" with line=True title="No emails sent yet" %}
     {% endif %}
-  </section>
-
-  {# ── Subscription ──────────────────────────────────────────────────── #}
-  {% if subscription %}
-  <section aria-labelledby="dash-plan">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h2 id="dash-plan" class="text-sm font-semibold text-ink">{{ subscription.plan.name }} plan</h2>
-        <p class="mt-1 text-sm text-ink-subtle">
-          {% if subscription.status == 'active' %}<span class="badge badge-success">Active</span>
-          {% elif subscription.status == 'trialing' %}<span class="badge badge-info">Trialing</span>
-          {% elif subscription.status == 'past_due' %}<span class="badge badge-warning">Past due</span>
-          {% else %}<span class="badge badge-neutral capitalize">{{ subscription.status }}</span>{% endif %}
-          {% if subscription.current_period_end %} · renews {{ subscription.current_period_end|date:"M j, Y" }}{% endif %}
-        </p>
-      </div>
-      <a href="/billing/plans/" class="btn btn-secondary btn-sm">Manage plan</a>
-    </div>
-    {% if email_quota and email_quota > 0 %}
-    <div class="mt-4">
-      <div class="flex items-end justify-between mb-1.5 text-sm">
-        <span class="text-ink-subtle" id="quota-label">Email usage this month</span>
-        <span class="text-ink-subtle tabular-nums">{{ emails_used }} / {{ email_quota }} · {{ usage_pct }}%</span>
-      </div>
-      <div class="h-1.5 rounded-full bg-[var(--color-secondary-bg)] overflow-hidden" role="progressbar"
-           aria-labelledby="quota-label"
-           aria-valuenow="{{ usage_pct }}" aria-valuemin="0" aria-valuemax="100"
-           aria-valuetext="{{ emails_used }} of {{ email_quota }} emails used, {{ usage_pct }} percent">
-        <div class="h-full rounded-full transition-all {% if usage_pct >= 90 %}bg-coral-500{% elif usage_pct >= 75 %}bg-amber-500{% else %}bg-highlight{% endif %}"
-             style="width: {{ usage_pct }}%"></div>
-      </div>
-    </div>
-    {% endif %}
-  </section>
-  {% else %}
-  <section class="flex flex-wrap items-center justify-between gap-3" aria-labelledby="dash-plan">
-    <div>
-      <h2 id="dash-plan" class="text-sm font-semibold text-ink">No active plan</h2>
-      <p class="mt-1 text-sm text-ink-subtle">Choose a plan to raise your sending limits.</p>
-    </div>
-    <a href="/billing/plans/" class="btn btn-secondary btn-sm">Choose a plan</a>
   </section>
   {% endif %}
 

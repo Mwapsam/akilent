@@ -1887,18 +1887,37 @@ def followups_badge(request):
     return response
 
 
-def inbox_unread_for(user, account) -> int:
-    """Open, unread conversations this person is expected to look at: assigned to them,
-    or to nobody in particular, or to one of their teams with no one picked yet.
-
-    Unread is one flag per conversation, shared by the team like a shared mailbox: when
-    anyone opens it, it stops counting for everyone (Conversation.is_unread)."""
+def _for_me(user, account) -> Q:
+    """Conversations this person is expected to look at: assigned to them, or to nobody in
+    particular, or to one of their teams with no one picked yet."""
     team_ids = list(
         Team.objects.filter(account=account, members=user).values_list("id", flat=True)
     )
     mine = Q(assigned_to=user) | Q(assigned_to__isnull=True, assigned_team__isnull=True)
     if team_ids:
         mine |= Q(assigned_to__isnull=True, assigned_team_id__in=team_ids)
+    return mine
+
+
+def inbox_waiting_for(user, account, now=None) -> int:
+    """Customers waiting on a reply (the Dashboard's "Customers waiting" and the inbox's
+    Needs attention: apps.conversations.state.needs_attention), counting only the
+    conversations this person is expected to look at (_for_me)."""
+    from apps.conversations.state import needs_attention
+
+    return (
+        hide_disabled_channels(needs_attention(account, now))
+        .filter(_for_me(user, account))
+        .count()
+    )
+
+
+def inbox_unread_for(user, account) -> int:
+    """Open, unread conversations this person is expected to look at (_for_me).
+
+    Unread is one flag per conversation, shared by the team like a shared mailbox: when
+    anyone opens it, it stops counting for everyone (Conversation.is_unread)."""
+    mine = _for_me(user, account)
     return (
         hide_disabled_channels(
             Conversation.objects.filter(
@@ -1912,31 +1931,37 @@ def inbox_unread_for(user, account) -> int:
 
 @login_required
 def inbox_badge(request):
-    """The sidebar's Inbox count: unread conversations for me (inbox_unread_for) plus
-    follow-ups due for me (the Follow-ups tab's number). One element on the page asks;
-    every badge shown copies it (components/_nav_item.html, app.js syncBadges). ``data-due``
-    carries the follow-ups due alone, for the inbox's "Follow-ups to do"."""
+    """The sidebar's Inbox badge. The number is customers waiting on a reply, the same rule
+    as the Dashboard's "Customers waiting" (inbox_waiting_for), for me. Follow-ups due for
+    me aren't added to it, so the two never read as one number: they're a dot on the
+    badge (alone when nothing is waiting). One element on the page asks; every badge shown
+    copies it (components/_nav_item.html, app.js syncBadges). ``data-due`` carries the
+    follow-ups due, for the inbox's "Follow-ups to do"."""
     from apps.conversations import followups
 
     account = get_current_account(request)
     if account is None:
         return HttpResponse("")
-    unread = inbox_unread_for(request.user, account)
+    waiting = inbox_waiting_for(request.user, account)
     due = followups.due_for(request.user, account)
-    total = unread + due
-    if not total:
+    if not waiting and not due:
         # Still says how many follow-ups are due (none), for the inbox's "Follow-ups to do".
         return HttpResponse('<span hidden data-due="0"></span>')
     parts = []
-    if unread:
-        parts.append(f"{unread} unread conversation{'s' if unread != 1 else ''}")
+    if waiting:
+        parts.append(
+            f"{waiting} customer{'s' if waiting != 1 else ''} waiting for a reply"
+        )
     if due:
         parts.append(f"{due} follow-up{'s' if due != 1 else ''} due")
     label = " and ".join(parts)
-    tone = " inbox-tab-count--danger" if due else ""
+    classes = "inbox-tab-count"
+    if due:
+        classes += " inbox-tab-count--due" if waiting else " inbox-tab-count--dot"
+    text = "" if not waiting else (waiting if waiting < 100 else "99+")
     return HttpResponse(
-        f'<span class="inbox-tab-count{tone}" data-due="{due}" aria-label="{label}" '
-        f'title="{label}">{total if total < 100 else "99+"}</span>'
+        f'<span class="{classes}" data-due="{due}" aria-label="{label}" '
+        f'title="{label}">{text}</span>'
     )
 
 

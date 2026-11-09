@@ -199,9 +199,13 @@ def test_the_inbox_badge_is_asked_for_once(owner_client):
     assert "/inbox/followups/badge/?plain" not in inbox  # copied from data-due
 
 
-def test_the_inbox_badge_counts_what_is_mine(owner, owner_client):
+def test_the_inbox_badge_counts_customers_waiting_that_are_mine(owner, owner_client):
+    """The same rule as the Dashboard's "Customers waiting" (the customer spoke last),
+    for me: not the unread flag, and follow-ups aren't added in."""
+    from django.utils import timezone
+
     from apps.contacts.models import Contact
-    from apps.conversations.models import Conversation
+    from apps.conversations.models import Conversation, Message
 
     user, account = owner
     other = User.objects.create_user("mate", "mate@example.com", "x")
@@ -213,9 +217,17 @@ def test_the_inbox_badge_counts_what_is_mine(owner, owner_client):
         contact = Contact.objects.create(
             account=account, phone=f"+2609{Contact.objects.count():08d}"
         )
-        return Conversation.objects.create(
-            account=account, contact=contact, channel="whatsapp", is_unread=True, **kw
+        c = Conversation.objects.create(
+            account=account, contact=contact, channel="whatsapp", **kw
         )
+        Message.objects.create(
+            account=account,
+            conversation=c,
+            direction=Message.Direction.INBOUND,
+            body="Hi",
+            timestamp=timezone.now(),
+        )
+        return c
 
     conv()  # nobody's
     conv(assigned_to=user)  # mine
@@ -223,10 +235,17 @@ def test_the_inbox_badge_counts_what_is_mine(owner, owner_client):
     conv(assigned_to=other)  # a teammate's
     conv(assigned_team=other_team)  # a team I'm not in
     conv(status=Conversation.Status.CLOSED)  # closed
-    read = conv()
-    Conversation.objects.filter(pk=read.pk).update(is_unread=False)  # already read
+    answered = conv()  # we replied last: not waiting
+    Message.objects.create(
+        account=account,
+        conversation=answered,
+        direction=Message.Direction.OUTBOUND,
+        body="Hello",
+        status="sent",
+        timestamp=timezone.now(),
+    )
     html = owner_client.get("/inbox/badge/").content.decode()
-    assert ">3<" in html and "3 unread conversations" in html
+    assert ">3<" in html and "3 customers waiting for a reply" in html
 
 
 def test_an_empty_inbox_badge_is_empty(owner_client):
