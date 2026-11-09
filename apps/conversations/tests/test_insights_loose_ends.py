@@ -72,7 +72,9 @@ def test_the_sentence_counts_conversations_and_names_customers_when_different(sh
     _conversation(account, ben, NOW - timedelta(days=2), timedelta(minutes=2))
     page = client.get("/insights/").content.decode()
     assert "3 conversations got a reply (2 customers)" in page
-    assert "From 3 conversations, not enough for a trend" in page
+    # One "Early days" line instead of a caveat under each figure (2026-11-09 review).
+    assert "Early days: 3 conversations so far." in page
+    assert "not enough for a trend" not in page
 
 
 def test_a_goal_on_a_rate_from_a_handful_is_too_early_to_tell(shop):
@@ -83,7 +85,8 @@ def test_a_goal_on_a_rate_from_a_handful_is_too_early_to_tell(shop):
         account=account, metric=InsightGoal.Metric.ANSWERED_PCT, target=100
     )
     page = client.get("/insights/").content.decode()
-    assert "Goal 100% · too early to tell" in page
+    # One short line: the goal, without "on track" from a handful (Early days says why).
+    assert "Goal 100%</p>" in page
     assert "Goal 100% · on track" not in page
 
 

@@ -1,0 +1,30 @@
+{% comment %}Counts per week (or day) as bars. Rendered by {% bar_chart %}.
+
+One series of counts: the title names it, so there's no legend; each bar shows its value
+above it, and the table view carries the same numbers for a screen reader or a printout.
+Server-rendered HTML, so it's in the first paint and needs no script.{% endcomment %}
+{% if has_data %}
+<figure class="chart" role="group"{% if title %} aria-label="{{ title }}"{% endif %} data-chart="bars">
+  {% if title %}<figcaption class="chart-title">{{ title }}</figcaption>{% endif %}
+  <div class="bars-plot" aria-hidden="true">
+    {% for b in bars %}
+    <div class="bars-col"{% if not b.value %} data-zero{% endif %} title="{{ b.label }}: {{ b.shown }}">
+      <span class="bars-value">{{ b.shown }}</span>
+      <span class="bars-bar" style="height: {{ b.pct }}%"></span>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="bars-x" aria-hidden="true">{% for b in bars %}<span>{{ b.label }}</span>{% endfor %}</div>
+  <details class="chart-table">
+    <summary class="btn btn-ghost btn-sm">View as table</summary>
+    <div class="table-scroll">
+      <table class="table">
+        <thead><tr><th>{{ unit }}</th><th>{{ value_label }}</th></tr></thead>
+        <tbody>
+          {% for b in bars %}<tr><td>{{ b.label }}</td><td class="tabular-nums">{{ b.shown }}</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+</figure>
+{% endif %}

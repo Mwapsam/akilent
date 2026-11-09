@@ -347,5 +347,6 @@ class TestGoalViews:
             target=Decimal("5"),
         )
         body = client.get("/insights/").content.decode()
-        assert "on track" in body
-        assert "Median first reply" in body
+        # The headline links to the goals ("Goals · 1 of 1 on track"); the drawer names them.
+        assert "1 of 1 on track" in body
+        assert "Median first reply" in client.get("/insights/goals/").content.decode()

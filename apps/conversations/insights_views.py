@@ -73,8 +73,20 @@ def insights(request):
     period, days, period_locked = _period(request, account, now)
     tab = _tab(request)
     has_history = LimitChecker(account).has_feature("detailed_analytics")
-    goal_context = _goal_context(request, account, now)
     rows = reporting.first_replies(account, period.start, period.end)
+    if request.headers.get("HX-Target") == "insights-tab":
+        # A tab switch: only the tab's region is worked out and sent back.
+        tab_context = {
+            "account": account,
+            "days": days,
+            "tab": tab,
+            "tabs": TABS,
+            "has_history": has_history,
+            "tab_swap": True,
+            **_tab_context(tab, request, account, period, days, rows, now, has_history),
+        }
+        return render(request, "insights/_tab.html", tab_context)
+    goal_context = _goal_context(request, account, now)
     open_insights = list(
         Insight.objects.filter(
             account=account,
@@ -100,6 +112,9 @@ def insights(request):
             True,
         ),
         **goal_context,
+        "early_days": reporting.EARLY_CONVERSATIONS,
+        # A quiet refresh brings the header's period picker and "Updated" time with it.
+        "controls_oob": is_background(request),
     }
     context.update(
         _tab_context(tab, request, account, period, days, rows, now, has_history)
@@ -112,14 +127,35 @@ def insights(request):
     )
 
 
+# A chart is drawn only with this many readings that aren't empty or zero; fewer is noise
+# ("Chart appears after a few more weeks of data").
+CHART_MIN_POINTS = 4
+
+
+def _points(values) -> int:
+    return sum(1 for v in values if v)
+
+
+def _reply_scale(seconds) -> tuple[str, float]:
+    """The unit that fits the replies: seconds under a minute, minutes under two hours."""
+    top = max((v for v in seconds if v is not None), default=0)
+    if top < 60:
+        return "seconds", 1.0
+    if top < 2 * 3600:
+        return "minutes", 60.0
+    return "hours", 3600.0
+
+
 def _charts(tab, trend) -> list[dict]:
-    """The open tab's chart, one per metric for its switcher: ``{"key", "label", "title",
-    "series", "labels", "unit"}``, ``series`` being ``(name, values)`` pairs on one axis
-    (one unit per chart, never two scales). Shaped here, not in the template, so a chart
-    can't be drawn from mismatched columns."""
+    """The open tab's charts, one per metric for its switcher: ``{"key", "label", "title",
+    "series", "labels", "unit", "kind", "enough"}``. ``series`` is ``(name, values)`` pairs
+    on one axis (one unit per chart, never two scales). ``kind`` is "bars" for a single count
+    and "line" otherwise; ``enough`` is False below CHART_MIN_POINTS readings, and then the
+    chart isn't drawn. Shaped here, not in the template, so a chart can't be drawn from
+    mismatched columns."""
     unit, labels = trend["unit"], trend["labels"]
 
-    def chart(key, label, title, series):
+    def chart(key, label, title, series, kind="line"):
         return {
             "key": key,
             "label": label,
@@ -127,20 +163,29 @@ def _charts(tab, trend) -> list[dict]:
             "series": series,
             "labels": labels,
             "unit": unit,
+            "kind": kind,
+            "values": series[0][1] if kind == "bars" else None,
+            "enough": max((_points(values) for _, values in series), default=0)
+            >= CHART_MIN_POINTS,
         }
 
     if tab == "response":
+        seconds = trend.get("reply_seconds") or [
+            None if m is None else m * 60 for m in trend["reply_minutes"]
+        ]
+        name, scale = _reply_scale(seconds)
+        reply = [None if v is None else round(v / scale, 1) for v in seconds]
         return [
             chart(
                 "reply",
                 "Reply time",
-                "Median first reply, in minutes",
-                [("Median first reply (min)", trend["reply_minutes"])],
+                f"Median first reply, in {name}",
+                [(f"Median first reply ({name})", reply)],
             ),
             chart(
                 "answered",
                 "Answered vs missed",
-                "Enquiries answered within 24 hours, and missed",
+                "Answered within 24 hours, and missed",
                 [
                     ("Answered within 24 hours", trend["answered"]),
                     ("Missed", trend["missed"]),
@@ -154,12 +199,14 @@ def _charts(tab, trend) -> list[dict]:
                 "Leads",
                 "Leads from conversations",
                 [("Leads", trend["leads"])],
+                "bars",
             ),
             chart(
                 "paid",
                 "Paid orders",
                 "Paid orders from conversations",
                 [("Paid orders", trend["paid"])],
+                "bars",
             ),
         ]
         if trend["revenue"]:
@@ -170,6 +217,7 @@ def _charts(tab, trend) -> list[dict]:
                     "Revenue",
                     f"Revenue from conversations, {currency}",
                     [(currency, trend["revenue"]["values"])],
+                    "bars",
                 )
             )
         return charts
@@ -192,9 +240,13 @@ def _tab_context(tab, request, account, period, days, rows, now, has_history) ->
     """The figures for the open tab only, and its chart."""
     context = _tab_figures(tab, request, account, period, days, rows, now, has_history)
     if tab != "content":
-        charts = _charts(tab, reporting.trend(account, period, rows, now=now))
+        # Weekly buckets for anything longer than a week: daily points over 30 days were
+        # mostly empty and read as broken.
+        trend = reporting.trend(account, period, rows, now=now, weekly=days > 7)
+        charts = [c for c in _charts(tab, trend) if c["enough"]]
         context["charts"] = charts
         context["chart_keys"] = [c["key"] for c in charts]
+        context["charts_waiting"] = not charts
     return context
 
 

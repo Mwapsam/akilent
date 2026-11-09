@@ -117,9 +117,11 @@ def test_the_page_uses_one_period_and_says_what_is_right_now(shop):
         in page
     )
     # One answered enquiry: a count, not "100%".
-    response = page[page.index('id="response-h"') :]
-    assert "1 of 1" in response and "100%" not in response
-    assert "Not enough data yet for a rate" in response
+    # Answered-in-24h is the headline's (not repeated on the Response tab): a count, not
+    # "100%", and the Early days line says why.
+    headline = page[page.index('id="headline-h"') : page.index('id="attention-h"')]
+    assert "1 of 1" in headline and "100%" not in headline
+    assert "Early days: 1 conversation so far." in page
 
 
 def test_the_body_refreshes_quietly_and_comes_back_alone(shop):

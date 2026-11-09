@@ -45,9 +45,9 @@ def test_dashboard_renders_work_queue_inline(client, account):
     assert resp.status_code == 200
     body = resp.content.decode()
     assert 'id="work-queue"' in body
-    assert "What needs your attention today" in body
-    # Counts are present without a second request.
-    assert "customer" in body and "waiting" in body
+    assert 'id="work-queue-label">Today</h2>' in body
+    # Counts are present without a second request ("All caught up" when none wait).
+    assert "All caught up" in body or "Waiting" in body
 
 
 @pytest.mark.django_db
@@ -115,24 +115,20 @@ def test_panels_fragment_renders(client, account):
     resp = client.get("/dashboard/panels/")
     assert resp.status_code == 200
     body = resp.content.decode()
-    assert "Upcoming sends" in body
-    # Renamed to what it is: email sends, and only with email on.
-    assert "Recent activity" not in body
-    assert "Setup" in body
+    # Panels (2026-11-09): Needs you, This week, Recent activity, Coming up.
+    for title in ("Needs you", "This week", "Recent activity", "Coming up"):
+        assert f">{title}</h2>" in body
     # Loads once — it must not re-trigger itself after the swap.
     assert 'hx-trigger="load"' not in body
 
 
 @pytest.mark.django_db
 def test_scheduled_is_not_duplicated_as_a_stat(client, account):
-    """ "Scheduled" is answered by the Upcoming sends panel, not also by a stat
-    card. The old dashboard showed both, which read as two different numbers
-    for the same question."""
+    """ "Scheduled" is answered by Coming up alone: no stat cards on Home any more."""
     client.force_login(account.owner)
     body = client.get("/dashboard/panels/").content.decode()
-    assert body.count('class="stat-card"') == 3
-    assert "Upcoming sends" in body
-    assert "upcoming sends" not in body.lower().replace("upcoming sends", "", 1)
+    assert body.count('class="stat-card"') == 0
+    assert body.count(">Coming up</h2>") == 1
 
 
 @pytest.mark.django_db

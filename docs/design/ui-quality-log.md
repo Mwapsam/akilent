@@ -2814,3 +2814,53 @@ Plan: the design audit's D5 (fewer boxes, Dashboard first), D4 (Settings side li
   - New: `apps/core/tests/test_panels.py`, `apps/accounts/tests/test_settings_panels.py`.
   - Updated: `test_settings_batch` (panel footer instead of the bar) and `test_settings_business` (shorter wording).
 - **Not done:** I haven't looked at the pages in a browser, in either theme.
+
+### Entry 57: Panels, steps 2 and 3 (Dashboard and Insights) (2026-11-09)
+
+The 11-09 production check (rated about 6/10) found both pages still flat. Step 1 (Entry 56) was staged but not deployed. `.panel` is in the built CSS; production doesn't have it yet.
+
+- **Dashboard:**
+  - **Header:**
+    - the greeting is 20–24 px with no 👋;
+    - today's date;
+    - one "+ New ▾" menu (Campaign, Post, Contact, Automation) replaces the four quick-action pills.
+  - **Today:**
+    - the figures are in a panel, with short labels (Waiting, Missed, New leads, Follow-ups due);
+    - waiting and missed both at 0 become one "✓ All caught up" figure;
+    - an arrow appears on hover and focus.
+  - **Plan:** a slim strip (`panel-alert`), only when action is needed.
+  - **Two columns (2/3 + 1/3):**
+    - Needs you beside This week;
+    - Recent activity beside Coming up, then Setup (only when something needs setting up) and Chat widgets (only when there are some).
+  - **Needs you** (`attention(home=True)`): a single case names the person ("Follow-up due · Samuel C.", opening that conversation), and observations older than 14 days (`FRESH_DAYS`) wait behind "See all".
+  - **This week** (`apps/accounts/home.this_week`): conversations, first reply, leads and paid orders for 7 days, with a sparkline each when there's more than one reading and at least one isn't zero. It uses the same reporting rules as Insights, and links there.
+  - **Recent activity** (`home.recent_activity`): new chats, new leads, paid orders, posts published, and WhatsApp and email campaigns sent, from the last 14 days, with icons and `{% when %}` times. It replaces "Recent email sends" and the email stat cards.
+  - **Coming up** (`home.coming_up`): scheduled sends and scheduled posts, soonest first.
+  - **Starting point:** one muted line while measuring or waiting, and a comparison panel once there's something to compare.
+- **Insights:**
+  - **One header row:** the title on the left; "Updated HH:MM", a refresh icon and the period picker on the right (`insights/_controls.html`). They're sent out of band with every quiet refresh.
+  - **One "Early days" line** below `reporting.EARLY_CONVERSATIONS` (20) replaces every per-figure caveat.
+  - **Headline:** one panel, with at most one short line per figure (a change, or else the goal). The automatic-reply count and revenue detail are in the title.
+  - Needs you is a panel.
+  - **Inner tabs:**
+    - a segmented control, sticky under the top bar;
+    - a switch asks only for the tab's region (`HX-Target: insights-tab` → `insights/_tab.html`; the view skips the headline and attention);
+    - the URL is pushed, and the header's hidden tab field follows out of band.
+  - **Each tab:**
+    - the chart panel (2/3) beside the tab's own figures (1/3, `.metric-stack`, the headline style), then detail panels;
+    - Response no longer repeats first reply or answered (Missed, Follow-ups done and Time to resolve; Busiest time; Team);
+    - Sales shows Revenue and Lead to sale, then the funnel panel and Channels;
+    - Automation shows its figures, then "Automations that led to sales";
+    - Content is the journey panel, with "How it's counted ⓘ" in the description, standard figures for "Not credited to a post", and no footnote.
+- **Chart rules** (`insights_views._charts`):
+  - drawn only with at least 4 non-empty, non-zero readings (`CHART_MIN_POINTS`); otherwise "Chart appears after a few more weeks of data";
+  - weekly buckets for periods over 7 days (`reporting.trend(weekly=)`);
+  - counts (leads, paid orders, revenue) as bars (`{% bar_chart %}`, `components/charts/_bar_chart.html`);
+  - reply time in seconds, minutes or hours, whichever fits (`trend["reply_seconds"]`, `_reply_scale`);
+  - the panel title is the chart's one label, with no section heading and no legend for a single series;
+  - gaps are drawn as a faint dotted bridge (`charts._bridges`, `data-chart-gap`);
+  - "View as table" is a ghost button.
+- **Tests:**
+  - New: `apps/accounts/tests/test_home_panels.py`, `apps/conversations/tests/test_insights_panels.py`.
+  - Updated, for new wording and the moved figures: `test_dashboard`, `test_insights_step1/2/3`, `test_insights_loose_ends`, `test_insights_view_full`, `test_goals`, `test_performance`, `test_starting_point` and `test_attribution_states`.
+- **Not done:** I haven't looked at the pages in a browser, in either theme.

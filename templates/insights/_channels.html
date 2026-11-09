@@ -2,12 +2,17 @@
 Pillar: channel performance. ``channels`` from apps.conversations.reporting.channels. Outcomes
 only — no "best channel" label. Gated on ``has_history`` (the plan's detailed-analytics feature).
 {% endcomment %}
-<section class="space-y-4" aria-labelledby="channels-h">
-  <h2 id="channels-h" class="text-lg font-semibold text-ink">Channel performance</h2>
-  <p class="text-sm text-ink-muted">Which channel are customers writing in from?</p>
+<section class="panel" aria-labelledby="channels-h">
+  <div class="panel-head">
+    <div>
+      <h2 id="channels-h" class="panel-title">Channel performance</h2>
+      <p class="panel-desc">Which channel customers write in from.</p>
+    </div>
+  </div>
+  <div class="panel-body">
 
   {% if not has_history %}
-  <div class="card card-pad text-center">
+  <div class="text-center">
     <p class="text-sm text-ink-subtle">Channel performance is available on higher plans.</p>
     <a href="/billing/plans/" class="btn btn-primary btn-sm mt-3">Upgrade your plan</a>
   </div>
@@ -29,6 +34,7 @@ only — no "best channel" label. Gated on ``has_history`` (the plan's detailed-
     </table>
   </div>
   {% else %}
-  <p class="text-sm text-ink-muted">No channel activity yet this period.</p>
+  <p class="empty-line">No channel activity yet this period.</p>
   {% endif %}
+  </div>
 </section>

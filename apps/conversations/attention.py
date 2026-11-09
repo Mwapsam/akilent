@@ -20,6 +20,9 @@ from django.db.models import Min
 from django.utils import timezone
 
 LIMIT = 3
+# Home's list is "right now": an observation that started longer ago than this waits behind
+# "See all" (the drawer) instead of taking one of the three lines.
+FRESH_DAYS = 14
 
 # Observations that repeat a live count: waiting 2h+ and waiting 24h+ are "waiting" and
 # "missed" in at_risk, counted the inbox's way.
@@ -96,21 +99,83 @@ def _live_since(account, now) -> dict[str, datetime | None]:
     }
 
 
-def _from_at_risk(account, at_risk, now) -> list[Item]:
+def short_name(contact) -> str:
+    """ "Samuel C.": a first name and an initial, else how the inbox names them."""
+    if contact is None:
+        return ""
+    if contact.first_name and contact.last_name:
+        return f"{contact.first_name} {contact.last_name[0]}."
+    return contact.display_name
+
+
+# One of a kind: the line names the person ("Follow-up due · Samuel C."), so it's something
+# to do, not the same count the figures above it show.
+_ONE = {
+    "followups_due": "Follow-up due",
+    "waiting": "Waiting for a reply",
+    "missed": "No reply for over 24 hours",
+}
+
+
+def _live_who(account, now, keys) -> dict[str, tuple[str, str]]:
+    """For each live problem with exactly one case: (who, where to open it)."""
+    from django.urls import reverse
+
+    from apps.conversations import followups
+    from apps.conversations.state import missed, needs_attention
+
+    out: dict[str, tuple[str, str]] = {}
+    if "followups_due" in keys:
+        f = (
+            followups._open_followups(account)
+            .filter(due_at__lte=now)
+            .select_related("contact", "conversation")
+            .order_by("due_at")
+            .first()
+        )
+        if f is not None:
+            url = (
+                reverse("conversations:detail", args=[f.conversation.public_id])
+                if f.conversation_id
+                else "/inbox/followups/?list=team"
+            )
+            out["followups_due"] = (short_name(f.contact), url)
+    for key, view in (("waiting", needs_attention), ("missed", missed)):
+        if key in keys:
+            c = view(account, now).select_related("contact").first()
+            if c is not None:
+                out[key] = (
+                    short_name(c.contact),
+                    reverse("conversations:detail", args=[c.public_id]),
+                )
+    return out
+
+
+def _from_at_risk(account, at_risk, now, *, name_people=False) -> list[Item]:
     since = _live_since(account, now) if at_risk["actions"] else {}
     tone = {"missed": "coral", "waiting": "highlight", "followups_due": "highlight"}
-    return [
-        Item(
-            key=a["key"],
-            text=a["text"],
-            cta=a["cta"],
-            url=a["url"],
-            since=since.get(a["key"]),
-            tone=tone.get(a["key"], "highlight" if a["count"] else "neutral"),
-            rank=_RANK.get(a["key"], 99),
+    single = {
+        a["key"] for a in at_risk["actions"] if a["count"] == 1 and a["key"] in _ONE
+    }
+    who = _live_who(account, now, single) if name_people and single else {}
+    items = []
+    for a in at_risk["actions"]:
+        text, url, cta = a["text"], a["url"], a["cta"]
+        if a["key"] in who and who[a["key"]][0]:
+            text = f"{_ONE[a['key']]} · {who[a['key']][0]}"
+            url, cta = who[a["key"]][1], "Open"
+        items.append(
+            Item(
+                key=a["key"],
+                text=text,
+                cta=cta,
+                url=url,
+                since=since.get(a["key"]),
+                tone=tone.get(a["key"], "highlight" if a["count"] else "neutral"),
+                rank=_RANK.get(a["key"], 99),
+            )
         )
-        for a in at_risk["actions"]
-    ]
+    return items
 
 
 def _automatable() -> frozenset:
@@ -172,13 +237,23 @@ def _from_insights(insights) -> list[Item]:
 
 
 def attention(
-    account, *, now=None, at_risk=None, insights=None, include_setup=True
+    account,
+    *,
+    now=None,
+    at_risk=None,
+    insights=None,
+    include_setup=True,
+    home=False,
 ) -> dict:
     """``{"items": [the first LIMIT Item], "more": int, "total": int}``.
 
     ``at_risk`` and ``insights`` (open Insight rows) are taken from the caller when it has
     them already, so a page that shows both doesn't count twice. ``include_setup=False``
     leaves out the set-up gaps (Home lists those in its own Setup section).
+
+    ``home``: Home's "Needs you". A live problem with one case names the person ("Follow-up
+    due · Samuel C.", opening that conversation), and an observation that started more than
+    FRESH_DAYS ago waits in the drawer ("See all") instead of the top three.
     """
     from apps.conversations import reporting
     from apps.insights.models import Insight
@@ -192,13 +267,29 @@ def attention(
                 status__in=[Insight.Status.NEW, Insight.Status.ACKNOWLEDGED],
             )
         )
-    items = _from_at_risk(account, at_risk, now) + _from_insights(insights)
+    items = _from_at_risk(account, at_risk, now, name_people=home) + _from_insights(
+        insights
+    )
     if not include_setup:
         items = [i for i in items if i.key not in SETUP]
     items.sort(key=lambda i: (i.rank, i.since or now))
+    top = items
+    if home:
+        from datetime import timedelta
+
+        cutoff = now - timedelta(days=FRESH_DAYS)
+        # Live problems are right now by definition; observations must be recent.
+        top = [
+            i
+            for i in items
+            if not i.key.startswith(("insight:", "family:"))
+            or not i.since
+            or i.since >= cutoff
+        ]
+    shown = top[:LIMIT]
     return {
-        "items": items[:LIMIT],
+        "items": shown,
         "all_items": items,
-        "more": max(0, len(items) - LIMIT),
+        "more": len(items) - len(shown),
         "total": len(items),
     }

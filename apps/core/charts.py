@@ -70,6 +70,9 @@ class Series:
     area: str = ""
     # Readings with a gap (or the edge) on both sides: a line can't show them, so they're dots.
     dots: list[Point] = field(default_factory=list)
+    # Faint dotted links across each gap, so a missing reading reads as "no data here", not
+    # as the line stopping (the tooltip says "No data" on the gap itself).
+    bridges: str = ""
 
     @property
     def last(self) -> Point | None:
@@ -132,6 +135,21 @@ def _path(points: list[Point]) -> str:
         if len(run) == 1:
             run = run * 2
         parts.append("M" + " L".join(f"{p.x},{p.y}" for p in run))
+    return " ".join(parts)
+
+
+def _bridges(points: list[Point]) -> str:
+    """A dotted segment from the last reading before each gap to the first one after it."""
+    parts = []
+    last = None
+    gap = False
+    for p in points:
+        if p.y is None:
+            gap = last is not None
+            continue
+        if gap and last is not None:
+            parts.append(f"M{last.x},{last.y} L{p.x},{p.y}")
+        last, gap = p, False
     return " ".join(parts)
 
 
@@ -305,6 +323,7 @@ def line_chart(
                 path=_path(points),
                 area=_area(points, height - pad) if len(series) == 1 else "",
                 dots=_isolated(points),
+                bridges=_bridges(points),
             )
         )
 

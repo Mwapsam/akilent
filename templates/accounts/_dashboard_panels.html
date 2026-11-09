@@ -1,178 +1,170 @@
-{% comment %}Everything below the work queue, loaded by HTMX after first paint.
+{% comment %}Everything below the Today figures, loaded by HTMX after first paint.
 
 Swapped in for the skeleton placeholder in dashboard.html. Deliberately has no
 hx-trigger of its own, so it loads exactly once.
 
-D5 (2026-11-08): sections, not cards. Each is a small heading over its content, separated
-by space; lists have hairline rows; an empty section is one muted line with its action.
-Only the recommendation is a card: it's one thing you act on or move past. "What needs you"
-is Insights' action list (apps.conversations.attention), shown only when there is something.
+Panels (2026-11-09 review, spec §20): one panel per module on the canvas, in two columns
+(2/3 + 1/3): Needs you beside This week, then Recent activity beside Coming up. Setup shows
+only when something needs setting up; the plan only when it needs action (a slim strip); the
+starting point is one muted line until there's a comparison to show.
 {% endcomment %}
-{% load static %}
-<div id="dashboard-panels" class="space-y-10 mt-10">
+{% load static insights_tags charts ui %}
+<div id="dashboard-panels" class="space-y-5 mt-5">
 
   {% include "billing/_usage_warnings.html" %}
 
-  {% comment %}The plan only when it needs something (billing_api.home_notice): no plan, a
-  payment that didn't go through, a renewal due but not through yet, a trial or a cancelled
-  plan ending soon, or a renewal within a week. Never "Active · renews" on a past date.{% endcomment %}
+  {% comment %}The plan only when it needs something (billing_api.home_notice), as a slim strip.
+  Never "Active · renews" on a past date.{% endcomment %}
   {% if plan_notice %}
-  <div class="alert {% if plan_notice.tone == 'warning' %}alert-warning{% else %}alert-info{% endif %} flex flex-wrap items-center justify-between gap-3" role="status" data-plan-notice>
-    <p class="text-sm">{{ plan_notice.text }}</p>
-    <a href="{{ plan_notice.href }}" class="btn btn-secondary btn-sm">{{ plan_notice.action }}</a>
+  <div class="panel-alert panel-alert--{% if plan_notice.tone == 'warning' %}warning{% else %}info{% endif %} !mx-0" role="status" data-plan-notice>
+    <span>{{ plan_notice.text }}</span>
+    <a href="{{ plan_notice.href }}" class="font-medium underline whitespace-nowrap">{{ plan_notice.action }}</a>
   </div>
   {% endif %}
 
-  {% if attention.items %}{% include "insights/_attention.html" %}{% endif %}
+  <div class="grid gap-5 lg:grid-cols-3 items-start">
+    <div class="lg:col-span-2 min-w-0 space-y-5">
+      {% include "insights/_attention.html" with home=True %}
 
-  {% if next_recommended %}
-  <div class="card card-pad flex flex-wrap items-center gap-4" data-testid="next-recommended">
-    <div class="flex-1 min-w-0">
-      <p class="metric-label">Get more out of Akilent</p>
-      <p class="mt-1 font-medium text-ink">{{ next_recommended.title }}</p>
-      <p class="text-sm text-ink-subtle mt-0.5">{{ next_recommended.desc }}</p>
-    </div>
-    <div class="flex items-center gap-2 shrink-0">
-      <a href="{{ next_recommended.url }}" class="btn btn-primary btn-sm">{{ next_recommended.cta }}</a>
-      <a href="{% url 'onboarding' %}" class="btn btn-ghost btn-sm">All suggestions</a>
-    </div>
-  </div>
-  {% endif %}
-
-  {% include "conversations/_starting_point.html" %}
-
-  {# ── Upcoming sends (2 cols) + Setup (1 col), per spec §12 ──────────── #}
-  <div class="grid gap-10 lg:grid-cols-3">
-
-    <section class="lg:col-span-2 min-w-0" aria-labelledby="dash-upcoming">
-      <div class="flex items-center justify-between mb-2">
-        <h2 id="dash-upcoming" class="text-sm font-semibold text-ink">Upcoming sends</h2>
-        {% if CAMPAIGNS_ENABLED %}<a href="/campaigns/?status=scheduled"
-           class="inline-flex items-center min-h-6 text-sm text-ink-subtle hover:text-ink">View all <span aria-hidden="true" class="ml-1">→</span></a>{% endif %}
+      {% if next_recommended %}
+      <div class="panel panel-pad flex flex-wrap items-center gap-4" data-testid="next-recommended">
+        <div class="flex-1 min-w-0">
+          <p class="text-xs font-medium uppercase tracking-wide text-ink-subtle">Get more out of Akilent</p>
+          <p class="mt-1 font-medium text-ink">{{ next_recommended.title }}</p>
+          <p class="text-sm text-ink-subtle mt-0.5">{{ next_recommended.desc }}</p>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <a href="{{ next_recommended.url }}" class="btn btn-primary btn-sm">{{ next_recommended.cta }}</a>
+          <a href="{% url 'onboarding' %}" class="btn btn-ghost btn-sm">All suggestions</a>
+        </div>
       </div>
-      {% if upcoming_sends %}
-        <ul class="divide-y divide-border border-t border-border">
-          {% for s in upcoming_sends %}
-          <li class="py-3 flex items-start gap-3">
-            {% comment %}
-              Stacks under sm: a fixed-width time column beside a truncating
-              label does not fit a 360px screen.
-            {% endcomment %}
-            <div class="min-w-0 flex-1 sm:flex sm:items-center sm:gap-3">
-              <span class="block text-xs sm:text-sm text-ink-subtle tabular-nums sm:w-40 sm:shrink-0">
-                {{ s.when|date:"D M j, H:i" }}
-              </span>
-              <span class="block text-sm font-medium text-ink truncate sm:flex-1">{{ s.label }}</span>
-            </div>
-            {% include "components/channel_tag.html" with channel=s.channel %}
-          </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        {% if "email" in enabled_channels %}
-        {% include "components/empty_state.html" with line=True title="Nothing scheduled" action_url="/email/campaigns/new/" action_label="Schedule a send" %}
-        {% else %}
-        {% include "components/empty_state.html" with line=True title="Nothing scheduled" %}
-        {% endif %}
       {% endif %}
-    </section>
+    </div>
 
-    <section class="min-w-0" aria-labelledby="dash-setup">
-      <h2 id="dash-setup" class="text-sm font-semibold text-ink mb-2">Setup</h2>
-      {% if attention_items %}
+    {# ── This week: four numbers with a trend line each, the same rules as Insights ── #}
+    <section class="panel min-w-0" aria-labelledby="dash-week" data-dash="this-week">
+      <div class="panel-head">
+        <h2 id="dash-week" class="panel-title">This week</h2>
+        <a href="{% url 'insights' %}?period=7" class="inline-flex items-center min-h-6 text-sm text-ink-subtle hover:text-ink">Insights <span aria-hidden="true" class="ml-1">→</span></a>
+      </div>
+      <div class="panel-body panel-body--flush">
         <ul class="divide-y divide-border border-t border-border">
-          {% for a in attention_items %}
+          {% for f in this_week.items %}
           <li>
-            <a href="{{ a.url }}" class="flex items-start gap-2 py-2.5 text-sm text-ink-muted hover:text-ink">
-              <span class="mt-1.5 w-1.5 h-1.5 rounded-full bg-highlight shrink-0" aria-hidden="true"></span>
-              <span>{{ a.text }}</span>
+            <a href="{{ f.href }}" class="flex items-center gap-3 px-5 sm:px-6 py-2.5 hover:bg-[var(--color-secondary-bg)]">
+              <span class="flex-1 min-w-0 text-sm text-ink-subtle">{{ f.label }}</span>
+              {% if f.spark %}<span class="w-16 shrink-0">{% sparkline f.spark label=f.label|add:" over the last 7 days" %}</span>{% endif %}
+              <span class="w-14 text-right text-sm font-semibold text-ink tabular-nums">{% if f.kind == "duration" %}{{ f.value|duration }}{% else %}{{ f.value }}{% endif %}</span>
             </a>
           </li>
           {% endfor %}
         </ul>
-      {% else %}
-        <p class="empty-line">All clear. Nothing to configure.</p>
-      {% endif %}
+      </div>
     </section>
   </div>
 
-  {# ── Chatbot ───────────────────────────────────────────────────────── #}
-  {% if not released.chatbot %}
-  {% elif chatbots %}
-  <section aria-labelledby="dash-widgets">
-    <div class="flex items-center justify-between mb-2">
-      <div class="flex items-center gap-2">
-        <h2 id="dash-widgets" class="text-sm font-semibold text-ink">Chat widgets</h2>
-        <span class="text-xs text-ink-subtle tabular-nums">{{ chatbot_sessions_month }} sessions · 30 days</span>
+  <div class="grid gap-5 lg:grid-cols-3 items-start">
+    {# ── Recent activity: what actually happened ─────────────────────────── #}
+    <section class="panel lg:col-span-2 min-w-0" aria-labelledby="dash-activity" data-dash="activity">
+      <div class="panel-head">
+        <h2 id="dash-activity" class="panel-title">Recent activity</h2>
       </div>
-      <a href="{% url 'chatbot:create' %}" class="btn btn-ghost btn-sm">
-        {% include "components/icon.html" with name="plus" class="w-4 h-4" %}
-        New
-      </a>
-    </div>
-    <ul class="divide-y divide-border border-t border-border">
-      {% for bot in chatbots %}
-      <li class="py-3 flex items-center gap-3">
-        <span class="w-1.5 h-1.5 rounded-full shrink-0 {% if bot.is_active %}bg-teal-500{% else %}bg-gray-300{% endif %}"></span>
-        <span class="flex-1 min-w-0">
-          <a href="{% url 'chatbot:detail' bot.pk %}" class="text-sm font-medium text-ink hover:underline truncate block min-h-6 leading-6">
-            {{ bot.name }}
-          </a>
-          <span class="text-xs text-ink-muted">{{ bot.get_purpose_display }}</span>
-        </span>
-        <a href="{% url 'chatbot:analytics' bot.pk %}" class="inline-flex items-center min-h-6 text-xs text-ink-muted hover:text-ink shrink-0" aria-label="{{ bot.name }} analytics">Analytics</a>
-      </li>
-      {% endfor %}
-    </ul>
-  </section>
-  {% else %}
-  <section aria-labelledby="dash-widgets">
-    <h2 id="dash-widgets" class="text-sm font-semibold text-ink mb-2">Chat widgets</h2>
-    <p class="empty-line">No chat widgets yet · <a href="{% url 'chatbot:create' %}">Add one to your website <span aria-hidden="true">→</span></a></p>
-  </section>
-  {% endif %}
+      {% if activity %}
+      <div class="panel-body panel-body--flush">
+        <ul class="divide-y divide-border border-t border-border">
+          {% for a in activity %}
+          <li>
+            <a href="{{ a.url }}" class="flex items-center gap-3 px-5 sm:px-6 py-2.5 hover:bg-[var(--color-secondary-bg)]">
+              <span class="text-ink-subtle shrink-0">{% include "components/icon.html" with name=a.icon class="w-4 h-4" %}</span>
+              <span class="flex-1 min-w-0 truncate text-sm text-ink">{{ a.text }}</span>
+              <span class="shrink-0 text-xs text-ink-subtle">{% when a.when %}</span>
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% else %}
+      <div class="panel-body"><p class="empty-line">Nothing in the last two weeks yet. New chats, leads, paid orders, posts and campaigns show here.</p></div>
+      {% endif %}
+    </section>
 
-  {# ── Email stats (secondary; "Scheduled" lives in the panel above) ──── #}
-  {% if "email" in enabled_channels %}
-  <section aria-label="Email this month" class="grid grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-6">
-    {% include "components/stat_card.html" with label="Messages sent" value=sent_month icon="send" tone="brand" sub="this month" %}
-    {% include "components/stat_card.html" with label="Success rate" value=success_rate_display icon="check-circle" tone="success" sub=failed_sub %}
-    {% include "components/stat_card.html" with label="Verified domains" value=domains_verified icon="globe" tone="brand" sub=domains_sub %}
-  </section>
-  {% endif %}
-
-  {% comment %}Email sends: only what it is. It was "Recent activity", which read as wrong
-  ("No messages sent yet") beside conversations and replies.{% endcomment %}
-  {% if "email" in enabled_channels %}
-  <section aria-labelledby="dash-sends">
-    <div class="flex items-center justify-between mb-2">
-      <h2 id="dash-sends" class="text-sm font-semibold text-ink">Recent email sends</h2>
-      <a href="/logs/messages/" class="inline-flex items-center min-h-6 text-sm text-ink-subtle hover:text-ink">Email log <span aria-hidden="true" class="ml-1">→</span></a>
-    </div>
-    {% if recent_sends %}
-      <div class="table-scroll border-t border-border">
-        <table class="table table--cards">
-          <thead>
-            <tr><th>Recipient</th><th>Subject</th><th>Status</th><th class="text-right">When</th></tr>
-          </thead>
-          <tbody>
-            {% for m in recent_sends %}
-            <tr>
-              <td data-label="Recipient" class="font-medium text-ink">{{ m.to_email }}</td>
-              <td data-label="Subject" class="text-ink-subtle">{{ m.subject|default:"—"|truncatechars:40 }}</td>
-              <td data-label="Status">
-                {% include "components/status.html" with state=m.status badge=True %}
-              </td>
-              <td data-label="When" class="text-ink-subtle text-right tabular-nums">{{ m.created_at|date:"M j, H:i" }}</td>
-            </tr>
+    <div class="min-w-0 space-y-5">
+      {# ── Coming up: scheduled sends and posts together ───────────────────── #}
+      <section class="panel" aria-labelledby="dash-upcoming" data-dash="coming-up">
+        <div class="panel-head">
+          <h2 id="dash-upcoming" class="panel-title">Coming up</h2>
+        </div>
+        {% if coming_up %}
+        <div class="panel-body panel-body--flush">
+          <ul class="divide-y divide-border border-t border-border">
+            {% for s in coming_up %}
+            <li class="px-5 sm:px-6 py-2.5 flex items-start gap-3">
+              <div class="min-w-0 flex-1">
+                <span class="block text-xs text-ink-subtle tabular-nums">{{ s.when|date:"D j M, H:i" }}</span>
+                {% if s.url %}<a href="{{ s.url }}" class="block text-sm font-medium text-ink truncate hover:underline">{{ s.label }}</a>{% else %}<span class="block text-sm font-medium text-ink truncate">{{ s.label }}</span>{% endif %}
+              </div>
+              {% include "components/channel_tag.html" with channel=s.channel compact=True %}
+            </li>
             {% endfor %}
-          </tbody>
-        </table>
-      </div>
+          </ul>
+        </div>
+        {% else %}
+        <div class="panel-body">
+          <p class="empty-line">Nothing scheduled.{% if "content_studio" in usable_features %} <a href="{% url 'publishing:post-new' %}" class="underline">Schedule a post</a>{% endif %}{% if "email" in enabled_channels %}{% if "content_studio" in usable_features %} or{% endif %} <a href="/email/campaigns/new/" class="underline">a send</a>{% endif %}</p>
+        </div>
+        {% endif %}
+      </section>
+
+      {% if attention_items %}
+      <section class="panel" aria-labelledby="dash-setup">
+        <div class="panel-head"><h2 id="dash-setup" class="panel-title">Setup</h2></div>
+        <div class="panel-body panel-body--flush">
+          <ul class="divide-y divide-border border-t border-border">
+            {% for a in attention_items %}
+            <li>
+              <a href="{{ a.url }}" class="flex items-start gap-2 px-5 sm:px-6 py-2.5 text-sm text-ink-muted hover:text-ink">
+                <span class="mt-1.5 w-1.5 h-1.5 rounded-full bg-highlight shrink-0" aria-hidden="true"></span>
+                <span>{{ a.text }}</span>
+              </a>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </section>
+      {% endif %}
+
+      {% if released.chatbot and chatbots %}
+      <section class="panel" aria-labelledby="dash-widgets">
+        <div class="panel-head">
+          <h2 id="dash-widgets" class="panel-title">Chat widgets</h2>
+          <span class="text-xs text-ink-subtle tabular-nums">{{ chatbot_sessions_month }} sessions · 30 days</span>
+        </div>
+        <div class="panel-body panel-body--flush">
+          <ul class="divide-y divide-border border-t border-border">
+            {% for bot in chatbots %}
+            <li class="px-5 sm:px-6 py-2.5 flex items-center gap-3">
+              <span class="w-1.5 h-1.5 rounded-full shrink-0 {% if bot.is_active %}bg-teal-500{% else %}bg-gray-300{% endif %}"></span>
+              <a href="{% url 'chatbot:detail' bot.pk %}" class="flex-1 min-w-0 text-sm font-medium text-ink hover:underline truncate">{{ bot.name }}</a>
+              <a href="{% url 'chatbot:analytics' bot.pk %}" class="text-xs text-ink-muted hover:text-ink shrink-0" aria-label="{{ bot.name }} analytics">Analytics</a>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </section>
+      {% endif %}
+    </div>
+  </div>
+
+  {% comment %}Your starting point: one muted line while it's measuring or waiting for the
+  month-later week, and a comparison panel once there's something to compare.{% endcomment %}
+  {% if starting_point %}
+    {% if starting_point.state == "measuring" %}
+    <p class="text-sm text-ink-subtle" data-dash="starting-point">Measuring your first week on WhatsApp: day {{ starting_point.day }} of 7. Your baseline is ready on {{ starting_point.ready_on|date:"j M" }}.</p>
+    {% elif starting_point.state == "starting" %}
+    <p class="text-sm text-ink-subtle" data-dash="starting-point">Baseline captured from your first week · compare on {{ starting_point.compare_on|date:"j M" }} <a href="{% url 'insights' %}" class="underline hover:text-ink">Insights <span aria-hidden="true">→</span></a></p>
     {% else %}
-      {% include "components/empty_state.html" with line=True title="No emails sent yet" %}
+    <div class="panel panel-pad" data-dash="starting-point">{% include "conversations/_starting_point.html" %}</div>
     {% endif %}
-  </section>
   {% endif %}
 
 </div>

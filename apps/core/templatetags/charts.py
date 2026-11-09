@@ -56,6 +56,33 @@ def line_chart(series, labels, title="", unit="", height=200, baseline_at_zero=T
     }
 
 
+@register.inclusion_tag("components/charts/_bar_chart.html")
+def bar_chart(values, labels, title="", unit="Week", value_label="Count"):
+    """Counts per period as bars: one series, no legend (the title names it), a value on
+    each bar, and the table view. For counts only; a rate or a median stays a line."""
+    numbers = [float(v or 0) for v in values]
+    labels = [str(x) for x in labels]
+    if len(numbers) != len(labels):
+        raise ValueError("bar_chart needs one label per value")
+    top = max(numbers, default=0.0)
+    bars = [
+        {
+            "label": label,
+            "value": value,
+            "shown": int(value) if value == int(value) else round(value, 2),
+            "pct": round(value / top * 100, 1) if top else 0.0,
+        }
+        for label, value in zip(labels, numbers)
+    ]
+    return {
+        "bars": bars,
+        "title": title,
+        "unit": unit,
+        "value_label": value_label,
+        "has_data": bool(bars),
+    }
+
+
 @register.inclusion_tag("components/charts/_sparkline.html")
 def sparkline(values, label=""):
     """Trend shape beside a number. No axes, no hover, no legend.

@@ -1,0 +1,25 @@
+{% comment %}The header's controls: the period, when the figures were read, and Refresh. In the
+page header, and sent again (hx-swap-oob) with every quiet refresh of the body, so "Updated" and
+the period stay true. The hidden tab follows the open tab (insights/_tab.html swaps it out of
+band), so a new period keeps the tab you're on; the body's own refresh reads this form too.{% endcomment %}
+<div id="insights-controls" class="flex items-center gap-3"{% if oob %} hx-swap-oob="true"{% endif %}>
+  <p class="hidden sm:block text-xs text-ink-subtle" data-insights="as-of">Updated {% now "H:i" %}</p>
+  <button type="button" class="btn btn-ghost btn-sm" hx-get="{% url 'insights' %}" hx-include="#insights-period"
+          hx-target="#insights-body" hx-swap="outerHTML" aria-label="Refresh the figures" title="Refresh">
+    {% include "components/icon.html" with name="refresh" class="w-4 h-4" %}<span class="sm:hidden">Refresh</span>
+  </button>
+  <form id="insights-period" method="get" action="{% url 'insights' %}" class="flex items-center gap-2"
+        x-data="{ busy: false }" @submit="busy = true">
+    {% include "insights/_tab_input.html" %}
+    <label class="sr-only" for="period">Period</label>
+    <select id="period" name="period" class="select" onchange="this.form.requestSubmit()"
+            :disabled="busy">
+      {% for choice in period_choices %}
+        <option value="{{ choice }}" {% if choice == days %}selected{% endif %}>
+          Last {{ choice }} days{% if choice == 90 and period_locked %} (upgrade){% endif %}
+        </option>
+      {% endfor %}
+    </select>
+    <noscript><button type="submit" class="btn btn-secondary btn-sm">Show</button></noscript>
+  </form>
+</div>

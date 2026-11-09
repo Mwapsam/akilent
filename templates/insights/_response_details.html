@@ -1,0 +1,39 @@
+{% comment %}Response tab, below the chart: the busiest time, and the team.{% endcomment %}
+{% load insights_tags charts %}
+{% if peak_hours.enough %}
+<section class="panel" aria-labelledby="peak-h">
+  <div class="panel-head">
+    <div>
+      <h2 id="peak-h" class="panel-title">Busiest time: {{ peak_hours.start_hour|hour12 }}–{{ peak_hours.end_hour|hour12 }}</h2>
+      <p class="panel-desc">{{ peak_hours.share_pct }}% of new enquiries arrive then.{% if peak_hours.closed_share_pct %} {{ peak_hours.closed_share_pct }}% of those arrive while you're closed.{% endif %}</p>
+    </div>
+  </div>
+  <div class="panel-body">{% line_chart peak_series peak_labels unit="Hour" %}</div>
+</section>
+{% endif %}
+
+{% if team %}
+<section class="panel" aria-labelledby="team-h">
+  <div class="panel-head"><h2 id="team-h" class="panel-title">Team</h2></div>
+  <div class="panel-body panel-body--flush">
+    <div class="table-scroll border-t border-border">
+      <table class="table table--cards">
+        <caption class="sr-only">Team performance, by who owns the conversation</caption>
+        <thead>
+          <tr><th>Team member</th><th>Conversations</th><th>Waiting now</th><th>Median first reply</th></tr>
+        </thead>
+        <tbody>
+          {% for row in team %}
+          <tr>
+            <td data-label="Team member">{{ row.name }}</td>
+            <td data-label="Conversations">{{ row.conversations }}</td>
+            <td data-label="Waiting now">{{ row.waiting }}</td>
+            <td data-label="Median first reply">{{ row.median_first_reply_seconds|duration }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% endif %}

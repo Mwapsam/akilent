@@ -1,21 +1,25 @@
 {% comment %}
 What needs you: at most three one-line items (apps.conversations.attention), on Insights and on
-Home. Live counts and observations in one list, nothing said twice; each says when the issue
-started where that's known. A dot marks the kind: coral is customers waiting too long,
-highlight is something to do, none is set-up. "N more" (and a merged line's "See them") opens
-the whole list in a drawer (insights_attention), from Insights and from Home alike. An
-observation's action is a POST: it records that you acted on it.
+Home, in one panel. Live counts and observations in one list, nothing said twice; each says when
+the issue started where that's known. A dot marks the kind: coral is customers waiting too long,
+highlight is something to do, none is set-up. "See all" / "N more" (and a merged line's "See
+them") opens the whole list in a drawer (insights_attention). An observation's action is a POST:
+it records that you acted on it.
+
+``home``: Home's version ("Needs you"): a single case names the person, and observations older
+than two weeks wait behind "See all" (attention(home=True)).
 {% endcomment %}
 {% load ui %}
-<section aria-labelledby="attention-h" data-insights="attention">
-  <div class="flex items-center justify-between gap-3 mb-2">
-    <h2 id="attention-h" class="text-sm font-semibold text-ink">What needs you <span class="font-normal text-ink-subtle">· right now</span></h2>
-    {% if attention.more %}<a href="{% url 'insights-attention' %}" data-overlay-open="drawer" class="inline-flex items-center min-h-6 text-sm text-ink-subtle hover:text-ink">{{ attention.more }} more <span aria-hidden="true" class="ml-1">→</span></a>{% endif %}
+<section class="panel" aria-labelledby="attention-h" data-insights="attention">
+  <div class="panel-head">
+    <h2 id="attention-h" class="panel-title">{% if home %}Needs you{% else %}What needs you <span class="font-normal text-ink-subtle">· right now</span>{% endif %}</h2>
+    {% if attention.more %}<a href="{% url 'insights-attention' %}" data-overlay-open="drawer" class="inline-flex items-center min-h-6 text-sm text-ink-subtle hover:text-ink">{% if home %}See all{% else %}{{ attention.more }} more{% endif %} <span aria-hidden="true" class="ml-1">→</span></a>{% endif %}
   </div>
   {% if attention.items %}
+  <div class="panel-body panel-body--flush">
   <ul class="divide-y divide-border border-t border-border">
     {% for item in attention.items %}
-    <li class="flex items-center gap-3 py-2.5" data-attention="{{ item.key }}">
+    <li class="flex items-center gap-3 px-5 sm:px-6 py-2.5" data-attention="{{ item.key }}">
       <span class="w-1.5 h-1.5 rounded-full shrink-0 {% if item.tone == 'coral' %}bg-coral-500{% elif item.tone == 'highlight' %}bg-highlight{% else %}bg-transparent{% endif %}" aria-hidden="true"></span>
       <p class="flex-1 min-w-0 text-sm text-ink">
         <span class="sm:truncate">{{ item.text }}</span>
@@ -36,7 +40,8 @@ observation's action is a POST: it records that you acted on it.
     </li>
     {% endfor %}
   </ul>
+  </div>
   {% else %}
-  <p class="empty-line">Nothing needs you right now.</p>
+  <div class="panel-body"><p class="empty-line">Nothing needs you right now.</p></div>
   {% endif %}
 </section>

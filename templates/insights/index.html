@@ -2,11 +2,14 @@
 {% block title %}Insights — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
-<header class="mb-6 flex items-start justify-between flex-wrap gap-3">
+{% comment %}One header row (2026-11-09 review): the title on the left; the period, when the
+figures were read and Refresh on the right (insights/_controls.html, refreshed with the body).{% endcomment %}
+<header class="mb-5 flex items-start justify-between flex-wrap gap-3">
   <div>
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Insights</h1>
     <p class="mt-1 text-sm text-ink-muted">What Akilent is doing for your business.</p>
   </div>
+  {% include "insights/_controls.html" %}
 </header>
 
 {% include "insights/_body.html" %}

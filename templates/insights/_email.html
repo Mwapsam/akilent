@@ -5,9 +5,9 @@ detailed-analytics feature — same flag as ``has_history`` above, named for thi
 context dict).
 {% endcomment %}
 {% load charts %}
-<section class="space-y-4" aria-labelledby="email-h">
-  <div class="border-b border-border flex items-center justify-between flex-wrap gap-3 pb-2">
-    <h2 id="email-h" class="text-lg font-semibold text-ink">Email</h2>
+<section class="panel" aria-labelledby="email-h">
+  <div class="panel-head">
+    <h2 id="email-h" class="panel-title">Email</h2>
     {% if has_analytics and domains %}
     <form method="get" class="flex items-center gap-2">
       {% if request.GET.period %}<input type="hidden" name="period" value="{{ request.GET.period }}">{% endif %}<input type="hidden" name="tab" value="content">
@@ -20,9 +20,10 @@ context dict).
     </form>
     {% endif %}
   </div>
+  <div class="panel-body">
 
   {% if not has_analytics %}
-    <div class="card card-pad text-center max-w-lg mx-auto">
+    <div class="text-center max-w-lg mx-auto">
       <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl tone-brand">
         {% include "components/icon.html" with name="sparkles" class="w-6 h-6" %}
       </span>
@@ -127,4 +128,5 @@ context dict).
       {% endif %}
     </div>
   {% endif %}
+  </div>
 </section>

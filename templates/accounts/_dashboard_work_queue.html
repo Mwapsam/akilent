@@ -13,12 +13,21 @@ The poll is gated on document visibility — a backgrounded tab stops asking.
 
   {% with waiting=customers_waiting_count missed=missed_count leads=new_leads_count due=followups_due_count %}
 
+  {% if not waiting and not missed %}
+  {% comment %}Nothing waiting and nothing missed: one figure says so, instead of two big 0s
+  leading the page.{% endcomment %}
+  <a href="/inbox/" class="work-tile work-tile--done col-span-2" data-tile="caught-up"
+     aria-label="All caught up: no customers waiting and none missed — open the inbox">
+    <span class="work-tile-value">{% include "components/icon.html" with name="check-circle" class="w-5 h-5" %}All caught up</span>
+    <span class="work-tile-label">Waiting · missed</span>
+  </a>
+  {% else %}
   <a href="/inbox/?view=needs_attention"
      class="work-tile{% if waiting %} work-tile--active{% endif %}"
      aria-label="{{ waiting }} customer{{ waiting|pluralize }} waiting for you — open the inbox">
     {% include "components/icon.html" with name="message-circle" class="w-5 h-5 shrink-0" %}
     <span class="work-tile-value">{{ waiting }}</span>
-    <span class="work-tile-label">customer{{ waiting|pluralize }} waiting</span>
+    <span class="work-tile-label">Waiting</span>
   </a>
 
   <a href="/inbox/?view=missed"
@@ -26,15 +35,16 @@ The poll is gated on document visibility — a backgrounded tab stops asking.
      aria-label="{{ missed }} missed conversation{{ missed|pluralize }} — open the inbox">
     {% include "components/icon.html" with name="alert" class="w-5 h-5 shrink-0" %}
     <span class="work-tile-value">{{ missed }}</span>
-    <span class="work-tile-label">missed conversation{{ missed|pluralize }}</span>
+    <span class="work-tile-label">Missed</span>
   </a>
+  {% endif %}
 
   <a href="/sales/"
      class="work-tile{% if leads %} work-tile--active{% endif %}"
      aria-label="{{ leads }} new lead{{ leads|pluralize }} — open sales">
     {% include "components/icon.html" with name="building" class="w-5 h-5 shrink-0" %}
     <span class="work-tile-value">{{ leads }}</span>
-    <span class="work-tile-label">new lead{{ leads|pluralize }}</span>
+    <span class="work-tile-label">New leads</span>
   </a>
 
   {% comment %}Customers with a follow-up due for anyone, like the other tiles count the whole
@@ -44,16 +54,9 @@ The poll is gated on document visibility — a backgrounded tab stops asking.
      aria-label="{{ due }} follow-up{{ due|pluralize }} due for the whole team — open follow-ups" data-tile="followups">
     {% include "components/icon.html" with name="bell" class="w-5 h-5 shrink-0" %}
     <span class="work-tile-value">{{ due }}</span>
-    <span class="work-tile-label">follow-up{{ due|pluralize }} due</span>
+    <span class="work-tile-label">Follow-ups due</span>
     <span class="work-tile-note">whole team</span>
   </a>
-
-  {% if not waiting and not missed and not leads and not due %}
-    <p class="col-span-2 lg:col-span-4 flex items-center gap-2 text-sm text-ink-subtle mt-1">
-      {% include "components/icon.html" with name="check-circle" class="w-4 h-4 text-teal-500" %}
-      Nothing waiting. You're on top of it.
-    </p>
-  {% endif %}
 
   {% endwith %}
 </div>

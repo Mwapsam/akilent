@@ -5,11 +5,15 @@ apps.publishing.results.journey. A step that can't be measured yet is None and r
 comment replies), per the messaging truth rule.
 {% endcomment %}
 {% load charts %}
-<section class="space-y-4" aria-labelledby="journey-h">
-  <h2 id="journey-h" class="text-lg font-semibold text-ink">Your customer journey</h2>
-  <p class="text-sm text-ink-muted">From the posts you publish to the orders customers pay.</p>
+<section class="panel" aria-labelledby="journey-h">
+  <div class="panel-head">
+    <div>
+      <h2 id="journey-h" class="panel-title">Your customer journey</h2>
+      <p class="panel-desc">From the posts you publish to the orders customers pay. <a href="{% url 'help-article' 'post-results' %}" class="underline" title="Counted only when a customer used a post's chat link or a reply to a comment on it, and the lead or order was made from that chat. A chat Akilent only guessed at is never credited to a post, so these are the least your posts brought in.">How it's counted <span aria-hidden="true">ⓘ</span></a></p>
+    </div>
+  </div>
 
-  <div class="space-y-5">
+  <div class="panel-body space-y-5">
     <p class="text-sm text-ink-muted"><a href="{% url 'publishing:index' %}" class="font-medium text-ink hover:underline tabular-nums">{{ journey.posts }} post{{ journey.posts|pluralize }}</a> published{% if journey.clicks is not None %}, <span class="tabular-nums">{{ journey.clicks }}</span> chat-link click{{ journey.clicks|pluralize }}{% endif %}{% if journey.revenue %}; {% for r in journey.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %} and {% endif %}{% endfor %} paid from posts{% elif journey.revenue is None %}; money paid from posts: not tracked yet{% endif %}.</p>
     {% funnel journey_steps label="People who started a chat from a post, and how far they got" %}
 
@@ -34,24 +38,24 @@ comment replies), per the messaging truth rule.
     {% endif %}
     {% if journey.chats is not None %}
     <div class="border-t border-border pt-4" data-journey="not-from-posts">
-      <h3 class="text-sm font-semibold text-ink">Not credited to a post</h3>
-      <p class="text-xs text-ink-subtle mt-0.5">Still your customers and your sales, just without proof that a post brought them in.</p>
-      <dl class="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-        <div>
-          <dt class="text-ink-subtle">New chats not from a post</dt>
-          <dd class="font-medium text-ink tabular-nums">{{ journey.untracked_chats }}</dd>
+      <h3 class="text-sm font-semibold text-ink" title="Still your customers and your sales, just without proof that a post brought them in.">Not credited to a post</h3>
+      <div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-x-8 gap-y-4">
+        <div class="metric">
+          <p class="metric-label">New chats</p>
+          <p class="metric-value">{{ journey.untracked_chats }}</p>
+          <p class="metric-note">Not from a post</p>
         </div>
-        <div>
-          <dt class="text-ink-subtle">Paid, linked to a recent chat (a guess)</dt>
-          <dd class="font-medium text-ink tabular-nums">{% for r in journey.guessed_revenue %}{{ r.currency }} {{ r.total|floatformat:2 }} ({{ r.orders }} order{{ r.orders|pluralize }}){% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}</dd>
+        <div class="metric">
+          <p class="metric-label">Paid, a guess</p>
+          <p class="metric-value">{% for r in journey.guessed_revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}<br>{% endif %}{% empty %}0{% endfor %}</p>
+          <p class="metric-note">Linked to a recent chat</p>
         </div>
-        <div>
-          <dt class="text-ink-subtle">Paid, not from a tracked post</dt>
-          <dd class="font-medium text-ink tabular-nums">{% for r in journey.untracked_revenue %}{{ r.currency }} {{ r.total|floatformat:2 }} ({{ r.orders }} order{{ r.orders|pluralize }}){% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}</dd>
+        <div class="metric">
+          <p class="metric-label">Paid, not from a post</p>
+          <p class="metric-value">{% for r in journey.untracked_revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}<br>{% endif %}{% empty %}0{% endfor %}</p>
         </div>
-      </dl>
+      </div>
     </div>
     {% endif %}
-    <p class="text-xs text-ink-subtle">Counted only when a customer used a post's chat link or a reply to a comment on it, and the lead or order was made from that chat (by your team or an automation). A chat Akilent only guessed at is never credited to a post. So these are the least your posts brought in. <a href="{% url 'help-article' 'post-results' %}" class="underline">How it's counted</a></p>
   </div>
 </section>

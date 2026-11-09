@@ -25,7 +25,7 @@ card around a bordered list. Durations use the one format (reporting.duration).
   {% endwith %}
 
   {% else %}
-  <h2 id="sp-h" class="text-sm font-semibold text-ink">Since your first week</h2>
+  <h2 id="sp-h" class="panel-title">Since your first week</h2>
   {% if starting_point.fewer_unanswered %}
   <p class="text-sm text-ink"><strong class="font-medium text-ink tabular-nums">{{ starting_point.fewer_unanswered }} fewer enquir{{ starting_point.fewer_unanswered|pluralize:"y,ies" }} went unanswered</strong> than in your first week.</p>
   {% endif %}

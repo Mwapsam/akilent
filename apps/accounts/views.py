@@ -1304,15 +1304,21 @@ def dashboard_panels(request):
     if ob.get_state(account, essentials_only=True, request=request)["complete"]:
         next_recommended = ob.get_state(account, request=request)["next_recommended"]
 
+    from apps.accounts import home
     from apps.conversations.attention import attention
 
+    upcoming = _upcoming_sends(account)
     return render(
         request,
         "accounts/_dashboard_panels.html",
         {
             "account": account,
-            # Insights' "What needs you", the same three lines (set-up gaps are in Setup).
-            "attention": attention(account, include_setup=False),
+            # Insights' "What needs you" in Home's form: a single case names the person and
+            # old observations wait behind "See all" (set-up gaps are in Setup).
+            "attention": attention(account, include_setup=False, home=True),
+            "this_week": home.this_week(account),
+            "activity": home.recent_activity(account),
+            "coming_up": home.coming_up(account, upcoming["upcoming_sends"]),
             "subscription": subscription,
             "plan_notice": billing_api.home_notice(subscription),
             "usage_warnings": billing_api.usage_warnings(account),
@@ -1322,7 +1328,7 @@ def dashboard_panels(request):
                 account, stats, numbers, email_domains, subscription
             ),
             **stats,
-            **_upcoming_sends(account),
+            **upcoming,
             **_chatbot_summary(account),
         },
     )

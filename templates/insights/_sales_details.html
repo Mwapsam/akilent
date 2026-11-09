@@ -1,0 +1,17 @@
+{% comment %}Sales tab, below the chart: the funnel (people, only ever narrowing:
+reporting.narrowing).{% endcomment %}
+{% load charts %}
+<section class="panel" aria-labelledby="funnel-h">
+  <div class="panel-head">
+    <div>
+      <h2 id="funnel-h" class="panel-title">From conversation to sale</h2>
+      <p class="panel-desc">People who wrote in, and how far they got.</p>
+    </div>
+  </div>
+  <div class="panel-body">
+    {% funnel sales_funnel label="People who wrote in, and how far they got" %}
+    {% if sales.named or sales.recent %}
+    <p class="text-xs text-ink-subtle">Of paid orders credited to a conversation: {{ sales.named }} named it explicitly, {{ sales.recent }} used the customer's most recent chat.</p>
+    {% endif %}
+  </div>
+</section>

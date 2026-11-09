@@ -156,11 +156,12 @@ def test_every_populated_branch_renders(client, account):
         resp = client.get(f"/insights/?period=90&tab={tab}")
         assert resp.status_code == 200
         body += resp.content.decode()
-    assert "Your busiest time is" in body
-    assert "out-of-hours customers reached" in body
+    assert "Busiest time:" in body
+    assert "Out of hours reached" in body
     assert "Greeter" in body  # per-workflow sales table
     assert "AI suggestions used" in body
     assert "Team member" in body
     # Channel performance table renders (plan has detailed_analytics), not the upgrade teaser.
     assert "Channel performance is available on higher plans" not in body
-    assert "Median first reply, in minutes" in body  # the Response tab's chart
+    # The Response tab's chart panel: a chart, or when it will appear (chart rules).
+    assert "data-insights-chart" in body

@@ -1,0 +1,41 @@
+{% comment %}The open Insights tab: a segmented control (a sub-view, held under the top bar while
+you scroll), then panels. Response, Sales and Automation put the tab's chart (2/3) beside the
+tab's own figures (1/3), with no figure the headline already shows, then their tables. Content is
+the post journey and email.
+
+Switching tabs asks for this region alone (hx-target="#insights-tab"; the view works out only
+the tab) and pushes the URL; the hidden tab field in the header's period form follows it out of
+band, so a new period or a refresh keeps the tab.{% endcomment %}
+<nav class="insights-tabs" aria-label="Insights sections">
+  <div class="seg" role="list">
+    {% for key, label in tabs %}
+    <a href="?period={{ days }}&amp;tab={{ key }}" class="seg-btn" role="listitem"
+       hx-get="?period={{ days }}&amp;tab={{ key }}" hx-target="#insights-tab" hx-swap="innerHTML" hx-push-url="true"
+       {% if key == tab %}aria-current="page"{% endif %} data-insights-tab="{{ key }}">{{ label }}</a>
+    {% endfor %}
+  </div>
+</nav>
+
+<div class="space-y-5" data-insights-panel="{{ tab }}">
+  {% if tab == "content" %}
+    {% if journey %}{% include "insights/_journey.html" %}{% endif %}
+    {% if "email" in enabled_channels %}{% include "insights/_email.html" %}{% endif %}
+    {% if not journey and "email" not in enabled_channels %}
+    <div class="panel panel-pad"><p class="empty-line">Nothing to show yet. Results from your posts appear here once you publish from <a href="{% url 'publishing:index' %}">Content Studio <span aria-hidden="true">→</span></a></p></div>
+    {% endif %}
+  {% else %}
+  <div class="grid gap-5 lg:grid-cols-3 items-start">
+    <div class="lg:col-span-2 min-w-0">{% include "insights/_tab_chart.html" %}</div>
+    <div class="min-w-0">
+      {% if tab == "response" %}{% include "insights/_response.html" %}
+      {% elif tab == "sales" %}{% include "insights/_sales.html" %}
+      {% else %}{% include "insights/_automation.html" %}{% endif %}
+    </div>
+  </div>
+  {% if tab == "response" %}{% include "insights/_response_details.html" %}
+  {% elif tab == "sales" %}{% include "insights/_sales_details.html" %}{% include "insights/_channels.html" %}
+  {% else %}{% include "insights/_automation_details.html" %}{% endif %}
+  {% endif %}
+</div>
+
+{% if tab_swap %}{% include "insights/_tab_input.html" with oob_tab=True %}{% endif %}

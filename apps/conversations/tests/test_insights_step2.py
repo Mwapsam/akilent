@@ -150,6 +150,6 @@ def test_home_shows_what_needs_you_without_the_setup_gaps(shop):
     client, account = shop
     _enquiry(account, NOW - timedelta(hours=2))  # waiting
     panels = client.get("/dashboard/panels/", HTTP_HX_REQUEST="true").content.decode()
-    assert "What needs you" in panels and 'data-attention="waiting"' in panels
+    assert ">Needs you</h2>" in panels and 'data-attention="waiting"' in panels
     assert 'data-attention="hours"' not in panels
     assert 'data-attention="automations"' not in panels

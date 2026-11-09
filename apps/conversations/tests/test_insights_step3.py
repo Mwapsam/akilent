@@ -101,7 +101,12 @@ def test_each_chart_has_one_unit_and_matching_columns(shop):
 
 def test_a_tab_with_two_metrics_has_a_switcher_and_one_without_has_none(shop):
     client, account = shop
+    # Chart rules (2026-11-09): a chart needs readings in four weeks; one enquiry isn't a trend.
     _enquiry(account, NOW - timedelta(days=2), timedelta(minutes=3))
+    page = client.get("/insights/?tab=response").content.decode()
+    assert "Chart appears after a few more weeks of data." in page
+    for days_ago in (9, 16, 23):
+        _enquiry(account, NOW - timedelta(days=days_ago), timedelta(minutes=3))
     page = client.get("/insights/?tab=response").content.decode()
     chart = page[page.index("data-insights-chart") :]
     assert "chartSwitch('response', ['reply', 'answered'])" in chart

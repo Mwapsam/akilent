@@ -1169,8 +1169,13 @@ def headline(
         },
         "sentence": oxford_join(parts),
         "active": bool(rows or replied or paid_now or leads_now),
+        "conversations": len(rows),
     }
 
+
+# Below this many conversations in the period, Insights shows one "Early days" line instead of
+# a caveat under every figure: rates and trends from a handful mean little.
+EARLY_CONVERSATIONS = 20
 
 # ---- charts: the chosen period, day by day (week by week for 90 days) -----------------------
 
@@ -1183,6 +1188,7 @@ def trend(
     rows: list[dict] | None = None,
     *,
     now: datetime | None = None,
+    weekly: bool | None = None,
 ) -> dict:
     """The period in buckets, for each Insights tab's chart, in the business's time zone.
 
@@ -1201,7 +1207,9 @@ def trend(
     now = now or timezone.now()
     rows = first_replies(account, period.start, period.end) if rows is None else rows
     zone = business_zone(account)
-    weekly = period.days > WEEKLY_AFTER_DAYS
+    # ``weekly`` from the caller (Insights draws weekly bars for anything longer than a
+    # week: daily points over 30 days were mostly empty), else weeks only past a month.
+    weekly = period.days > WEEKLY_AFTER_DAYS if weekly is None else weekly
     first_day = timezone.localtime(period.start, zone).date()
     last_day = timezone.localtime(period.end - timedelta(microseconds=1), zone).date()
 
@@ -1272,6 +1280,8 @@ def trend(
         "unit": "Week" if weekly else "Day",
         "labels": [label(d) for d in starts],
         "reply_minutes": [round(median(w) / 60, 1) if w else None for w in waits],
+        # Seconds too, so a chart of replies under a minute isn't "0.1 minutes".
+        "reply_seconds": [round(median(w)) if w else None for w in waits],
         "answered": answered,
         "missed": missed,
         "leads": leads,

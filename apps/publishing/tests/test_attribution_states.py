@@ -258,7 +258,7 @@ def test_insights_shows_what_is_not_credited_to_a_post(world):
     html = world.client.get("/insights/?tab=content").content.decode()
 
     assert 'data-journey="not-from-posts"' in html
-    assert "ZMW 60.00 (1 order)" in html
+    assert "ZMW 60.00" in html and "Paid, a guess" in html
 
 
 def test_another_workspaces_attribution_never_leaks(world):

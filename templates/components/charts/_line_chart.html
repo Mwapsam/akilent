@@ -15,6 +15,8 @@ that ends on screen is also labelled at its own line end.{% endcomment %}
         {% if title %}aria-label="{{ title }}"{% endif %}>
   {% if title %}<figcaption class="chart-title">{{ title }}</figcaption>{% endif %}
 
+  {% comment %}A legend only for two or more series: one series is named by the title.{% endcomment %}
+  {% if chart.series|length > 1 %}
   <div class="chart-legend">
     {% for s in chart.series %}
     <span class="chart-legend-item">
@@ -23,6 +25,7 @@ that ends on screen is also labelled at its own line end.{% endcomment %}
     </span>
     {% endfor %}
   </div>
+  {% endif %}
 
   <div class="chart-plot">
     <svg viewBox="0 0 {{ chart.width }} {{ chart.height }}" class="chart-svg"
@@ -43,6 +46,11 @@ that ends on screen is also labelled at its own line end.{% endcomment %}
         <path d="{{ s.path }}" fill="none" stroke="var(--chart-series-{{ forloop.counter }})"
               stroke-width="2" stroke-linejoin="round" stroke-linecap="round"
               vector-effect="non-scaling-stroke" />
+        {% if s.bridges %}
+        <path d="{{ s.bridges }}" fill="none" stroke="var(--chart-series-{{ forloop.counter }})"
+              stroke-width="1.5" stroke-dasharray="2 5" stroke-linecap="round" opacity="0.5"
+              vector-effect="non-scaling-stroke" data-chart-gap />
+        {% endif %}
         {% comment %}A reading cut off by gaps on both sides. A zero-length stroke with a round cap
         and a non-scaling width stays a true circle however far the plot is stretched; an SVG
         circle would squash into an ellipse.{% endcomment %}
@@ -140,7 +148,7 @@ that ends on screen is also labelled at its own line end.{% endcomment %}
   reader, a printout and anyone who cannot separate the two hues reads the same
   numbers.{% endcomment %}
   <details class="chart-table">
-    <summary>View as table</summary>
+    <summary class="btn btn-ghost btn-sm">View as table</summary>
     <div class="table-scroll">
       <table class="table">
         <thead>

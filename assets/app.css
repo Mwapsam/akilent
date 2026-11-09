@@ -1320,6 +1320,14 @@
   }
   .seg-btn:hover { color: var(--color-ink); }
   .seg-btn[aria-pressed="true"] { background-color: var(--color-surface); color: var(--color-ink); box-shadow: 0 0 0 1px var(--color-border); }
+  .seg-btn[aria-current="page"] { background-color: var(--color-surface); color: var(--color-ink); box-shadow: 0 0 0 1px var(--color-border); }
+  /* Insights' inner tabs: a segmented control (a sub-view, not navigation), held under the
+     top bar while the tab's panels scroll. */
+  .insights-tabs { @apply sticky z-10 py-2 -my-2; top: calc(4rem + var(--safe-top, 0px)); background-color: var(--color-canvas); }
+  .insights-tabs .seg-btn { @apply px-3 py-1.5 text-sm; }
+  /* Figures stacked in a narrow panel: the headline's style (label above a tabular number,
+     at most one short line under it). */
+  .metric-stack { @apply flex flex-col gap-5; }
 
   /* Funnel bars (components/charts/_funnel.html): label, then a bar against the first step
      with its number beside it. One hue; 4px rounded data end; recessive track. */
@@ -1364,8 +1372,18 @@
   .chart-tooltip-value { @apply ml-auto font-medium text-ink; }
 
   .chart-table { @apply mt-3 text-sm; }
-  .chart-table summary { @apply cursor-pointer text-xs; color: var(--color-ink-subtle); }
-  .chart-table summary:hover { color: var(--color-ink); }
+  /* "View as table" is a quiet button, not a native disclosure triangle. */
+  .chart-table > summary { @apply cursor-pointer -ml-2; list-style: none; }
+  .chart-table > summary::-webkit-details-marker { display: none; }
+  /* Weekly bars ({% bar_chart %}): one series of counts, the bar's height its share of the
+     tallest; each bar names its week and value on hover and focus. */
+  .bars-plot { @apply flex items-end gap-2 h-40 pt-2; border-bottom: 1px solid var(--color-border); }
+  .bars-col { @apply relative flex-1 h-full flex flex-col justify-end items-center min-w-0; }
+  .bars-bar { @apply w-full max-w-12 rounded-t; min-height: 2px; background-color: var(--chart-series-1); }
+  .bars-col[data-zero] .bars-bar { background-color: var(--color-border); }
+  .bars-value { @apply text-xs tabular-nums mb-1; color: var(--color-ink-subtle); }
+  .bars-x { @apply flex gap-2 mt-1.5; }
+  .bars-x > span { @apply flex-1 text-center text-xs truncate min-w-0; color: var(--color-ink-subtle); }
   .chart-table[open] summary { @apply mb-2; }
 
   /* Sparkline: shape only, sized to sit on a line of text. */
@@ -1558,6 +1576,12 @@
     background: var(--color-highlight);
   }
   .work-tile--warn .work-tile-label::before { background: var(--color-coral-500) !important; }
+  /* Clickable: an arrow comes in on hover and focus, with the tint above. */
+  .work-tile-label::after { content: "→"; margin-left: .25rem; opacity: 0; transition: opacity 120ms; }
+  .work-tile:is(:hover, :focus-visible) .work-tile-label::after { opacity: 1; }
+  /* Nothing waiting and nothing missed: one quiet figure, so the eye goes to what isn't 0. */
+  .work-tile--done .work-tile-value { @apply inline-flex items-center gap-2 text-base font-semibold; line-height: 2.25rem; letter-spacing: 0; }
+  .work-tile--done .work-tile-value svg { color: var(--color-teal-500); }
 
   /* Section that carries the page's primary answer. Slightly lifted off the
      canvas so it out-ranks the cards below it without shouting. */
