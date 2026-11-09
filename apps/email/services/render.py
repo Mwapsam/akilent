@@ -43,6 +43,15 @@ def _account_components(template) -> dict:
     }
 
 
+def account_defaults(template) -> dict:
+    """Account-level blanks any template may use, filled when the send doesn't pass them:
+    ``company_name``. The starter templates use it and no send path passed it, so a welcome
+    email went out as "Welcome to , !". A value the send passes wins."""
+    if not getattr(template, "account_id", None):
+        return {}
+    return {"company_name": template.account.company_name or ""}
+
+
 def _resolve_locale_source(template, locale: str | None):
     """Return (subject, text, html) sources for `locale`, per-field falling back
     to the base template. Unknown/blank locale -> the base template unchanged."""
@@ -76,7 +85,7 @@ def render_template(
     matching ``EmailTemplateLocale`` exists, its content is used, per-field
     falling back to the base template.
     """
-    variables = {**(variables or {})}
+    variables = {**account_defaults(template), **(variables or {})}
     variables.setdefault("_components", _account_components(template))
     if getattr(template, "pk", None) is not None:
         from apps.email.services.datafetch import resolve_data_sources
@@ -141,7 +150,7 @@ def validate_variables(template, variables: dict | None = None) -> list[str]:
     `template` that don't resolve against `variables` (nested dicts are
     walked, so `{{ contact.first_name }}` is only satisfied by a
     `{"contact": {"first_name": ...}}` shape, not merely a `contact` key)."""
-    variables = variables or {}
+    variables = {**account_defaults(template), **(variables or {})}
     referenced: set[str] = set()
     for source in (template.subject, template.text_body, template.html_body):
         referenced |= find_variable_paths(source)

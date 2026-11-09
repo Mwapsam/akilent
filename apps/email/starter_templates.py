@@ -17,7 +17,8 @@ STARTER_TEMPLATES: list[dict] = [
     {
         "slug": "welcome-email",
         "name": "Welcome email",
-        "subject": "Welcome to {{ company_name }}, {{ first_name }}!",
+        # The name only when the contact has one: never "Welcome to Acme, !".
+        "subject": "Welcome to {{ company_name }}{% if first_name %}, {{ first_name }}{% endif %}!",
         "text_body": (
             "Hi {{ first_name }},\n\n"
             "Welcome to {{ company_name }}! We're glad to have you on board.\n\n"

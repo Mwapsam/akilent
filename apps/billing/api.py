@@ -1068,3 +1068,71 @@ def home_notice(subscription, now=None) -> dict | None:
             "href": plans,
         }
     return None
+
+
+def plan_status(subscription, now=None) -> dict | None:
+    """The plan's state as Settings › Plan & usage shows it: ``{"label", "tone", "line"}``,
+    tone one of success/info/warning/danger/neutral. The same rules as ``home_notice``, so the
+    two never disagree: an active plan whose period has ended reads "Renewal pending", never
+    "Active · Renews <a date already past>"."""
+    from django.utils import timezone
+
+    from apps.billing.models import Subscription
+
+    if subscription is None:
+        return None
+    now = now or timezone.now()
+    end = subscription.current_period_end
+    name = subscription.plan.name
+
+    def day(when) -> str:
+        local = timezone.localtime(when)
+        return f"{local.day} {local:%b} {local.year}"
+
+    status = subscription.status
+    if status == Subscription.PAST_DUE:
+        return {
+            "label": "Payment failed",
+            "tone": "danger",
+            "line": "Your renewal didn't go through. Pay to keep your features.",
+        }
+    if status == Subscription.INCOMPLETE:
+        return {
+            "label": "Payment needed",
+            "tone": "warning",
+            "line": f"Pay to switch on {name}.",
+        }
+    if status == Subscription.TRIALING:
+        trial_end = subscription.trial_ends_at or end
+        if trial_end and trial_end <= now:
+            return {
+                "label": "Trial ended",
+                "tone": "warning",
+                "line": f"Your trial ended {day(trial_end)}.",
+            }
+        return {
+            "label": "Trial",
+            "tone": "info",
+            "line": f"Trial ends {day(trial_end)}." if trial_end else "Free trial.",
+        }
+    if status == Subscription.ACTIVE:
+        if not end:
+            return {"label": "Active", "tone": "success", "line": ""}
+        if subscription.cancel_at_period_end:
+            return {
+                "label": "Ending",
+                "tone": "warning",
+                "line": f"Ends {day(end)} · won't renew.",
+            }
+        if end <= now:
+            return {
+                "label": "Renewal pending",
+                "tone": "warning",
+                "line": f"Renewal was due {day(end)} and hasn't gone through yet.",
+            }
+        return {"label": "Active", "tone": "success", "line": f"Renews {day(end)}."}
+    return {
+        "label": subscription.get_status_display(),
+        "tone": "danger" if status == Subscription.EXPIRED else "neutral",
+        "line": "",
+    }

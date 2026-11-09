@@ -1,56 +1,64 @@
 {% extends "accounts/settings_base.html" %}
 {% block title %}Activity log — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
+{% comment %}
+Activity log (Settings panels, 2026-11-09): one panel. The filters sit in its header row and
+apply as you type or pick (no Filter button; a visually hidden submit keeps Enter and no-script
+working). Rows lead with who and what, the status and when; the message's ID lives on its
+detail page, not in the list. The results half (logs/_messages_results.html) is swapped on
+filter and paging, and hx-push-url keeps a filtered log linkable.
+{% endcomment %}
 {% block settings_content %}
-<header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
-  <div class="min-w-0">
-    <h2 class="text-lg font-semibold text-ink">Activity log</h2>
-    <p class="mt-1 text-sm text-ink-muted">Every message, its delivery timeline, and the exact payload we sent.</p>
-  </div>
-  <a href="/logs/requests/" class="btn btn-secondary btn-sm">API request logs</a>
-</header>
-
 {% if show_quickstart and "email" in enabled_channels %}
-<div class="alert alert-info mb-6"
+<section class="panel" aria-labelledby="first-send-h"
      x-data="{ poll() { setTimeout(() => location.reload(), 15000) } }" x-init="poll()">
-  {% include "components/icon.html" with name="sparkles" %}
-  <div class="min-w-0">
-    <p class="font-medium text-ink">Send your first email</p>
-    <p class="mt-1">Grab a key from <a href="/email/domains/" class="underline">Domains &amp; API keys</a>, then run this.
-      Use an <code>ak_test_</code> key with <code>delivered@sandbox.akilent.test</code> to try it without a verified domain.</p>
-    <pre class="mt-3 text-xs bg-surface border border-border rounded-lg p-3 overflow-x-auto">curl https://akilent.com/api/v1/messages \
+  <div class="panel-head">
+    <div>
+      <h2 id="first-send-h" class="panel-title">Send your first email</h2>
+      <p class="panel-desc">Grab a key from <a href="/email/domains/" class="underline">Domains &amp; API keys</a>, then run this. An <code>ak_test_</code> key to <code>delivered@sandbox.akilent.test</code> works without a verified domain.</p>
+    </div>
+  </div>
+  <div class="panel-body">
+    <pre class="text-xs bg-surface-muted border border-border rounded-lg p-3 overflow-x-auto">curl https://akilent.com/api/v1/messages \
   -H "Authorization: Bearer $AKILENT_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"from":"you@yourdomain.com","to":"delivered@sandbox.akilent.test","subject":"Hello","text":"It works."}'</pre>
-    <p class="text-xs mt-2">Waiting for your first send… this page refreshes automatically.</p>
+    <p class="text-xs text-ink-subtle">Waiting for your first send. This page refreshes on its own.</p>
   </div>
-</div>
+</section>
 {% endif %}
 
-{% comment %}
-  Filtering swaps the results instead of reloading. hx-push-url keeps a
-  filtered log linkable and the back button working. The plain GET form
-  underneath still works with HTMX switched off.
-{% endcomment %}
-<form method="get"
-      hx-get="/logs/messages/"
-      hx-target="#message-results"
-      hx-swap="outerHTML"
-      hx-push-url="true"
-      hx-indicator="#message-results"
-      hx-trigger="submit, input from:find input[type=search] delay:400ms, change from:find select"
-      class="flex flex-wrap items-center gap-2 mb-4">
-  <input type="search" name="q" value="{{ q }}" placeholder="Recipient email…"
-         class="input w-full sm:w-64" aria-label="Search by recipient" />
-  <select name="status" class="select w-full sm:w-44" aria-label="Filter by status">
-    <option value="">Any status</option>
-    {% for value, label in status_choices %}
-      <option value="{{ value }}" {% if value == status %}selected{% endif %}>{{ label }}</option>
-    {% endfor %}
-  </select>
-  <button class="btn btn-primary btn-sm">Filter</button>
-  {% if q or status %}<a href="/logs/messages/" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
-</form>
-
-{% include "logs/_messages_results.html" %}
+<section class="panel" aria-labelledby="activity-h">
+  <div class="panel-head">
+    <div>
+      <h2 id="activity-h" class="panel-title">Activity log</h2>
+      <p class="panel-desc">Every email sent, and what happened to it.</p>
+    </div>
+    <div class="panel-actions">
+      <a href="/logs/requests/" class="btn btn-ghost btn-sm">API requests</a>
+    </div>
+  </div>
+  <div class="panel-body">
+    <form method="get"
+          hx-get="/logs/messages/"
+          hx-target="#message-results"
+          hx-swap="outerHTML"
+          hx-push-url="true"
+          hx-indicator="#message-results"
+          hx-trigger="submit, input from:find input[type=search] delay:400ms, change from:find select"
+          class="flex flex-wrap items-center gap-2" data-activity-filters>
+      <input type="search" name="q" value="{{ q }}" placeholder="Search by recipient"
+             class="input w-full sm:flex-1 sm:min-w-0" aria-label="Search by recipient" />
+      <select name="status" class="select w-full sm:w-44" aria-label="Status">
+        <option value="">Any status</option>
+        {% for value, label in status_choices %}
+          <option value="{{ value }}" {% if value == status %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="sr-only">Search</button>
+      {% if q or status %}<a href="/logs/messages/" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
+    </form>
+  </div>
+  {% include "logs/_messages_results.html" %}
+</section>
 {% endblock %}

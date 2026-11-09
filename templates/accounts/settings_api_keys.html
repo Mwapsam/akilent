@@ -1,6 +1,8 @@
 {% extends "accounts/settings_base.html" %}
+{% comment %}API keys (Settings panels, 2026-11-09): the keys as hairline rows, then "Create a key"
+in the Settings pattern (title and description on top, Create in the footer).{% endcomment %}
+{% load ui %}
 {% block settings_content %}
-<div class="flex flex-col gap-5">
 
   {% if new_key %}
   <div class="panel panel-pad" style="border-color: var(--tone-amber-border)" role="status">
@@ -16,7 +18,7 @@
     <div class="panel-head">
       <div>
         <h2 class="panel-title">API keys</h2>
-        <p class="panel-desc">Give each website or app its own key, so you can revoke one without breaking the others.</p>
+        <p class="panel-desc">One key per website or app, so revoking one breaks nothing else.{% if not can_edit %} Only an owner or admin can create or revoke keys.{% endif %}</p>
       </div>
     </div>
 
@@ -35,7 +37,7 @@
           <p class="text-xs text-ink-subtle">{{ k.scope_labels|join:" · " }}</p>
           <p class="text-xs text-ink-subtle">
             Created {{ k.created_at|date:"j M Y" }}
-            · {% if k.last_used_at %}last used {{ k.last_used_at|timesince }} ago{% else %}never used{% endif %}
+            · {% if k.last_used_at %}last used {% when k.last_used_at %}{% else %}never used{% endif %}
             {% if k.expires_at and not k.is_expired %}· expires {{ k.expires_at|date:"j M Y" }}{% endif %}
           </p>
         </div>
@@ -53,15 +55,21 @@
     </ul>
     </div>
     {% else %}
-    <div class="panel-body"><p class="text-sm text-ink-subtle">Your business doesn't have an API key yet.</p></div>
+    <div class="panel-body"><p class="empty-line">No API keys yet.</p></div>
     {% endif %}
   </div>
 
   {% if can_edit %}
-  <div class="panel panel-pad">
-    <h2 class="panel-title mb-4">Create a key</h2>
-    <form method="post" class="space-y-4">
+  <section class="panel" aria-labelledby="create-key-h">
+    <div class="panel-head">
+      <div>
+        <h2 id="create-key-h" class="panel-title">Create a key</h2>
+        <p class="panel-desc">Send it in the <code>X-Api-Key</code> header. <a href="{% url 'docs-page' 'authentication' %}" class="underline">API docs</a></p>
+      </div>
+    </div>
+    <form method="post">
       {% csrf_token %}
+      <div class="panel-body">
       <div>
         <label class="label" for="id_name">Name</label>
         <input id="id_name" name="name" maxlength="100" required class="input" placeholder="e.g. Online shop">
@@ -98,11 +106,12 @@
         </div>
       </div>
 
-      <button class="btn btn-primary" type="submit">Create key</button>
+      </div>
+      <div class="panel-foot">
+        <span>You see the key once, right after you create it.</span>
+        <button class="btn btn-primary btn-sm" type="submit">Create key</button>
+      </div>
     </form>
-  </div>
-  {% else %}
-  <p class="text-sm text-ink-subtle">Only an owner or admin can create or revoke API keys.</p>
+  </section>
   {% endif %}
-</div>
 {% endblock %}

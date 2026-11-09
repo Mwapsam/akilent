@@ -1,43 +1,72 @@
 {% extends "accounts/settings_base.html" %}
 {% block settings_content %}
 
-<p class="text-sm">{% include "components/help_link.html" with slug="team" text="Read the team management guide" %}</p>
-
+{% comment %}
+Team (Settings panels, 2026-11-09): invite in a panel whose footer holds Send invite; the guide
+link in its description (as on Security); the role as two picked cards with what each can do,
+not a bare dropdown. Members and pending invitations are panels with hairline rows.
+{% endcomment %}
 {% if can_manage %}
-<section class="settings-section">
-  <div>
-    <h2 class="settings-section-title">Invite a teammate</h2>
-    <p class="settings-section-desc">Admins can also manage the team. Invites expire in 7 days.</p>
+<section class="panel" aria-labelledby="invite-h">
+  <div class="panel-head">
+    <div>
+      <h2 id="invite-h" class="panel-title">Invite a teammate</h2>
+      <p class="panel-desc">Invites expire in 7 days. {% include "components/help_link.html" with slug="team" text="Team guide" %}</p>
+    </div>
   </div>
-  <div class="settings-section-body">
-  <form method="post" action="{% url 'invite-create' %}" class="flex flex-wrap gap-3">
+  <form method="post" action="{% url 'invite-create' %}">
     {% csrf_token %}
-    <label class="sr-only" for="id_invite_email">Email</label>
-    <input id="id_invite_email" name="email" type="email" required
-           placeholder="teammate@company.com" class="input flex-1 min-w-[16rem]">
-    <label class="sr-only" for="id_invite_role">Role</label>
-    <select id="id_invite_role" name="role" class="input sm:w-40">
-      <option value="member">Member</option>
-      <option value="admin">Admin</option>
-    </select>
-    <button class="btn btn-primary" type="submit">
-      {% include "components/icon.html" with name="plus" class="w-4 h-4" %} Send invite
-    </button>
+    <div class="panel-body">
+      <div>
+        <label class="label" for="id_invite_email">Email</label>
+        <input id="id_invite_email" name="email" type="email" required autocomplete="off"
+               placeholder="teammate@company.com" class="input w-full">
+      </div>
+      <fieldset>
+        <legend class="label">Role</legend>
+        <div class="grid gap-2 sm:grid-cols-2" data-invite-role>
+          <label class="choice-card px-4 py-3 flex items-start gap-3">
+            <input type="radio" name="role" value="member" class="sr-only" checked>
+            <span class="min-w-0 flex-1">
+              <span class="block font-medium text-ink">Member</span>
+              <span class="block text-xs text-ink-subtle">Answers chats, works leads and orders.</span>
+            </span>
+            <span class="choice-card-mark" aria-hidden="true"><svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></span>
+          </label>
+          <label class="choice-card px-4 py-3 flex items-start gap-3">
+            <input type="radio" name="role" value="admin" class="sr-only">
+            <span class="min-w-0 flex-1">
+              <span class="block font-medium text-ink">Admin</span>
+              <span class="block text-xs text-ink-subtle">Also manages the team and settings.</span>
+            </span>
+            <span class="choice-card-mark" aria-hidden="true"><svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></span>
+          </label>
+        </div>
+      </fieldset>
+    </div>
+    <div class="panel-foot">
+      <span>They get an email with a link to join.</span>
+      <button class="btn btn-primary btn-sm" type="submit">Send invite</button>
+    </div>
   </form>
-  </div>
 </section>
 {% else %}
-<div class="panel panel-pad text-sm text-ink-subtle">
-  Only workspace owners and admins can invite or manage teammates.
-</div>
+<section class="panel" aria-labelledby="invite-h">
+  <div class="panel-head">
+    <div>
+      <h2 id="invite-h" class="panel-title">Invite a teammate</h2>
+      <p class="panel-desc">Only owners and admins can invite or manage teammates. {% include "components/help_link.html" with slug="team" text="Team guide" %}</p>
+    </div>
+  </div>
+</section>
 {% endif %}
 
-{# Members #}
-<div class="panel">
-  <div class="px-5 sm:px-6 py-4 border-b border-border">
-    <h2 class="panel-title">Members <span class="text-sm font-normal text-ink-subtle">({{ members|length }})</span></h2>
+<section class="panel" aria-labelledby="members-h">
+  <div class="panel-head">
+    <h2 id="members-h" class="panel-title">Members <span class="text-sm font-normal text-ink-subtle">{{ members|length }}</span></h2>
   </div>
-  <div class="table-wrap">
+  <div class="panel-body panel-body--flush">
+  <div class="table-scroll border-t border-border">
     <table class="table table--cards">
       <thead><tr>
         <th>User</th><th>Role</th>{% if can_manage %}<th class="text-right">Actions</th>{% endif %}
@@ -85,15 +114,16 @@
       </tbody>
     </table>
   </div>
-</div>
-
-{# Pending invitations #}
-{% if invitations %}
-<div class="panel">
-  <div class="px-5 sm:px-6 py-4 border-b border-border">
-    <h2 class="panel-title">Pending invitations</h2>
   </div>
-  <div class="table-wrap">
+</section>
+
+{% if invitations %}
+<section class="panel" aria-labelledby="invites-h">
+  <div class="panel-head">
+    <h2 id="invites-h" class="panel-title">Pending invitations</h2>
+  </div>
+  <div class="panel-body panel-body--flush">
+  <div class="table-scroll border-t border-border">
     <table class="table table--cards">
       <thead><tr>
         <th>Email</th><th>Role</th><th>Sent</th>{% if can_manage %}<th class="text-right">Actions</th>{% endif %}
@@ -121,7 +151,8 @@
       </tbody>
     </table>
   </div>
-</div>
+  </div>
+</section>
 {% endif %}
 
 {% endblock %}

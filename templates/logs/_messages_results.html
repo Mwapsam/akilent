@@ -1,44 +1,43 @@
 {% comment %}The results half of the activity log: swapped on filter and paging.
 
-Returned on its own for HX-Request. The outer div is the swap target and
-re-renders itself, so it carries its own id.
+Returned on its own for HX-Request. The outer div is the swap target and re-renders itself, so it
+carries its own id. Inside the Activity log panel: hairline rows to the panel's edges, each
+leading with the recipient and subject (the link to the message's timeline), then status and
+when ({% when %}: "5 min ago" / "8 Nov, 13:29" in the workspace's time zone).
 {% endcomment %}
-<div id="message-results">
+{% load ui %}
+<div id="message-results" class="border-t border-border">
   {% if page %}
-  <div class="table-wrap">
+  <div class="table-scroll">
     <table class="table table--cards">
+      <caption class="sr-only">Emails sent, newest first</caption>
       <thead>
-        <tr><th>Message</th><th>To</th><th>Subject</th><th>Status</th><th>Created</th></tr>
+        <tr><th>Email</th><th>Status</th><th class="text-right">Sent</th></tr>
       </thead>
       <tbody>
         {% for m in page %}
         <tr>
-          <td data-label="Message" class="font-mono text-xs">
-            <a href="/logs/messages/{{ m.public_id }}/" class="text-accent hover:text-accent-strong">{{ m.public_id }}</a>
+          <td data-label="Email" class="min-w-0">
+            <a href="/logs/messages/{{ m.public_id }}/" class="font-medium text-ink hover:underline break-all">{{ m.to_email }}</a>
+            <span class="block text-xs text-ink-subtle truncate max-w-md">{{ m.subject|default:"No subject" }}</span>
           </td>
-          <td data-label="To" class="font-medium text-ink">{{ m.to_email }}</td>
-          <td data-label="Subject" class="max-w-xs truncate text-ink-subtle">{{ m.subject|default:"—" }}</td>
           <td data-label="Status">
             {% if m.status == 'sent' %}{% include "components/status.html" with state="sent" badge=True %}
             {% elif m.status == 'failed' or m.status == 'bounced' %}{% include "components/status.html" with state="failed" badge=True %}
             {% elif m.status == 'queued' or m.status == 'sending' %}{% include "components/status.html" with state="sending" badge=True %}
             {% else %}<span class="badge badge-neutral">{{ m.get_status_display }}</span>{% endif %}
           </td>
-          <td data-label="Created" class="text-ink-subtle tabular-nums">{{ m.created_at|date:"Y-m-d H:i:s" }}</td>
+          <td data-label="Sent" class="text-ink-subtle tabular-nums md:text-right whitespace-nowrap">{% when m.created_at %}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
   {% elif q or status %}
-  <div class="table-wrap">
-    {% include "components/empty_state.html" with icon="search" title="No messages match those filters" message="Try a different recipient or status, or clear the filters to see everything." action_url="/logs/messages/" action_label="Clear filters" %}
-  </div>
+    {% include "components/empty_state.html" with icon="search" title="No emails match" message="Try a different recipient or status." action_url="/logs/messages/" action_label="Clear filters" %}
   {% else %}
-  <div class="table-wrap">
-    {% include "components/empty_state.html" with icon="list" title="No messages yet" message="Once you send email, every message shows up here with its full delivery history." %}
-  </div>
+    {% include "components/empty_state.html" with icon="list" title="No emails yet" message="Every email you send shows up here with what happened to it." %}
   {% endif %}
 
-  {% include "components/pagination.html" with page=page target="#message-results" %}
+  {% if page.has_other_pages %}<div class="px-5 pb-4 sm:px-6">{% include "components/pagination.html" with page=page target="#message-results" %}</div>{% endif %}
 </div>

@@ -21,7 +21,7 @@ def owner_client(db, client):
 def test_settings_is_one_column_of_panels_with_plan_and_usage(owner_client):
     page = owner_client.get("/settings/").content.decode()
     assert 'class="settings-main settings-main--panels"' in page
-    assert 'href="/billing/plans/" class="settings-nav-link">Plan &amp; usage' in page
+    assert 'href="/billing/plans/" class="settings-nav-link" >Plan &amp; usage' in page
     css = (settings.BASE_DIR / "assets" / "app.css").read_text(encoding="utf-8")
     assert ".settings-main--panels { max-width: 45rem;" in css
 

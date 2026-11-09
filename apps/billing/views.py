@@ -108,6 +108,9 @@ def pricing_page(request):
             "payment_methods": checkout_options() if site.payments_enabled else [],
             "credit": credit.summary(account),
             "renewal_note": _renewal_note(account, subscription),
+            # One status, the same rules as Home's billing line (billing_api.plan_status).
+            "plan_status": billing_api.plan_status(subscription),
+            "active_tab": "plan",  # the Settings tab: Plan & usage
             "billing_periods": Subscription.BILLING_PERIOD_CHOICES,
             "period_pricing_json": json.dumps(period_pricing),
         },

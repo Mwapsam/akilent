@@ -692,6 +692,18 @@
     color: var(--color-accent);
   }
   .choice-card[aria-checked="true"] .choice-card-tag { display: inline; }
+  /* The same card around a native radio (label.choice-card > input.sr-only), picked without
+     scripts: Team's role picker. */
+  .choice-card:has(> input:checked) {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 1px var(--color-accent);
+    background-color: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
+  }
+  .choice-card:has(> input:checked) .choice-card-mark {
+    border-color: var(--color-accent); background-color: var(--color-accent); color: var(--color-surface);
+  }
+  .choice-card:has(> input:focus-visible) { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }
+  label.choice-card { cursor: pointer; }
   /* A channel outside the trial: still clickable (it opens every plan), but quieter. */
   .choice-card[aria-disabled="true"] { border-style: dashed; background-color: transparent; }
   /* The billing-term pills scroll sideways on a phone instead of wrapping onto rows. */
@@ -1000,7 +1012,11 @@
   }
   .panel-head { @apply flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-5 pt-5 sm:px-6; }
   .panel-head:last-child { @apply pb-5; } /* a panel that's only a title row and an action */
-  .panel-head + .panel-body, .panel-head + .panel-alert { @apply pt-4; }
+  .panel-head + .panel-body { @apply pt-4; }
+  .panel-head + .panel-alert { @apply mt-4; }
+  /* A footer straight under the header or a slim alert (no body between): the body's gap. */
+  .panel-head + .panel-foot, .panel-alert + .panel-foot { @apply mt-5; }
+  .panel > .panel-alert:last-child { @apply mb-5; }
   .panel-title { @apply text-base font-semibold; color: var(--color-ink); }
   .panel-desc { @apply mt-0.5 text-sm; color: var(--color-ink-subtle); }
   .panel-actions { @apply flex shrink-0 items-center gap-2; }

@@ -71,7 +71,7 @@ def test_message_log_distinguishes_no_results_from_no_data(logged_in, two_messag
     filtered = client.get(
         "/logs/messages/?q=nobody", HTTP_HX_REQUEST="true"
     ).content.decode()
-    assert "No messages match those filters" in filtered
+    assert "No emails match" in filtered
     assert "Clear filters" in filtered
 
 
@@ -79,7 +79,7 @@ def test_message_log_distinguishes_no_results_from_no_data(logged_in, two_messag
 def test_message_log_empty_account_keeps_its_own_empty_state(logged_in):
     client, _ = logged_in
     body = client.get("/logs/messages/", HTTP_HX_REQUEST="true").content.decode()
-    assert "No messages yet" in body
+    assert "No emails yet" in body
 
 
 # --- API request log ------------------------------------------------------

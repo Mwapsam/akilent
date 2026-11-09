@@ -19,7 +19,7 @@ between tabs. At phone width the list folds into "Settings · Profile".
 <div class="settings-layout">
   <nav class="settings-nav" aria-label="Settings">
     <details class="settings-nav-fold" x-data x-init="if (window.matchMedia('(min-width: 768px)').matches) $el.open = true">
-      <summary class="settings-nav-summary">Settings · <span class="text-ink">{% if t == 'profile' %}Profile{% elif t == 'security' %}Security{% elif t == 'business' %}Business{% elif t == 'team' %}Team{% elif t == 'hours' %}Opening hours{% elif t == 'ai' %}AI{% elif t == 'tools' %}Optional tools{% elif t == 'integrations' %}Integrations{% elif t == 'api_keys' %}API keys{% elif t == 'activity' %}Activity log{% endif %}</span></summary>
+      <summary class="settings-nav-summary">Settings · <span class="text-ink">{% if t == 'profile' %}Profile{% elif t == 'security' %}Security{% elif t == 'business' %}Business{% elif t == 'team' %}Team{% elif t == 'hours' %}Opening hours{% elif t == 'ai' %}AI{% elif t == 'tools' %}Optional tools{% elif t == 'integrations' %}Integrations{% elif t == 'api_keys' %}API keys{% elif t == 'activity' %}Activity log{% elif t == 'plan' %}Plan &amp; usage{% endif %}</span></summary>
       <div class="settings-nav-groups">
         <p class="settings-nav-group">Account</p>
         <a href="{% url 'settings-profile' %}" class="settings-nav-link" {% if t == 'profile' %}aria-current="page"{% endif %}>Profile</a>
@@ -32,7 +32,7 @@ between tabs. At phone width the list folds into "Settings · Profile".
         <a href="{% url 'settings-ai' %}" class="settings-nav-link" {% if t == 'ai' %}aria-current="page"{% endif %}>AI</a>
         <a href="{% url 'settings-tools' %}" class="settings-nav-link" {% if t == 'tools' %}aria-current="page"{% endif %}>Optional tools</a>
         <a href="{% url 'settings-integrations' %}" class="settings-nav-link" {% if t == 'integrations' %}aria-current="page"{% endif %}>Integrations</a>
-        <a href="{% url 'billing:plans' %}" class="settings-nav-link">Plan &amp; usage</a>
+        <a href="{% url 'billing:plans' %}" class="settings-nav-link" {% if t == 'plan' %}aria-current="page"{% endif %}>Plan &amp; usage</a>
 
         <p class="settings-nav-group">Developer</p>
         <a href="{% url 'settings-api-keys' %}" class="settings-nav-link" {% if t == 'api_keys' %}aria-current="page"{% endif %}>API keys</a>

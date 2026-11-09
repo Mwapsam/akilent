@@ -2864,3 +2864,30 @@ The 11-09 production check (rated about 6/10) found both pages still flat. Step 
   - New: `apps/accounts/tests/test_home_panels.py`, `apps/conversations/tests/test_insights_panels.py`.
   - Updated, for new wording and the moved figures: `test_dashboard`, `test_insights_step1/2/3`, `test_insights_loose_ends`, `test_insights_view_full`, `test_goals`, `test_performance`, `test_starting_point` and `test_attribution_states`.
 - **Not done:** I haven't looked at the pages in a browser, in either theme.
+
+## Entry 58 — Settings leftovers: Plan & usage, Activity log, Team, Integrations, API keys (2026-11-09)
+
+From the production review once Settings was on panels.
+
+- **Plan & usage** (`/billing/plans/`, same URL, so the 60-odd links still work) now sits inside the Settings layout and is active in the side list. It has five panels:
+  - **Your plan:** one status from `billing_api.plan_status`, which uses the same rules as Home's `home_notice`. An active plan whose period has ended reads "Renewal pending · Renewal was due … and hasn't gone through yet", never "Active · Renews <past date>". Credit and any bank transfer in review show in the body. The footer has the billing term and renewal note on the left, and the one action the state needs on the right.
+  - **Usage:** the bars, with the 80% warnings as slim alerts.
+  - **Change plan:** the billing term as a segmented control, then one hairline row per plan (price, limits, "What's included", the button). The four boxed cards are gone.
+  - **Compare plans:** "Included in every plan", then the table.
+  - **Cancel subscription:** a danger panel.
+- **Activity log:** one panel. Search and status sit in the panel and apply as you type, so there's no Filter button. Rows show the recipient and subject, the status, and `{% when %}`. The raw message ID is only on the detail page.
+- **"Welcome to , !":** no send path passed `company_name`. Rendering now fills it from the account (`render.account_defaults`, and a value the send passes wins). The starter subject shows the first name only when there is one. Migration `email_service/0038` updates seeded subjects that nobody has edited. Emails already sent keep their stored subject.
+- **Team:**
+  - the guide link moved into the invite panel's description;
+  - the role is two picked cards (native radios, `.choice-card:has(> input:checked)`) instead of a dropdown;
+  - Send invite is in the footer;
+  - Members and invitations are panels with hairline rows.
+- **Integrations and API keys:**
+  - each integration has the mark, title and description, with its status at the right, a slim alert when it needs something, and actions in the footer;
+  - "Create a key" has a panel header and its button in the footer.
+- **CSS:**
+  - `.panel-head + .panel-alert` is now a margin, not padding inside the alert;
+  - a footer straight after the header or an alert gets the body's gap;
+  - a slim alert that ends a panel gets bottom spacing.
+- **Tests:** new `apps/accounts/tests/test_settings_plan_activity.py`. Wording updated in `test_list_htmx` and `test_settings_panels`.
+- **Not done:** I haven't checked these pages in a browser.
