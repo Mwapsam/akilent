@@ -164,4 +164,4 @@ def test_every_populated_branch_renders(client, account):
     # Channel performance table renders (plan has detailed_analytics), not the upgrade teaser.
     assert "Channel performance is available on higher plans" not in body
     # The Response tab's chart panel: a chart, or when it will appear (chart rules).
-    assert "data-insights-chart" in body
+    assert "data-insights-chart" in body or 'data-insights="chart-waiting"' in body

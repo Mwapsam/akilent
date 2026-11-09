@@ -9,15 +9,17 @@ only — no "best channel" label. Gated on ``has_history`` (the plan's detailed-
       <p class="panel-desc">Which channel customers write in from.</p>
     </div>
   </div>
-  <div class="panel-body">
-
   {% if not has_history %}
+  <div class="panel-body">
   <div class="text-center">
     <p class="text-sm text-ink-subtle">Channel performance is available on higher plans.</p>
     <a href="/billing/plans/" class="btn btn-primary btn-sm mt-3">Upgrade your plan</a>
   </div>
+  </div>
   {% elif channels %}
-  <div class="table-wrap">
+  {% comment %}Hairline rows to the panel's edges; the table has no box of its own.{% endcomment %}
+  <div class="panel-body panel-body--flush">
+  <div class="table-scroll border-t border-border">
     <table class="table table--cards">
       <thead><tr><th>Channel</th><th>Conversations</th><th>Leads</th><th>Paid orders</th><th>Revenue</th></tr></thead>
       <tbody>
@@ -33,8 +35,8 @@ only — no "best channel" label. Gated on ``has_history`` (the plan's detailed-
       </tbody>
     </table>
   </div>
-  {% else %}
-  <p class="empty-line">No channel activity yet this period.</p>
-  {% endif %}
   </div>
+  {% else %}
+  <div class="panel-body"><p class="empty-line">No channel activity yet this period.</p></div>
+  {% endif %}
 </section>

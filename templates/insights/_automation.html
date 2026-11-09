@@ -4,9 +4,14 @@ reporting.automation_impact. No composite score; the one estimate (time saved) s
 {% endcomment %}
 {% load insights_tags %}
 <section class="panel" aria-labelledby="automation-h">
-  <div class="panel-head"><h2 id="automation-h" class="panel-title">This period</h2></div>
+  <div class="panel-head">
+    <div>
+      <h2 id="automation-h" class="panel-title">This period</h2>
+      {% if wide %}<p class="panel-desc" data-insights="chart-waiting">Chart appears after a few more weeks of data.</p>{% endif %}
+    </div>
+  </div>
   <div class="panel-body">
-    <div class="metric-stack">
+    <div class="{% if wide %}metric-row{% else %}metric-stack{% endif %}">
       <div class="metric">
         <p class="metric-label">Automatic first replies</p>
         <p class="metric-value">{{ automation.first_replies_automatic }}</p>
@@ -18,23 +23,22 @@ reporting.automation_impact. No composite score; the one estimate (time saved) s
         <p class="metric-value">{{ automation.out_of_hours.reached }}</p>
         <p class="metric-note">Of {{ automation.out_of_hours.closed_enquiries }} while closed</p>
         {% else %}
-        <p class="metric-value">—</p>
-        <p class="metric-note"><a href="/settings/hours/" class="underline">Set your hours</a> to measure this</p>
+        <p class="metric-value"><span class="metric-empty">Not set up</span></p>
+        <p class="metric-note"><a href="/settings/hours/" class="link-quiet">Set your hours</a> to measure this</p>
         {% endif %}
       </div>
       <div class="metric">
         <p class="metric-label">AI suggestions used</p>
         {% if automation.ai %}
-        <p class="metric-value">{{ automation.ai.used|share:automation.ai.suggested }}</p>
+        <p class="metric-value">{{ automation.ai.used|share:automation.ai.suggested|figure }}</p>
         {% else %}
-        <p class="metric-value">—</p>
-        <p class="metric-note">AI isn't turned on</p>
+        <p class="metric-value"><span class="metric-empty">AI is off</span></p>
         {% endif %}
       </div>
       {% if forms.sent %}
       <div class="metric">
         <p class="metric-label">Forms finished</p>
-        <p class="metric-value">{{ forms.completed|share:forms.sent }}</p>
+        <p class="metric-value">{{ forms.completed|share:forms.sent|figure }}</p>
       </div>
       {% endif %}
       <div class="metric" title="Estimate: {{ automation.automatic_replies }} automatic replies × {{ automation.minutes_per_reply }} min">

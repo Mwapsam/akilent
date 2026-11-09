@@ -4,7 +4,7 @@ Swapped in for the skeleton placeholder in dashboard.html. Deliberately has no
 hx-trigger of its own, so it loads exactly once.
 
 Panels (2026-11-09 review, spec §20): one panel per module on the canvas, in two columns
-(2/3 + 1/3): Needs you beside This week, then Recent activity beside Coming up. Setup shows
+(2/3 + 1/3): Needs you then Recent activity, beside This week then Coming up. Setup shows
 only when something needs setting up; the plan only when it needs action (a slim strip); the
 starting point is one muted line until there's a comparison to show.
 {% endcomment %}
@@ -16,14 +16,17 @@ starting point is one muted line until there's a comparison to show.
   {% comment %}The plan only when it needs something (billing_api.home_notice), as a slim strip.
   Never "Active · renews" on a past date.{% endcomment %}
   {% if plan_notice %}
-  <div class="panel-alert panel-alert--{% if plan_notice.tone == 'warning' %}warning{% else %}info{% endif %} !mx-0" role="status" data-plan-notice>
-    <span>{{ plan_notice.text }}</span>
-    <a href="{{ plan_notice.href }}" class="font-medium underline whitespace-nowrap">{{ plan_notice.action }}</a>
+  <div class="notice-strip{% if plan_notice.tone != 'warning' %} notice-strip--info{% endif %}" role="status" data-plan-notice>
+    <span class="flex items-center gap-2 min-w-0"><span class="notice-strip-icon shrink-0">{% include "components/icon.html" with name="alert" class="w-4 h-4" %}</span>{{ plan_notice.text }}</span>
+    <a href="{{ plan_notice.href }}" class="link-quiet">{{ plan_notice.action }} <span aria-hidden="true">→</span></a>
   </div>
   {% endif %}
 
+  {% comment %}Two independent columns, so a short panel never leaves a gap beside a tall
+  one: Needs you then Recent activity on the left (2/3), This week then Coming up on the right.
+  {% endcomment %}
   <div class="grid gap-5 lg:grid-cols-3 items-start">
-    <div class="lg:col-span-2 min-w-0 space-y-5">
+    <div class="lg:col-span-2 min-w-0 space-y-5" data-dash-column="main">
       {% include "insights/_attention.html" with home=True %}
 
       {% if next_recommended %}
@@ -39,33 +42,9 @@ starting point is one muted line until there's a comparison to show.
         </div>
       </div>
       {% endif %}
-    </div>
 
-    {# ── This week: four numbers with a trend line each, the same rules as Insights ── #}
-    <section class="panel min-w-0" aria-labelledby="dash-week" data-dash="this-week">
-      <div class="panel-head">
-        <h2 id="dash-week" class="panel-title">This week</h2>
-        <a href="{% url 'insights' %}?period=7" class="inline-flex items-center min-h-6 text-sm text-ink-subtle hover:text-ink">Insights <span aria-hidden="true" class="ml-1">→</span></a>
-      </div>
-      <div class="panel-body panel-body--flush">
-        <ul class="divide-y divide-border border-t border-border">
-          {% for f in this_week.items %}
-          <li>
-            <a href="{{ f.href }}" class="flex items-center gap-3 px-5 sm:px-6 py-2.5 hover:bg-[var(--color-secondary-bg)]">
-              <span class="flex-1 min-w-0 text-sm text-ink-subtle">{{ f.label }}</span>
-              {% if f.spark %}<span class="w-16 shrink-0">{% sparkline f.spark label=f.label|add:" over the last 7 days" %}</span>{% endif %}
-              <span class="w-14 text-right text-sm font-semibold text-ink tabular-nums">{% if f.kind == "duration" %}{{ f.value|duration }}{% else %}{{ f.value }}{% endif %}</span>
-            </a>
-          </li>
-          {% endfor %}
-        </ul>
-      </div>
-    </section>
-  </div>
-
-  <div class="grid gap-5 lg:grid-cols-3 items-start">
     {# ── Recent activity: what actually happened ─────────────────────────── #}
-    <section class="panel lg:col-span-2 min-w-0" aria-labelledby="dash-activity" data-dash="activity">
+    <section class="panel" aria-labelledby="dash-activity" data-dash="activity">
       <div class="panel-head">
         <h2 id="dash-activity" class="panel-title">Recent activity</h2>
       </div>
@@ -87,8 +66,30 @@ starting point is one muted line until there's a comparison to show.
       <div class="panel-body"><p class="empty-line">Nothing in the last two weeks yet. New chats, leads, paid orders, posts and campaigns show here.</p></div>
       {% endif %}
     </section>
+    </div>
 
-    <div class="min-w-0 space-y-5">
+    <div class="min-w-0 space-y-5" data-dash-column="side">
+    {# ── This week: four numbers with a trend line each, the same rules as Insights ── #}
+    <section class="panel" aria-labelledby="dash-week" data-dash="this-week">
+      <div class="panel-head">
+        <h2 id="dash-week" class="panel-title">This week</h2>
+        <a href="{% url 'insights' %}?period=7" class="link-quiet text-sm min-h-6">Insights <span aria-hidden="true">→</span></a>
+      </div>
+      <div class="panel-body panel-body--flush">
+        <ul class="divide-y divide-border border-t border-border">
+          {% for f in this_week.items %}
+          <li>
+            <a href="{{ f.href }}" class="flex items-center gap-3 px-5 sm:px-6 py-2.5 hover:bg-[var(--color-secondary-bg)]">
+              <span class="flex-1 min-w-0 text-sm text-ink-subtle">{{ f.label }}</span>
+              <span class="spark-slot">{% if f.spark %}{% sparkline f.spark label=f.label|add:" over the last 7 days" %}{% endif %}</span>
+              <span class="w-16 shrink-0 text-right text-sm font-semibold text-ink tabular-nums">{% if f.kind == "duration" %}{{ f.value|duration }}{% else %}{{ f.value }}{% endif %}</span>
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </section>
+
       {# ── Coming up: scheduled sends and posts together ───────────────────── #}
       <section class="panel" aria-labelledby="dash-upcoming" data-dash="coming-up">
         <div class="panel-head">
@@ -110,7 +111,7 @@ starting point is one muted line until there's a comparison to show.
         </div>
         {% else %}
         <div class="panel-body">
-          <p class="empty-line">Nothing scheduled.{% if "content_studio" in usable_features %} <a href="{% url 'publishing:post-new' %}" class="underline">Schedule a post</a>{% endif %}{% if "email" in enabled_channels %}{% if "content_studio" in usable_features %} or{% endif %} <a href="/email/campaigns/new/" class="underline">a send</a>{% endif %}</p>
+          <p class="empty-line">Nothing scheduled.{% if "content_studio" in usable_features %} <a href="{% url 'publishing:post-new' %}" class="link-quiet">Schedule a post</a>{% endif %}{% if "email" in enabled_channels %}{% if "content_studio" in usable_features %} or{% endif %} <a href="/email/campaigns/new/" class="link-quiet">a send</a>{% endif %}</p>
         </div>
         {% endif %}
       </section>
@@ -161,7 +162,7 @@ starting point is one muted line until there's a comparison to show.
     {% if starting_point.state == "measuring" %}
     <p class="text-sm text-ink-subtle" data-dash="starting-point">Measuring your first week on WhatsApp: day {{ starting_point.day }} of 7. Your baseline is ready on {{ starting_point.ready_on|date:"j M" }}.</p>
     {% elif starting_point.state == "starting" %}
-    <p class="text-sm text-ink-subtle" data-dash="starting-point">Baseline captured from your first week · compare on {{ starting_point.compare_on|date:"j M" }} <a href="{% url 'insights' %}" class="underline hover:text-ink">Insights <span aria-hidden="true">→</span></a></p>
+    <p class="text-sm text-ink-subtle" data-dash="starting-point">Baseline captured from your first week · compare on {{ starting_point.compare_on|date:"j M" }} <a href="{% url 'insights' %}" class="link-quiet">Insights <span aria-hidden="true">→</span></a></p>
     {% else %}
     <div class="panel panel-pad" data-dash="starting-point">{% include "conversations/_starting_point.html" %}</div>
     {% endif %}

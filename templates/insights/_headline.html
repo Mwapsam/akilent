@@ -20,7 +20,7 @@ replies were automatic are in each figure's title and on the Automation tab.
 
     <div class="metric" title="Median time to the first reply, for conversations that started in the last {{ days }} days{% if h.reply.automatic %} ({{ h.reply.automatic }} of {{ h.reply.replied }} sent automatically){% endif %}">
       <p class="metric-label">First reply</p>
-      <p class="metric-value">{{ h.reply.value|duration }}</p>
+      <p class="metric-value">{{ h.reply.value|duration|figure }}</p>
       {% if h.reply.change is not None %}
       <p class="metric-note"><span aria-hidden="true">{% if h.reply.change < 0 %}↓{% elif h.reply.change > 0 %}↑{% else %}→{% endif %}</span><span class="sr-only">{% if h.reply.change < 0 %}faster by{% elif h.reply.change > 0 %}slower by{% else %}unchanged{% endif %}</span> {{ h.reply.change|duration }} vs before</p>
       {% elif h.reply.goal %}
@@ -30,7 +30,7 @@ replies were automatic are in each figure's title and on the Automation tab.
 
     <div class="metric" title="Conversations answered within 24 hours, of those whose 24 hours have passed">
       <p class="metric-label">Answered in 24h</p>
-      <p class="metric-value">{{ h.answered.answered|share:h.answered.settled }}</p>
+      <p class="metric-value">{{ h.answered.answered|share:h.answered.settled|figure }}</p>
       {% if h.answered.change is not None %}
       <p class="metric-note"><span aria-hidden="true">{% if h.answered.change > 0 %}↑{% elif h.answered.change < 0 %}↓{% else %}→{% endif %}</span> {% if h.answered.change > 0 %}+{% endif %}{{ h.answered.change }} points vs before</p>
       {% elif h.answered.goal %}

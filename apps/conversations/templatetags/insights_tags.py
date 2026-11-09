@@ -34,6 +34,17 @@ def share(part, whole):
 
 
 @register.filter
+def figure(value, empty="Not enough data"):
+    """A figure's value, or muted words in place of a bare "—" (2026-11-09 review):
+    ``{{ x|share:y|figure }}``, ``{{ s|duration|figure }}``."""
+    from django.utils.html import format_html
+
+    if value in (None, "", "—"):
+        return format_html('<span class="metric-empty">{}</span>', empty)
+    return value
+
+
+@register.filter
 def thin(n) -> bool:
     """Something to show, but too little to call it a rate or a trend yet."""
     n = int(n or 0)

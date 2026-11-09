@@ -6,9 +6,14 @@ reporting.MIN_SAMPLE they read "1 of 1"). At most one short line under each figu
 {% endcomment %}
 {% load insights_tags %}
 <section class="panel" aria-labelledby="response-h">
-  <div class="panel-head"><h2 id="response-h" class="panel-title">This period</h2></div>
+  <div class="panel-head">
+    <div>
+      <h2 id="response-h" class="panel-title">This period</h2>
+      {% if wide %}<p class="panel-desc" data-insights="chart-waiting">Chart appears after a few more weeks of data.</p>{% endif %}
+    </div>
+  </div>
   <div class="panel-body">
-    <div class="metric-stack">
+    <div class="{% if wide %}metric-row{% else %}metric-stack{% endif %}">
       <div class="metric">
         <p class="metric-label">Missed</p>
         <p class="metric-value tabular-nums" data-figure="missed">{{ recovery.missed }}</p>
@@ -16,12 +21,12 @@ reporting.MIN_SAMPLE they read "1 of 1"). At most one short line under each figu
       </div>
       <div class="metric">
         <p class="metric-label">Follow-ups done</p>
-        <p class="metric-value">{{ followups.completed|share:followups.due }}</p>
+        <p class="metric-value">{{ followups.completed|share:followups.due|figure }}</p>
         {% if followups.on_time_pct is not None and not followups.due|thin %}<p class="metric-note">{{ followups.on_time_pct }}% on time</p>{% endif %}
       </div>
       <div class="metric">
         <p class="metric-label">Time to resolve</p>
-        <p class="metric-value">{{ resolution.median_resolution_seconds|duration }}</p>
+        <p class="metric-value">{{ resolution.median_resolution_seconds|duration|figure }}</p>
         {% if resolution.resolved %}<p class="metric-note">Median of {{ resolution.resolved }} closed</p>{% endif %}
       </div>
     </div>

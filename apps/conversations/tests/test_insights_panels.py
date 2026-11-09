@@ -57,7 +57,9 @@ def test_one_header_row_and_one_early_days_line(shop):
     assert 'id="insights-controls"' in header and 'id="period"' in header
     assert "Updated" in header
     assert page.count('data-insights="early-days"') == 1
-    assert "not enough data" not in page.lower()
+    # No per-figure caveats ("Not enough data yet for a rate"); an empty figure reads
+    # "Not enough data" in muted words instead of a bare dash.
+    assert "not enough data yet" not in page.lower()
 
 
 def test_figures_are_panels_and_the_response_tab_repeats_nothing(shop):

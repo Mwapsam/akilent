@@ -24,6 +24,7 @@ band, so a new period or a refresh keeps the tab.{% endcomment %}
     <div class="panel panel-pad"><p class="empty-line">Nothing to show yet. Results from your posts appear here once you publish from <a href="{% url 'publishing:index' %}">Content Studio <span aria-hidden="true">→</span></a></p></div>
     {% endif %}
   {% else %}
+  {% if charts %}
   <div class="grid gap-5 lg:grid-cols-3 items-start">
     <div class="lg:col-span-2 min-w-0">{% include "insights/_tab_chart.html" %}</div>
     <div class="min-w-0">
@@ -32,6 +33,13 @@ band, so a new period or a refresh keeps the tab.{% endcomment %}
       {% else %}{% include "insights/_automation.html" %}{% endif %}
     </div>
   </div>
+  {% else %}
+  {% comment %}No chart yet: the figures as one full-width row, with when the chart will appear
+  as a muted line in that panel's header (no short empty panel beside a tall one).{% endcomment %}
+  {% if tab == "response" %}{% include "insights/_response.html" with wide=True %}
+  {% elif tab == "sales" %}{% include "insights/_sales.html" with wide=True %}
+  {% else %}{% include "insights/_automation.html" with wide=True %}{% endif %}
+  {% endif %}
   {% if tab == "response" %}{% include "insights/_response_details.html" %}
   {% elif tab == "sales" %}{% include "insights/_sales_details.html" %}{% include "insights/_channels.html" %}
   {% else %}{% include "insights/_automation_details.html" %}{% endif %}

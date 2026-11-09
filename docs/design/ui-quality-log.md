@@ -2891,3 +2891,21 @@ From the production review once Settings was on panels.
   - a slim alert that ends a panel gets bottom spacing.
 - **Tests:** new `apps/accounts/tests/test_settings_plan_activity.py`. Wording updated in `test_list_htmx` and `test_settings_panels`.
 - **Not done:** I haven't checked these pages in a browser.
+
+## Entry 59 — Home and Insights polish (2026-11-09)
+
+From the production review that scored both pages 8/10.
+
+1. **Uneven panel heights:**
+   - Home is now two independent columns: Needs you, then Recent activity on the left (2/3); This week, then Coming up, Setup and Chat widgets on the right.
+   - On Insights, a tab with no chart shows its figures as one full-width row (`.metric-row`, `wide=True`), with "Chart appears after a few more weeks of data." in that panel's header.
+2. **Trend line over its label:** each This week row keeps a fixed `.spark-slot` (80px, the SVG at 100%) between label and value, whether or not it has a line. Rows without enough data show nothing rather than a flat line that could read as "no change".
+3. **One link style:** `.link-quiet` is plain text with an arrow when it goes somewhere, underlined only on hover. It's used for See all, Insights →, Check billing →, Schedule a post, Set your hours, Upgrade → and How it's counted.
+4. **Plan strip:** `.notice-strip` uses the panel surface with a 3px amber left edge and an amber icon, instead of a tint that went muddy on the dark theme.
+5. **Activity icons:** an image for posts, a megaphone for campaigns, a chat bubble for chats, a tag for leads and a tick for paid orders. The new icons are in `apps/core/icons.py`.
+6. **No bare dashes:** `insights_tags.figure` shows muted "Not enough data" (`.metric-empty`) for empty rates and durations. Automation shows "Not set up" and "AI is off".
+7. **Boxed tables:** Channel performance has hairline rows to the panel edges. `.panel .table-wrap` drops the box anywhere else too.
+8. **Revenue:** shows "—" with "No paid orders yet" until there's a paid order, then amounts per currency. The journey's guessed and untracked revenue no longer shows "0".
+
+- **Tests:** new `apps/accounts/tests/test_home_insights_polish.py`. Updated `test_insights_panels`, `test_insights_view_full` and `test_insights_ui_quality` (a chart or its waiting line).
+- **Not done:** I haven't checked the changes in a browser.

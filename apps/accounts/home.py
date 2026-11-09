@@ -116,7 +116,7 @@ def recent_activity(account, now=None, limit: int = 8) -> list[dict]:
         items.append(
             {
                 "when": lead.created_at,
-                "icon": "building",
+                "icon": "tag",
                 "text": f"New lead · {short_name(lead.contact)}",
                 "url": reverse("crm:sales"),
             }
@@ -151,7 +151,7 @@ def recent_activity(account, now=None, limit: int = 8) -> list[dict]:
         items.append(
             {
                 "when": variant.published_at,
-                "icon": "send",
+                "icon": "image",
                 "text": f"Post published on {variant.get_platform_display()}"
                 + (f": “{short}”" if short else ""),
                 "url": reverse("publishing:post-detail", args=[variant.post_id]),
@@ -163,7 +163,7 @@ def recent_activity(account, now=None, limit: int = 8) -> list[dict]:
         items.append(
             {
                 "when": campaign.started_at,
-                "icon": "send",
+                "icon": "megaphone",
                 "text": f"Campaign sent · {campaign.name}",
                 "url": "/campaigns/",
             }
@@ -177,7 +177,7 @@ def recent_activity(account, now=None, limit: int = 8) -> list[dict]:
         items.append(
             {
                 "when": bulk.completed_at,
-                "icon": "mail",
+                "icon": "megaphone",
                 "text": "Email campaign sent" + (f" · {name}" if name else ""),
                 "url": "/email/campaigns/",
             }

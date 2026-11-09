@@ -9,7 +9,7 @@ comment replies), per the messaging truth rule.
   <div class="panel-head">
     <div>
       <h2 id="journey-h" class="panel-title">Your customer journey</h2>
-      <p class="panel-desc">From the posts you publish to the orders customers pay. <a href="{% url 'help-article' 'post-results' %}" class="underline" title="Counted only when a customer used a post's chat link or a reply to a comment on it, and the lead or order was made from that chat. A chat Akilent only guessed at is never credited to a post, so these are the least your posts brought in.">How it's counted <span aria-hidden="true">ⓘ</span></a></p>
+      <p class="panel-desc">From the posts you publish to the orders customers pay. <a href="{% url 'help-article' 'post-results' %}" class="link-quiet" title="Counted only when a customer used a post's chat link or a reply to a comment on it, and the lead or order was made from that chat. A chat Akilent only guessed at is never credited to a post, so these are the least your posts brought in.">How it's counted <span aria-hidden="true">ⓘ</span></a></p>
     </div>
   </div>
 
@@ -47,12 +47,12 @@ comment replies), per the messaging truth rule.
         </div>
         <div class="metric">
           <p class="metric-label">Paid, a guess</p>
-          <p class="metric-value">{% for r in journey.guessed_revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}<br>{% endif %}{% empty %}0{% endfor %}</p>
+          <p class="metric-value">{% for r in journey.guessed_revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}</p>
           <p class="metric-note">Linked to a recent chat</p>
         </div>
         <div class="metric">
           <p class="metric-label">Paid, not from a post</p>
-          <p class="metric-value">{% for r in journey.untracked_revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}<br>{% endif %}{% empty %}0{% endfor %}</p>
+          <p class="metric-value">{% for r in journey.untracked_revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}</p>
         </div>
       </div>
     </div>

@@ -13,7 +13,7 @@ than two weeks wait behind "See all" (attention(home=True)).
 <section class="panel" aria-labelledby="attention-h" data-insights="attention">
   <div class="panel-head">
     <h2 id="attention-h" class="panel-title">{% if home %}Needs you{% else %}What needs you <span class="font-normal text-ink-subtle">· right now</span>{% endif %}</h2>
-    {% if attention.more %}<a href="{% url 'insights-attention' %}" data-overlay-open="drawer" class="inline-flex items-center min-h-6 text-sm text-ink-subtle hover:text-ink">{% if home %}See all{% else %}{{ attention.more }} more{% endif %} <span aria-hidden="true" class="ml-1">→</span></a>{% endif %}
+    {% if attention.more %}<a href="{% url 'insights-attention' %}" data-overlay-open="drawer" class="link-quiet text-sm min-h-6">{% if home %}See all{% else %}{{ attention.more }} more{% endif %} <span aria-hidden="true">→</span></a>{% endif %}
   </div>
   {% if attention.items %}
   <div class="panel-body panel-body--flush">

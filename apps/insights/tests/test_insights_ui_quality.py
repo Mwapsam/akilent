@@ -143,7 +143,9 @@ class TestMomentum:
         _week(account, start)
         _week(account, start + timedelta(days=7))
         html = owner_client.get("/insights/").content.decode()
-        assert 'id="momentum-h"' not in html and "data-insights-chart" in html
+        assert 'id="momentum-h"' not in html and (
+            "data-insights-chart" in html or 'data-insights="chart-waiting"' in html
+        )
 
 
 # ---- email analytics ----------------------------------------------------------------------

@@ -4,17 +4,24 @@ paid orders are in the headline, so they aren't repeated. ``sales`` from reporti
 {% endcomment %}
 {% load insights_tags %}
 <section class="panel" aria-labelledby="sales-h">
-  <div class="panel-head"><h2 id="sales-h" class="panel-title">This period</h2></div>
+  <div class="panel-head">
+    <div>
+      <h2 id="sales-h" class="panel-title">This period</h2>
+      {% if wide %}<p class="panel-desc" data-insights="chart-waiting">Chart appears after a few more weeks of data.</p>{% endif %}
+    </div>
+  </div>
   <div class="panel-body">
-    <div class="metric-stack">
+    <div class="{% if wide %}metric-row{% else %}metric-stack{% endif %}">
       <div class="metric">
         <p class="metric-label">Revenue</p>
-        <p class="metric-value">{% if sales.revenue %}{% for r in sales.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}<br>{% endif %}{% endfor %}{% else %}0{% endif %}</p>
-        <p class="metric-note">From conversations</p>
+        {% comment %}Per currency once there's a paid order; "—" until then (never a bare "0"
+        with no currency).{% endcomment %}
+        <p class="metric-value">{% if sales.revenue %}{% for r in sales.revenue %}{{ r.currency }} {{ r.total|floatformat:2 }}{% if not forloop.last %}<br>{% endif %}{% endfor %}{% else %}—{% endif %}</p>
+        <p class="metric-note">{% if sales.revenue %}From conversations{% else %}No paid orders yet{% endif %}</p>
       </div>
       <div class="metric">
         <p class="metric-label">Lead to sale</p>
-        <p class="metric-value">{{ sales.leads_bought|share:sales.leads }}</p>
+        <p class="metric-value">{{ sales.leads_bought|share:sales.leads|figure }}</p>
         {% if sales.leads %}<p class="metric-note">Leads who went on to pay</p>{% endif %}
       </div>
     </div>

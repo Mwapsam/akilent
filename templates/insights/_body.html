@@ -24,7 +24,7 @@ swaps only the tab's region. Only the weekly-email switch is left at the end.
 {% if period_locked %}
 <div class="panel-alert panel-alert--info !mx-0" role="status">
   <span>The 90-day view is available on higher plans. Showing the last 30 days.</span>
-  <a href="{% url 'billing:plans' %}" class="font-medium underline">Upgrade</a>
+  <a href="{% url 'billing:plans' %}" class="link-quiet">Upgrade <span aria-hidden="true">→</span></a>
 </div>
 {% endif %}
 

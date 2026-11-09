@@ -751,6 +751,8 @@
     overflow-x: auto;
     overflow-y: hidden;
   }
+  /* Inside a panel a table never gets a box of its own: hairline rows only. */
+  .panel .table-wrap { border: 0; border-top: 1px solid var(--color-border); border-radius: 0; box-shadow: none; background: transparent; }
   /* Scroll-only wrapper, for a table already inside a .card where .table-wrap
      would double the border/shadow/radius. */
   .table-scroll { overflow-x: auto; }
@@ -933,6 +935,8 @@
     font-size: 1.75rem; line-height: 2.25rem; letter-spacing: -0.02em;
     color: var(--color-ink);
   }
+  /* In place of a bare dash: muted words at body size (insights_tags.figure). */
+  .metric-empty { @apply text-sm font-normal; color: var(--color-ink-subtle); }
   .metric-note { @apply text-xs; color: var(--color-ink-subtle); }
 
   /* Settings (D4): a grouped side list, then two-column sections at one width. */
@@ -1027,6 +1031,18 @@
   .panel-alert + .panel-body { @apply pt-4; }
   .panel-alert--warning { background-color: var(--tone-amber-bg); color: var(--tone-amber-fg); }
   .panel-alert--info { background-color: var(--tone-info-bg); color: var(--tone-info-fg); }
+  /* A slim notice on the canvas (Home's plan line): the panel surface with a thin coloured
+     left edge and icon, not a full tint (amber tints go muddy on the graphite dark theme). */
+  .notice-strip {
+    @apply flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-lg px-4 py-2.5 text-sm;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-left: 3px solid var(--color-amber-500);
+    color: var(--color-ink);
+  }
+  .notice-strip--info { border-left-color: var(--color-border-strong); }
+  .notice-strip-icon { color: var(--color-amber-500); }
+  .notice-strip--info .notice-strip-icon { color: var(--color-ink-subtle); }
   .panel-foot {
     @apply flex flex-wrap items-center justify-between gap-3 px-5 py-3 sm:px-6 text-sm;
     border-top: 1px solid var(--color-border);
@@ -1344,6 +1360,8 @@
   /* Figures stacked in a narrow panel: the headline's style (label above a tabular number,
      at most one short line under it). */
   .metric-stack { @apply flex flex-col gap-5; }
+  /* The same figures as one full-width row (a tab with no chart yet). */
+  .metric-row { @apply grid gap-x-8 gap-y-5 grid-cols-2 lg:grid-cols-4; }
 
   /* Funnel bars (components/charts/_funnel.html): label, then a bar against the first step
      with its number beside it. One hue; 4px rounded data end; recessive track. */
@@ -1519,6 +1537,11 @@
   /* One-line empty state (components/empty_state.html line=True). */
   .empty-line { @apply text-sm py-1; color: var(--color-ink-subtle); }
   .empty-line a { @apply font-medium; color: var(--color-ink); }
+  /* One quiet link style on Home and Insights (2026-11-09): plain text, an arrow when it goes
+     somewhere, underline only on hover. "See all →", "Check billing", "Schedule a post". */
+  .link-quiet { @apply inline-flex items-center gap-1 font-medium whitespace-nowrap; color: var(--color-ink-muted); text-decoration: none; }
+  .link-quiet:hover { color: var(--color-ink); text-decoration: underline; text-underline-offset: 3px; }
+  .link-quiet:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; border-radius: 2px; }
   .empty-line a:hover { text-decoration: underline; text-underline-offset: 3px; }
 
   /* Stat card ----------------------------------------------------------- */
