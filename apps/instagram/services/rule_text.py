@@ -56,7 +56,11 @@ def sentence(rule, *, show_channels: bool = False) -> str:
     words = _keywords(rule)
     if isinstance(rule, CommentTrigger):
         if rule.match_type == CommentTrigger.MatchType.KEYWORD:
-            when = f"When {where} mentions {_or_list(words)}" if words else f"When {where} matches"
+            when = (
+                f"When {where} mentions {_or_list(words)}"
+                if words
+                else f"When {where} matches"
+            )
         elif rule.match_type == CommentTrigger.MatchType.BUYING_INTENT:
             when = f"When {where} sounds ready to buy"
         else:
@@ -69,7 +73,11 @@ def sentence(rule, *, show_channels: bool = False) -> str:
         return f"{when}, {how}."
 
     if rule.match_type == ModerationRule.MatchType.KEYWORD:
-        when = f"When {where} mentions {_or_list(words)}" if words else f"When {where} matches"
+        when = (
+            f"When {where} mentions {_or_list(words)}"
+            if words
+            else f"When {where} matches"
+        )
     else:
         when = f"When {where} {_MODERATION_WHAT.get(rule.match_type, 'matches')}"
         if words:
