@@ -35,13 +35,16 @@ def owner_client(db, client):
     "path",
     ["/settings/", "/settings/business/", "/settings/hours/", "/settings/ai/"],
 )
-def test_settings_forms_get_the_bar_and_keep_a_plain_save(owner_client, path):
+def test_settings_forms_save_in_their_panel_footer(owner_client, path):
+    """Panels (2026-11-09): Settings saves per panel, in its footer (Save muted until
+    something changes, then Discard beside it); the sticky bar stays for the Studio pages
+    until they become panels."""
     page = owner_client.get(path).content.decode()
     form = page[page.index("data-save-bar") :]
     form = form[: form.index("</form>")]
-    assert "data-save-fallback" in form
-    assert 'class="save-bar" role="region" aria-label="Unsaved changes"' in form
-    assert 'type="reset" class="btn btn-ghost btn-sm">Discard' in form
+    assert 'class="panel-foot"' in form and "data-panel-save" in form
+    assert "data-panel-discard" in form
+    assert 'class="save-bar"' not in form
 
 
 def test_the_bar_shows_only_with_scripts_and_once_a_field_changed():

@@ -1,12 +1,13 @@
 {% extends "accounts/settings_base.html" %}
 {% block settings_content %}
 
-<div class="mb-5">{% include "components/help_link.html" with slug="team" text="Read the team management guide" %}</div>
+<p class="text-sm">{% include "components/help_link.html" with slug="team" text="Read the team management guide" %}</p>
 
 {% if can_manage %}
 <section class="settings-section">
   <div>
     <h2 class="settings-section-title">Invite a teammate</h2>
+    <p class="settings-section-desc">Admins can also manage the team. Invites expire in 7 days.</p>
   </div>
   <div class="settings-section-body">
   <form method="post" action="{% url 'invite-create' %}" class="flex flex-wrap gap-3">
@@ -23,19 +24,18 @@
       {% include "components/icon.html" with name="plus" class="w-4 h-4" %} Send invite
     </button>
   </form>
-  <p class="help mt-2">Members manage email &amp; mailboxes; admins can also manage the team. Invites expire in 7 days.</p>
   </div>
 </section>
 {% else %}
-<div class="mb-6 rounded-2xl border border-border tone-neutral px-5 py-3 text-sm">
+<div class="panel panel-pad text-sm text-ink-subtle">
   Only workspace owners and admins can invite or manage teammates.
 </div>
 {% endif %}
 
 {# Members #}
-<div class="card overflow-hidden mb-6">
+<div class="panel">
   <div class="px-5 sm:px-6 py-4 border-b border-border">
-    <h2 class="font-semibold">Members <span class="text-sm font-normal text-ink-subtle">({{ members|length }})</span></h2>
+    <h2 class="panel-title">Members <span class="text-sm font-normal text-ink-subtle">({{ members|length }})</span></h2>
   </div>
   <div class="table-wrap">
     <table class="table table--cards">
@@ -89,9 +89,9 @@
 
 {# Pending invitations #}
 {% if invitations %}
-<div class="card overflow-hidden">
+<div class="panel">
   <div class="px-5 sm:px-6 py-4 border-b border-border">
-    <h2 class="font-semibold">Pending invitations</h2>
+    <h2 class="panel-title">Pending invitations</h2>
   </div>
   <div class="table-wrap">
     <table class="table table--cards">

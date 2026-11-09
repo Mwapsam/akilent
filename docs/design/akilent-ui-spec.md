@@ -707,3 +707,41 @@ Built once, used by Forms, Message templates, Saved replies, Teams and the comme
 | Message preview | `components/_message_bubble.html` | Server-rendered `.wa-preview` / `.wa-bubble`, the markup of the editors' live previews (`whatsapp-template-preview.js`); `compact=True` in list rows. |
 | Times | `{% when value %}` (`apps/core/display.py`) | "just now / 5 min ago / 3 hours ago / yesterday / 12 days ago", then "8 Nov, 13:29" (+ year), in the workspace's time zone, exact time on hover. Replaces `timesince`. |
 | Undo | `apps/core/undo.py` (`undo_url`, `/undo/`) | A signed, 90-second token naming the action, person and workspace; each app registers a handler that undoes for real (unhiding a comment calls Meta). Offered on Follow-up Done, pausing a comment rule, hiding a comment and deleting a saved reply (kept 30 days, `SavedReply.deleted_at`). |
+
+## 20. Panels (2026-11-09)
+
+The 11-09 reviews of Dashboard, Insights and Settings found the pages had gone from too many boxes to none: every module sat directly on the canvas, so figures, lists, charts and tables blended into one column. "Fewer boxes" means no cards in cards and no box around every number. It doesn't mean no structure.
+
+- **Use a panel** for each module that reads on its own: headline figures, a chart, an action list, a funnel, a table, a settings group.
+- **No panel** for page-level text (the title, the period picker, a page banner), for single figures inside a panel, or for anything already inside a panel. Panels are never nested.
+- **Markup:**
+
+  ```html
+  <div class="panel">
+    <div class="panel-head">
+      <div>
+        <h2 class="panel-title">…</h2>
+        <p class="panel-desc">…</p>
+      </div>
+      <div class="panel-actions">…</div>
+    </div>
+    <div class="panel-alert panel-alert--warning">…</div>   <!-- optional -->
+    <div class="panel-body">…</div>                          <!-- --flush for .slist rows -->
+    <div class="panel-foot"><span>helper</span><button>Save</button></div>  <!-- optional -->
+  </div>
+  ```
+
+- **Look:**
+  - the surface (`--color-surface`) on the canvas (`--color-canvas`: `#F3F5F7` light, `#0B0C10` dark);
+  - a 1 px `--color-border` hairline, a 12 px radius and no shadow;
+  - 20–24 px padding;
+  - `.panel-stack` puts 20 px between panels; groups get 40–48 px.
+
+  In dark mode the step between surface and canvas is small, so the hairline does most of the work.
+- **Titles:** panel titles are 16 px semibold (`.panel-title`). A description is one line (`.panel-desc`), and longer explanations go behind "Learn more". Actions such as a metric switcher or "See all →" sit on the right of the title row.
+- **Variants:**
+  - `.panel-alert--warning` / `--info`: a slim tinted bar at the top of the panel it concerns, never a large block.
+  - `.panel-foot`: a muted helper on the left and the action (Save) on the right.
+  - `.panel--danger`: a coral hairline and title, for delete and revoke.
+- **Settings side list:** a 200 px rail with a hairline right edge, sticky. The active item is filled with the surface and has a 2 px highlight bar on its left.
+- Samples are on `/manage/styleguide/`.

@@ -1,8 +1,8 @@
 {% extends "accounts/settings_base.html" %}
 {% block settings_content %}
-<section class="settings-section">
+<section class="settings-section" aria-labelledby="profile-title">
   <div>
-    <h2 class="settings-section-title">Your profile</h2>
+    <h2 id="profile-title" class="settings-section-title">Your profile</h2>
     <p class="settings-section-desc">How you appear to your team, and where sign-in notices go.</p>
   </div>
   <div class="settings-section-body">
@@ -13,28 +13,30 @@
       {% include "components/form_field.html" with name="last_name" label="Last name" value=form.last_name.value error=form.last_name.errors|join:" " %}
     </div>
     {% include "components/form_field.html" with name="email" label="Email" type="email" value=form.email.value error=form.email.errors|join:" " help="Used for sign-in notices and password resets." %}
-    <div class="pt-1">
-      <p class="text-xs text-ink-subtle mb-3">Username <span class="font-medium text-ink-subtle">{{ user.get_username }}</span> can't be changed.</p>
-      <button class="btn btn-primary" type="submit" data-save-fallback>Save changes</button>
-    </div>
-    {% include "components/_save_bar.html" %}
+    {% with helper="Username "|add:user.get_username|add:" can't be changed." %}
+    {% include "components/_panel_foot.html" with helper=helper %}
+    {% endwith %}
   </form>
   </div>
 </section>
 
-<section class="settings-section">
+{% comment %}A single preference: a switch that saves itself (a background post answered with a
+toast). Without scripts the switch is a checkbox and "Save preference" posts the form.{% endcomment %}
+<section class="settings-section" aria-labelledby="email-prefs-title">
   <div>
-    <h2 class="settings-section-title">Email preferences</h2>
-    <p class="settings-section-desc">Account emails, like sign-in codes, password resets and billing notices, always arrive.</p>
+    <h2 id="email-prefs-title" class="settings-section-title">Email preferences</h2>
+    <p class="settings-section-desc">Account emails, like sign-in codes and billing notices, always arrive.</p>
   </div>
   <div class="settings-section-body">
-  <form method="post" action="{% url 'settings-product-updates' %}" class="space-y-4">
+  <form method="post" action="{% url 'settings-product-updates' %}"
+        hx-post="{% url 'settings-product-updates' %}" hx-trigger="change" hx-swap="none">
     {% csrf_token %}
-    <label class="flex items-start gap-2 text-sm text-ink">
-      <input type="checkbox" name="product_updates" value="on" class="mt-0.5" {% if product_updates %}checked{% endif %}>
-      <span>Send me Akilent product updates and tips</span>
+    <label class="switch-row flex items-center justify-between gap-4 text-sm text-ink">
+      <span>Product updates and tips from Akilent</span>
+      <input type="hidden" name="product_updates" value="off">
+      <input type="checkbox" role="switch" class="switch" name="product_updates" value="on" {% if product_updates %}checked{% endif %} data-switch-pref>
     </label>
-    <button class="btn btn-secondary btn-sm" type="submit">Save preference</button>
+    <noscript><button class="btn btn-secondary btn-sm mt-3" type="submit">Save preference</button></noscript>
   </form>
   </div>
 </section>

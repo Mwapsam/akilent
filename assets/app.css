@@ -926,8 +926,8 @@
   /* Settings (D4): a grouped side list, then two-column sections at one width. */
   .settings-layout { @apply grid gap-6; }
   @media (min-width: 768px) {
-    .settings-layout { grid-template-columns: 12rem minmax(0, 1fr); column-gap: 3rem; align-items: start; }
-    .settings-nav { position: sticky; top: 5rem; }
+    .settings-layout { grid-template-columns: 12.5rem minmax(0, 1fr); column-gap: 2.5rem; align-items: start; }
+    .settings-nav { position: sticky; top: 5rem; padding-right: 1rem; border-right: 1px solid var(--color-border); min-height: 16rem; }
   }
   .settings-nav-fold > summary { list-style: none; }
   .settings-nav-fold > summary::-webkit-details-marker { display: none; }
@@ -944,12 +944,33 @@
     letter-spacing: 0.04em; color: var(--color-ink-subtle);
   }
   .settings-nav-link {
-    @apply rounded-md px-2.5 py-1.5 text-sm transition-colors;
+    @apply relative rounded-md px-2.5 py-1.5 text-sm transition-colors;
     color: var(--color-ink-muted);
   }
   .settings-nav-link:hover { background-color: var(--color-secondary-bg); color: var(--color-ink); }
-  .settings-nav-link[aria-current="page"] { @apply font-medium; background-color: var(--color-secondary-bg); color: var(--color-ink); }
+  /* The page you're on: filled (the panel surface) with a 2px highlight bar on its left. */
+  .settings-nav-link[aria-current="page"] {
+    @apply font-medium; background-color: var(--color-surface); color: var(--color-ink);
+    box-shadow: inset 0 0 0 1px var(--color-border);
+  }
+  .settings-nav-link[aria-current="page"]::before {
+    content: ""; position: absolute; left: 0; top: .375rem; bottom: .375rem; width: 2px;
+    border-radius: 2px; background-color: var(--color-highlight);
+  }
   .settings-main { @apply min-w-0; max-width: 64rem; }
+  /* Panels (2026-11-09, spec §20): every group is a panel in one 720px column. */
+  .settings-main--panels { max-width: 45rem; display: flex; flex-direction: column; gap: 1.25rem; }
+  .settings-main--panels .settings-section,
+  .settings-main--panels .settings-section:first-child {
+    display: block; padding: 0;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: .75rem;
+  }
+  .settings-main--panels .settings-section > :first-child:not(.settings-section-body) { @apply px-5 pt-5 sm:px-6; }
+  .settings-main--panels .settings-section-body { @apply px-5 pt-4 pb-5 sm:px-6; }
+  .settings-main--panels .settings-section--danger { border-color: var(--tone-coral-border); }
+  .settings-main--panels .settings-section-desc { @apply mt-0.5; }
 
   /* One settings group: what it is (left), its fields (right); a hairline between groups,
      no card. Stacks at phone width. --danger: a last group for what can't be undone. */
@@ -963,6 +984,67 @@
   .settings-section-body { @apply min-w-0 space-y-4; }
   .settings-section--danger .settings-section-title { color: var(--tone-coral-fg); }
   .btn-danger-outline { color: var(--tone-coral-fg); box-shadow: inset 0 0 0 1px var(--tone-coral-border); }
+
+  /* Panel (2026-11-09): one surface per module that reads on its own (headline figures, a
+     chart, an action list, a funnel, a table, a settings group), on the tinted canvas.
+     Never nested; nothing inside is boxed. Spec §20.
+       .panel > .panel-head (.panel-title, .panel-desc, .panel-actions)
+              > .panel-alert (optional, slim) > .panel-body (or --flush for hairline rows)
+              > .panel-foot (optional: helper left, action right)
+     .panel--danger: delete / revoke. .panel-stack: panels one under another. */
+  .panel {
+    @apply min-w-0;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: .75rem;
+  }
+  .panel-head { @apply flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-5 pt-5 sm:px-6; }
+  .panel-head:last-child { @apply pb-5; } /* a panel that's only a title row and an action */
+  .panel-head + .panel-body, .panel-head + .panel-alert { @apply pt-4; }
+  .panel-title { @apply text-base font-semibold; color: var(--color-ink); }
+  .panel-desc { @apply mt-0.5 text-sm; color: var(--color-ink-subtle); }
+  .panel-actions { @apply flex shrink-0 items-center gap-2; }
+  .panel-body { @apply min-w-0 space-y-4 px-5 py-5 sm:px-6; }
+  .panel-body--flush { @apply px-0 pb-0 space-y-0; }
+  .panel-body--flush > .slist, .panel-body--flush > ul { border-top: 1px solid var(--color-border); }
+  .panel-alert { @apply mx-5 sm:mx-6 flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm; }
+  .panel-alert + .panel-body { @apply pt-4; }
+  .panel-alert--warning { background-color: var(--tone-amber-bg); color: var(--tone-amber-fg); }
+  .panel-alert--info { background-color: var(--tone-info-bg); color: var(--tone-info-fg); }
+  .panel-foot {
+    @apply flex flex-wrap items-center justify-between gap-3 px-5 py-3 sm:px-6 text-sm;
+    border-top: 1px solid var(--color-border);
+    background-color: var(--color-surface-muted);
+    color: var(--color-ink-subtle);
+    border-radius: 0 0 calc(.75rem - 1px) calc(.75rem - 1px);
+  }
+  /* A footer inside a padded body (a form that wraps its fields and its Save) reaches the
+     panel's edges. */
+  .panel-body .panel-foot, .settings-section-body .panel-foot { margin: 1.25rem -1.25rem -1.25rem; }
+  @media (min-width: 640px) {
+    .panel-body .panel-foot, .settings-section-body .panel-foot { margin: 1.5rem -1.5rem -1.25rem; }
+  }
+  .panel-pad { @apply px-5 py-5 sm:px-6; }
+  /* A panel's Save (components/_panel_foot.html): with scripts it waits, muted, until something
+     in its form changes; Discard shows only then. Without scripts it's a plain Save. */
+  html.ak-js form[data-save-bar]:not([data-dirty]) [data-panel-discard] { display: none; }
+  html.ak-js form[data-save-bar]:not([data-dirty]) [data-panel-save] {
+    background-color: var(--color-secondary-bg); color: var(--color-ink-subtle); box-shadow: none; cursor: default;
+  }
+  .panel-foot > :last-child:not(:first-child) { margin-left: auto; }
+  .panel--danger { border-color: var(--tone-coral-border); }
+  .panel--danger .panel-title { color: var(--tone-coral-fg); }
+  .panel-stack { @apply flex flex-col gap-5; }
+
+  /* A searchable select (app.js enhanceSearchSelect): an input with a list under it. */
+  .search-select { @apply relative; }
+  .search-select-list {
+    @apply absolute z-30 mt-1 w-full max-h-64 overflow-y-auto rounded-lg py-1 text-sm;
+    background-color: var(--color-surface); box-shadow: 0 0 0 1px var(--color-border-strong), var(--shadow-pop);
+  }
+  .search-select-option { @apply px-3 py-1.5 cursor-pointer; color: var(--color-ink); }
+  .search-select-option[aria-selected="true"] { background-color: var(--color-secondary-bg); }
+  .search-select-empty { @apply px-3 py-1.5; color: var(--color-ink-subtle); }
   .btn-danger-outline:hover { background-color: var(--tone-coral-bg); }
 
   /* The "Unsaved changes" bar (components/_save_bar.html): with scripts, a settings form's own

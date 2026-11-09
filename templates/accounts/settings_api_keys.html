@@ -1,9 +1,9 @@
 {% extends "accounts/settings_base.html" %}
 {% block settings_content %}
-<div class="space-y-6">
+<div class="flex flex-col gap-5">
 
   {% if new_key %}
-  <div class="rounded-xl border border-amber-300 tone-amber-bg px-4 py-3" role="status">
+  <div class="panel panel-pad" style="border-color: var(--tone-amber-border)" role="status">
     <p class="text-sm font-medium tone-amber-fg">Copy your key now and keep it on your server. It won't be shown again.</p>
     <div class="mt-2">
       {% include "components/copy_field.html" with value=new_key label="Copy" %}
@@ -12,17 +12,19 @@
   </div>
   {% endif %}
 
-  <div>
-    <h2 class="settings-section-title">API keys</h2>
-    <p class="text-sm text-ink-subtle mb-4">
-      Keys let your own website or app use Akilent. Give each place its own key, so you can
-      revoke one without breaking the others.
-    </p>
+  <div class="panel">
+    <div class="panel-head">
+      <div>
+        <h2 class="panel-title">API keys</h2>
+        <p class="panel-desc">Give each website or app its own key, so you can revoke one without breaking the others.</p>
+      </div>
+    </div>
 
     {% if keys %}
-    <ul class="divide-y divide-border rounded-xl border border-border text-sm">
+    <div class="panel-body panel-body--flush">
+    <ul class="divide-y divide-border border-t border-border text-sm">
       {% for k in keys %}
-      <li class="p-3 flex flex-wrap items-start justify-between gap-3">
+      <li class="px-5 sm:px-6 py-3 flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0 space-y-1">
           <p class="font-medium text-ink">
             {{ k.name }}
@@ -49,14 +51,15 @@
       </li>
       {% endfor %}
     </ul>
+    </div>
     {% else %}
-    <p class="text-sm text-ink-subtle">Your business doesn't have an API key yet.</p>
+    <div class="panel-body"><p class="text-sm text-ink-subtle">Your business doesn't have an API key yet.</p></div>
     {% endif %}
   </div>
 
   {% if can_edit %}
-  <div class="card card-pad">
-    <h2 class="font-semibold mb-4">Create a key</h2>
+  <div class="panel panel-pad">
+    <h2 class="panel-title mb-4">Create a key</h2>
     <form method="post" class="space-y-4">
       {% csrf_token %}
       <div>

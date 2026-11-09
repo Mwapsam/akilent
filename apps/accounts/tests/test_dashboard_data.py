@@ -103,7 +103,10 @@ def test_badge_number_is_customers_waiting_and_a_follow_up_is_a_dot(owner, monke
     monkeypatch.setattr(followups, "due_for", lambda user, account: 1)
     # Nothing waiting, one follow-up due: a dot, no number (it used to read "1").
     html = client.get("/inbox/badge/").content.decode()
-    assert "inbox-tab-count--dot" in html and "></span>" in html
+    assert (
+        "inbox-tab-count--dot" in html
+        and '<span class="sr-only">1 follow-up due</span>' in html
+    )
     assert 'data-due="1"' in html and "1 follow-up due" in html
     _waiting(account)
     html = client.get("/inbox/badge/").content.decode()

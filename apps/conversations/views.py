@@ -1959,9 +1959,12 @@ def inbox_badge(request):
     if due:
         classes += " inbox-tab-count--due" if waiting else " inbox-tab-count--dot"
     text = "" if not waiting else (waiting if waiting < 100 else "99+")
+    # The label is real text for screen readers (an aria-label on a plain span isn't
+    # reliably read, and the dot has no text at all); the number is for the eye.
+    shown = f'<span aria-hidden="true">{text}</span>' if text else ""
     return HttpResponse(
-        f'<span class="{classes}" data-due="{due}" aria-label="{label}" '
-        f'title="{label}">{text}</span>'
+        f'<span class="{classes}" data-due="{due}" title="{label}">{shown}'
+        f'<span class="sr-only">{label}</span></span>'
     )
 
 

@@ -2761,3 +2761,56 @@ Plan: the design audit's D5 (fewer boxes, Dashboard first), D4 (Settings side li
   - Clicks aren't a funnel step any more, because a chat can also start from a reply to a comment. They're in the sentence above the funnel ("2 posts published, 14 chat-link clicks").
 - **Missed is a number:** "0 missed (no reply within 24 hours)", never "—". When there are misses, the line below says "N answered later".
 - **Tests:** `apps/insights/tests/test_insights_trust.py`; `test_insights_step3` has the new funnel label.
+
+### Entry 55: Dashboard review step 1, data fixes; and mypy (2026-11-09)
+
+- **Plan on Home** (`billing_api.home_notice`):
+  - It shows only when it needs action, as one slim line with a button:
+    - no plan;
+    - a payment that didn't go through ("Pay now");
+    - a renewal that's due but hasn't gone through;
+    - a trial, or a cancelled plan, ending within 7 days;
+    - a renewal within 7 days.
+  - It never shows "Active · renews 7 Nov" on 9 Nov.
+  - The "Business plan" block, the "No active plan" block and the email quota bar are gone from Home. Quota warnings at 80% and over still show through `_usage_warnings.html`.
+- **Inbox badge** (`inbox_badge`, `inbox_waiting_for`):
+  - The number is customers waiting on a reply. That's `state.needs_attention`, the Dashboard's "Customers waiting", limited to the conversations the viewer is expected to look at.
+  - Follow-ups due for the viewer are no longer added to it. They're a coral dot: on the number (`.inbox-tab-count--due`), or on its own when nothing is waiting (`--dot`).
+  - The label says both, for example "1 customer waiting for a reply and 1 follow-up due".
+  - `data-due` is unchanged.
+- **"Recent activity"** was email sends only, which read as wrong ("No messages sent yet") beside conversations and replies. It's now "Recent email sends" and only shows with email on. The real activity feed is part of review step 3.
+- **mypy:** two errors were from Entry 54 and one from Stage 5 (`results.journey` sets `chats` with `setattr`; `rules_views` casts the instance). `mypy .` is clean.
+- **Tests:** `apps/accounts/tests/test_dashboard_data.py`. Updated `test_nav_sections` (badge counts waiting, not unread) and `test_dashboard`.
+
+### Entry 56: Panels, step 1 (component and Settings), plus the 11-09 follow-ups (2026-11-09)
+
+- **Panel component** (`assets/app.css`, spec §20, styleguide "Panels"):
+  - `.panel` with `.panel-head` (`.panel-title` 16 px, `.panel-desc`, `.panel-actions`), `.panel-alert--warning/--info`, `.panel-body` (`--flush` for hairline rows), `.panel-foot`, `.panel--danger`, `.panel-pad` and `.panel-stack`.
+  - It's a surface on the existing tinted canvas (`#F3F5F7` light, `#0B0C10` dark), with a hairline, a 12 px radius and no shadow.
+  - There's no `overflow: hidden`, so row menus still open past the edge.
+- **Settings side list:** a 200 px sticky rail with a hairline right edge. The active item is filled with the surface, with a 2 px highlight bar on its left. There's a new "Plan & usage" item (`/billing/plans/`), so email and other usage is one click from Settings.
+- **Settings as panels:**
+  - `.settings-main--panels` (set on `settings_base.html`) turns every `.settings-section` into a panel in one 720 px column. The section's head is on top and its fields are below.
+  - It's scoped to Settings: Inbox settings, the Studio pages and Channels move in review step 4.
+  - **Save** is in each panel's footer (`components/_panel_foot.html`). With scripts it's muted and disabled until a field in its form changes (`syncPanelSave` in app.js), then it's the primary button with Discard beside it. Leaving with changes still asks first. Without scripts it's a plain Save.
+  - Settings no longer uses the sticky bar; the Studio pages keep it until step 4.
+  - **Profile:** "Product updates and tips" is a switch that saves itself (a background post answered with a toast; `settings_product_updates` uses `action_done`). Without scripts it falls back to the form.
+  - **Business:** a one-line description ("Shown at the bottom of every campaign email, as anti-spam law requires. Learn more"), a slim alert and a searchable country list. Short fields are in pairs (City and Postal code, Region and Country); the address lines are full width.
+  - **Opening hours:** a searchable time zone, hairline day rows instead of a box each (shared with Build step 1), and a one-line description.
+  - **Optional tools:** switch rows instead of bordered cards.
+  - **Security:** the password Save is in the footer, the two-factor methods are full-width hairline rows, and the guide link is in the description.
+  - **AI** is now four panels:
+    - AI replies: the form, with the status as one line, consent as a switch, no boxes inside, and "Test connection" plus Save in the footer;
+    - Knowledge base;
+    - What is sent to the AI service;
+    - Recent automatic replies.
+  - **Team, Integrations and API keys:** the `.card` boxes became panels.
+- **Searchable select** (`enhanceSearchSelect`, `select[data-searchable]`):
+  - The `<select>` stays in the form, hidden, holding the value.
+  - An input with `role="combobox"` filters a listbox: arrows move, Enter chooses, Esc closes, and blur puts the text back to the current value.
+  - The label points at the input, and `required`, `aria-invalid` and `aria-describedby` move to it.
+- **Inbox badge:** the label is now real screen-reader text (`.sr-only` inside the badge, copied with it to every mirror), so the follow-up dot is announced, not only shown in a tooltip.
+- **Tests:**
+  - New: `apps/core/tests/test_panels.py`, `apps/accounts/tests/test_settings_panels.py`.
+  - Updated: `test_settings_batch` (panel footer instead of the bar) and `test_settings_business` (shorter wording).
+- **Not done:** I haven't looked at the pages in a browser, in either theme.

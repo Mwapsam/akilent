@@ -33,7 +33,7 @@ def test_page_explains_why_and_prompts_when_missing(client, account):
     _login(client, account, Membership.Role.OWNER)
     resp = client.get("/settings/business/")
     assert resp.status_code == 200
-    assert b"Anti-spam law requires" in resp.content
+    assert b"as anti-spam law requires" in resp.content
     assert b"Add your mailing address to send email campaigns" in resp.content
 
 

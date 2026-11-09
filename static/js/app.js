@@ -1044,14 +1044,25 @@
   function saveBarForm(el) {
     return el && el.closest ? el.closest("form[data-save-bar]") : null;
   }
+  // A panel's Save (components/_panel_foot.html) is disabled until its form changes.
+  function syncPanelSave(form) {
+    const clean = !form.hasAttribute("data-dirty");
+    form.querySelectorAll("[data-panel-save]").forEach(function (b) { b.disabled = clean; });
+  }
   function markDirty(e) {
     const form = saveBarForm(e.target);
-    if (form && !e.target.closest(".save-bar")) form.setAttribute("data-dirty", "");
+    if (form && !e.target.closest(".save-bar")) { form.setAttribute("data-dirty", ""); syncPanelSave(form); }
   }
   document.addEventListener("input", markDirty);
   document.addEventListener("change", markDirty);
   document.addEventListener("reset", function (e) {
-    if (e.target.matches && e.target.matches("form[data-save-bar]")) e.target.removeAttribute("data-dirty");
+    if (e.target.matches && e.target.matches("form[data-save-bar]")) {
+      const form = e.target;
+      form.removeAttribute("data-dirty");
+      syncPanelSave(form);
+      // A searchable select's text follows its <select> back (enhanceSearchSelect).
+      setTimeout(function () { form.dispatchEvent(new Event("ak:reset")); }, 0);
+    }
   }, true);
   document.addEventListener("submit", function (e) {
     if (e.target.matches && e.target.matches("form[data-save-bar]")) e.target.removeAttribute("data-dirty");
@@ -1061,8 +1072,109 @@
     if (!root || !root.querySelectorAll) return;
     root.querySelectorAll("form[data-save-bar]").forEach(function (form) {
       if (form.querySelector('[aria-invalid="true"], .field-error')) form.setAttribute("data-dirty", "");
+      syncPanelSave(form);
     });
+    root.querySelectorAll("select[data-searchable]").forEach(enhanceSearchSelect);
   });
+  // A long <select> (country, time zone) as a searchable list: type to filter, arrows to move,
+  // Enter to choose, Esc to close. The <select> stays in the form (hidden) and keeps the value,
+  // so the server sees the same field; without scripts it's the plain <select>.
+  let searchSelectSeq = 0;
+  function enhanceSearchSelect(sel) {
+    if (sel.dataset.enhanced) return;
+    sel.dataset.enhanced = "1";
+    const n = ++searchSelectSeq;
+    const wrap = document.createElement("div");
+    wrap.className = "search-select";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "input w-full";
+    input.autocomplete = "off";
+    input.setAttribute("role", "combobox");
+    input.setAttribute("aria-autocomplete", "list");
+    input.setAttribute("aria-expanded", "false");
+    input.setAttribute("aria-controls", "search-select-list-" + n);
+    input.placeholder = sel.dataset.placeholder || "Type to search";
+    ["aria-invalid", "aria-describedby"].forEach(function (a) {
+      if (sel.hasAttribute(a)) input.setAttribute(a, sel.getAttribute(a));
+    });
+    if (sel.disabled) input.disabled = true;
+    // The label points at what you type in.
+    if (sel.id) { input.id = sel.id; sel.id = sel.id + "-native"; }
+    input.required = sel.required;
+    sel.required = false;
+    const list = document.createElement("ul");
+    list.className = "search-select-list";
+    list.id = "search-select-list-" + n;
+    list.setAttribute("role", "listbox");
+    list.hidden = true;
+    sel.parentNode.insertBefore(wrap, sel);
+    wrap.appendChild(input);
+    wrap.appendChild(list);
+    wrap.appendChild(sel);
+    sel.hidden = true;
+    sel.tabIndex = -1;
+    const options = Array.prototype.filter.call(sel.options, function (o) { return o.value !== ""; });
+    let shown = [];
+    let active = -1;
+    function current() { const o = sel.options[sel.selectedIndex]; return o && o.value ? o.text : ""; }
+    input.value = current();
+    function close() { list.hidden = true; input.setAttribute("aria-expanded", "false"); input.removeAttribute("aria-activedescendant"); }
+    function highlight(i) {
+      active = i;
+      Array.prototype.forEach.call(list.children, function (li, j) { li.setAttribute("aria-selected", j === i ? "true" : "false"); });
+      const li = list.children[i];
+      if (li) { input.setAttribute("aria-activedescendant", li.id); li.scrollIntoView({ block: "nearest" }); }
+    }
+    function render() {
+      const q = input.value.trim().toLowerCase();
+      const all = q === current().toLowerCase();
+      shown = options.filter(function (o) { return all || !q || o.text.toLowerCase().indexOf(q) !== -1; }).slice(0, 80);
+      list.innerHTML = "";
+      shown.forEach(function (o, i) {
+        const li = document.createElement("li");
+        li.id = list.id + "-" + i;
+        li.setAttribute("role", "option");
+        li.className = "search-select-option";
+        li.textContent = o.text;
+        li.addEventListener("mousedown", function (e) { e.preventDefault(); choose(o); });
+        list.appendChild(li);
+      });
+      if (!shown.length) {
+        const li = document.createElement("li");
+        li.className = "search-select-empty";
+        li.textContent = "No matches";
+        list.appendChild(li);
+      }
+      list.hidden = false;
+      input.setAttribute("aria-expanded", "true");
+      highlight(shown.length ? Math.max(0, shown.indexOf(sel.options[sel.selectedIndex])) : -1);
+    }
+    function choose(o) {
+      sel.value = o.value;
+      input.value = o.text;
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+      close();
+    }
+    input.addEventListener("focus", function () { input.select(); render(); });
+    input.addEventListener("input", render);
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        if (list.hidden) { render(); return; }
+        if (!shown.length) return;
+        highlight((active + (e.key === "ArrowDown" ? 1 : -1) + shown.length) % shown.length);
+      } else if (e.key === "Enter") {
+        if (!list.hidden && shown[active]) { e.preventDefault(); choose(shown[active]); }
+      } else if (e.key === "Escape") {
+        if (!list.hidden) { e.preventDefault(); input.value = current(); close(); }
+      }
+    });
+    input.addEventListener("blur", function () { input.value = current(); close(); });
+    const form = sel.form;
+    if (form) form.addEventListener("ak:reset", function () { input.value = current(); });
+  }
+
   const LEAVE = "You have unsaved changes. Leave without saving?";
   window.addEventListener("beforeunload", function (e) {
     if (document.querySelector("form[data-save-bar][data-dirty]")) { e.preventDefault(); e.returnValue = ""; }

@@ -336,6 +336,45 @@
     </div>
   </section>
 
+  {% comment %}Panels (2026-11-09): one surface per module, on the canvas. Spec §20.{% endcomment %}
+  <section>
+    <h2 class="text-lg font-semibold text-ink mb-3">Panels</h2>
+    <div class="panel-stack max-w-2xl" data-sg="panels">
+      <div class="panel">
+        <div class="panel-head">
+          <div><h3 class="panel-title">Your profile</h3><p class="panel-desc">How you appear to your team.</p></div>
+        </div>
+        <div class="panel-alert panel-alert--warning"><span>Add your mailing address so campaign emails can be sent.</span><a href="#" class="font-medium underline">Add it</a></div>
+        <div class="panel-body">
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div><label class="label" for="sg-first">First name</label><input id="sg-first" class="input w-full" value="Sam"></div>
+            <div><label class="label" for="sg-last">Last name</label><input id="sg-last" class="input w-full" value="Mwape"></div>
+          </div>
+        </div>
+        <div class="panel-foot"><span>Username can't be changed.</span><button type="button" class="btn btn-secondary btn-sm" disabled>Save changes</button></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <div><h3 class="panel-title">Team members</h3><p class="panel-desc">Everyone who can sign in to this workspace.</p></div>
+          <div class="panel-actions"><button type="button" class="btn btn-secondary btn-sm">Invite member</button></div>
+        </div>
+        <div class="panel-body panel-body--flush">
+          <ul class="slist">
+            <li class="slist-row"><div class="slist-main"><p class="slist-title">Sam Mwape</p><p class="slist-meta">Owner</p></div></li>
+            <li class="slist-row"><div class="slist-main"><p class="slist-title">Akili M.</p><p class="slist-meta">Member</p></div></li>
+          </ul>
+        </div>
+      </div>
+      <div class="panel panel--danger">
+        <div class="panel-head">
+          <div><h3 class="panel-title">Delete workspace</h3><p class="panel-desc">Removes every conversation, contact and setting. This can't be undone.</p></div>
+          <div class="panel-actions"><button type="button" class="btn btn-danger-outline btn-sm">Delete workspace</button></div>
+        </div>
+      </div>
+    </div>
+    <p class="mt-2 text-xs text-ink-subtle">.panel › .panel-head (.panel-title, .panel-desc, .panel-actions) › .panel-alert › .panel-body (--flush for hairline rows) › .panel-foot. Never nested.</p>
+  </section>
+
   {# ── Shared list components (Inbox pages plan, Stage 3) ───────── #}
   <section>
     <h2 class="text-lg font-semibold text-ink mb-3">Status badge (draft · pending · live · paused · error)</h2>

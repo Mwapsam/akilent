@@ -2,11 +2,11 @@
 {% block title %}Settings — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% comment %}
-Settings (D4, 2026-11-08): a grouped side list instead of ten tabs in a row, and every page
-in the same two-column sections (.settings-section: what it is on the left, the fields on
-the right, a hairline between sections, no cards). One width for every page, so the right
-edge doesn't move between tabs. At phone width the list folds into "Settings · Profile" and
-the sections stack.
+Settings (D4, 2026-11-08; panels 2026-11-09): a grouped side list, then one 720px column of
+panels (.settings-main--panels turns each .settings-section into a panel: title and one-line
+description on top, the fields below, Save in the panel's footer via
+components/_panel_foot.html). One width for every page, so the right edge doesn't move
+between tabs. At phone width the list folds into "Settings · Profile".
 {% endcomment %}
 {% block page_header %}
 <div class="mb-6">
@@ -32,6 +32,7 @@ the sections stack.
         <a href="{% url 'settings-ai' %}" class="settings-nav-link" {% if t == 'ai' %}aria-current="page"{% endif %}>AI</a>
         <a href="{% url 'settings-tools' %}" class="settings-nav-link" {% if t == 'tools' %}aria-current="page"{% endif %}>Optional tools</a>
         <a href="{% url 'settings-integrations' %}" class="settings-nav-link" {% if t == 'integrations' %}aria-current="page"{% endif %}>Integrations</a>
+        <a href="{% url 'billing:plans' %}" class="settings-nav-link">Plan &amp; usage</a>
 
         <p class="settings-nav-group">Developer</p>
         <a href="{% url 'settings-api-keys' %}" class="settings-nav-link" {% if t == 'api_keys' %}aria-current="page"{% endif %}>API keys</a>
@@ -40,7 +41,7 @@ the sections stack.
     </details>
   </nav>
 
-  <div class="settings-main">
+  <div class="settings-main settings-main--panels">
     {% block settings_content %}{% endblock %}
   </div>
 </div>

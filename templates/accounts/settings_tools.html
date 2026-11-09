@@ -3,25 +3,26 @@
 <section class="settings-section">
   <div>
     <h2 class="settings-section-title">Optional tools</h2>
-    <p class="settings-section-desc">Akilent is about your customer conversations. These add extra sections to it — turn one on if your business needs it, off if it doesn't. Nothing is deleted either way.</p>
+    <p class="settings-section-desc">Extra sections for Akilent. Turning one off deletes nothing.</p>
   </div>
   <div class="settings-section-body">
   {% if not tools %}
   <p class="text-sm text-ink-subtle">Your plan doesn't include any optional tools. <a href="{% url 'billing:plans' %}" class="text-accent underline">See plans</a>.</p>
   {% else %}
-  <form method="post" class="space-y-4" data-save-bar>
+  <form method="post" data-save-bar>
     {% csrf_token %}
+    <div class="divide-y divide-border border-y border-border">
     {% for tool in tools %}
-    <label class="flex items-start gap-3 rounded-xl border border-border px-4 py-3 cursor-pointer hover:border-brand-300">
-      <input type="checkbox" name="{{ tool.feature }}" {% if tool.enabled %}checked{% endif %} class="mt-1">
+    <label class="flex items-start justify-between gap-4 py-3 cursor-pointer">
       <span class="min-w-0">
         <span class="block font-medium text-ink">{{ tool.label }}</span>
         <span class="block text-sm text-ink-subtle">{{ tool.hint }}</span>
       </span>
+      <input type="checkbox" role="switch" class="switch mt-0.5" name="{{ tool.feature }}" {% if tool.enabled %}checked{% endif %}>
     </label>
     {% endfor %}
-    <button class="btn btn-primary" type="submit" data-save-fallback>Save</button>
-    {% include "components/_save_bar.html" %}
+    </div>
+    {% include "components/_panel_foot.html" with label="Save" %}
   </form>
   {% endif %}
   </div>

@@ -102,17 +102,20 @@ def _send_invitation_email(request, invite):
 @require_POST
 def settings_product_updates(request):
     """The person's own marketing choice. Account emails are not affected either way."""
+    from apps.core.htmx import action_done
     from apps.platform_mail.services.consent import set_user_preference
 
+    # The switch posts "off" then "on" when it's on (a hidden field before the checkbox).
     wants = request.POST.get("product_updates") == "on"
     set_user_preference(request.user, wants, source="profile", request=request)
-    messages.success(
+    # From the switch (a background post): a toast; from the plain form: a flash + redirect.
+    return action_done(
         request,
         "You'll get product updates."
         if wants
         else "You won't get product updates any more.",
+        reverse("settings-profile"),
     )
-    return redirect("settings-profile")
 
 
 @login_required

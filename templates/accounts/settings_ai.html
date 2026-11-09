@@ -1,58 +1,34 @@
 {% extends "accounts/settings_base.html" %}
 {% block settings_content %}
-<section class="settings-section">
+{% comment %}Panels (2026-11-09): AI replies (the form, Save in its footer), the knowledge base,
+what is sent to the AI service, and recent automatic replies. Nothing boxed inside a panel.{% endcomment %}
+<section class="settings-section" aria-labelledby="ai-title">
   <div>
-    <h2 class="settings-section-title">AI suggestions</h2>
-    <p class="settings-section-desc">
-      When a customer writes and none of your automations answered, AI can draft a reply for your team.
-      A person on your team reads the suggestion, edits it if needed, and presses Send.
-      <strong>AI sends nothing on its own unless you choose automatic replies below</strong>, and then only for the
-      kinds of question you tick. Everything else in Akilent works the same with AI switched off.
-    </p>
+    <h2 id="ai-title" class="settings-section-title">AI replies</h2>
+    <p class="settings-section-desc">AI drafts replies for your team. It sends nothing on its own unless you choose automatic replies.</p>
   </div>
   <div class="settings-section-body">
 
   {% if not site_configured %}
-  <div class="alert alert-info">AI isn't set up on this Akilent installation yet. Ask your administrator to configure an AI provider.</div>
+  <div class="panel-alert panel-alert--info !mx-0" role="status"><span>AI isn't set up on this Akilent installation yet. Ask your administrator to configure an AI provider.</span></div>
   {% elif off_reason %}
-  <div class="alert alert-info">
-    <strong>AI is off in the inbox.</strong> {{ off_reason }}
+  <div class="panel-alert panel-alert--info !mx-0" role="status">
+    <span><strong>AI is off in the inbox.</strong> {{ off_reason }}
     {% if "module" in off_reason %}
       {% if is_operator %}Turn on the AI module for this business under <a class="underline" href="{% url 'core:business-tab' account.pk 'billing' %}">Operator console, then Billing</a>.{% else %}Ask Akilent support to include AI in your plan.{% endif %}
-    {% endif %}
+    {% endif %}</span>
   </div>
   {% else %}
-  <div class="alert alert-success">AI is on. Open a conversation to see a suggestion above the message box.</div>
+  <p class="text-sm text-ink-subtle" role="status"><span class="badge badge-success">On</span> AI is on. Open a conversation to see a suggestion above the message box.</p>
   {% endif %}
-
-  <div class="rounded-xl border border-border p-4 flex flex-wrap items-center justify-between gap-3">
-    <div class="flex-1 min-w-0">
-      <p class="font-medium text-ink">Teach AI about your business</p>
-      <p class="text-sm text-ink-subtle">
-        Add your customers' questions and your answers: write them, paste or upload a list, or import them from your website. Then try a question to see how AI would reply.
-        <span class="block text-xs text-ink-subtle mt-0.5">{{ knowledge_active }} answer{{ knowledge_active|pluralize }} in use{% if knowledge_review %} · {{ knowledge_review }} waiting for review{% endif %}</span>
-      </p>
-    </div>
-    <a href="{% url 'settings-ai-knowledge' %}" class="btn btn-primary btn-sm">Open knowledge base</a>
-  </div>
-
-  <div class="rounded-xl border border-border p-4 text-sm text-ink-muted">
-    <p class="font-medium text-ink">What is sent to the AI service</p>
-    <ul class="list-disc pl-5 mt-1 space-y-0.5">
-      <li>The last few messages of the one conversation being answered, and a short summary of its earlier messages. Phone numbers and email addresses in them are hidden.</li>
-      <li>The customer's first name and tags, whether they're tracked as interested, and, when AI asks, their open follow-up and last few orders.</li>
-      <li>Your business name, opening hours, approved templates, tag names, the notes below, your <a class="underline" href="{% url 'settings-ai-knowledge' %}">knowledge base</a> entries (the ones closest to the customer's question when you have many), and products and prices from your catalogue.</li>
-    </ul>
-    <p class="mt-1">Internal notes, other customers and other conversations are never sent.</p>
-  </div>
 
   <form method="post" class="space-y-4" data-save-bar>
     {% csrf_token %}
-    <label class="flex items-start gap-3 rounded-xl border border-border px-4 py-3">
-      <input type="checkbox" name="enabled" class="mt-1" {% if ai.enabled %}checked{% endif %} {% if not can_edit %}disabled{% endif %}>
-      <span class="text-sm text-ink">Turn on AI suggestions. I agree that the information above is sent to the AI service to draft replies.
+    <label class="flex items-start justify-between gap-4 text-sm text-ink">
+      <span>Turn on AI suggestions. I agree that what's listed under “What is sent to the AI service” is sent to draft replies.
         {% if ai.consented_at %}<span class="block text-xs text-ink-subtle mt-0.5">Agreed {{ ai.consented_at|date:"j M Y" }}{% if ai.consented_by %} by {{ ai.consented_by.get_full_name|default:ai.consented_by.email }}{% endif %}.</span>{% endif %}
       </span>
+      <input type="checkbox" role="switch" class="switch mt-0.5" name="enabled" {% if ai.enabled %}checked{% endif %} {% if not can_edit %}disabled{% endif %}>
     </label>
     <div>
       <label class="label" for="ai-notes">What AI may tell customers about your business</label>
@@ -64,12 +40,12 @@
 
     <fieldset class="space-y-2" x-data="{ mode: '{{ ai.reply_mode|default:'suggest' }}' }" {% if not can_edit %}disabled{% endif %}>
       <legend class="label">How should AI help?</legend>
-      <label class="flex items-start gap-3 rounded-xl border border-border px-4 py-3">
+      <label class="flex items-start gap-3 py-1">
         <input type="radio" name="reply_mode" value="suggest" class="mt-1" x-model="mode">
         <span class="text-sm text-ink"><span class="font-medium">Suggest replies for my team to send</span>
           <span class="block text-xs text-ink-subtle mt-0.5">AI drafts a reply; a person checks it and presses Send. Nothing goes out without your team.</span></span>
       </label>
-      <label class="flex items-start gap-3 rounded-xl border border-border px-4 py-3">
+      <label class="flex items-start gap-3 py-1">
         <input type="radio" name="reply_mode" value="auto" class="mt-1" x-model="mode">
         <span class="text-sm text-ink"><span class="font-medium">Reply automatically to the questions I choose</span>
           <span class="block text-xs text-ink-subtle mt-0.5">AI answers on WhatsApp and Instagram straight away, like a customer asking when you're open at 9 pm or a question your knowledge base answers. Everything else stays a suggestion for your team.</span>
@@ -77,9 +53,9 @@
         </span>
       </label>
 
-      <div class="rounded-xl border border-border p-4 space-y-3" x-show="mode === 'auto'" x-cloak>
+      <div class="ml-6 pl-4 border-l border-border space-y-3" x-show="mode === 'auto'" x-cloak>
         {% if not autonomy_site_on %}
-        <div class="alert alert-info">Automatic replies are paused for everyone on this Akilent installation. AI will only suggest until they're resumed.</div>
+        <div class="panel-alert panel-alert--info !mx-0"><span>Automatic replies are paused for everyone on this Akilent installation. AI will only suggest until they're resumed.</span></div>
         {% endif %}
         <div>
           <p class="text-sm font-medium text-ink">AI may answer these on its own</p>
@@ -127,20 +103,55 @@
       </div>
     </fieldset>
     {% if can_edit %}
-    <div class="flex flex-wrap justify-end gap-2">
-      {% if site_configured %}<button name="action" value="test" class="btn btn-ghost btn-sm" formnovalidate>Test connection</button>{% endif %}
-      <button class="btn btn-primary btn-sm" data-save-fallback>Save</button>
+    <div class="panel-foot">
+      <span>{% if site_configured %}<button name="action" value="test" class="btn btn-ghost btn-sm" formnovalidate>Test connection</button>{% endif %}</span>
+      <span class="flex items-center gap-2">
+        <button type="reset" class="btn btn-ghost btn-sm" data-panel-discard>Discard</button>
+        <button type="submit" class="btn btn-primary btn-sm" data-panel-save>Save</button>
+      </span>
     </div>
-    {% include "components/_save_bar.html" %}
+    {% else %}
+    {% include "components/_panel_foot.html" with readonly="Only an owner or admin can change AI settings." %}
     {% endif %}
   </form>
+  </div>
+</section>
+
+<section class="settings-section" aria-labelledby="ai-knowledge-title">
+  <div class="flex flex-wrap items-start justify-between gap-3 !pb-5">
+    <div class="min-w-0">
+      <h2 id="ai-knowledge-title" class="settings-section-title">Knowledge base</h2>
+      <p class="settings-section-desc">Your customers' questions and your answers, for AI to reply from: {{ knowledge_active }} answer{{ knowledge_active|pluralize }} in use{% if knowledge_review %} · {{ knowledge_review }} waiting for review{% endif %}.</p>
+    </div>
+    <a href="{% url 'settings-ai-knowledge' %}" class="btn btn-secondary btn-sm">Open knowledge base</a>
+  </div>
+</section>
+
+<section class="settings-section" aria-labelledby="ai-sent-title">
+  <div>
+    <h2 id="ai-sent-title" class="settings-section-title">What is sent to the AI service</h2>
+    <p class="settings-section-desc">Only what's needed to draft one reply.</p>
+  </div>
+  <div class="settings-section-body text-sm text-ink-muted">
+    <ul class="list-disc pl-5 mt-1 space-y-0.5">
+      <li>The last few messages of the one conversation being answered, and a short summary of its earlier messages. Phone numbers and email addresses in them are hidden.</li>
+      <li>The customer's first name and tags, whether they're tracked as interested, and, when AI asks, their open follow-up and last few orders.</li>
+      <li>Your business name, opening hours, approved templates, tag names, the notes below, your <a class="underline" href="{% url 'settings-ai-knowledge' %}">knowledge base</a> entries (the ones closest to the customer's question when you have many), and products and prices from your catalogue.</li>
+    </ul>
+    <p class="mt-2">Internal notes, other customers and other conversations are never sent.</p>
+  </div>
+</section>
 
   {% if auto_replies %}
+<section class="settings-section" aria-labelledby="ai-recent-title">
   <div>
-    <h3 class="font-semibold text-sm mb-2">Recent automatic replies</h3>
-    <ul class="divide-y divide-border rounded-xl border border-border text-sm">
+    <h2 id="ai-recent-title" class="settings-section-title">Recent automatic replies</h2>
+    <p class="settings-section-desc">Everything AI sent or held back is in the <a class="underline" href="{% url 'settings-ai-autopilot' %}">autopilot report</a>.</p>
+  </div>
+  <div class="settings-section-body !px-0 !pb-0">
+    <ul class="divide-y divide-border border-t border-border text-sm">
       {% for r in auto_replies %}
-      <li class="p-3">
+      <li class="px-5 sm:px-6 py-3">
         <div class="flex flex-wrap items-baseline justify-between gap-2">
           {% if r.conversation_id %}
           <a href="{% url 'conversations:detail' r.conversation_id %}" class="font-medium text-ink underline">{{ r.customer }}</a>
@@ -154,7 +165,6 @@
       {% endfor %}
     </ul>
   </div>
-  {% endif %}
-  </div>
 </section>
+  {% endif %}
 {% endblock %}

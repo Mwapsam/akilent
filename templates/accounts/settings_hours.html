@@ -3,12 +3,12 @@
 <section class="settings-section">
   <div>
     <h2 class="settings-section-title">Opening hours</h2>
-    <p class="settings-section-desc">Tell Akilent when you're open. Automations use this to reply differently when you're closed. Leave every day unticked and you'll be treated as always open.</p>
+    <p class="settings-section-desc">Automations use these to reply differently when you're closed.</p>
   </div>
   <div class="settings-section-body">
 
   {% if configured %}
-  <p class="text-sm mb-4">
+  <p class="text-sm">
     Right now you're
     {% if open_now %}<span class="badge badge-success">open</span>{% else %}<span class="badge badge-neutral">closed</span>{% endif %}
   </p>
@@ -19,10 +19,9 @@
     {% include "accounts/_hours_fields.html" %}
 
     {% if can_edit %}
-    <button class="btn btn-primary" type="submit" data-save-fallback>Save</button>
-    {% include "components/_save_bar.html" %}
+    {% include "components/_panel_foot.html" with helper="No days ticked means always open." label="Save" %}
     {% else %}
-    <p class="text-sm text-ink-subtle">Only an owner or admin can change opening hours.</p>
+    {% include "components/_panel_foot.html" with readonly="Only an owner or admin can change opening hours." %}
     {% endif %}
   </form>
   </div>

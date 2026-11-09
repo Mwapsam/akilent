@@ -1,0 +1,21 @@
+{% comment %}A settings panel's footer with its Save (spec §20). Put it last inside the panel's form,
+and mark that form data-save-bar:
+
+  <form method="post" data-save-bar> … {% include "components/_panel_foot.html" with helper="…" %}</form>
+
+With scripts (app.js) Save stays muted and disabled until a field in the form changes, then
+becomes the primary button with Discard beside it; leaving with changes asks first. Without
+scripts it's a plain Save. Args: helper (muted text on the left), label (default "Save
+changes"), readonly (a reason shown
+instead of the buttons, for someone who can't edit).{% endcomment %}
+<div class="panel-foot">
+  <span>{{ helper|default:"" }}</span>
+  {% if readonly %}
+  <span>{{ readonly }}</span>
+  {% else %}
+  <span class="flex items-center gap-2">
+    <button type="reset" class="btn btn-ghost btn-sm" data-panel-discard>Discard</button>
+    <button type="submit" class="btn btn-primary btn-sm" data-panel-save>{{ label|default:"Save changes" }}</button>
+  </span>
+  {% endif %}
+</div>

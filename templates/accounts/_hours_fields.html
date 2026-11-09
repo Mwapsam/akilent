@@ -5,14 +5,14 @@
 {% endcomment %}
 <div>
   <label class="label" for="hours-timezone">Your timezone</label>
-  <select id="hours-timezone" name="timezone" class="select" {% if not can_edit %}disabled{% endif %}>
+  <select id="hours-timezone" name="timezone" class="select" data-searchable data-placeholder="Type a city or region" {% if not can_edit %}disabled{% endif %}>
     {% for tz in timezones %}<option value="{{ tz }}" {% if tz == current_tz %}selected{% endif %}>{{ tz }}</option>{% endfor %}
   </select>
 </div>
 
-<div class="space-y-2">
+<div class="divide-y divide-border border-y border-border">
   {% for row in rows %}
-  <div class="flex flex-wrap items-center gap-3 rounded-xl border border-border px-4 py-2">
+  <div class="flex flex-wrap items-center gap-3 py-2">
     <label class="flex items-center gap-2 w-32">
       <input type="checkbox" name="{{ row.key }}_open" {% if row.open %}checked{% endif %} {% if not can_edit %}disabled{% endif %}>
       <span class="font-medium text-ink">{{ row.label }}</span>
