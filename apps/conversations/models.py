@@ -724,6 +724,17 @@ class ConversationForm(models.Model):
         )
 
     @property
+    def flow_needs_publish(self) -> bool:
+        """A WhatsApp Flow form whose current questions aren't on WhatsApp yet: the editor's
+        header offers Publish (for a draft it also makes the form ready to send)."""
+        return (
+            self.presentation == self.Presentation.WHATSAPP_FLOW
+            and self.status != self.Status.ARCHIVED
+            and self.flow_status != self.FlowStatus.PUBLISHING
+            and not (self.flow_status == self.FlowStatus.PUBLISHED and self.flow_id)
+        )
+
+    @property
     def flow_error_text(self) -> str:
         """The last publish error for owners. Errors stored before they were translated
         (Meta's raw "(#100) The parameter name is required.") are translated here."""
@@ -757,7 +768,9 @@ class ConversationForm(models.Model):
             return {
                 "key": "draft",
                 "label": "Draft",
-                "reason": "Make it ready to send when the questions are done.",
+                "reason": "Publish it to WhatsApp when the questions are done."
+                if self.presentation == self.Presentation.WHATSAPP_FLOW
+                else "Make it ready to send when the questions are done.",
             }
         if self.presentation != self.Presentation.WHATSAPP_FLOW:
             return {"key": "live", "label": "Live", "reason": ""}

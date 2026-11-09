@@ -51,8 +51,8 @@ class CommentRulesPagesTest(TestCase):
                 "priority": 10,
             },
         )
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Add at least one keyword.")
+        # 422: the overlay re-renders the form with its errors in place.
+        self.assertContains(response, "Add at least one keyword.", status_code=422)
         self.assertFalse(CommentTrigger.objects.exists())
 
     def test_moderation_rule_must_do_something(self):
@@ -66,7 +66,7 @@ class CommentRulesPagesTest(TestCase):
                 "priority": 10,
             },
         )
-        self.assertContains(response, "Choose at least one thing")
+        self.assertContains(response, "Choose at least one thing", status_code=422)
         self.assertFalse(ModerationRule.objects.exists())
 
     def test_pause_and_delete(self):

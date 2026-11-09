@@ -79,7 +79,8 @@ def test_inbox_settings_render_as_sections_with_the_highlight_tab(owner_client):
     page = owner_client.get("/inbox/settings/teams/").content.decode()
     assert 'id="teams" class="settings-section' in page
     assert 'id="routing" class="settings-section' in page
-    assert "Add a routing rule</summary>" in page
+    # Stage 5: adding a rule is a modal (with "New team…" in it), not a disclosure.
+    assert '/inbox/routing-rules/?add=1" data-overlay-open="modal"' in page
     assert "border-brand-600" not in page
     replies = owner_client.get("/inbox/saved-replies/").content.decode()
     assert 'aria-labelledby="replies-title"' in replies

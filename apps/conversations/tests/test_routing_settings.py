@@ -146,3 +146,122 @@ class TestRoutingRules:
         assert resp.status_code == 404
         other_rule.refresh_from_db()
         assert other_rule.is_active is True
+
+
+@pytest.mark.django_db
+class TestRoutingRuleBuilder:
+    """Stage 5: order by drag / Move, a new team inline, each rule in words, and a warning
+    on a rule that can never run."""
+
+    def _rule(self, account, team, name, priority, **conditions):
+        return RoutingRule.objects.create(
+            account=account,
+            name=name,
+            team=team,
+            priority=priority,
+            conditions=conditions,
+        )
+
+    def _names(self, account):
+        return list(
+            RoutingRule.objects.filter(account=account)
+            .order_by("priority")
+            .values_list("name", flat=True)
+        )
+
+    def test_a_new_rule_runs_last(self, logged_in):
+        client, account, _ = logged_in
+        team = Team.objects.create(account=account, name="Sales")
+        self._rule(account, team, "First", 30)
+        client.post("/inbox/routing-rules/", {"name": "Second", "team": team.pk})
+        assert RoutingRule.objects.get(name="Second").priority == 40
+
+    def test_a_new_team_made_in_the_rule_form(self, logged_in):
+        client, account, _ = logged_in
+        client.post(
+            "/inbox/routing-rules/",
+            {"name": "Orders", "team": "new", "new_team": "Fulfilment"},
+        )
+        rule = RoutingRule.objects.get(account=account, name="Orders")
+        assert rule.team.name == "Fulfilment"
+        # The same name again reuses the team.
+        client.post(
+            "/inbox/routing-rules/",
+            {"name": "More", "team": "new", "new_team": "fulfilment"},
+        )
+        assert Team.objects.filter(account=account).count() == 1
+
+    def test_new_team_without_a_name_reopens_the_form(self, logged_in):
+        client, account, _ = logged_in
+        resp = client.post(
+            "/inbox/routing-rules/",
+            {"name": "Orders", "team": "new", "new_team": ""},
+            HTTP_HX_REQUEST="true",
+            HTTP_HX_TARGET="overlay-body",
+        )
+        assert resp.status_code == 422
+        assert "needs a name and a team" in resp.content.decode()
+        assert not RoutingRule.objects.exists()
+
+    def test_add_form_opens_in_a_modal_with_new_team(self, logged_in):
+        client, account, _ = logged_in
+        html = client.get(
+            "/inbox/routing-rules/?add=1",
+            HTTP_HX_REQUEST="true",
+            HTTP_HX_TARGET="overlay-body",
+        ).content.decode()
+        assert 'data-overlay="modal"' in html
+        assert 'value="new"' in html and "New team" in html
+        assert 'name="priority"' not in html
+
+    def test_move_and_drag(self, logged_in):
+        client, account, _ = logged_in
+        team = Team.objects.create(account=account, name="Sales")
+        a = self._rule(account, team, "A", 10)
+        b = self._rule(account, team, "B", 20)
+        c = self._rule(account, team, "C", 30)
+        resp = client.post("/inbox/routing-rules/reorder/", {"pk": c.pk, "move": "up"})
+        assert resp.status_code == 302 and resp.url.endswith("#routing")
+        assert self._names(account) == ["A", "C", "B"]
+        client.post("/inbox/routing-rules/reorder/", {"order": [b.pk, c.pk, a.pk]})
+        assert self._names(account) == ["B", "C", "A"]
+
+    def test_another_accounts_rules_are_not_reordered(self, logged_in):
+        client, account, _ = logged_in
+        other = Account.objects.create(company_name="Other Co")
+        theirs = self._rule(other, Team.objects.create(account=other, name="X"), "T", 5)
+        client.post("/inbox/routing-rules/reorder/", {"order": [theirs.pk]})
+        theirs.refresh_from_db()
+        assert theirs.priority == 5
+
+    def test_rules_in_words_with_a_never_runs_warning(self, logged_in):
+        client, account, _ = logged_in
+        sales = Team.objects.create(account=account, name="Sales")
+        support = Team.objects.create(account=account, name="Support")
+        self._rule(account, support, "Default", 10)
+        self._rule(account, sales, "VIP", 20, channel="whatsapp", tag="vip")
+        html = client.get("/inbox/settings/teams/").content.decode()
+        assert "Every other new conversation goes to Support." in html
+        assert (
+            "New conversations on WhatsApp from customers tagged “vip” go to Sales."
+            in html
+        )
+        assert "Never runs: “Default” comes first and has no conditions" in html
+        assert "1 rule never runs" in html
+        assert "routing-rules/reorder/" in html and 'name="move" value="up"' in html
+        assert "Priority" not in html
+
+    def test_a_paused_earlier_rule_doesnt_shadow(self, logged_in):
+        from apps.conversations import routing
+
+        _, account, _ = logged_in
+        team = Team.objects.create(account=account, name="Sales")
+        first = self._rule(account, team, "Off default", 10)
+        first.is_active = False
+        first.save()
+        later = self._rule(account, team, "New buyers", 20, is_new_customer=True)
+        assert routing.lint([first, later]) == {}
+        narrower = self._rule(
+            account, team, "New VIPs", 30, is_new_customer=True, tag="vip"
+        )
+        assert list(routing.lint([first, later, narrower])) == [narrower.pk]

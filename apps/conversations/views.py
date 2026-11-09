@@ -1980,10 +1980,12 @@ def _add_overlay(
     error: str = "",
     values: dict | None = None,
     status: int = 200,
+    extra: dict | None = None,
 ):
     """An "Add …" form: in a modal over its list (``?add=1`` with data-overlay-open), or as
     its own page (components/_overlay_page.html). A failed save re-renders it with the
-    error (422); a good one closes it (overlay_done) or goes on to what was made."""
+    error (422); a good one closes it (overlay_done) or goes on to what was made.
+    ``extra``: more context for the partial (a select's choices)."""
     from apps.core.htmx import overlay_or_page
 
     return overlay_or_page(
@@ -1991,6 +1993,7 @@ def _add_overlay(
         partial,
         "components/_overlay_page.html",
         {
+            **(extra or {}),
             "overlay_partial": partial,
             "page_title": title,
             "back_url": back_url,
@@ -2142,19 +2145,27 @@ def inbox_settings_teams(request):
         .annotate(member_count=Count("members"))
         .order_by("name")
     )
-    rules = (
+    from apps.conversations import routing
+
+    rules = list(
         RoutingRule.objects.filter(account=account)
         .select_related("team")
-        .order_by("priority", "id")
+        .order_by("priority", "created_at", "id")
     )
+    labels = dict(Conversation.Channel.choices)
+    warnings = routing.lint(rules)
     return render(
         request,
         "conversations/inbox_settings_teams.html",
         {
             "account": account,
             "teams": team_list,
-            "rules": rules,
-            "channel_choices": visible_choices(Conversation.Channel.choices),
+            # (rule, the rule in a sentence, its warning), in the order they run.
+            "rules": [
+                (rule, routing.describe(rule, labels), warnings.get(rule.pk, ""))
+                for rule in rules
+            ],
+            "routing_warnings": len(warnings),
             "active_tab": "teams",
         },
     )
@@ -2204,35 +2215,91 @@ def routing_rules(request):
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
+    from apps.core.htmx import is_overlay, overlay_done
+    from apps.core.reorder import next_priority
+
+    back = reverse("conversations:inbox_settings_teams") + "#routing"
+    teams_qs = Team.objects.filter(account=account).order_by("name")
+
+    def _form(error="", values=None, status=200):
+        return _add_overlay(
+            request,
+            "conversations/add/_routing_rule.html",
+            "Add a routing rule",
+            back,
+            "Teams & routing",
+            error=error,
+            values=values,
+            status=status,
+            extra={
+                "teams": teams_qs,
+                "channel_choices": visible_choices(Conversation.Channel.choices),
+            },
+        )
 
     if request.method == "POST":
         name = request.POST.get("name", "").strip()
-        team = Team.objects.filter(account=account, pk=request.POST.get("team")).first()
+        raw_team = request.POST.get("team", "")
+        new_team = request.POST.get("new_team", "").strip()
+        team = None
+        if raw_team == "new" or (not raw_team and new_team):
+            # "New team" right in the rule form, so a first rule doesn't mean a detour.
+            if new_team:
+                team = Team.objects.filter(
+                    account=account, name__iexact=new_team
+                ).first()
+                if team is None:
+                    team = Team.objects.create(account=account, name=new_team)
+        elif raw_team.isdigit():
+            team = teams_qs.filter(pk=raw_team).first()
         if not name or team is None:
-            messages.error(request, "A routing rule needs a name and a team.")
-        else:
-            conditions: dict = {}
-            channel = request.POST.get("channel", "").strip()
-            if channel:
-                conditions["channel"] = channel
-            tag = request.POST.get("tag", "").strip()
-            if tag:
-                conditions["tag"] = tag
-            for key in ("is_new_customer", "has_open_lead", "has_open_order"):
-                if request.POST.get(key):
-                    conditions[key] = True
-            try:
-                priority = int(request.POST.get("priority") or 0)
-            except ValueError:
-                priority = 0
-            RoutingRule.objects.create(
-                account=account,
-                name=name,
-                team=team,
-                conditions=conditions,
-                priority=priority,
-            )
-            messages.success(request, "Routing rule added.")
+            error = "A routing rule needs a name and a team."
+            if is_overlay(request):
+                return _form(error, dict(request.POST.items()), status=422)
+            messages.error(request, error)
+            return redirect(back)
+        conditions: dict = {}
+        channel = request.POST.get("channel", "").strip()
+        if channel:
+            conditions["channel"] = channel
+        tag = request.POST.get("tag", "").strip()
+        if tag:
+            conditions["tag"] = tag
+        for key in ("is_new_customer", "has_open_lead", "has_open_order"):
+            if request.POST.get(key):
+                conditions[key] = True
+        rules_qs = RoutingRule.objects.filter(account=account)
+        RoutingRule.objects.create(
+            account=account,
+            name=name,
+            team=team,
+            conditions=conditions,
+            # Runs after the existing rules; drag or Move up / down to change that.
+            priority=next_priority(rules_qs),
+        )
+        return overlay_done(request, "Routing rule added.", back)
+    if request.GET.get("add"):
+        return _form()
+    return redirect(back)
+
+
+@login_required
+@require_POST
+def routing_rules_reorder(request):
+    """Put the routing rules in a new order: ``order`` (pks, top first) from a drag, or
+    ``move`` (up/down) and ``pk`` from a row's Move buttons."""
+    from apps.core import reorder
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    qs = RoutingRule.objects.filter(account=account)
+    if request.POST.get("move"):
+        pk = request.POST.get("pk", "")
+        if pk.isdigit():
+            reorder.move(qs, pk, request.POST["move"])
+    else:
+        reorder.renumber(qs, request.POST.getlist("order"))
     return redirect(reverse("conversations:inbox_settings_teams") + "#routing")
 
 
@@ -2469,14 +2536,20 @@ def form_detail(request, pk):
                 return redirect("conversations:form_detail", pk=form.pk)
             form.flow_status = ConversationForm.FlowStatus.PUBLISHING
             form.flow_error = ""
-            form.save(update_fields=["flow_status", "flow_error", "updated_at"])
+            fields = ["flow_status", "flow_error", "updated_at"]
+            if form.status == ConversationForm.Status.DRAFT:
+                # Publishing to WhatsApp is the one step: it also makes the form ready to send.
+                form.status = ConversationForm.Status.PUBLISHED
+                fields.append("status")
+            form.save(update_fields=fields)
             publish_conversation_flow_task.delay(form.pk)
             form.refresh_from_db()
             if form.flow_status == ConversationForm.FlowStatus.PUBLISHED:
                 messages.success(request, "WhatsApp Flow published successfully.")
             elif form.flow_status == ConversationForm.FlowStatus.ERROR:
                 messages.error(
-                    request, f"Publish failed: {form.flow_error or 'unknown error'}"
+                    request,
+                    f"Publish failed: {form.flow_error_text or 'unknown error'}",
                 )
             else:
                 messages.info(

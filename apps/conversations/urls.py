@@ -55,6 +55,11 @@ urlpatterns = [
     path("teams/<int:pk>/", views.team_detail, name="team_detail"),
     path("routing-rules/", views.routing_rules, name="routing_rules"),
     path(
+        "routing-rules/reorder/",
+        views.routing_rules_reorder,
+        name="routing_rules_reorder",
+    ),
+    path(
         "routing-rules/<int:pk>/toggle/",
         views.routing_rule_toggle,
         name="routing_rule_toggle",

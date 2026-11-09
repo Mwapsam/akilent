@@ -59,6 +59,11 @@ urlpatterns = [
         name="instagram-comment-rule-toggle",
     ),
     path(
+        "rules/<str:kind>/reorder/",
+        rules_views.comment_rules_reorder,
+        name="instagram-comment-rules-reorder",
+    ),
+    path(
         "rules/<str:kind>/<int:pk>/delete/",
         rules_views.comment_rule_delete,
         name="instagram-comment-rule-delete",

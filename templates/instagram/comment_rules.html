@@ -6,7 +6,7 @@
 
 <header class="mb-6">
   <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Comment rules</h1>
-  <p class="mt-1 text-sm text-gray-600">Reply privately to people who comment on your posts, and keep spam off them.</p>
+  <p class="mt-1 text-sm text-gray-600">Reply privately to people who comment on your posts, and keep spam off them. Rules run from the top, and only the first that matches acts on a comment: drag a rule, or use ↑ ↓, to change the order.</p>
 </header>
 
 {% if not has_account %}
@@ -40,14 +40,17 @@
       <h2 class="text-lg font-semibold text-ink">Automatic private replies</h2>
       <p class="text-sm text-gray-600">When someone comments, send them one DM. Their reply lands in your inbox.</p>
     </div>
-    <a href="{% url 'instagram-comment-rule-new' 'reply' %}" class="btn btn-primary btn-sm">Add reply rule</a>
+    <a href="{% url 'instagram-comment-rule-new' 'reply' %}" data-overlay-open="drawer" class="btn btn-primary btn-sm">Add reply rule</a>
   </div>
   {% if triggers %}
+<div id="reply-rules" data-reorder>
+  <form method="post" action="{% url 'instagram-comment-rules-reorder' 'reply' %}" data-reorder-form hidden>{% csrf_token %}</form>
   <ul class="space-y-3">
-    {% for rule, lint in triggers %}
-    {% include "instagram/_comment_rule_row.html" with kind="reply" rule=rule lint=lint summary=rule.get_match_type_display detail=rule.reply_template badge=rule.get_reply_type_display show_channels=both_channels|default:instagram_only_count %}
+    {% for rule, lint, sentence in triggers %}
+    {% include "instagram/_comment_rule_row.html" with kind="reply" rule=rule lint=lint sentence=sentence first=forloop.first last=forloop.last %}
     {% endfor %}
   </ul>
+  </div>
   {% else %}
   <div class="card p-5 text-sm text-ink-subtle">No reply rules yet. Example: a comment containing “price” gets “Thanks {username}! We've sent you the price in a DM.”</div>
   {% endif %}
@@ -70,16 +73,19 @@
       {% if moderation_rules and has_account %}
       <a href="{% url 'instagram-comment-rules-apply-existing' %}" data-overlay-open="modal" class="btn btn-secondary btn-sm">Apply to existing comments</a>
       {% endif %}
-      <a href="{% url 'instagram-comment-rule-new' 'moderation' %}" class="btn btn-secondary btn-sm">Add moderation rule</a>
+      <a href="{% url 'instagram-comment-rule-new' 'moderation' %}" data-overlay-open="drawer" class="btn btn-secondary btn-sm">Add moderation rule</a>
     </div>
   </div>
   {% if backfill %}{% include "instagram/_comment_rules_backfill_status.html" %}{% endif %}
   {% if moderation_rules %}
+<div id="moderation-rules" data-reorder>
+  <form method="post" action="{% url 'instagram-comment-rules-reorder' 'moderation' %}" data-reorder-form hidden>{% csrf_token %}</form>
   <ul class="space-y-3">
-    {% for rule, lint in moderation_rules %}
-    {% include "instagram/_comment_rule_row.html" with kind="moderation" rule=rule lint=lint summary=rule.get_match_type_display detail=rule.get_moderation_action_display show_channels=both_channels|default:instagram_only_count %}
+    {% for rule, lint, sentence in moderation_rules %}
+    {% include "instagram/_comment_rule_row.html" with kind="moderation" rule=rule lint=lint sentence=sentence first=forloop.first last=forloop.last %}
     {% endfor %}
   </ul>
+  </div>
   {% else %}
   <div class="card p-5 text-sm text-ink-subtle">No moderation rules yet. “Add recommended rules” hides spam and flags abuse and complaints for your team — you can change any of them.</div>
   {% endif %}

@@ -56,6 +56,9 @@ class _ChannelsMixin(forms.ModelForm):
     _only_channel = ""
 
     def setup_channels(self, channels: list[str]):
+        # Keywords as chips (components/_keyword_chips.html); still one comma-separated field.
+        if "keywords" in self.fields:
+            self.fields["keywords"].chips = True  # type: ignore[attr-defined]
         self._only_channel = channels[0] if len(channels) == 1 else ""
         if self._only_channel:
             self.fields.pop("channels", None)
@@ -81,19 +84,16 @@ class CommentTriggerForm(_ChannelsMixin):
             "keywords",
             "reply_type",
             "reply_template",
-            "priority",
         ]
         labels = {
             "match_type": "Reply when a comment…",
             "keywords": "Keywords",
             "reply_type": "Reply via",
             "reply_template": "Reply text",
-            "priority": "Order",
         }
         help_texts = {
-            "keywords": "Comma-separated, e.g. price, how much, cost. Used with 'contains a keyword'.",
+            "keywords": "For example price, how much, cost. Used with 'Keyword / phrase match'.",
             "reply_template": "{username} becomes their Instagram name, or their first name on Facebook. Sent once per comment thread.",
-            "priority": "Lower runs first; only the first matching rule replies.",
         }
         widgets = {
             "keywords": forms.TextInput(),
@@ -119,17 +119,14 @@ class ModerationRuleForm(_ChannelsMixin):
             "keywords",
             "moderation_action",
             "automation_trigger",
-            "priority",
         ]
         labels = {
             "match_type": "When a comment is…",
             "moderation_action": "Do this to the comment",
             "automation_trigger": "And in Akilent",
-            "priority": "Order",
         }
         help_texts = {
-            "keywords": "Comma-separated. Required for 'keyword / phrase match'; on the other types they're checked as well as the built-in detection.",
-            "priority": "Lower runs first.",
+            "keywords": "Required for 'Keyword / phrase match'; on the other types they're checked as well as the built-in detection.",
         }
         widgets = {"keywords": forms.TextInput()}
 
@@ -173,14 +170,17 @@ def comment_rules(request):
     account = get_current_account(request)
     if account is None:
         return redirect("dashboard")
+    from apps.instagram.services.rule_text import sentence
+
     lint = lint_rules(account)
-    # (rule, its warnings) pairs, for the rows.
+    both = len(rule_channels(account)) == 2
+    # (rule, its warnings, the rule in a sentence), in the order they run.
     triggers = [
-        (rule, lint.for_rule("reply", rule.pk))
+        (rule, lint.for_rule("reply", rule.pk), sentence(rule, show_channels=both))
         for rule in CommentTrigger.objects.filter(account=account)
     ]
     moderation_rules = [
-        (rule, lint.for_rule("moderation", rule.pk))
+        (rule, lint.for_rule("moderation", rule.pk), sentence(rule, show_channels=both))
         for rule in ModerationRule.objects.filter(account=account)
     ]
     return render(
@@ -263,23 +263,71 @@ def comment_rule_edit(request, kind: str, pk: int | None = None):
     model, form_class = _KINDS[kind]
     instance = get_object_or_404(model, pk=pk, account=account) if pk else None
 
+    from apps.core.htmx import overlay_done, overlay_or_page
+    from apps.core.reorder import next_priority
+
+    status = 200
     if request.method == "POST":
         form = form_class(request.POST, instance=instance)
         form.setup_channels(rule_channels(account))
         if form.is_valid():
             rule = form.save(commit=False)
             rule.account = account
+            if instance is None:  # a new rule runs after the ones already there
+                rule.priority = next_priority(model.objects.filter(account=account))
             rule.save()
-            messages.success(request, f'Rule "{rule.name}" saved.')
-            return redirect("instagram-comment-rules")
+            return overlay_done(
+                request,
+                f'Rule "{rule.name}" saved.',
+                reverse("instagram-comment-rules"),
+            )
+        status = 422
     else:
         form = form_class(instance=instance)
         form.setup_channels(rule_channels(account))
-    return render(
+    lint = []
+    if instance is not None:
+        from apps.instagram.services.rule_lint import lint_rules
+
+        lint = lint_rules(account).for_rule(kind, instance.pk)
+    if instance is not None:
+        title = f"Edit “{instance.name}”"
+    else:
+        title = "New private-reply rule" if kind == "reply" else "New moderation rule"
+    return overlay_or_page(
         request,
+        "instagram/_comment_rule_form.html",
         "instagram/comment_rule_form.html",
-        {"form": _style(form), "kind": kind, "rule": instance},
+        {
+            "form": _style(form),
+            "kind": kind,
+            "rule": instance,
+            "lint": lint,
+            "title": title,
+        },
+        kind="drawer",
+        title=title,
+        status=status,
     )
+
+
+@login_required
+@comment_rules_required
+@require_POST
+def comment_rules_reorder(request, kind: str):
+    """Put one kind of rule in a new order: ``order`` (pks, top first) from a drag, or
+    ``move`` (up/down) and ``pk`` from a row's Move buttons."""
+    from apps.core import reorder
+
+    account = get_current_account(request)
+    if account is None or kind not in _KINDS:
+        return redirect("instagram-comment-rules")
+    qs = _KINDS[kind][0].objects.filter(account=account)
+    if request.POST.get("move"):
+        reorder.move(qs, request.POST.get("pk") or 0, request.POST["move"])
+    else:
+        reorder.renumber(qs, request.POST.getlist("order"))
+    return redirect(reverse("instagram-comment-rules") + f"#{kind}-rules")
 
 
 @login_required

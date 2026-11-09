@@ -16,7 +16,7 @@
     </details>
     {% endif %}
   </div>
-  {% if form.flow_status != "publishing" %}
+  {% if form.flow_status != "publishing" and not form.flow_needs_publish %}
   <form method="post" action="{% url 'conversations:form_detail' form.pk %}" hx-boost="false">
     {% csrf_token %}
     <input type="hidden" name="action" value="publish_flow" />

@@ -1,0 +1,25 @@
+{% comment %}One comment rule's editor: a drawer from the rules page (overlay_or_page) or its own
+page. Needs: form, kind ("reply"/"moderation"), rule (None when new), lint (its warnings).
+Priority isn't a field: a new rule runs after the others, and the list's drag / Move buttons
+set the order.{% endcomment %}
+<div class="space-y-4">
+  <p class="text-sm text-ink-subtle">
+    {% if kind == "reply" %}Each comment gets at most one automatic reply, sent as a DM within 7 days of the comment.
+    {% else %}Moderation acts on comments on your own posts only.{% endif %}
+    Only the first matching rule acts on a comment.
+  </p>
+  {% for w in lint %}
+  <div class="flex items-start gap-2 text-sm {% if w.severity == 'warning' %}text-amber-800{% else %}text-ink-subtle{% endif %}">
+    <span aria-hidden="true">{% if w.severity == 'warning' %}⚠{% else %}ⓘ{% endif %}</span>
+    <p class="min-w-0"><span class="sr-only">{% if w.severity == 'warning' %}Warning: {% else %}Note: {% endif %}</span>{{ w.message }}</p>
+  </div>
+  {% endfor %}
+  <form method="post" action="{% if rule %}{% url 'instagram-comment-rule-edit' kind rule.pk %}{% else %}{% url 'instagram-comment-rule-new' kind %}{% endif %}" class="space-y-4" x-data="dirtyGuard"{% if not in_overlay %} hx-boost="false"{% endif %}>
+    {% csrf_token %}
+    {% include "components/form.html" with form=form %}
+    <div class="flex items-center justify-end gap-2 pt-2">
+      {% if in_overlay %}<button type="button" class="btn btn-ghost btn-sm" data-overlay-close>Cancel</button>{% else %}<a href="{% url 'instagram-comment-rules' %}" class="btn btn-ghost btn-sm">Cancel</a>{% endif %}
+      <button type="submit" class="btn btn-primary btn-sm">Save rule</button>
+    </div>
+  </form>
+</div>

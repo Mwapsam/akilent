@@ -37,113 +37,57 @@
   <div>
     <h2 id="routing-title" class="settings-section-title">Routing rules</h2>
     <p class="settings-section-desc">
-      A new conversation is checked against these in priority order (lowest first); the first one that
-      matches decides its team. A rule with no conditions always matches, which makes it the default team.
-      If nothing matches, the conversation stays in
+      A new conversation is checked against these from the top; the first one that matches decides its
+      team. Drag a rule, or use ↑ ↓, to change the order. A rule with no conditions catches everything,
+      so it belongs last. If nothing matches, the conversation stays in
       <a href="{% url 'conversations:inbox' %}?view=unassigned" class="underline hover:text-ink">Unassigned</a>, not lost.
     </p>
+    <a href="{% url 'conversations:routing_rules' %}?add=1" data-overlay-open="modal" class="btn btn-secondary btn-sm mt-4">Add a routing rule</a>
   </div>
   <div class="settings-section-body">
+    {% if routing_warnings %}
+    <p class="text-sm text-amber-800 mb-3" role="status">{{ routing_warnings }} rule{{ routing_warnings|pluralize:" never runs,s never run" }}: an earlier rule catches every conversation first.</p>
+    {% endif %}
     {% if rules %}
-    <div class="table-scroll border-t border-border">
-      <table class="table table--cards">
-        <thead><tr><th>Priority</th><th>Rule</th><th>Team</th><th>Conditions</th><th></th></tr></thead>
-        <tbody>
-          {% for rule in rules %}
-          <tr>
-            <td data-label="Priority" class="tabular-nums">{{ rule.priority }}</td>
-            <td data-label="Rule">
-              {{ rule.name }}
-              {% if not rule.is_active %}<span class="badge badge-neutral">Off</span>{% endif %}
-            </td>
-            <td data-label="Team">{{ rule.team.name }}</td>
-            <td data-label="Conditions" class="text-ink-subtle text-sm">
-              {% if rule.conditions %}
-                {% for key, value in rule.conditions.items %}{{ key }}={{ value }}{% if not forloop.last %}, {% endif %}{% endfor %}
-              {% else %}
-                <em>always (default)</em>
-              {% endif %}
-            </td>
-            <td class="whitespace-nowrap">
-              <form method="post" action="{% url 'conversations:routing_rule_toggle' rule.pk %}" class="inline">
+    <div data-reorder>
+      <form method="post" action="{% url 'conversations:routing_rules_reorder' %}" data-reorder-form hidden>{% csrf_token %}</form>
+      <ul class="slist">
+        {% for rule, sentence, warning in rules %}
+        <li class="slist-row" data-reorder-item data-pk="{{ rule.pk }}">
+          <span class="reorder-handle" data-reorder-handle title="Drag to change the order" aria-hidden="true">
+            <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1.5"/><circle cx="9" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="9" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="9" cy="13" r="1.5"/></svg>
+          </span>
+          <div class="slist-main">
+            <p class="slist-title">{{ rule.name }}{% if not rule.is_active %} <span class="badge badge-neutral">Off</span>{% endif %}</p>
+            <p class="slist-meta" data-rule-sentence>{{ sentence }}</p>
+            {% if warning %}<p class="mt-1 text-sm text-amber-800"><span aria-hidden="true">⚠</span><span class="sr-only">Warning:</span> {{ warning }}</p>{% endif %}
+          </div>
+          <div class="slist-side">
+            <form method="post" action="{% url 'conversations:routing_rules_reorder' %}" class="reorder-moves">
+              {% csrf_token %}
+              <input type="hidden" name="pk" value="{{ rule.pk }}">
+              <button type="submit" name="move" value="up" class="btn btn-ghost btn-sm"{% if forloop.first %} disabled{% endif %} aria-label="Move “{{ rule.name }}” up" title="Move up">↑</button>
+              <button type="submit" name="move" value="down" class="btn btn-ghost btn-sm"{% if forloop.last %} disabled{% endif %} aria-label="Move “{{ rule.name }}” down" title="Move down">↓</button>
+            </form>
+            {% row_menu "Actions for "|add:rule.name %}
+              <form method="post" action="{% url 'conversations:routing_rule_toggle' rule.pk %}">
                 {% csrf_token %}
-                <button class="btn btn-ghost btn-sm">{% if rule.is_active %}Turn off{% else %}Turn on{% endif %}</button>
+                <button class="row-menu-item" role="menuitem">{% if rule.is_active %}Turn off{% else %}Turn on{% endif %}</button>
               </form>
-              <form method="post" action="{% url 'conversations:routing_rule_delete' rule.pk %}" class="inline"
+              <form method="post" action="{% url 'conversations:routing_rule_delete' rule.pk %}"
                     data-confirm="Delete this routing rule?" data-confirm-danger data-confirm-label="Delete">
                 {% csrf_token %}
-                <button class="btn btn-ghost btn-sm">Delete</button>
+                <button class="row-menu-item row-menu-item--danger" role="menuitem">Delete</button>
               </form>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+            {% endrow_menu %}
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
     </div>
     {% else %}
     <p class="empty-line">No routing rules yet. Without one, every new conversation lands Unassigned for someone to pick up.</p>
     {% endif %}
-
-    {% comment %}Adding a rule: a disclosure under the list, not a card beside it (no card in a
-    section). Open when there are no rules yet, since that's the one thing to do here.{% endcomment %}
-    <details class="cv-disclosure border-t border-border pt-4" {% if not rules %}open{% endif %}>
-      <summary class="text-sm font-medium text-ink cursor-pointer">Add a routing rule</summary>
-      {% if teams %}
-      <form method="post" action="{% url 'conversations:routing_rules' %}" class="mt-4 space-y-4 max-w-md">
-        {% csrf_token %}
-        <div class="grid sm:grid-cols-2 gap-4">
-          <div>
-            <label class="label" for="rule-name">Name</label>
-            <input id="rule-name" name="name" class="input" placeholder="e.g. Order questions" required />
-          </div>
-          <div>
-            <label class="label" for="rule-team">Team</label>
-            <select id="rule-team" name="team" class="select" required>
-              {% for team in teams %}
-              <option value="{{ team.pk }}">{{ team.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-        </div>
-        <div>
-          <label class="label" for="rule-priority">Priority</label>
-          <input id="rule-priority" name="priority" type="number" class="input max-w-32" value="0" aria-describedby="rule-priority-help" />
-          <p id="rule-priority-help" class="help">Lower runs first.</p>
-        </div>
-        <fieldset class="space-y-3">
-          <legend class="label">Conditions</legend>
-          <p class="help -mt-1">Leave all of these empty for a default, catch-all rule.</p>
-          <div class="grid sm:grid-cols-2 gap-4">
-            <div>
-              <label class="label" for="rule-channel">Channel</label>
-              <select id="rule-channel" name="channel" class="select">
-                <option value="">Any channel</option>
-                {% for value, label in channel_choices %}
-                <option value="{{ value }}">{{ label }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div>
-              <label class="label" for="rule-tag">Contact tag</label>
-              <input id="rule-tag" name="tag" class="input" placeholder="e.g. vip" />
-            </div>
-          </div>
-          <label class="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="is_new_customer" value="1" /> First-time customer
-          </label>
-          <label class="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="has_open_lead" value="1" /> Has an open lead
-          </label>
-          <label class="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="has_open_order" value="1" /> Has an open order
-          </label>
-        </fieldset>
-        <button class="btn btn-primary btn-sm">Add rule</button>
-      </form>
-      {% else %}
-      <p class="mt-3 text-sm text-ink-subtle">Add a <a href="#teams" class="underline hover:text-ink">team</a> above first: a rule needs somewhere to send conversations.</p>
-      {% endif %}
-    </details>
   </div>
 </section>
 {% endblock %}

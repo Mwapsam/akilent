@@ -1,0 +1,55 @@
+{% comment %}Add a routing rule (modal from Inbox settings › Teams & routing, or its own page).
+Needs: teams, channel_choices; error / values after a failed save. "New team…" in the Team
+select names a team right here, so a first rule isn't a detour. The rule runs after the
+existing ones; the list's drag / Move buttons change that.{% endcomment %}
+<form method="post" action="{% url 'conversations:routing_rules' %}" class="space-y-4"{% if not in_overlay %} hx-boost="false"{% endif %}
+      x-data="{ team: '{% if values.team %}{{ values.team|escapejs }}{% elif teams %}{{ teams.0.pk }}{% else %}new{% endif %}' }">
+  {% csrf_token %}
+  {% if error %}<p class="text-sm text-coral-700" role="alert">{{ error }}</p>{% endif %}
+  <div class="grid sm:grid-cols-2 gap-4">
+    <div>
+      <label class="label" for="rule-name">Name</label>
+      <input id="rule-name" name="name" class="input" placeholder="e.g. Order questions" value="{{ values.name }}" required autofocus />
+    </div>
+    <div>
+      <label class="label" for="rule-team">Send to team</label>
+      <select id="rule-team" name="team" class="select" x-model="team">
+        {% for team in teams %}
+        <option value="{{ team.pk }}"{% if values.team == team.pk|stringformat:"s" %} selected{% endif %}>{{ team.name }}</option>
+        {% endfor %}
+        <option value="new"{% if values.team == "new" or not teams %} selected{% endif %}>New team…</option>
+      </select>
+    </div>
+  </div>
+  <div x-show="team === 'new'">
+    <label class="label" for="rule-new-team">New team's name</label>
+    <input id="rule-new-team" name="new_team" class="input max-w-xs" placeholder="e.g. Sales" value="{{ values.new_team }}" aria-describedby="rule-new-team-help" />
+    <p id="rule-new-team-help" class="help">The team is made with the rule. Add people to it afterwards.</p>
+  </div>
+  <fieldset class="space-y-3">
+    <legend class="label">When a new conversation…</legend>
+    <p class="help -mt-1">All of these must match. Leave them empty for a default rule that catches everything else.</p>
+    <div class="grid sm:grid-cols-2 gap-4">
+      <div>
+        <label class="label" for="rule-channel">Comes in on</label>
+        <select id="rule-channel" name="channel" class="select">
+          <option value="">Any channel</option>
+          {% for value, label in channel_choices %}
+          <option value="{{ value }}"{% if values.channel == value %} selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="label" for="rule-tag">Customer is tagged</label>
+        <input id="rule-tag" name="tag" class="input" placeholder="e.g. vip" value="{{ values.tag }}" />
+      </div>
+    </div>
+    <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_new_customer" value="1"{% if values.is_new_customer %} checked{% endif %} /> Is from a first-time customer</label>
+    <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="has_open_lead" value="1"{% if values.has_open_lead %} checked{% endif %} /> Customer has an open lead</label>
+    <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="has_open_order" value="1"{% if values.has_open_order %} checked{% endif %} /> Customer has an open order</label>
+  </fieldset>
+  <div class="flex justify-end gap-2">
+    {% if in_overlay %}<button type="button" class="btn btn-ghost btn-sm" data-overlay-close>Cancel</button>{% else %}<a href="{% url 'conversations:inbox_settings_teams' %}#routing" class="btn btn-ghost btn-sm">Cancel</a>{% endif %}
+    <button class="btn btn-primary btn-sm">Add rule</button>
+  </div>
+</form>

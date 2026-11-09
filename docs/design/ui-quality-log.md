@@ -2719,3 +2719,33 @@ Plan: the design audit's D5 (fewer boxes, Dashboard first), D4 (Settings side li
   - New and not yet used by any page: `apps/core/reorder.py`, `static/js/rule_builder.js` (loaded with the shell), `components/_keyword_chips.html` (+ the `chips` hook in `bound_field.html`), `.chips-*`/`.reorder-*` CSS, `apps/instagram/services/rule_text.py`.
   - The comment-rule view and template changes are not applied yet.
 - **Tests:** `test_insights_loose_ends.py`. Tests for the moved sections now read the drawers and Home. The full suite is green.
+
+### Entry 53: Stage 5 rule builder, comment rules, routing rules and the Forms editor (2026-11-09)
+
+- **Shared pieces:** these were built in Entry 52 and are now in use.
+  - `apps/core/reorder.py`: `renumber` gives 10, 20, …; `move`; `next_priority`.
+  - `static/js/rule_builder.js`: `keywordChips`, plus drag by `[data-reorder-handle]` inside `[data-reorder]`, posting through `[data-reorder-form]`.
+  - `components/_keyword_chips.html`: a field shows as chips when `chips = True` is set on it.
+- **Comment rules** (`/instagram/rules/`):
+  - Each row is the rule in one sentence (`rule_text.sentence`). It names channels only when the business has both.
+  - Rows can be dragged by a handle, or moved with ↑ ↓ buttons that are real POST forms, so they work by keyboard, on a phone and without scripts. Both go to `instagram-comment-rules-reorder` and land back on `#reply-rules` / `#moderation-rules`.
+  - The editor opens in a drawer (`_comment_rule_form.html` via `overlay_or_page`). It shows the rule's lint warnings, and a save closes the drawer with a toast. The page fallback is `comment_rule_form.html`.
+  - There's no priority field any more. A new rule runs after the others, and editing a rule keeps its place.
+  - Keywords are chips.
+  - An invalid form comes back as 422 and re-renders in the drawer.
+- **Routing rules** (Inbox settings › Teams & routing):
+  - Each rule is a sentence (`routing.describe`), for example "New conversations on WhatsApp from customers tagged “vip” go to Sales." A rule with no conditions reads "Every other new conversation goes to …".
+  - `routing.lint` warns "Never runs: …" when an earlier active rule's conditions are a subset of a later rule's. Conditions are an AND of exact matches, so that check is exact. A count shows above the list.
+  - Drag or ↑ ↓ (`routing_rules_reorder`), with no priority numbers. Turn off and Delete are in the ⋯ menu.
+  - "Add a routing rule" is a modal (`add/_routing_rule.html`, `?add=1`). It has a "New team…" option, and a team name that already exists is reused (case-insensitive).
+- **Forms editor:**
+  - The header has one primary action. "Publish to WhatsApp", or "Publish changes" when an older version is live, shows while the current questions aren't on WhatsApp (`ConversationForm.flow_needs_publish`). For a draft it also makes the form ready to send, so it's one step, not two. A text form keeps "Make it ready to send".
+  - Archive, Move back to draft and Delete are in a ⋯ menu.
+  - The WhatsApp card keeps only "Publish again", so the button is never on the page twice.
+  - Publish errors use `flow_error_text`.
+  - Questions can be dragged by a handle (Alpine `dragStart`/`dragOver`/`dragEnd`) or moved with named buttons ("Move question 2 up").
+  - The preview's messages use the shared `.wa-preview` markup.
+  - "Add a form" was already a modal.
+- **Tests:**
+  - New: `apps/instagram/tests/test_rule_builder.py`, `apps/conversations/tests/test_forms_editor_builder.py`, and `TestRoutingRuleBuilder` in `test_routing_settings.py`.
+  - Updated: `test_comment_rules_ui` (422) and `test_settings_batch` (routing modal).

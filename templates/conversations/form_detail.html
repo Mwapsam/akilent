@@ -18,24 +18,42 @@
   <div class="flex flex-wrap items-center gap-2">
     <a href="{% url 'help-article' 'forms' %}" class="btn btn-ghost btn-sm">Help</a>
     <a href="{% url 'conversations:form_responses' form.pk %}" class="btn btn-secondary btn-sm">Answers</a>
+    {% comment %}One primary action: Publish while the questions on WhatsApp aren't the current
+    ones (a draft is made ready at the same time), or "Make it ready to send" for a draft sent
+    one question at a time. Everything else is in the menu.{% endcomment %}
+    {% if form.flow_needs_publish %}
+    <form method="post" class="inline" hx-boost="false">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="publish_flow" />
+      <button class="btn btn-primary btn-sm" data-form-publish {% if not form.questions %}disabled title="Add at least one question first"{% endif %}>{% if form.flow_is_live %}Publish changes{% else %}Publish to WhatsApp{% endif %}</button>
+    </form>
+    {% elif form.status == "draft" %}
     <form method="post" class="inline" hx-boost="false">
       {% csrf_token %}
       <input type="hidden" name="action" value="set_status" />
-      {% if form.status == "draft" %}
       <input type="hidden" name="status" value="published" />
       <button class="btn btn-primary btn-sm" {% if not form.questions %}disabled title="Add at least one question first"{% endif %}>Make it ready to send</button>
-      {% elif form.status == "published" %}
-      <input type="hidden" name="status" value="archived" />
-      <button class="btn btn-ghost btn-sm">Archive</button>
-      {% else %}
-      <input type="hidden" name="status" value="draft" />
-      <button class="btn btn-ghost btn-sm">Move back to draft</button>
+    </form>
+    {% endif %}
+    {% row_menu "More actions for "|add:form.name %}
+      {% if form.status != "draft" %}
+      <form method="post" hx-boost="false">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="set_status" />
+        {% if form.status == "published" %}
+        <input type="hidden" name="status" value="archived" />
+        <button class="row-menu-item" role="menuitem">Archive</button>
+        {% else %}
+        <input type="hidden" name="status" value="draft" />
+        <button class="row-menu-item" role="menuitem">Move back to draft</button>
+        {% endif %}
+      </form>
       {% endif %}
-    </form>
-    <form method="post" action="{% url 'conversations:form_delete' form.pk %}" class="inline" data-confirm="Delete this form and its answers?" data-confirm-danger data-confirm-label="Delete">
-      {% csrf_token %}
-      <button class="btn btn-danger-ghost btn-sm">Delete</button>
-    </form>
+      <form method="post" action="{% url 'conversations:form_delete' form.pk %}" data-confirm="Delete this form and its answers?" data-confirm-danger data-confirm-label="Delete">
+        {% csrf_token %}
+        <button class="row-menu-item row-menu-item--danger" role="menuitem">Delete</button>
+      </form>
+    {% endrow_menu %}
   </div>
 </header>
 
@@ -56,12 +74,18 @@
 
     <ol class="space-y-3">
       <template x-for="(q, i) in questions" :key="q._id">
-        <li class="card card-pad space-y-2">
+        <li class="card card-pad space-y-2" :class="dragging === i && 'opacity-50'"
+            :draggable="grab === i" @dragstart="dragStart(i, $event)" @dragover="dragOver(i, $event)" @drop.prevent @dragend="dragEnd()">
           <div class="flex items-center justify-between gap-2">
-            <span class="text-xs font-medium text-ink-subtle" x-text="'Question ' + (i + 1)"></span>
+            <span class="inline-flex items-center gap-1">
+              <span class="reorder-handle" title="Drag to change the order" aria-hidden="true" @mousedown="grab = i" @mouseup="grab = null">
+                <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1.5"/><circle cx="9" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="9" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="9" cy="13" r="1.5"/></svg>
+              </span>
+              <span class="text-xs font-medium text-ink-subtle" x-text="'Question ' + (i + 1)"></span>
+            </span>
             <div class="flex items-center gap-1">
-              <button type="button" class="btn btn-ghost btn-xs" @click="move(i, -1)" :disabled="i === 0" aria-label="Move up">↑</button>
-              <button type="button" class="btn btn-ghost btn-xs" @click="move(i, 1)" :disabled="i === questions.length - 1" aria-label="Move down">↓</button>
+              <button type="button" class="btn btn-ghost btn-xs" @click="move(i, -1)" :disabled="i === 0" :aria-label="'Move question ' + (i + 1) + ' up'" title="Move up">↑</button>
+              <button type="button" class="btn btn-ghost btn-xs" @click="move(i, 1)" :disabled="i === questions.length - 1" :aria-label="'Move question ' + (i + 1) + ' down'" title="Move down">↓</button>
               <button type="button" class="btn btn-danger-ghost btn-xs" @click="questions.splice(i, 1); changed()">Remove</button>
             </div>
           </div>
@@ -162,8 +186,12 @@
   <aside class="lg:sticky lg:top-4 self-start" aria-label="Preview">
     <p class="text-xs font-medium text-ink-subtle mb-2">Preview</p>
     <div class="rounded-[2rem] border-4 border-ink/80 bg-surface-muted p-3 space-y-2 max-w-xs mx-auto">
-      <div class="wa-bubble" x-text="copy.intro_text || ('Please fill in ' + data.name + '.')"></div>
-      <div class="wa-button" x-text="copy.cta_label || 'Start'"></div>
+      {% comment %}The opening message: the same markup as components/_message_bubble.html,
+      filled live from the editor.{% endcomment %}
+      <div class="wa-preview wa-preview--compact" role="group" aria-label="The message that opens the form">
+        <div class="wa-bubble" x-text="copy.intro_text || ('Please fill in ' + data.name + '.')"></div>
+        <div class="wa-button" x-text="copy.cta_label || 'Start'"></div>
+      </div>
       <div class="rounded-2xl bg-surface p-3 space-y-3 shadow-card">
         <div class="flex items-center justify-between">
           <p class="text-sm font-semibold text-ink" x-text="copy.screen_title || 'Your details'"></p>
@@ -194,7 +222,9 @@
                   x-text="page < pages().length - 1 ? 'Next' : (copy.submit_label || 'Submit')"></button>
         </div>
       </div>
-      <div class="wa-bubble" x-text="copy.thanks_text || 'Thanks - got everything I need!'"></div>
+      <div class="wa-preview wa-preview--compact" role="group" aria-label="The thank-you message">
+        <div class="wa-bubble" x-text="copy.thanks_text || 'Thanks - got everything I need!'"></div>
+      </div>
     </div>
   </aside>
 </div>
@@ -229,6 +259,9 @@ function formBuilder() {
     copy: {},
     problems: [],
     page: 0,
+    grab: null, // the question whose handle is held: only the handle starts a drag
+    dragging: null,
+    _dragMoved: false,
     saveState: "saved",
     saveError: "",
     _timer: null,
@@ -271,6 +304,28 @@ function formBuilder() {
       if (j < 0 || j >= this.questions.length) return;
       [this.questions[i], this.questions[j]] = [this.questions[j], this.questions[i]];
       this.changed();
+    },
+    // Drag by the handle (a mouse); the Move buttons are the way in by keyboard and touch.
+    dragStart(i, e) {
+      if (this.grab !== i) { e.preventDefault(); return; }
+      this.dragging = i;
+      this._dragMoved = false;
+      e.dataTransfer.effectAllowed = "move";
+      try { e.dataTransfer.setData("text/plain", String(i)); } catch (_) { /* old browsers */ }
+    },
+    dragOver(i, e) {
+      if (this.dragging === null) return;
+      e.preventDefault();
+      if (i === this.dragging) return;
+      const [q] = this.questions.splice(this.dragging, 1);
+      this.questions.splice(i, 0, q);
+      this.dragging = i;
+      this._dragMoved = true;
+    },
+    dragEnd() {
+      if (this._dragMoved) this.changed();
+      this.dragging = this.grab = null;
+      this._dragMoved = false;
     },
     pages() {
       const pages = [[]];

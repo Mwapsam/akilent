@@ -91,3 +91,53 @@ def match_team(conversation: Conversation):
         if _matches(rule.conditions, signals):
             return rule.team
     return None
+
+
+# ── For the Teams & routing page (Stage 5 rule builder) ─────────────────────
+
+
+def describe(rule, channel_labels: dict | None = None) -> str:
+    """The rule in one sentence: "New conversations on WhatsApp from first-time customers go
+    to Sales." Built from the rule's own conditions, so it can't drift from what it does."""
+    conditions = rule.conditions or {}
+    parts = ["New conversations"]
+    channel = conditions.get("channel")
+    if channel:
+        parts.append(f"on {(channel_labels or {}).get(channel, channel)}")
+    who = "first-time customers" if conditions.get("is_new_customer") else ""
+    if conditions.get("tag"):
+        who = f"{who or 'customers'} tagged “{conditions['tag']}”"
+    if who:
+        parts.append(f"from {who}")
+    extra = []
+    if conditions.get("has_open_lead"):
+        extra.append("an open lead")
+    if conditions.get("has_open_order"):
+        extra.append("an open order")
+    if extra:
+        parts.append("with " + " and ".join(extra))
+    if len(parts) == 1:
+        return f"Every other new conversation goes to {rule.team.name}."
+    return " ".join(parts) + f" go to {rule.team.name}."
+
+
+def lint(rules) -> dict[int, str]:
+    """Rules that can never run, by pk. Conditions are an AND of exact matches, so an
+    earlier active rule whose conditions are a subset of a later one's catches every
+    conversation the later one would: the later rule never decides anything."""
+    active = [r for r in rules if r.is_active]
+    warnings: dict[int, str] = {}
+    for i, rule in enumerate(active):
+        mine = (rule.conditions or {}).items()
+        for earlier in active[:i]:
+            theirs = (earlier.conditions or {}).items()
+            if theirs <= mine:
+                if not theirs:
+                    why = f"“{earlier.name}” comes first and has no conditions, so it catches every conversation."
+                else:
+                    why = f"“{earlier.name}” comes first and catches every conversation this one would."
+                warnings[rule.pk] = (
+                    f"Never runs: {why} Move this rule above it, or change its conditions."
+                )
+                break
+    return warnings
