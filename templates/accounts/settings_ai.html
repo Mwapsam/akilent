@@ -46,7 +46,7 @@
     <p class="mt-1">Internal notes, other customers and other conversations are never sent.</p>
   </div>
 
-  <form method="post" class="space-y-4">
+  <form method="post" class="space-y-4" data-save-bar>
     {% csrf_token %}
     <label class="flex items-start gap-3 rounded-xl border border-border px-4 py-3">
       <input type="checkbox" name="enabled" class="mt-1" {% if ai.enabled %}checked{% endif %} {% if not can_edit %}disabled{% endif %}>
@@ -129,8 +129,9 @@
     {% if can_edit %}
     <div class="flex flex-wrap justify-end gap-2">
       {% if site_configured %}<button name="action" value="test" class="btn btn-ghost btn-sm" formnovalidate>Test connection</button>{% endif %}
-      <button class="btn btn-primary btn-sm">Save</button>
+      <button class="btn btn-primary btn-sm" data-save-fallback>Save</button>
     </div>
+    {% include "components/_save_bar.html" %}
     {% endif %}
   </form>
 

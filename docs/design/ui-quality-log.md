@@ -2618,3 +2618,22 @@ Plan: the design audit's D5 (fewer boxes, Dashboard first), D4 (Settings side li
 - **Tests:** `apps/conversations/tests/test_insights_step1.py` and `apps/accounts/tests/test_d6_polish.py`. Recovery, weekly report and proof tests were updated to the one rule. The full suite is green.
 - **Production:** run `generate_insights()` once so stored insight titles pick up the earlier wording fixes.
 - **Next:** the remaining Settings-style pages as one batch, then Insights steps 2 (layout) and 3 (charts).
+
+
+### Entry 49: Settings-style batch: Inbox settings, Studio AI and Bio, Channels, the save bar (2026-11-09)
+
+- **The "Unsaved changes" bar** (`components/_save_bar.html`, `.save-bar` in app.css, the handler in app.js):
+  - A form marked `data-save-bar` gets `data-dirty` once a field changes. The bar then sticks to the bottom of the screen with Discard (a form reset) and Save.
+  - With scripts (`html.ak-js`), the form's own Save (`data-save-fallback`) is hidden. Without scripts the bar never shows and the plain button stays.
+  - A form that comes back with errors starts dirty. Leaving with changes asks first, both on a full unload and on an in-app (boosted) navigation.
+  - Adopted on Profile, Business, Opening hours, Optional tools, AI, Studio brand voice and Bio page settings.
+- **Inbox settings:**
+  - Saved replies and Teams & routing are two-column sections. Each "Add" button is under its section's description.
+  - "Add a routing rule" is a disclosure under the rules (open when there are none), not a card beside them.
+  - Empty states are one line. The tab underline uses the highlight colour (D1).
+- **Content Studio:**
+  - AI tools has two sections: Brand voice, and Post ideas from what sold.
+  - Bio page has: Your bio page (address, bio-link check), Posts on the page, Removed posts and Page settings. "Page is on" is a switch.
+  - Channels has: Instagram, Facebook Page, Review before publishing, Recent failures, and a closing **danger section** for Disconnect (`btn-danger-outline`). Connect stays on the Facebook section (App Review path kept).
+- **Tests:** `apps/accounts/tests/test_settings_batch.py`. The full suite is green. Tailwind rebuilt.
+- **Next:** Insights step 2 (layout), then step 3 (charts).

@@ -8,14 +8,17 @@
 
 {% include "publishing/_subnav.html" %}
 
-{% comment %}Once there's a page: the link and its posts on the left, the settings on the right
-(.cs-cols, one column below lg).{% endcomment %}
-<div class="space-y-4">
+{% comment %}D4 sections, like Settings: what each is on the left, its fields on the right, a
+hairline between, no cards. The page's settings use the "Unsaved changes" bar.{% endcomment %}
+<div class="settings-main">
 
   {% if not page %}
-  <section class="card card-pad space-y-3 max-w-2xl" aria-labelledby="bio-new">
-    <h2 id="bio-new" class="font-semibold text-ink">Set up your bio page</h2>
-    <p class="text-sm text-ink-subtle">An Instagram bio holds one link. Point it at your bio page, and each post you add gets its own button there. A chat that starts from a button is credited to that post, not to whichever post was last in your bio.</p>
+  <section class="settings-section" aria-labelledby="bio-new">
+    <div>
+      <h2 id="bio-new" class="settings-section-title">Set up your bio page</h2>
+      <p class="settings-section-desc">An Instagram bio holds one link. Point it at your bio page, and each post you add gets its own button there. A chat that starts from a button is credited to that post, not to whichever post was last in your bio.</p>
+    </div>
+    <div class="settings-section-body">
     {% if can_admin %}
     <form method="post" class="space-y-3" hx-boost="false">
       {% csrf_token %}
@@ -37,14 +40,17 @@
     {% else %}
     <p class="text-sm text-ink-subtle">Ask an Owner or Admin to create it.</p>
     {% endif %}
+    </div>
   </section>
 
   {% else %}
-  <div class="cs-cols">
-  <div class="cs-stack">
 
-  <section class="card card-pad space-y-3" aria-labelledby="bio-link" x-data="{ copied: false }">
-    <h2 id="bio-link" class="font-semibold text-ink">Your bio page</h2>
+  <section class="settings-section" aria-labelledby="bio-link" x-data="{ copied: false }">
+    <div>
+      <h2 id="bio-link" class="settings-section-title">Your bio page</h2>
+      <p class="settings-section-desc">Put this address in your Instagram profile's links, so every chat from your bio is credited to the post it came from.</p>
+    </div>
+    <div class="settings-section-body">
     <div class="flex flex-wrap items-center gap-2">
       <code class="text-sm break-all">{{ page_url }}</code>
       <button type="button" class="btn btn-ghost text-xs"
@@ -73,12 +79,18 @@
       </form>
       {% endif %}
     </div>
+    </div>
   </section>
 
-  <section class="card card-pad space-y-3" aria-labelledby="bio-tiles">
-    <h2 id="bio-tiles" class="font-semibold text-ink">Posts on the page ({{ tiles|length }} of {{ page.max_tiles }})</h2>
+  <section class="settings-section" aria-labelledby="bio-tiles">
+    <div>
+      <h2 id="bio-tiles" class="settings-section-title">Posts on the page <span class="text-sm font-normal text-ink-subtle tabular-nums">{{ tiles|length }} of {{ page.max_tiles }}</span></h2>
+      <p class="settings-section-desc">The newest {{ page.max_tiles }} posts show. Posts are removed after {{ page.archive_after_days }} days unless pinned. A removed post's button keeps working for anyone who already has it.</p>
+    </div>
+    <div class="settings-section-body">
+    <div class="divide-y divide-border border-t border-border">
     {% for tile in tiles %}
-    <div class="flex flex-wrap items-center gap-2 py-2{% if not forloop.first %} border-t border-border{% endif %}">
+    <div class="flex flex-wrap items-center gap-2 py-2.5">
       <div class="flex-1 min-w-0">
         <p class="text-sm text-ink truncate">{% if tile.pinned %}<span class="text-xs tone-teal-fg mr-1">Pinned</span>{% endif %}{{ tile.label }}</p>
         <p class="text-xs text-ink-subtle"><a href="{% url 'publishing:post-detail' tile.link.post_id %}" class="cs-link">Open post</a> · added {{ tile.created_at|date:"j M" }}</p>
@@ -93,16 +105,22 @@
       </form>
     </div>
     {% empty %}
-    {% include "components/empty_state.html" with icon="image" title="No posts on your bio page yet" message="Open a published Instagram post with a WhatsApp chat link and choose Add to bio page on its Results card." compact=True %}
+    <p class="empty-line pt-3">No posts on your bio page yet. Open a published Instagram post with a WhatsApp chat link and choose Add to bio page on its Results card.</p>
     {% endfor %}
-    <p class="text-xs text-ink-subtle">The newest {{ page.max_tiles }} posts show. Posts are removed after {{ page.archive_after_days }} days unless pinned. A removed post's button keeps working for anyone who already has it.</p>
+    </div>
+    </div>
   </section>
 
   {% if archived %}
-  <section class="card card-pad space-y-2" aria-labelledby="bio-archived">
-    <h2 id="bio-archived" class="font-semibold text-ink">Removed posts</h2>
+  <section class="settings-section" aria-labelledby="bio-archived">
+    <div>
+      <h2 id="bio-archived" class="settings-section-title">Removed posts</h2>
+      <p class="settings-section-desc">Put one back to show its button on the page again.</p>
+    </div>
+    <div class="settings-section-body">
+    <div class="divide-y divide-border border-t border-border">
     {% for tile in archived %}
-    <div class="flex items-center gap-2 py-1">
+    <div class="flex items-center gap-2 py-2">
       <p class="flex-1 min-w-0 text-sm text-ink-subtle truncate">{{ tile.label }}</p>
       <form method="post" action="{% url 'publishing:bio-tile-update' tile.pk %}" hx-boost="false">
         {% csrf_token %}
@@ -110,15 +128,19 @@
       </form>
     </div>
     {% endfor %}
+    </div>
+    </div>
   </section>
   {% endif %}
 
-  </div>
-
   {% if can_admin %}
-  <section class="card card-pad space-y-3 cs-side" aria-labelledby="bio-settings">
-    <h2 id="bio-settings" class="font-semibold text-ink">Settings</h2>
-    <form method="post" enctype="multipart/form-data" class="space-y-3" hx-boost="false">
+  <section class="settings-section" aria-labelledby="bio-settings">
+    <div>
+      <h2 id="bio-settings" class="settings-section-title">Page settings</h2>
+      <p class="settings-section-desc">What the page looks like and how many posts it keeps. Turning it off hides the page; buttons people already have keep working.</p>
+    </div>
+    <div class="settings-section-body">
+    <form method="post" enctype="multipart/form-data" class="space-y-4" hx-boost="false" data-save-bar>
       {% csrf_token %}
       <input type="hidden" name="action" value="settings">
       <div>
@@ -159,15 +181,16 @@
         </div>
         <p class="text-xs text-ink-subtle" x-show="custom" x-cloak>Text is set to dark or white, whichever is easier to read on each colour.</p>
       </fieldset>
-      <label class="flex items-center gap-2 text-sm">
-        <input type="checkbox" name="is_active" {% if page.is_active %}checked{% endif %}>
+      <label class="switch-row text-sm">
+        <input type="checkbox" role="switch" class="switch" name="is_active" {% if page.is_active %}checked{% endif %}>
         Page is on
       </label>
-      <button type="submit" class="btn btn-tonal btn-sm">Save</button>
+      <button type="submit" class="btn btn-secondary btn-sm" data-save-fallback>Save</button>
+      {% include "components/_save_bar.html" %}
     </form>
+    </div>
   </section>
   {% endif %}
-  </div>
 
   {% endif %}
 </div>

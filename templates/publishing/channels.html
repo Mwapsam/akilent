@@ -9,13 +9,18 @@
 
 {% include "publishing/_subnav.html" %}
 
-{% comment %}Full width: the accounts side by side, then the review switch and recent failures
-(.cs-cols, one column below lg).{% endcomment %}
-<div class="space-y-4">
-<div class="cs-cols">
+{% comment %}D4 sections, like Settings: each account, the review switch and recent failures
+as two-column groups with hairlines, no cards. Disconnecting is last, in a danger section.
+Connecting stays reachable here and in Connections (App Review: keep both paths).{% endcomment %}
+<div class="settings-main">
 
   {# Instagram #}
-  <div class="card card-pad">
+  <section class="settings-section" aria-labelledby="ch-ig">
+    <div>
+      <h2 id="ch-ig" class="settings-section-title">Instagram</h2>
+      <p class="settings-section-desc">Publish images, reels and stories from Akilent.</p>
+    </div>
+    <div class="settings-section-body">
     <div class="flex items-start gap-4">
       <div class="shrink-0 w-10 h-10 rounded-lg bg-gradient-to-br from-[#f09433] via-[#e6683c] to-[#833ab4] flex items-center justify-center">
         <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
@@ -24,7 +29,7 @@
       </div>
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2 mb-1">
-          <h3 class="font-semibold text-ink">Instagram</h3>
+
           {% if ig_connection %}
             {% if ig_publish_scope %}
             <span class="inline-flex items-center gap-1 text-xs font-medium tone-teal px-2 py-0.5 rounded-full">
@@ -64,10 +69,16 @@
         {% endif %}
       </div>
     </div>
-  </div>
+    </div>
+  </section>
 
   {# Facebook Page #}
-  <div class="card card-pad">
+  <section class="settings-section" aria-labelledby="ch-fb">
+    <div>
+      <h2 id="ch-fb" class="settings-section-title">Facebook Page</h2>
+      <p class="settings-section-desc">Publish posts, photos and videos to your Facebook Page.</p>
+    </div>
+    <div class="settings-section-body">
     <div class="flex items-start gap-4">
       <div class="shrink-0 w-10 h-10 rounded-lg bg-[#1877F2] flex items-center justify-center">
         <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
@@ -76,7 +87,7 @@
       </div>
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2 mb-1">
-          <h3 class="font-semibold text-ink">Facebook Page</h3>
+
           {% if fb_connection and fb_connection.status == 'active' %}
           <span class="inline-flex items-center gap-1 text-xs font-medium tone-teal px-2 py-0.5 rounded-full">
             <span class="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
@@ -94,7 +105,6 @@
           </span>
           {% endif %}
         </div>
-        <p class="text-sm text-ink-subtle">Publish posts, photos, and videos to your Facebook Page.</p>
         {% if fb_connection and fb_connection.status == 'expired' %}
         <p class="text-xs tone-amber-fg mt-1">Facebook stopped accepting the saved access (for example after a password change or removed permission). Reconnect to resume publishing.</p>
         {% endif %}
@@ -106,28 +116,21 @@
         {% endif %}
       </div>
     </div>
-    <div class="mt-4 flex flex-wrap gap-2">
-      {% if fb_connection and fb_connection.status == 'active' %}
-      <form method="post" action="{% url 'publishing:fb-disconnect' %}">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-danger-ghost text-sm"
-                data-confirm="Disconnect this Facebook Page? Posting to it stops, and so do new Messenger messages and comments in the inbox; conversations you have are kept. Facebook posts scheduled for it can't go out until you connect it again." data-confirm-danger data-confirm-label="Disconnect">Disconnect</button>
-      </form>
-      {% elif channel_on.facebook %}
-      <a href="{% url 'publishing:fb-connect' %}" class="btn btn-primary text-sm">Connect Facebook Page</a>
-      {% endif %}
+    {% if channel_on.facebook and not fb_connection or channel_on.facebook and fb_connection.status != 'active' %}
+    <div><a href="{% url 'publishing:fb-connect' %}" class="btn btn-primary btn-sm">Connect Facebook Page</a></div>
+    {% endif %}
     </div>
-  </div>
+  </section>
 
-</div>
-
-<div class="cs-cols">
   {# Review before publishing #}
-  <div class="card card-pad">
-    <h3 class="font-semibold text-ink mb-1">Review before publishing</h3>
-    <p class="text-sm text-ink-subtle">When on, an Owner or Admin must approve each post before it can be scheduled or published. Editing an approved post sends it back for review.</p>
+  <section class="settings-section" aria-labelledby="ch-review">
+    <div>
+      <h2 id="ch-review" class="settings-section-title">Review before publishing</h2>
+      <p class="settings-section-desc">When on, an Owner or Admin must approve each post before it can be scheduled or published. Editing an approved post sends it back for review.</p>
+    </div>
+    <div class="settings-section-body">
     {% if is_admin %}
-    <form method="post" action="{% url 'publishing:settings' %}" class="mt-3 flex flex-wrap items-center justify-between gap-3">
+    <form method="post" action="{% url 'publishing:settings' %}" class="flex flex-wrap items-center justify-between gap-3">
       {% csrf_token %}
       {% comment %}A switch saves when flipped; the Save button is only for pages without JavaScript.{% endcomment %}
       <label class="switch-row text-sm">
@@ -137,17 +140,22 @@
       <noscript><button type="submit" class="btn btn-ghost text-sm">Save</button></noscript>
     </form>
     {% else %}
-    <p class="text-sm mt-3">{% if requires_review %}On — your posts need an Owner or Admin approval.{% else %}Off.{% endif %}</p>
+    <p class="text-sm">{% if requires_review %}On: your posts need an Owner or Admin approval.{% else %}Off.{% endif %}</p>
     {% endif %}
-  </div>
+    </div>
+  </section>
 
   {# Publishing failures #}
   {% if recent_failures %}
-  <div class="card card-pad">
-    <h3 class="font-semibold text-ink mb-3">Recent publishing failures</h3>
-    <div class="space-y-3">
+  <section class="settings-section" aria-labelledby="ch-failures">
+    <div>
+      <h2 id="ch-failures" class="settings-section-title">Recent publishing failures</h2>
+      <p class="settings-section-desc">Posts that didn't go out. Retry once the reason is fixed.</p>
+    </div>
+    <div class="settings-section-body">
+    <div class="divide-y divide-border border-t border-border">
       {% for post in recent_failures %}
-      <div class="flex items-start justify-between gap-3" data-row>
+      <div class="flex items-start justify-between gap-3 py-2.5" data-row>
         <div class="flex-1 min-w-0">
           <a href="{% url 'publishing:post-detail' post.pk %}" data-overlay-open="drawer"
              class="text-sm font-medium text-ink hover:underline truncate block">
@@ -165,9 +173,24 @@
       </div>
       {% endfor %}
     </div>
-  </div>
+    </div>
+  </section>
   {% endif %}
-</div>
 
+  {% if fb_connection and fb_connection.status == 'active' %}
+  <section class="settings-section settings-section--danger" aria-labelledby="ch-danger">
+    <div>
+      <h2 id="ch-danger" class="settings-section-title">Disconnect</h2>
+      <p class="settings-section-desc">Posting to the Page stops, and so do new Messenger messages and comments in the inbox. Conversations you have are kept, and you can connect it again.</p>
+    </div>
+    <div class="settings-section-body">
+      <form method="post" action="{% url 'publishing:fb-disconnect' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger-outline btn-sm"
+                data-confirm="Disconnect this Facebook Page? Posting to it stops, and so do new Messenger messages and comments in the inbox; conversations you have are kept. Facebook posts scheduled for it can't go out until you connect it again." data-confirm-danger data-confirm-label="Disconnect">Disconnect Facebook Page</button>
+      </form>
+    </div>
+  </section>
+  {% endif %}
 </div>
 {% endblock %}

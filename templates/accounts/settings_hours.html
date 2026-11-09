@@ -14,12 +14,13 @@
   </p>
   {% endif %}
 
-  <form method="post" class="space-y-4">
+  <form method="post" class="space-y-4" data-save-bar>
     {% csrf_token %}
     {% include "accounts/_hours_fields.html" %}
 
     {% if can_edit %}
-    <button class="btn btn-primary" type="submit">Save</button>
+    <button class="btn btn-primary" type="submit" data-save-fallback>Save</button>
+    {% include "components/_save_bar.html" %}
     {% else %}
     <p class="text-sm text-ink-subtle">Only an owner or admin can change opening hours.</p>
     {% endif %}

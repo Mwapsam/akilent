@@ -3,27 +3,36 @@
 {% block title %}Saved replies — Inbox settings{% endblock %}
 
 {% block inbox_settings_content %}
-<p class="mb-4 text-sm text-ink-subtle">Write a reply once, reuse it from any conversation's composer.</p>
 {% url 'conversations:saved_replies' as list_url %}
-{% include "components/_settings_list.html" with title="Saved replies" count=replies|length add_url=list_url|add:"?add=1" add_label="Add a saved reply" empty_icon="chat" empty_title="No saved replies yet" empty_message="Add your most common answers so nobody has to retype them." %}
-{% if replies %}
-<ul class="slist">
-  {% for r in replies %}
-  <li class="slist-row">
-    <div class="slist-main">
-      <p class="slist-title">{{ r.title }}</p>
-      <div class="mt-1.5">{% include "components/_message_bubble.html" with text=r.body compact=True label="How "|add:r.title|add:" reads" %}</div>
-    </div>
-    <div class="slist-side">
-      {% row_menu "Actions for "|add:r.title %}
-        <form method="post" action="{% url 'conversations:saved_reply_delete' r.pk %}" hx-boost="false">
-          {% csrf_token %}
-          <button class="row-menu-item row-menu-item--danger" role="menuitem">Delete</button>
-        </form>
-      {% endrow_menu %}
-    </div>
-  </li>
-  {% endfor %}
-</ul>
-{% endif %}
+<section class="settings-section" aria-labelledby="replies-title">
+  <div>
+    <h2 id="replies-title" class="settings-section-title">Saved replies{% if replies %} <span class="text-sm font-normal text-ink-subtle tabular-nums">{{ replies|length }}</span>{% endif %}</h2>
+    <p class="settings-section-desc">Write a reply once, then reuse it from the Saved replies button in any conversation's composer.</p>
+    <a href="{{ list_url }}?add=1" data-overlay-open="modal" class="btn btn-secondary btn-sm mt-4">Add a saved reply</a>
+  </div>
+  <div class="settings-section-body">
+    {% if replies %}
+    <ul class="slist">
+      {% for r in replies %}
+      <li class="slist-row">
+        <div class="slist-main">
+          <p class="slist-title">{{ r.title }}</p>
+          <div class="mt-1.5">{% include "components/_message_bubble.html" with text=r.body compact=True label="How "|add:r.title|add:" reads" %}</div>
+        </div>
+        <div class="slist-side">
+          {% row_menu "Actions for "|add:r.title %}
+            <form method="post" action="{% url 'conversations:saved_reply_delete' r.pk %}" hx-boost="false">
+              {% csrf_token %}
+              <button class="row-menu-item row-menu-item--danger" role="menuitem">Delete</button>
+            </form>
+          {% endrow_menu %}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty-line">No saved replies yet. Add your most common answers so nobody has to retype them.</p>
+    {% endif %}
+  </div>
+</section>
 {% endblock %}

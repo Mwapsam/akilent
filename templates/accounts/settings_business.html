@@ -18,7 +18,7 @@
   </div>
   {% endif %}
 
-  <form method="post" class="space-y-4">
+  <form method="post" class="space-y-4" data-save-bar>
     {% csrf_token %}
     {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
     {% include "components/form_field.html" with name="legal_name" label="Legal / registered name" value=form.legal_name.value error=form.legal_name.errors|join:" " help="Shown in the footer. Leave blank to use your company name." %}
@@ -44,7 +44,8 @@
     <p class="help">A registered office address or P.O. Box is fine.</p>
 
     {% if can_edit %}
-    <button class="btn btn-primary" type="submit">Save</button>
+    <button class="btn btn-primary" type="submit" data-save-fallback>Save</button>
+    {% include "components/_save_bar.html" %}
     {% else %}
     <p class="text-sm text-ink-subtle">Only an owner or admin can change business details.</p>
     {% endif %}

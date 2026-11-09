@@ -6,7 +6,7 @@
     <p class="settings-section-desc">How you appear to your team, and where sign-in notices go.</p>
   </div>
   <div class="settings-section-body">
-  <form method="post" class="space-y-4">
+  <form method="post" class="space-y-4" data-save-bar>
     {% csrf_token %}
     <div class="grid sm:grid-cols-2 gap-4">
       {% include "components/form_field.html" with name="first_name" label="First name" value=form.first_name.value error=form.first_name.errors|join:" " %}
@@ -15,8 +15,9 @@
     {% include "components/form_field.html" with name="email" label="Email" type="email" value=form.email.value error=form.email.errors|join:" " help="Used for sign-in notices and password resets." %}
     <div class="pt-1">
       <p class="text-xs text-ink-subtle mb-3">Username <span class="font-medium text-ink-subtle">{{ user.get_username }}</span> can't be changed.</p>
-      <button class="btn btn-primary" type="submit">Save changes</button>
+      <button class="btn btn-primary" type="submit" data-save-fallback>Save changes</button>
     </div>
+    {% include "components/_save_bar.html" %}
   </form>
   </div>
 </section>

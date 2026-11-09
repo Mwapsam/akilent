@@ -3,47 +3,55 @@
 {% block title %}Teams & routing — Inbox settings{% endblock %}
 
 {% block inbox_settings_content %}
-<section id="teams" class="mb-10 scroll-mt-24" aria-label="Teams">
-  <p class="mb-4 text-sm text-ink-subtle">Teams say who is responsible for a conversation (Sales, Support), separately from which person owns it.</p>
-  {% url 'conversations:teams' as teams_url %}
-  {% include "components/_settings_list.html" with title="Teams" count=teams|length add_url=teams_url|add:"?add=1" add_label="Add a team" empty_icon="users" empty_title="No teams yet" empty_message="Add a team, then send conversations to it with a routing rule below." %}
-  {% if teams %}
-  <ul class="slist">
-    {% for team in teams %}
-    <li class="slist-row">
-      <div class="slist-main">
-        <a href="{% url 'conversations:team_detail' team.pk %}" class="slist-title hover:underline">{{ team.name }}</a>
-        <p class="slist-meta">{{ team.member_count }} member{{ team.member_count|pluralize }}</p>
-      </div>
-      <div class="slist-side">
-        {% row_menu "Actions for "|add:team.name %}
-          <a href="{% url 'conversations:team_detail' team.pk %}" class="row-menu-item" role="menuitem">Manage members</a>
-        {% endrow_menu %}
-      </div>
-    </li>
-    {% endfor %}
-  </ul>
-  {% endif %}
+{% url 'conversations:teams' as teams_url %}
+<section id="teams" class="settings-section scroll-mt-24" aria-labelledby="teams-title">
+  <div>
+    <h2 id="teams-title" class="settings-section-title">Teams{% if teams %} <span class="text-sm font-normal text-ink-subtle tabular-nums">{{ teams|length }}</span>{% endif %}</h2>
+    <p class="settings-section-desc">Teams say who is responsible for a conversation (Sales, Support), separately from which person owns it.</p>
+    <a href="{{ teams_url }}?add=1" data-overlay-open="modal" class="btn btn-secondary btn-sm mt-4">Add a team</a>
+  </div>
+  <div class="settings-section-body">
+    {% if teams %}
+    <ul class="slist">
+      {% for team in teams %}
+      <li class="slist-row">
+        <div class="slist-main">
+          <a href="{% url 'conversations:team_detail' team.pk %}" class="slist-title hover:underline">{{ team.name }}</a>
+          <p class="slist-meta">{{ team.member_count }} member{{ team.member_count|pluralize }}</p>
+        </div>
+        <div class="slist-side">
+          {% row_menu "Actions for "|add:team.name %}
+            <a href="{% url 'conversations:team_detail' team.pk %}" class="row-menu-item" role="menuitem">Manage members</a>
+          {% endrow_menu %}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty-line">No teams yet. Add a team, then send conversations to it with a routing rule below.</p>
+    {% endif %}
+  </div>
 </section>
 
-<section id="routing" class="scroll-mt-24" aria-labelledby="routing-title">
-  <h2 id="routing-title" class="text-lg font-semibold text-ink">Routing rules</h2>
-  <p class="mt-1 mb-4 text-sm text-ink-subtle">
-    A new conversation is checked against these in priority order (lowest first); the first one that
-    matches decides its team. A rule with no conditions always matches, which makes it the default team.
-    If nothing matches, the conversation stays in
-    <a href="{% url 'conversations:inbox' %}?view=unassigned" class="text-accent underline">Unassigned</a>, not lost.
-  </p>
-<div class="grid gap-6 lg:grid-cols-3">
-  <section class="lg:col-span-2">
+<section id="routing" class="settings-section scroll-mt-24" aria-labelledby="routing-title">
+  <div>
+    <h2 id="routing-title" class="settings-section-title">Routing rules</h2>
+    <p class="settings-section-desc">
+      A new conversation is checked against these in priority order (lowest first); the first one that
+      matches decides its team. A rule with no conditions always matches, which makes it the default team.
+      If nothing matches, the conversation stays in
+      <a href="{% url 'conversations:inbox' %}?view=unassigned" class="underline hover:text-ink">Unassigned</a>, not lost.
+    </p>
+  </div>
+  <div class="settings-section-body">
     {% if rules %}
-    <div class="table-wrap">
+    <div class="table-scroll border-t border-border">
       <table class="table table--cards">
         <thead><tr><th>Priority</th><th>Rule</th><th>Team</th><th>Conditions</th><th></th></tr></thead>
         <tbody>
           {% for rule in rules %}
           <tr>
-            <td data-label="Priority">{{ rule.priority }}</td>
+            <td data-label="Priority" class="tabular-nums">{{ rule.priority }}</td>
             <td data-label="Rule">
               {{ rule.name }}
               {% if not rule.is_active %}<span class="badge badge-neutral">Off</span>{% endif %}
@@ -73,49 +81,52 @@
       </table>
     </div>
     {% else %}
-    <div class="table-wrap">
-      {% include "components/empty_state.html" with icon="workflow" title="No routing rules yet" message="Without one, every new conversation lands Unassigned for someone to pick up." %}
-    </div>
+    <p class="empty-line">No routing rules yet. Without one, every new conversation lands Unassigned for someone to pick up.</p>
     {% endif %}
-  </section>
 
-  <section>
-    <div class="card card-pad">
-      <h2 class="font-semibold mb-3">Add a routing rule</h2>
+    {% comment %}Adding a rule: a disclosure under the list, not a card beside it (no card in a
+    section). Open when there are no rules yet, since that's the one thing to do here.{% endcomment %}
+    <details class="cv-disclosure border-t border-border pt-4" {% if not rules %}open{% endif %}>
+      <summary class="text-sm font-medium text-ink cursor-pointer">Add a routing rule</summary>
       {% if teams %}
-      <form method="post" action="{% url 'conversations:routing_rules' %}" class="space-y-3">
+      <form method="post" action="{% url 'conversations:routing_rules' %}" class="mt-4 space-y-4 max-w-md">
         {% csrf_token %}
-        <div>
-          <label class="label" for="rule-name">Name</label>
-          <input id="rule-name" name="name" class="input" placeholder="e.g. Order questions" required />
-        </div>
-        <div>
-          <label class="label" for="rule-team">Team</label>
-          <select id="rule-team" name="team" class="select" required>
-            {% for team in teams %}
-            <option value="{{ team.pk }}">{{ team.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <label class="label" for="rule-priority">Priority</label>
-          <input id="rule-priority" name="priority" type="number" class="input" value="0" />
-          <p class="mt-1 text-xs text-ink-subtle">Lower runs first.</p>
-        </div>
-        <fieldset class="space-y-2">
-          <legend class="label">Conditions (leave all blank/unchecked for a default/catch-all rule)</legend>
+        <div class="grid sm:grid-cols-2 gap-4">
           <div>
-            <label class="label" for="rule-channel">Channel</label>
-            <select id="rule-channel" name="channel" class="select">
-              <option value="">Any channel</option>
-              {% for value, label in channel_choices %}
-              <option value="{{ value }}">{{ label }}</option>
+            <label class="label" for="rule-name">Name</label>
+            <input id="rule-name" name="name" class="input" placeholder="e.g. Order questions" required />
+          </div>
+          <div>
+            <label class="label" for="rule-team">Team</label>
+            <select id="rule-team" name="team" class="select" required>
+              {% for team in teams %}
+              <option value="{{ team.pk }}">{{ team.name }}</option>
               {% endfor %}
             </select>
           </div>
-          <div>
-            <label class="label" for="rule-tag">Contact tag</label>
-            <input id="rule-tag" name="tag" class="input" placeholder="e.g. vip" />
+        </div>
+        <div>
+          <label class="label" for="rule-priority">Priority</label>
+          <input id="rule-priority" name="priority" type="number" class="input max-w-32" value="0" aria-describedby="rule-priority-help" />
+          <p id="rule-priority-help" class="help">Lower runs first.</p>
+        </div>
+        <fieldset class="space-y-3">
+          <legend class="label">Conditions</legend>
+          <p class="help -mt-1">Leave all of these empty for a default, catch-all rule.</p>
+          <div class="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label class="label" for="rule-channel">Channel</label>
+              <select id="rule-channel" name="channel" class="select">
+                <option value="">Any channel</option>
+                {% for value, label in channel_choices %}
+                <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="label" for="rule-tag">Contact tag</label>
+              <input id="rule-tag" name="tag" class="input" placeholder="e.g. vip" />
+            </div>
           </div>
           <label class="flex items-center gap-2 text-sm">
             <input type="checkbox" name="is_new_customer" value="1" /> First-time customer
@@ -127,13 +138,12 @@
             <input type="checkbox" name="has_open_order" value="1" /> Has an open order
           </label>
         </fieldset>
-        <button class="btn btn-primary btn-sm w-full">Add rule</button>
+        <button class="btn btn-primary btn-sm">Add rule</button>
       </form>
       {% else %}
-      <p class="text-sm text-ink-subtle">Add a <a href="#teams" class="text-accent underline">team</a> above first: a rule needs somewhere to send conversations.</p>
+      <p class="mt-3 text-sm text-ink-subtle">Add a <a href="#teams" class="underline hover:text-ink">team</a> above first: a rule needs somewhere to send conversations.</p>
       {% endif %}
-    </div>
-  </section>
-</div>
+    </details>
+  </div>
 </section>
 {% endblock %}

@@ -1035,6 +1035,47 @@
     return m ? m.content : "";
   };
 
+  // The "Unsaved changes" bar (components/_save_bar.html). A form marked data-save-bar gets
+  // data-dirty once any field in it changes; CSS shows the bar then and hides the form's own
+  // Save button (html.ak-js). Discard is a reset; saving or discarding clears it. A form that
+  // comes back with errors starts dirty, so its Save is there. Leaving with changes asks first,
+  // for a full unload and for an in-app (boosted) navigation.
+  document.documentElement.classList.add("ak-js");
+  function saveBarForm(el) {
+    return el && el.closest ? el.closest("form[data-save-bar]") : null;
+  }
+  function markDirty(e) {
+    const form = saveBarForm(e.target);
+    if (form && !e.target.closest(".save-bar")) form.setAttribute("data-dirty", "");
+  }
+  document.addEventListener("input", markDirty);
+  document.addEventListener("change", markDirty);
+  document.addEventListener("reset", function (e) {
+    if (e.target.matches && e.target.matches("form[data-save-bar]")) e.target.removeAttribute("data-dirty");
+  }, true);
+  document.addEventListener("submit", function (e) {
+    if (e.target.matches && e.target.matches("form[data-save-bar]")) e.target.removeAttribute("data-dirty");
+  }, true);
+  document.addEventListener("htmx:load", function (e) {
+    const root = e.detail && e.detail.elt;
+    if (!root || !root.querySelectorAll) return;
+    root.querySelectorAll("form[data-save-bar]").forEach(function (form) {
+      if (form.querySelector('[aria-invalid="true"], .field-error')) form.setAttribute("data-dirty", "");
+    });
+  });
+  const LEAVE = "You have unsaved changes. Leave without saving?";
+  window.addEventListener("beforeunload", function (e) {
+    if (document.querySelector("form[data-save-bar][data-dirty]")) { e.preventDefault(); e.returnValue = ""; }
+  });
+  document.addEventListener("htmx:beforeRequest", function (e) {
+    const d = e.detail || {};
+    if (!d.boosted) return;
+    const dirty = document.querySelector("form[data-save-bar][data-dirty]");
+    if (!dirty || dirty.contains(d.elt)) return; // saving it, or something inside it
+    if (!window.confirm(LEAVE)) e.preventDefault();
+    else dirty.removeAttribute("data-dirty");
+  });
+
   // Page lifecycle for scripts that live inside <main>. onPage(fn) runs fn now and after every
   // in-place navigation; whatever fn returns runs just before the page is swapped away.
   const pageHooks = [];

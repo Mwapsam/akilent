@@ -1,0 +1,18 @@
+{% comment %}The sticky "Unsaved changes" bar for a settings form. Put it last inside a form marked
+data-save-bar, and mark that form's own Save button data-save-fallback:
+
+  <form method="post" data-save-bar> … <button class="btn btn-primary" data-save-fallback>Save</button>
+    {% include "components/_save_bar.html" %}
+  </form>
+
+With scripts (static/js/app.js, html.ak-js) the plain button is hidden and this bar shows once
+a field changes, stuck to the bottom of the screen: Discard puts the fields back, Save submits.
+Leaving the page with changes asks first. Without scripts the plain button is all there is.
+``label`` overrides the Save button's text.{% endcomment %}
+<div class="save-bar" role="region" aria-label="Unsaved changes">
+  <p class="text-sm text-ink">Unsaved changes</p>
+  <div class="flex items-center gap-2">
+    <button type="reset" class="btn btn-ghost btn-sm">Discard</button>
+    <button type="submit" class="btn btn-primary btn-sm">{{ label|default:"Save changes" }}</button>
+  </div>
+</div>
