@@ -4,13 +4,15 @@
 
 {% block inbox_settings_content %}
 {% url 'conversations:saved_replies' as list_url %}
-<section class="settings-section" aria-labelledby="replies-title">
-  <div>
-    <h2 id="replies-title" class="settings-section-title">Saved replies{% if replies %} <span class="text-sm font-normal text-ink-subtle tabular-nums">{{ replies|length }}</span>{% endif %}</h2>
-    <p class="settings-section-desc">Write a reply once, then reuse it from the Saved replies button in any conversation's composer.</p>
-    <a href="{{ list_url }}?add=1" data-overlay-open="modal" class="btn btn-secondary btn-sm mt-4">Add a saved reply</a>
+<section class="panel" aria-labelledby="replies-title">
+  <div class="panel-head">
+    <div>
+      <h2 id="replies-title" class="panel-title">Saved replies{% if replies %} <span class="text-sm font-normal text-ink-subtle tabular-nums">{{ replies|length }}</span>{% endif %}</h2>
+      <p class="panel-desc">Write it once, then insert it from any conversation's composer.</p>
+    </div>
+    <div class="panel-actions"><a href="{{ list_url }}?add=1" data-overlay-open="modal" class="btn btn-secondary btn-sm">Add a saved reply</a></div>
   </div>
-  <div class="settings-section-body">
+  <div class="{% if replies %}panel-body panel-body--flush{% else %}panel-body{% endif %}">
     {% if replies %}
     <ul class="slist">
       {% for r in replies %}

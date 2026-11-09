@@ -2,8 +2,9 @@
 {% comment %}Inbox settings: the pages set up now and then rather than used all day. Tabs:
 Saved replies · Teams & routing. Pages extend this, set active_tab ("replies" | "teams") and
 fill inbox_settings_content. The section tab bar stays off here (apps/core/sections.py:
-these are Inbox "also" pages), so there is one row of tabs. Content is two-column
-.settings-section groups, like Settings (D4).{% endcomment %}
+these are Inbox "also" pages), so there is one row of tabs. Content is one 720px column of
+panels, like Settings (spec §20, 2026-11-09): title and description on top, Add at the right,
+hairline rows to the edges.{% endcomment %}
 {% block title %}Inbox settings — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block page_header %}
@@ -31,7 +32,7 @@ these are Inbox "also" pages), so there is one row of tabs. Content is two-colum
   </nav>
 </div>
 
-<div class="settings-main">
+<div class="settings-main settings-main--panels">
 {% block inbox_settings_content %}{% endblock %}
 </div>
 {% endblock %}

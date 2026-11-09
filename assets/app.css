@@ -1736,6 +1736,9 @@
   .slist-title { @apply font-medium text-ink break-words; }
   .slist-meta { @apply mt-0.5 text-sm text-ink-subtle break-words; }
   .slist-side { @apply flex items-center gap-2 shrink-0; }
+  /* Inside a panel a list is hairline rows to the panel's edges, never a box in a box. */
+  .panel .slist { border: 0; border-top: 1px solid var(--color-border); border-radius: 0; background: transparent; }
+  .panel .slist-row { @apply px-5 sm:px-6; }
   .row-menu-item { @apply flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-ink; min-height: 2.25rem; }
   .row-menu-item:hover, .row-menu-item:focus-visible { background: var(--color-hover); outline: none; }
   .row-menu-item--danger { color: var(--color-coral-700); }

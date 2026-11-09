@@ -8,15 +8,15 @@
 
 {% include "publishing/_subnav.html" %}
 
-{% comment %}D4 sections, like Settings: what each is on the left, its fields on the right, a
-hairline between, no cards. The page's settings use the "Unsaved changes" bar.{% endcomment %}
-<div class="settings-main">
+{% comment %}Panels, like Settings (2026-11-09, spec §20): title and one-line description on top,
+lists as hairline rows to the panel's edges, Save in the panel's footer.{% endcomment %}
+<div class="settings-main settings-main--panels">
 
   {% if not page %}
   <section class="settings-section" aria-labelledby="bio-new">
     <div>
       <h2 id="bio-new" class="settings-section-title">Set up your bio page</h2>
-      <p class="settings-section-desc">An Instagram bio holds one link. Point it at your bio page, and each post you add gets its own button there. A chat that starts from a button is credited to that post, not to whichever post was last in your bio.</p>
+      <p class="settings-section-desc">Your Instagram bio holds one link. Point it here and each post gets its own button, so a chat is credited to the post it came from.</p>
     </div>
     <div class="settings-section-body">
     {% if can_admin %}
@@ -35,10 +35,10 @@ hairline between, no cards. The page's settings use the "Unsaved changes" bar.{%
         </div>
         <p id="bio-slug-help" class="text-xs text-ink-subtle mt-1">Lowercase letters, numbers and hyphens.</p>
       </div>
-      <button type="submit" class="btn btn-primary">Create bio page</button>
+      <div class="panel-foot"><span></span><button type="submit" class="btn btn-primary btn-sm">Create bio page</button></div>
     </form>
     {% else %}
-    <p class="text-sm text-ink-subtle">Ask an Owner or Admin to create it.</p>
+    <p class="empty-line">Ask an Owner or Admin to create it.</p>
     {% endif %}
     </div>
   </section>
@@ -48,7 +48,7 @@ hairline between, no cards. The page's settings use the "Unsaved changes" bar.{%
   <section class="settings-section" aria-labelledby="bio-link" x-data="{ copied: false }">
     <div>
       <h2 id="bio-link" class="settings-section-title">Your bio page</h2>
-      <p class="settings-section-desc">Put this address in your Instagram profile's links, so every chat from your bio is credited to the post it came from.</p>
+      <p class="settings-section-desc">Put this address in your Instagram profile's links.</p>
     </div>
     <div class="settings-section-body">
     <div class="flex flex-wrap items-center gap-2">
@@ -85,12 +85,12 @@ hairline between, no cards. The page's settings use the "Unsaved changes" bar.{%
   <section class="settings-section" aria-labelledby="bio-tiles">
     <div>
       <h2 id="bio-tiles" class="settings-section-title">Posts on the page <span class="text-sm font-normal text-ink-subtle tabular-nums">{{ tiles|length }} of {{ page.max_tiles }}</span></h2>
-      <p class="settings-section-desc">The newest {{ page.max_tiles }} posts show. Posts are removed after {{ page.archive_after_days }} days unless pinned. A removed post's button keeps working for anyone who already has it.</p>
+      <p class="settings-section-desc" title="A removed post's button keeps working for anyone who already has it.">The newest {{ page.max_tiles }} show; unpinned posts are removed after {{ page.archive_after_days }} days.</p>
     </div>
-    <div class="settings-section-body">
+    <div class="settings-section-body !px-0 !pb-0">
     <div class="divide-y divide-border border-t border-border">
     {% for tile in tiles %}
-    <div class="flex flex-wrap items-center gap-2 py-2.5">
+    <div class="flex flex-wrap items-center gap-2 px-5 sm:px-6 py-2.5">
       <div class="flex-1 min-w-0">
         <p class="text-sm text-ink truncate">{% if tile.pinned %}<span class="text-xs tone-teal-fg mr-1">Pinned</span>{% endif %}{{ tile.label }}</p>
         <p class="text-xs text-ink-subtle"><a href="{% url 'publishing:post-detail' tile.link.post_id %}" class="cs-link">Open post</a> · added {{ tile.created_at|date:"j M" }}</p>
@@ -105,7 +105,7 @@ hairline between, no cards. The page's settings use the "Unsaved changes" bar.{%
       </form>
     </div>
     {% empty %}
-    <p class="empty-line pt-3">No posts on your bio page yet. Open a published Instagram post with a WhatsApp chat link and choose Add to bio page on its Results card.</p>
+    <p class="empty-line px-5 sm:px-6 py-4">No posts on your bio page yet. Open a published Instagram post with a WhatsApp chat link and choose Add to bio page on its Results card.</p>
     {% endfor %}
     </div>
     </div>
@@ -117,10 +117,10 @@ hairline between, no cards. The page's settings use the "Unsaved changes" bar.{%
       <h2 id="bio-archived" class="settings-section-title">Removed posts</h2>
       <p class="settings-section-desc">Put one back to show its button on the page again.</p>
     </div>
-    <div class="settings-section-body">
+    <div class="settings-section-body !px-0 !pb-0">
     <div class="divide-y divide-border border-t border-border">
     {% for tile in archived %}
-    <div class="flex items-center gap-2 py-2">
+    <div class="flex items-center gap-2 px-5 sm:px-6 py-2">
       <p class="flex-1 min-w-0 text-sm text-ink-subtle truncate">{{ tile.label }}</p>
       <form method="post" action="{% url 'publishing:bio-tile-update' tile.pk %}" hx-boost="false">
         {% csrf_token %}
@@ -137,7 +137,7 @@ hairline between, no cards. The page's settings use the "Unsaved changes" bar.{%
   <section class="settings-section" aria-labelledby="bio-settings">
     <div>
       <h2 id="bio-settings" class="settings-section-title">Page settings</h2>
-      <p class="settings-section-desc">What the page looks like and how many posts it keeps. Turning it off hides the page; buttons people already have keep working.</p>
+      <p class="settings-section-desc">How the page looks and how many posts it keeps.</p>
     </div>
     <div class="settings-section-body">
     <form method="post" enctype="multipart/form-data" class="space-y-4" hx-boost="false" data-save-bar>
@@ -185,8 +185,7 @@ hairline between, no cards. The page's settings use the "Unsaved changes" bar.{%
         <input type="checkbox" role="switch" class="switch" name="is_active" {% if page.is_active %}checked{% endif %}>
         Page is on
       </label>
-      <button type="submit" class="btn btn-secondary btn-sm" data-save-fallback>Save</button>
-      {% include "components/_save_bar.html" %}
+      {% include "components/_panel_foot.html" with helper="Turning the page off hides it; buttons people have keep working." %}
     </form>
     </div>
   </section>

@@ -8,20 +8,20 @@
 
 {% include "publishing/_subnav.html" %}
 
-{% comment %}D4 sections, like Settings: what each is on the left, its fields on the right, a
-hairline between, no cards. Brand voice uses the "Unsaved changes" bar.{% endcomment %}
-<div class="settings-main">
+{% comment %}Panels, like Settings (2026-11-09, spec §20): title and one-line description on top,
+the fields below, Save in the panel's footer (components/_panel_foot.html).{% endcomment %}
+<div class="settings-main settings-main--panels">
   {% if off_reason %}
-  <div class="tone-info rounded-xl p-3 text-sm mb-6" role="status">
-    AI tools are off: {{ off_reason }}
-    {% if can_admin %}<a href="{% url 'settings-ai' %}" class="cs-link font-medium">AI settings</a>{% endif %}
+  <div class="notice-strip notice-strip--info" role="status">
+    <span>AI tools are off: {{ off_reason }}</span>
+    {% if can_admin %}<a href="{% url 'settings-ai' %}" class="link-quiet">AI settings <span aria-hidden="true">→</span></a>{% endif %}
   </div>
   {% endif %}
 
   <section class="settings-section" aria-labelledby="ai-voice-title">
     <div>
       <h2 id="ai-voice-title" class="settings-section-title">Brand voice</h2>
-      <p class="settings-section-desc">How your posts should sound. AI follows it when it suggests captions, rewrites them or suggests ideas. It's style only: AI still takes facts like prices only from your AI notes.</p>
+      <p class="settings-section-desc">How your posts should sound when AI writes or rewrites them. Style only: facts like prices still come from your AI notes.</p>
     </div>
     <div class="settings-section-body">
     <form method="post" class="space-y-3" hx-boost="false"{% if can_admin %} data-save-bar{% endif %}>
@@ -31,10 +31,9 @@ hairline between, no cards. Brand voice uses the "Unsaved changes" bar.{% endcom
                 {% if not can_admin %}disabled{% endif %}
                 placeholder="Warm and plain-spoken, like talking to a neighbour. Short sentences. One emoji at most. Never say &quot;cheap&quot;; say &quot;good value&quot;.">{{ brand_voice }}</textarea>
       {% if can_admin %}
-      <button type="submit" class="btn btn-secondary btn-sm" data-save-fallback>Save brand voice</button>
-      {% include "components/_save_bar.html" with label="Save brand voice" %}
+      {% include "components/_panel_foot.html" with label="Save brand voice" %}
       {% else %}
-      <p class="text-xs text-ink-subtle">Only an Owner or Admin can change the brand voice.</p>
+      {% include "components/_panel_foot.html" with readonly="Only an Owner or Admin can change it." %}
       {% endif %}
     </form>
     </div>
@@ -43,7 +42,7 @@ hairline between, no cards. Brand voice uses the "Unsaved changes" bar.{% endcom
   <section id="ideas" class="settings-section scroll-mt-24" aria-labelledby="ai-ideas-title">
     <div>
       <h2 id="ai-ideas-title" class="settings-section-title">Post ideas from what sold</h2>
-      <p class="settings-section-desc">AI looks at your posts from the last {{ idea_days }} days that started the most WhatsApp chats, leads and paid orders, and suggests new posts that build on them. Only posts the sales report can rank count: chats credited to the post for sure, and enough of them to judge. Ideas go to Planning; nothing is posted.</p>
+      <p class="settings-section-desc" title="Only posts the sales report can rank count: chats credited to the post for sure, and enough of them to judge.">New posts built on your best sellers from the last {{ idea_days }} days. Ideas go to Planning; nothing is posted.</p>
     </div>
     <div class="settings-section-body">
     {% if sources %}

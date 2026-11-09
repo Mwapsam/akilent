@@ -4,13 +4,15 @@
 
 {% block inbox_settings_content %}
 {% url 'conversations:teams' as teams_url %}
-<section id="teams" class="settings-section scroll-mt-24" aria-labelledby="teams-title">
-  <div>
-    <h2 id="teams-title" class="settings-section-title">Teams{% if teams %} <span class="text-sm font-normal text-ink-subtle tabular-nums">{{ teams|length }}</span>{% endif %}</h2>
-    <p class="settings-section-desc">Teams say who is responsible for a conversation (Sales, Support), separately from which person owns it.</p>
-    <a href="{{ teams_url }}?add=1" data-overlay-open="modal" class="btn btn-secondary btn-sm mt-4">Add a team</a>
+<section id="teams" class="panel scroll-mt-24" aria-labelledby="teams-title">
+  <div class="panel-head">
+    <div>
+      <h2 id="teams-title" class="panel-title">Teams{% if teams %} <span class="text-sm font-normal text-ink-subtle tabular-nums">{{ teams|length }}</span>{% endif %}</h2>
+      <p class="panel-desc">Who is responsible for a conversation (Sales, Support), apart from who owns it.</p>
+    </div>
+    <div class="panel-actions"><a href="{{ teams_url }}?add=1" data-overlay-open="modal" class="btn btn-secondary btn-sm">Add a team</a></div>
   </div>
-  <div class="settings-section-body">
+  <div class="{% if teams %}panel-body panel-body--flush{% else %}panel-body{% endif %}">
     {% if teams %}
     <ul class="slist">
       {% for team in teams %}
@@ -33,21 +35,18 @@
   </div>
 </section>
 
-<section id="routing" class="settings-section scroll-mt-24" aria-labelledby="routing-title">
-  <div>
-    <h2 id="routing-title" class="settings-section-title">Routing rules</h2>
-    <p class="settings-section-desc">
-      A new conversation is checked against these from the top; the first one that matches decides its
-      team. Drag a rule, or use ↑ ↓, to change the order. A rule with no conditions catches everything,
-      so it belongs last. If nothing matches, the conversation stays in
-      <a href="{% url 'conversations:inbox' %}?view=unassigned" class="underline hover:text-ink">Unassigned</a>, not lost.
-    </p>
-    <a href="{% url 'conversations:routing_rules' %}?add=1" data-overlay-open="modal" class="btn btn-secondary btn-sm mt-4">Add a routing rule</a>
+<section id="routing" class="panel scroll-mt-24" aria-labelledby="routing-title">
+  <div class="panel-head">
+    <div>
+      <h2 id="routing-title" class="panel-title">Routing rules</h2>
+      <p class="panel-desc">The first rule that matches a new conversation decides its team; drag or use ↑ ↓ to reorder. No match leaves it in <a href="{% url 'conversations:inbox' %}?view=unassigned" class="link-quiet">Unassigned</a>.</p>
+    </div>
+    <div class="panel-actions"><a href="{% url 'conversations:routing_rules' %}?add=1" data-overlay-open="modal" class="btn btn-secondary btn-sm">Add a routing rule</a></div>
   </div>
-  <div class="settings-section-body">
-    {% if routing_warnings %}
-    <p class="text-sm text-amber-800 mb-3" role="status">{{ routing_warnings }} rule{{ routing_warnings|pluralize:" never runs,s never run" }}: an earlier rule catches every conversation first.</p>
-    {% endif %}
+  {% if routing_warnings %}
+  <div class="panel-alert panel-alert--warning" role="status"><span>{{ routing_warnings }} rule{{ routing_warnings|pluralize:" never runs,s never run" }}: an earlier rule catches every conversation first.</span></div>
+  {% endif %}
+  <div class="{% if rules %}panel-body panel-body--flush{% else %}panel-body{% endif %}">
     {% if rules %}
     <div data-reorder>
       <form method="post" action="{% url 'conversations:routing_rules_reorder' %}" data-reorder-form hidden>{% csrf_token %}</form>
@@ -60,7 +59,7 @@
           <div class="slist-main">
             <p class="slist-title">{{ rule.name }}{% if not rule.is_active %} <span class="badge badge-neutral">Off</span>{% endif %}</p>
             <p class="slist-meta" data-rule-sentence>{{ sentence }}</p>
-            {% if warning %}<p class="mt-1 text-sm text-amber-800"><span aria-hidden="true">⚠</span><span class="sr-only">Warning:</span> {{ warning }}</p>{% endif %}
+            {% if warning %}<p class="mt-1 text-sm tone-amber-fg"><span aria-hidden="true">⚠</span><span class="sr-only">Warning:</span> {{ warning }}</p>{% endif %}
           </div>
           <div class="slist-side">
             <form method="post" action="{% url 'conversations:routing_rules_reorder' %}" class="reorder-moves">

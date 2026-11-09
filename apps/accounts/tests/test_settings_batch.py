@@ -73,15 +73,17 @@ def test_the_bar_shows_only_with_scripts_and_once_a_field_changed():
     ],
 )
 def test_the_page_is_settings_sections_with_no_cards(path):
+    # Panels step 4 (2026-11-09): sections or explicit panels in the 720px panel column.
     src = _src(path)
-    assert 'class="settings-section' in src
+    assert 'class="settings-section' in src or 'class="panel' in src
     assert "card card-pad" not in src and "cs-cols" not in src
 
 
 def test_inbox_settings_render_as_sections_with_the_highlight_tab(owner_client):
     page = owner_client.get("/inbox/settings/teams/").content.decode()
-    assert 'id="teams" class="settings-section' in page
-    assert 'id="routing" class="settings-section' in page
+    assert 'id="teams" class="panel' in page
+    assert 'id="routing" class="panel' in page
+    assert 'class="settings-main settings-main--panels"' in page
     # Stage 5: adding a rule is a modal (with "New team…" in it), not a disclosure.
     assert '/inbox/routing-rules/?add=1" data-overlay-open="modal"' in page
     assert "border-brand-600" not in page
@@ -91,15 +93,17 @@ def test_inbox_settings_render_as_sections_with_the_highlight_tab(owner_client):
 
 
 def test_studio_settings_forms_get_the_bar():
+    # Panels step 4: Save in the panel's footer (components/_panel_foot.html), which waits
+    # until something changes, in place of the floating bar.
     for path in ("publishing/ai_tools.html", "publishing/bio.html"):
         src = _src(path)
-        assert "data-save-bar" in src and "data-save-fallback" in src
-        assert '{% include "components/_save_bar.html"' in src
+        assert "data-save-bar" in src
+        assert '{% include "components/_panel_foot.html"' in src
 
 
 def test_channels_ends_in_a_danger_section_for_disconnect():
     src = _src("publishing/channels.html")
-    danger = src[src.index("settings-section--danger") :]
+    danger = src[src.index("panel--danger") :]
     assert "publishing:fb-disconnect" in danger and "btn-danger-outline" in danger
     assert src.count("publishing:fb-disconnect") == 1
     assert "publishing:fb-connect" in src  # connecting stays reachable here

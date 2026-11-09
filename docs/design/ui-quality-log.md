@@ -2909,3 +2909,27 @@ From the production review that scored both pages 8/10.
 
 - **Tests:** new `apps/accounts/tests/test_home_insights_polish.py`. Updated `test_insights_panels`, `test_insights_view_full` and `test_insights_ui_quality` (a chart or its waiting line).
 - **Not done:** I haven't checked the changes in a browser.
+
+## Entry 60 — Panels step 4: the remaining Settings-style pages (2026-11-09)
+
+- **Inbox settings:** `inbox_settings_base.html` uses the 720px panel column.
+  - **Saved replies, Teams and Routing rules** are panels, each with its Add button at the right of the header and hairline rows to the edges.
+  - The routing "never runs" warning is a slim alert, and the long routing description is one line.
+  - A team page has Members as rows and "Add a member" with Add to team in its footer. It no longer has a table in a box or a card.
+- **Content Studio › AI tools:**
+  - the panel column;
+  - "AI tools are off" as a notice strip;
+  - shorter descriptions;
+  - Save brand voice in the panel's footer, read-only for members, replacing the floating save bar.
+- **Content Studio › Bio page:**
+  - panels, with Posts on the page and Removed posts as edge-to-edge rows;
+  - Page settings has Save in its footer, with the "turned off" note as the helper;
+  - Create bio page is in a plain footer (no Discard on a create form).
+- **Content Studio › Channels:** the same pattern as Settings › Integrations.
+  - **Instagram and Facebook Page:** mark, title and description, a status badge at the right, and slim alerts for reconnect or switched off. For Facebook, the Page name and Connect sit in the footer.
+  - **Review before publishing:** its switch is in the panel header.
+  - **Recent failures:** rows, with Retry as a small ghost button.
+  - **Disconnect:** last, in a danger panel. Connect and disconnect stay on this page (App Review).
+- **CSS:** `.panel .slist` drops the list's own box (hairline rows, padded to the panel).
+- **Tests:** new `apps/publishing/tests/test_settings_style_panels.py`. `test_settings_batch` was updated from sections and the save bar to panels and the panel footer.
+- **Not done:** I haven't looked at these pages in a browser.

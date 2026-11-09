@@ -1,64 +1,67 @@
 {% extends "conversations/inbox_settings_base.html" %}
+{% comment %}One team (Inbox settings panels, 2026-11-09): its members as hairline rows, then "Add a
+member" with Add in the panel's footer.{% endcomment %}
 {% block title %}{{ team.name }} — Inbox settings{% endblock %}
 
 {% block inbox_settings_content %}
-<header class="mb-4">
-  <p class="text-sm"><a href="{% url 'conversations:inbox_settings_teams' %}#teams" class="text-ink-subtle hover:text-ink">← Teams &amp; routing</a></p>
-  <h2 class="text-lg font-semibold text-ink">{{ team.name }}</h2>
-</header>
+<p class="text-sm"><a href="{% url 'conversations:inbox_settings_teams' %}#teams" class="link-quiet"><span aria-hidden="true">←</span> Teams &amp; routing</a></p>
 
-<div class="grid gap-6 lg:grid-cols-2">
-  <section>
-    <h2 class="font-semibold mb-3">Members</h2>
-    {% if members %}
-    <div class="table-wrap">
-      <table class="table table--cards">
-        <thead><tr><th>Name</th><th></th></tr></thead>
-        <tbody>
-          {% for user in members %}
-          <tr>
-            <td data-label="Name">{{ user.get_full_name|default:user.get_username }}</td>
-            <td>
-              <form method="post">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="remove_member" />
-                <input type="hidden" name="user_id" value="{{ user.pk }}" />
-                <button class="btn btn-ghost btn-sm">Remove</button>
-              </form>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+<section class="panel" aria-labelledby="team-members-h">
+  <div class="panel-head">
+    <div>
+      <h2 id="team-members-h" class="panel-title">{{ team.name }} <span class="text-sm font-normal text-ink-subtle tabular-nums">{{ members|length }} member{{ members|length|pluralize }}</span></h2>
+      <p class="panel-desc">Routing gives this team's conversations to these people.</p>
     </div>
-    {% else %}
-    <div class="table-wrap">
-      {% include "components/empty_state.html" with icon="users" title="No members yet" message="Add teammates below so routing has someone to give this team's conversations to." %}
-    </div>
-    {% endif %}
-  </section>
-
-  <section>
-    <div class="card card-pad">
-      <h2 class="font-semibold mb-3">Add a member</h2>
-      {% if available %}
-      <form method="post" class="space-y-3">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="add_member" />
-        <div>
-          <label class="label" for="add-user">Teammate</label>
-          <select id="add-user" name="user_id" class="select" required>
-            {% for user in available %}
-            <option value="{{ user.pk }}">{{ user.get_full_name|default:user.get_username }}</option>
-            {% endfor %}
-          </select>
+  </div>
+  {% if members %}
+  <div class="panel-body panel-body--flush">
+    <ul class="slist">
+      {% for user in members %}
+      <li class="slist-row items-center">
+        <div class="slist-main"><p class="slist-title">{{ user.get_full_name|default:user.get_username }}</p></div>
+        <div class="slist-side">
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="remove_member" />
+            <input type="hidden" name="user_id" value="{{ user.pk }}" />
+            <button class="btn btn-ghost btn-sm" aria-label="Remove {{ user.get_full_name|default:user.get_username }}">Remove</button>
+          </form>
         </div>
-        <button class="btn btn-primary btn-sm w-full">Add to team</button>
-      </form>
-      {% else %}
-      <p class="text-sm text-ink-subtle">Everyone on your account is already on this team.</p>
-      {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% else %}
+  <div class="panel-body"><p class="empty-line">No members yet. Add teammates below so routing has someone to give this team's conversations to.</p></div>
+  {% endif %}
+</section>
+
+<section class="panel" aria-labelledby="team-add-h">
+  <div class="panel-head">
+    <div>
+      <h2 id="team-add-h" class="panel-title">Add a member</h2>
+      {% if not available %}<p class="panel-desc">Everyone on your account is already on this team.</p>{% endif %}
     </div>
-  </section>
-</div>
+  </div>
+  {% if available %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="add_member" />
+    <div class="panel-body">
+      <div>
+        <label class="label" for="add-user">Teammate</label>
+        <select id="add-user" name="user_id" class="select" required>
+          {% for user in available %}
+          <option value="{{ user.pk }}">{{ user.get_full_name|default:user.get_username }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="panel-foot">
+      <span>They see this team's conversations straight away.</span>
+      <button class="btn btn-primary btn-sm">Add to team</button>
+    </div>
+  </form>
+  {% endif %}
+</section>
 {% endblock %}

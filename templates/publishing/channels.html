@@ -9,153 +9,118 @@
 
 {% include "publishing/_subnav.html" %}
 
-{% comment %}D4 sections, like Settings: each account, the review switch and recent failures
-as two-column groups with hairlines, no cards. Disconnecting is last, in a danger section.
-Connecting stays reachable here and in Connections (App Review: keep both paths).{% endcomment %}
-<div class="settings-main">
+{% comment %}
+Content Studio › Channels (panels, 2026-11-09; spec §20): one panel per account in the Settings
+pattern (mark, title and one-line description, the status at the right, slim alerts, Connect in
+the footer), the review switch in its panel's header, recent failures as hairline rows, and
+Disconnect last in a danger panel. Connecting stays reachable here and in Connections (App
+Review: keep both paths).
+{% endcomment %}
+<div class="settings-main settings-main--panels">
 
-  {# Instagram #}
-  <section class="settings-section" aria-labelledby="ch-ig">
-    <div>
-      <h2 id="ch-ig" class="settings-section-title">Instagram</h2>
-      <p class="settings-section-desc">Publish images, reels and stories from Akilent.</p>
-    </div>
-    <div class="settings-section-body">
-    <div class="flex items-start gap-4">
-      <div class="shrink-0 w-10 h-10 rounded-lg bg-gradient-to-br from-[#f09433] via-[#e6683c] to-[#833ab4] flex items-center justify-center">
-        <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+  <section class="panel" aria-labelledby="ch-ig">
+    <div class="panel-head">
+      <div class="flex items-start gap-3 min-w-0">
+        <div class="shrink-0 w-10 h-10 rounded-lg bg-gradient-to-br from-[#f09433] via-[#e6683c] to-[#833ab4] flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
         </svg>
       </div>
-      <div class="flex-1 min-w-0">
-        <div class="flex items-center gap-2 mb-1">
-
-          {% if ig_connection %}
-            {% if ig_publish_scope %}
-            <span class="inline-flex items-center gap-1 text-xs font-medium tone-teal px-2 py-0.5 rounded-full">
-              <span class="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
-              Publishing enabled
-            </span>
-            {% elif ig_connection.token_expired %}
-            <span class="inline-flex items-center gap-1 text-xs font-medium tone-amber px-2 py-0.5 rounded-full">
-              <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-              Reconnect needed
-            </span>
-            {% else %}
-            <span class="inline-flex items-center gap-1 text-xs font-medium tone-amber px-2 py-0.5 rounded-full">
-              <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-              Connected — publish scope pending
-            </span>
-            {% endif %}
-          {% else %}
-          <span class="inline-flex items-center gap-1 text-xs font-medium tone-neutral px-2 py-0.5 rounded-full">
-            <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
-            Not connected
-          </span>
-          {% endif %}
+        <div class="min-w-0">
+          <h2 id="ch-ig" class="panel-title">Instagram</h2>
+          <p class="panel-desc">{% if ig_connection %}Connected through your Instagram business account.{% else %}Publish images, reels and stories from Akilent.{% endif %}</p>
         </div>
+      </div>
+      <div class="panel-actions">
         {% if ig_connection %}
-        <p class="text-sm text-ink-subtle">Connected via Instagram Business Account.</p>
-        {% if ig_connection.token_expired %}
-        <p class="text-xs tone-amber-fg mt-1">Instagram stopped accepting the saved access. Reconnect Instagram to resume publishing.</p>
-        {% elif not ig_publish_scope %}
-        <p class="text-xs text-ink-subtle mt-1">This connection can't publish yet. You can plan and draft Instagram posts now; reconnect Instagram and allow publishing to post them.</p>
-        {% endif %}
-        {% else %}
-        <p class="text-sm text-ink-subtle">Connect Instagram to publish images, reels, and stories from Akilent.</p>
-        {% endif %}
-        {% if not channel_on.instagram %}
-        <p class="text-xs tone-amber-fg mt-1">Instagram is switched off on Akilent right now. Scheduled Instagram posts wait and go out once it's back on.</p>
-        {% endif %}
+          {% if ig_publish_scope %}<span class="badge badge-success">Publishing on</span>
+          {% elif ig_connection.token_expired %}<span class="badge badge-warning">Reconnect needed</span>
+          {% else %}<span class="badge badge-warning">Can't publish yet</span>{% endif %}
+        {% else %}<span class="badge badge-neutral">Not connected</span>{% endif %}
       </div>
     </div>
-    </div>
+    {% if ig_connection and ig_connection.token_expired %}
+    <div class="panel-alert panel-alert--warning"><span>Instagram stopped accepting the saved access. Reconnect Instagram to publish again.</span></div>
+    {% elif ig_connection and not ig_publish_scope %}
+    <div class="panel-alert panel-alert--info"><span>You can plan and draft Instagram posts now. Reconnect Instagram and allow publishing to post them.</span></div>
+    {% endif %}
+    {% if not channel_on.instagram %}
+    <div class="panel-alert panel-alert--warning"><span>Instagram is switched off on Akilent right now. Scheduled posts wait and go out once it's back on.</span></div>
+    {% endif %}
   </section>
 
-  {# Facebook Page #}
-  <section class="settings-section" aria-labelledby="ch-fb">
-    <div>
-      <h2 id="ch-fb" class="settings-section-title">Facebook Page</h2>
-      <p class="settings-section-desc">Publish posts, photos and videos to your Facebook Page.</p>
-    </div>
-    <div class="settings-section-body">
-    <div class="flex items-start gap-4">
-      <div class="shrink-0 w-10 h-10 rounded-lg bg-[#1877F2] flex items-center justify-center">
-        <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+  <section class="panel" aria-labelledby="ch-fb">
+    <div class="panel-head">
+      <div class="flex items-start gap-3 min-w-0">
+        <div class="shrink-0 w-10 h-10 rounded-lg bg-[#1877F2] flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
         </svg>
       </div>
-      <div class="flex-1 min-w-0">
-        <div class="flex items-center gap-2 mb-1">
-
-          {% if fb_connection and fb_connection.status == 'active' %}
-          <span class="inline-flex items-center gap-1 text-xs font-medium tone-teal px-2 py-0.5 rounded-full">
-            <span class="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
-            Connected
-          </span>
-          {% elif fb_connection and fb_connection.status == 'expired' %}
-          <span class="inline-flex items-center gap-1 text-xs font-medium tone-amber px-2 py-0.5 rounded-full">
-            <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-            Reconnect needed
-          </span>
-          {% else %}
-          <span class="inline-flex items-center gap-1 text-xs font-medium tone-neutral px-2 py-0.5 rounded-full">
-            <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
-            Not connected
-          </span>
-          {% endif %}
+        <div class="min-w-0">
+          <h2 id="ch-fb" class="panel-title">Facebook Page</h2>
+          <p class="panel-desc">Publish posts, photos and videos to your Page.</p>
         </div>
-        {% if fb_connection and fb_connection.status == 'expired' %}
-        <p class="text-xs tone-amber-fg mt-1">Facebook stopped accepting the saved access (for example after a password change or removed permission). Reconnect to resume publishing.</p>
-        {% endif %}
-        {% if fb_connection and fb_connection.page_name %}
-        <p class="text-xs text-ink-subtle mt-1">Page: {{ fb_connection.page_name }}</p>
-        {% endif %}
-        {% if not channel_on.facebook %}
-        <p class="text-xs tone-amber-fg mt-1">Facebook Page publishing is switched off on Akilent right now. Scheduled Facebook posts wait and go out once it's back on.</p>
-        {% endif %}
+      </div>
+      <div class="panel-actions">
+        {% if fb_connection and fb_connection.status == 'active' %}<span class="badge badge-success">Connected</span>
+        {% elif fb_connection and fb_connection.status == 'expired' %}<span class="badge badge-warning">Reconnect needed</span>
+        {% else %}<span class="badge badge-neutral">Not connected</span>{% endif %}
       </div>
     </div>
-    {% if channel_on.facebook and not fb_connection or channel_on.facebook and fb_connection.status != 'active' %}
-    <div><a href="{% url 'publishing:fb-connect' %}" class="btn btn-primary btn-sm">Connect Facebook Page</a></div>
+    {% if fb_connection and fb_connection.status == 'expired' %}
+    <div class="panel-alert panel-alert--warning"><span>Facebook stopped accepting the saved access, for example after a password change. Reconnect to publish again.</span></div>
     {% endif %}
+    {% if not channel_on.facebook %}
+    <div class="panel-alert panel-alert--warning"><span>Facebook Page publishing is switched off on Akilent right now. Scheduled posts wait and go out once it's back on.</span></div>
+    {% endif %}
+    {% if fb_connection and fb_connection.page_name or channel_on.facebook and not fb_connection or channel_on.facebook and fb_connection.status != 'active' %}
+    <div class="panel-foot">
+      <span>{% if fb_connection and fb_connection.page_name %}Page: {{ fb_connection.page_name }}{% endif %}</span>
+      {% if channel_on.facebook and not fb_connection or channel_on.facebook and fb_connection.status != 'active' %}
+      <a href="{% url 'publishing:fb-connect' %}" class="btn btn-primary btn-sm">Connect Facebook Page</a>
+      {% endif %}
     </div>
+    {% endif %}
   </section>
 
-  {# Review before publishing #}
-  <section class="settings-section" aria-labelledby="ch-review">
-    <div>
-      <h2 id="ch-review" class="settings-section-title">Review before publishing</h2>
-      <p class="settings-section-desc">When on, an Owner or Admin must approve each post before it can be scheduled or published. Editing an approved post sends it back for review.</p>
-    </div>
-    <div class="settings-section-body">
-    {% if is_admin %}
-    <form method="post" action="{% url 'publishing:settings' %}" class="flex flex-wrap items-center justify-between gap-3">
-      {% csrf_token %}
-      {% comment %}A switch saves when flipped; the Save button is only for pages without JavaScript.{% endcomment %}
-      <label class="switch-row text-sm">
-        <input type="checkbox" role="switch" class="switch" name="requires_review" {% if requires_review %}checked{% endif %} onchange="this.form.requestSubmit()">
-        Require review
-      </label>
-      <noscript><button type="submit" class="btn btn-ghost text-sm">Save</button></noscript>
-    </form>
-    {% else %}
-    <p class="text-sm">{% if requires_review %}On: your posts need an Owner or Admin approval.{% else %}Off.{% endif %}</p>
-    {% endif %}
+  <section class="panel" aria-labelledby="ch-review">
+    <div class="panel-head">
+      <div>
+        <h2 id="ch-review" class="panel-title">Review before publishing</h2>
+        <p class="panel-desc">An Owner or Admin approves each post before it's scheduled. Editing an approved post sends it back.</p>
+      </div>
+      <div class="panel-actions">
+        {% if is_admin %}
+        <form method="post" action="{% url 'publishing:settings' %}">
+          {% csrf_token %}
+          {% comment %}A switch saves when flipped; the Save button is only for pages without JavaScript.{% endcomment %}
+          <label class="switch-row text-sm">
+            <input type="checkbox" role="switch" class="switch" name="requires_review" {% if requires_review %}checked{% endif %} onchange="this.form.requestSubmit()" aria-label="Require review">
+            <span class="sr-only">Require review</span>
+          </label>
+          <noscript><button type="submit" class="btn btn-ghost btn-sm">Save</button></noscript>
+        </form>
+        {% else %}
+        <span class="badge badge-neutral">{% if requires_review %}On{% else %}Off{% endif %}</span>
+        {% endif %}
+      </div>
     </div>
   </section>
 
   {# Publishing failures #}
   {% if recent_failures %}
-  <section class="settings-section" aria-labelledby="ch-failures">
-    <div>
-      <h2 id="ch-failures" class="settings-section-title">Recent publishing failures</h2>
-      <p class="settings-section-desc">Posts that didn't go out. Retry once the reason is fixed.</p>
+  <section class="panel" aria-labelledby="ch-failures">
+    <div class="panel-head">
+      <div>
+        <h2 id="ch-failures" class="panel-title">Recent publishing failures</h2>
+        <p class="panel-desc">Posts that didn't go out. Retry once the reason is fixed.</p>
+      </div>
     </div>
-    <div class="settings-section-body">
+    <div class="panel-body panel-body--flush">
     <div class="divide-y divide-border border-t border-border">
       {% for post in recent_failures %}
-      <div class="flex items-start justify-between gap-3 py-2.5" data-row>
+      <div class="flex items-start justify-between gap-3 px-5 sm:px-6 py-2.5" data-row>
         <div class="flex-1 min-w-0">
           <a href="{% url 'publishing:post-detail' post.pk %}" data-overlay-open="drawer"
              class="text-sm font-medium text-ink hover:underline truncate block">
@@ -168,7 +133,7 @@ Connecting stays reachable here and in Connections (App Review: keep both paths)
         </div>
         <form method="post" action="{% url 'publishing:post-retry' post.pk %}" class="shrink-0">
           {% csrf_token %}
-          <button type="submit" class="btn btn-ghost text-xs py-0.5 px-2">Retry</button>
+          <button type="submit" class="btn btn-ghost btn-sm">Retry</button>
         </form>
       </div>
       {% endfor %}
@@ -178,17 +143,19 @@ Connecting stays reachable here and in Connections (App Review: keep both paths)
   {% endif %}
 
   {% if fb_connection and fb_connection.status == 'active' %}
-  <section class="settings-section settings-section--danger" aria-labelledby="ch-danger">
-    <div>
-      <h2 id="ch-danger" class="settings-section-title">Disconnect</h2>
-      <p class="settings-section-desc">Posting to the Page stops, and so do new Messenger messages and comments in the inbox. Conversations you have are kept, and you can connect it again.</p>
-    </div>
-    <div class="settings-section-body">
+  <section class="panel panel--danger" aria-labelledby="ch-danger">
+    <div class="panel-head">
+      <div>
+        <h2 id="ch-danger" class="panel-title">Disconnect Facebook Page</h2>
+        <p class="panel-desc">Posting, Messenger messages and comments stop. Conversations are kept, and you can connect again.</p>
+      </div>
+      <div class="panel-actions">
       <form method="post" action="{% url 'publishing:fb-disconnect' %}">
         {% csrf_token %}
         <button type="submit" class="btn btn-danger-outline btn-sm"
-                data-confirm="Disconnect this Facebook Page? Posting to it stops, and so do new Messenger messages and comments in the inbox; conversations you have are kept. Facebook posts scheduled for it can't go out until you connect it again." data-confirm-danger data-confirm-label="Disconnect">Disconnect Facebook Page</button>
+                data-confirm="Disconnect this Facebook Page? Posting to it stops, and so do new Messenger messages and comments in the inbox; conversations you have are kept. Facebook posts scheduled for it can't go out until you connect it again." data-confirm-danger data-confirm-label="Disconnect">Disconnect</button>
       </form>
+      </div>
     </div>
   </section>
   {% endif %}
