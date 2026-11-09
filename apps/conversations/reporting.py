@@ -1076,10 +1076,17 @@ def headline(
     paid_now = sum(r["orders"] for r in money)
     paid_before = sum(r["orders"] for r in revenue(account, before))
 
-    replied = customers_replied(account, period)
+    # One unit with the figures below it: conversations that started in the period and got a
+    # reply, and how many customers those were when that's a different number.
+    replied_rows = [r for r in rows if r["first_reply"] is not None]
+    replied = len(replied_rows)
+    customers = len({r["contact_id"] for r in replied_rows})
     parts = []
     if replied:
-        parts.append(f"{replied} customer{'' if replied == 1 else 's'} got a reply")
+        text = f"{replied} conversation{'' if replied == 1 else 's'} got a reply"
+        if customers != replied:
+            text += f" ({customers} customer{'' if customers == 1 else 's'})"
+        parts.append(text)
     if resp["missed"]:
         rec = recovery(account, period, rows, now=now)
         if rec["recovered"]:

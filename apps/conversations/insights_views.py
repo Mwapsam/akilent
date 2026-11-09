@@ -57,14 +57,13 @@ def _tab(request) -> str:
 
 @login_required
 def insights(request):
-    """Insights: four headline numbers, what needs you (at most three lines), then one tab of
-    detail at a time (Response · Sales · Content · Automation) and, under every tab, goals and
-    the weekly trend. Only the open tab's figures are worked out."""
-    from apps.accounts.api import is_account_admin
+    """Insights: four headline numbers, what needs you (at most three lines; the rest in a
+    drawer), then one tab of detail at a time (Response · Sales · Content · Automation), each
+    with its chart. Only the open tab's figures are worked out; nothing repeats below them."""
     from apps.billing.limits import LimitChecker
-    from apps.conversations import api as conversations_api
     from apps.conversations.attention import attention
     from apps.core.htmx import is_background
+    from apps.insights.models import Insight
 
     account = get_current_account(request)
     if account is None:
@@ -74,47 +73,14 @@ def insights(request):
     period, days, period_locked = _period(request, account, now)
     tab = _tab(request)
     has_history = LimitChecker(account).has_feature("detailed_analytics")
-    goals = reporting.goal_progress(account, now=now)
-    goal_limit = None if has_history else FREE_GOAL_LIMIT
+    goal_context = _goal_context(request, account, now)
     rows = reporting.first_replies(account, period.start, period.end)
-
-    from django.db.models import Count, Prefetch, Q
-
-    from apps.insights.models import BusinessPolicy, Insight, RecommendationLog
-
-    # Severity ordering: urgent first, then warning, opportunity, info.
-    severity_order: dict[str, int] = {
-        Insight.Severity.URGENT: 0,
-        Insight.Severity.WARNING: 1,
-        Insight.Severity.OPPORTUNITY: 2,
-        Insight.Severity.INFO: 3,
-    }
-    raw_insights = list(
+    open_insights = list(
         Insight.objects.filter(
             account=account,
             status__in=[Insight.Status.NEW, Insight.Status.ACKNOWLEDGED],
         )
-        .prefetch_related(
-            Prefetch(
-                "recommendation_logs",
-                queryset=RecommendationLog.objects.filter(
-                    status=RecommendationLog.Status.ACCEPTED
-                ).order_by("-acted_at"),
-                to_attr="accepted_recs",
-            )
-        )
-        .order_by("-created_at")
     )
-    raw_insights.sort(key=lambda i: severity_order.get(i.severity, 9))
-    rec_stats = RecommendationLog.objects.filter(
-        account=account,
-        recommended_at__gte=period.start,
-    ).aggregate(
-        total=Count("id"),
-        acted_on=Count("id", filter=Q(status=RecommendationLog.Status.ACCEPTED)),
-        dismissed=Count("id", filter=Q(status=RecommendationLog.Status.DISMISSED)),
-    )
-    at_risk = reporting.at_risk(account, now)
 
     context = {
         "account": account,
@@ -124,36 +90,16 @@ def insights(request):
         "period_choices": reporting.PERIODS,
         "period_locked": period_locked,
         "has_history": has_history,
-        "headline": reporting.headline(account, period, rows, now=now, goals=goals),
-        "attention": attention(
-            account, now=now, at_risk=at_risk, insights=raw_insights
+        "headline": reporting.headline(
+            account, period, rows, now=now, goals=goal_context["goals"]
         ),
-        "at_risk": at_risk,
-        "intelligence_insights": raw_insights,
-        "rec_stats": rec_stats,
-        # Keys of insight types that have a known automation mapping.  The
-        # template uses this to guard the Automate button so the same set of
-        # types is checked in both places — no divergence between client and server.
-        "automatable_insight_types": frozenset(BusinessPolicy.INSIGHT_TYPE_TO_TRIGGER),
-        "starting_point": conversations_api.starting_point(account, now),
-        "momentum": reporting.momentum(account),
-        "goals": goals,
-        "goal_limit": goal_limit,
-        "goal_limit_reached": goal_limit is not None and goals["total"] >= goal_limit,
-        "can_manage_goals": is_account_admin(request.user, account),
-        "goal_metrics": reporting.GOAL_METRICS,
+        "attention": attention(account, now=now, insights=open_insights),
         "weekly_report_enabled": getattr(
             InsightSettings.objects.filter(account=account).first(),
             "weekly_report",
             True,
         ),
-        # Revenue can have one goal per currency, so it's never excluded here; every other
-        # metric is single-goal, so once it's set it drops off the "add a goal" choices.
-        "existing_goal_metrics": {
-            g.metric
-            for g in InsightGoal.objects.filter(account=account)
-            if g.metric != InsightGoal.Metric.REVENUE
-        },
+        **goal_context,
     }
     context.update(
         _tab_context(tab, request, account, period, days, rows, now, has_history)
@@ -322,6 +268,68 @@ def _tab_figures(tab, request, account, period, days, rows, now, has_history) ->
         "automation": reporting.automation_impact(account, period, rows),
         "forms": reporting.forms(account, period),
     }
+
+
+def _goal_context(request, account, now) -> dict:
+    """What the Goals drawer needs (and the headline's goal notes)."""
+    from apps.accounts.api import is_account_admin
+    from apps.billing.limits import LimitChecker
+
+    has_history = LimitChecker(account).has_feature("detailed_analytics")
+    goals = reporting.goal_progress(account, now=now)
+    goal_limit = None if has_history else FREE_GOAL_LIMIT
+    return {
+        "goals": goals,
+        "goal_limit": goal_limit,
+        "goal_limit_reached": goal_limit is not None and goals["total"] >= goal_limit,
+        "can_manage_goals": is_account_admin(request.user, account),
+        "goal_metrics": reporting.GOAL_METRICS,
+        # Revenue can have one goal per currency, so it's never excluded here; every other
+        # metric is single-goal, so once it's set it drops off the "add a goal" choices.
+        "existing_goal_metrics": {
+            g.metric
+            for g in InsightGoal.objects.filter(account=account)
+            if g.metric != InsightGoal.Metric.REVENUE
+        },
+    }
+
+
+@login_required
+def insights_goals(request):
+    """This month's goals, in a drawer from the headline's "Goals" link (or as a page)."""
+    from apps.core.htmx import overlay_or_page
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    return overlay_or_page(
+        request,
+        "insights/_goals.html",
+        "insights/goals_page.html",
+        _goal_context(request, account, timezone.now()),
+        kind="drawer",
+        title="Monthly goals",
+    )
+
+
+@login_required
+def insights_attention(request):
+    """Everything that needs you, not just the first three: a drawer from "N more" on
+    Insights and Home (or a page). The same compact rows; an observation can be dismissed."""
+    from apps.conversations.attention import attention
+    from apps.core.htmx import overlay_or_page
+
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    return overlay_or_page(
+        request,
+        "insights/_attention_all.html",
+        "insights/attention_page.html",
+        {"attention": attention(account)},
+        kind="drawer",
+        title="What needs you",
+    )
 
 
 def _goals_redirect(request):

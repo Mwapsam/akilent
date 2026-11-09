@@ -1,0 +1,24 @@
+{% comment %}A keyword field as chips (keywordChips in static/js/rule_builder.js). Reached from
+components/bound_field.html for a form field with ``chips = True`` set on it:
+
+  self.fields["keywords"].chips = True
+
+The real field is the plain comma-separated text input (.chips-raw): that's all a page
+without scripts gets. With scripts it's hidden and kept in sync with the chips. Enter or a comma
+adds a keyword, × removes one, Backspace on an empty box brings the last one back to edit, and a
+paste is split on commas and new lines.{% endcomment %}
+{% load ui %}
+<div class="chips-input" x-data="keywordChips()" @click="$refs.draft && $refs.draft.focus()">
+  <template x-for="(chip, i) in chips" :key="chip">
+    <span class="chip">
+      <span x-text="chip"></span>
+      <button type="button" class="chip-remove" @click.stop="remove(i)" :aria-label="'Remove ' + chip">×</button>
+    </span>
+  </template>
+  {% render_field field extra_class="chips-raw" %}
+  <input type="text" x-ref="draft" x-model="draft" class="chips-draft" x-cloak
+         @keydown="key($event)" @paste="paste($event)" @blur="blur()"
+         :placeholder="chips.length ? 'Add another' : 'Type a keyword, then Enter'"
+         aria-label="Add a keyword" aria-describedby="{{ field.id_for_label }}-chips-help">
+</div>
+<p id="{{ field.id_for_label }}-chips-help" class="help">Press Enter or type a comma after each keyword. A comma always starts a new keyword, so a keyword can't contain one.</p>

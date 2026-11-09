@@ -2687,3 +2687,35 @@ Plan: the design audit's D5 (fewer boxes, Dashboard first), D4 (Settings side li
 - **Palette:** `--chart-series-1/2` (blue-600/teal-600; dark blue-500/teal-600) run through the dataviz validator: all checks pass in light and dark (dark tritan ΔE 4.9, covered by legend, tooltip and table).
 - **Tests:** `test_insights_step3.py`. The full suite is green apart from `test_import_5000_contacts` under parallel load.
 - **Not done:** a look in a real browser (labels, phone width, dark mode).
+
+
+### Entry 52: Insights loose ends from the 11-09 walkthrough, and a CI download fix (2026-11-09)
+
+- **Stale insights close themselves:**
+  - `apps/insights/engine.resolve_stale`: when a rule finds nothing, its open insight is set to RESOLVED. Rules are named `rule_<type>`, which is how they're matched.
+  - The 7 Oct "1 unanswered conversation" closes on the next nightly run.
+  - `generate_insights()` on production is still the user's step (it also rewrites the old titles).
+- **No duplicate list:**
+  - "All observations" and its cards are gone from the page.
+  - "N more →" (and a merged line's "See them") opens every item in a drawer (`/insights/needs-you/`, `_attention_all.html`), on Insights and on Home. It uses compact rows with the action, Automate (where a policy can be made) and Dismiss.
+  - `attention()` now also returns `all_items`.
+- **One unit:**
+  - The headline sentence counts conversations that started in the period and got a reply, the same rows as the figures: "4 conversations got a reply (3 customers)".
+  - The median's note says "From 4 conversations".
+- **Goals below the minimum sample:** "Goal 100% · too early to tell", never "on track" beside "Not enough data yet".
+- **Labels:**
+  - "First reply", "Answered in 24h", "Leads", "Paid orders", with the full meaning in a title.
+  - `.metric-label` is one line (nowrap, truncate) everywhere, so the numbers line up on every page that uses figures.
+- **Shorter page:**
+  - Goals moved to a drawer ("Goals · 1 of 2 on track →" beside the headline sentence; `/insights/goals/`).
+  - The starting point is on Home only.
+  - Business momentum is gone from Insights: the tab charts are the trend (weeks over 90 days). The weekly snapshots stay for the weekly email.
+  - Only the weekly-email switch is left below the tabs.
+  - The view no longer computes momentum, the starting point or recommendation stats.
+- **Momentum "stopped at 26 Oct":** it hadn't stopped. A week is captured once it has closed plus one day (`snapshots.SETTLE`), so on 9 Nov the latest is the week starting 26 Oct.
+- **Neutral changes:** leads and paid orders changes are plain grey notes.
+- **CI:** the Tailwind download is `curl -f` with five retries, plus a check that it's an ELF binary. A GitHub 504 page was saved and run as the binary.
+- **Stage 5 (rule builder), paused for this:**
+  - New and not yet used by any page: `apps/core/reorder.py`, `static/js/rule_builder.js` (loaded with the shell), `components/_keyword_chips.html` (+ the `chips` hook in `bound_field.html`), `.chips-*`/`.reorder-*` CSS, `apps/instagram/services/rule_text.py`.
+  - The comment-rule view and template changes are not applied yet.
+- **Tests:** `test_insights_loose_ends.py`. Tests for the moved sections now read the drawers and Home. The full suite is green.

@@ -109,7 +109,7 @@ def test_the_page_uses_one_period_and_says_what_is_right_now(shop):
     client, account = shop
     _enquiry(account, NOW - timedelta(days=3), reply_after=timedelta(minutes=4))
     page = client.get("/insights/?period=7").content.decode()
-    assert "In the last 7 days, 1 customer got a reply." in page
+    assert "In the last 7 days, 1 conversation got a reply." in page
     assert "This week, Akilent" not in page and "vs last week" not in page
     assert '<option value="7" selected>' in " ".join(page.split())
     assert (

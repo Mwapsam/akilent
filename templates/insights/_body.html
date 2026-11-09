@@ -5,10 +5,12 @@ and when you come back to the tab, never while you're typing in one of its forms
 spinner or jump. Refresh and the tabs do the same at once. hx-disinherit keeps the boosted forms
 and links inside from picking up this element's swap.
 
-Layout (Insights step 2): the period picker; four headline numbers; what needs you (at most
-three lines, also on Home); one tab of detail at a time (Response · Sales · Content · Automation,
-?tab=, only that tab's figures are worked out); then, under every tab, goals, the weekly trend
-and all observations.
+Layout: the period picker; four headline numbers (with "Goals" opening this month's goals in a
+drawer); what needs you (at most three lines, also on Home; "N more" opens the rest in a drawer);
+one tab of detail at a time (Response · Sales · Content · Automation, ?tab=, only that tab's
+figures are worked out), each with its chart. Nothing repeats below the tabs: the observations
+are in the drawer, the starting point is on Home, and the weekly trend is the tab charts over
+90 days. Only the weekly-email switch is left at the end.
 
 One period: every figure here is for the chosen "last N days", except what says "right now"
 (what needs you, the observations), the weekly trend and this month's goals.
@@ -49,7 +51,7 @@ One period: every figure here is for the chosen "last N days", except what says 
 {% include "insights/_headline.html" %}
 
 <div class="mt-10">
-  {% include "insights/_attention.html" with more_url="#observations" %}
+  {% include "insights/_attention.html" %}
 </div>
 
 <nav class="tabs mt-12" aria-label="Insights sections">
@@ -78,14 +80,7 @@ One period: every figure here is for the chosen "last N days", except what says 
   {% endif %}
 </div>
 
-<div class="mt-14 space-y-12 border-t border-border pt-10">
-  {% include "insights/_goals.html" %}
-  {% include "insights/_momentum.html" %}
-
-  <section id="observations" class="scroll-mt-24" aria-label="All observations">
-    {% include "insights/_intelligence.html" %}
-  </section>
-
+<div class="mt-14 border-t border-border pt-6">
   {% if can_manage_goals %}
   <form method="post" action="/insights/report-settings/">
     {% csrf_token %}

@@ -901,8 +901,10 @@
      large and tabular below, no box of its own. .kpi-* (Content Studio, Campaigns)
      follow the same look. */
   .metric { @apply flex flex-col gap-1 min-w-0; }
+  /* One line, always: a label that wraps pushes its number below its neighbours'. Long labels
+     truncate; keep them short ("Answered in 24h"), with the full meaning in a title. */
   .metric-label {
-    @apply text-xs font-medium uppercase;
+    @apply text-xs font-medium uppercase leading-4 whitespace-nowrap truncate;
     letter-spacing: 0.04em;
     color: var(--color-ink-subtle);
   }
@@ -1196,6 +1198,28 @@
   .chart-swatch--critical { background: var(--chart-critical); }
   .chart-swatch--series-1 { background: var(--chart-series-1); }
   .chart-swatch--series-2 { background: var(--chart-series-2); }
+
+  /* Rule builder (Stage 5): a keyword field as chips (components/_keyword_chips.html), and
+     rows you can drag by their handle or move with Move up / Move down. */
+  .chips-input {
+    @apply flex flex-wrap items-center gap-1.5 rounded-lg px-2 py-1.5 min-h-10 cursor-text;
+    background-color: var(--color-surface); box-shadow: inset 0 0 0 1px var(--color-border-strong);
+  }
+  .chips-input:focus-within { box-shadow: inset 0 0 0 1px var(--color-ink-subtle), 0 0 0 3px color-mix(in srgb, var(--color-highlight) 35%, transparent); }
+  html:not(.ak-js) .chips-input { @apply block p-0 shadow-none; }
+  .chip { @apply inline-flex items-center gap-1 rounded-md pl-2 pr-1 py-0.5 text-sm; background-color: var(--color-secondary-bg); color: var(--color-ink); }
+  .chip-remove { @apply inline-flex items-center justify-center w-5 h-5 rounded text-base leading-none; color: var(--color-ink-subtle); }
+  .chip-remove:hover { background-color: var(--color-secondary-hover); color: var(--color-ink); }
+  .chips-draft { @apply flex-1 min-w-32 bg-transparent border-0 p-1 text-sm outline-none focus:ring-0; color: var(--color-ink); }
+  .reorder-handle {
+    @apply hidden sm:inline-flex items-center justify-center w-6 h-8 rounded cursor-grab shrink-0;
+    color: var(--color-ink-subtle);
+  }
+  html:not(.ak-js) .reorder-handle { display: none; }
+  .reorder-handle:hover { background-color: var(--color-secondary-bg); color: var(--color-ink); }
+  [data-reorder-item].is-dragging { opacity: .5; }
+  .reorder-moves { @apply inline-flex items-center; }
+  .reorder-moves .btn { @apply px-2; }
 
   /* A chart's metric switcher (Insights tabs): a quiet segmented control above one chart.
      Hidden until scripts run (x-cloak); without them every chart shows, one under another. */

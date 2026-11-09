@@ -54,7 +54,13 @@ jobs:
       - name: Verify compiled CSS is up to date
         run: |
           set -e
-          curl -sSL -o "$RUNNER_TEMP/tailwindcss" "https://github.com/tailwindlabs/tailwindcss/releases/download/v${TAILWIND_VERSION}/tailwindcss-linux-x64"
+          # -f: an HTTP error (GitHub's "504 Gateway Time-out" page) fails the download
+          # instead of being saved and run as the binary; retried, since GitHub's release
+          # CDN has the odd bad minute. Then check it really is an executable.
+          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors \
+            -o "$RUNNER_TEMP/tailwindcss" \
+            "https://github.com/tailwindlabs/tailwindcss/releases/download/v${TAILWIND_VERSION}/tailwindcss-linux-x64"
+          head -c 4 "$RUNNER_TEMP/tailwindcss" | grep -q "ELF" || { echo "Downloaded tailwindcss is not a Linux binary"; exit 1; }
           chmod +x "$RUNNER_TEMP/tailwindcss"
           "$RUNNER_TEMP/tailwindcss" -i assets/app.css -o "$RUNNER_TEMP/app.built.css" --minify
           python tools/check_css_build.py "$RUNNER_TEMP/app.built.css" static/css/app.css

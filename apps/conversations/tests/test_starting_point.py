@@ -154,10 +154,11 @@ def test_no_card_before_whatsapp_is_connected_and_no_cross_business_numbers(acco
 
 
 @pytest.mark.django_db
-def test_insights_shows_the_card(client, account):
+def test_home_shows_the_card_and_insights_doesnt_repeat_it(client, account):
     user = User.objects.create_user("amara", "amara@example.com", "pw")
     Membership.objects.create(user=user, account=account, role=Membership.Role.OWNER)
     client.force_login(user)
     _connect(account, days_ago=3)
-    html = client.get("/insights/").content.decode()
+    html = client.get("/dashboard/panels/", HTTP_HX_REQUEST="true").content.decode()
     assert "Your starting point" in html and "day 4 of 7" in html
+    assert "Your starting point" not in client.get("/insights/").content.decode()

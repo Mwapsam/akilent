@@ -13,6 +13,8 @@ urlpatterns = [
     ),
     path("<int:pk>/dismiss/", insights_views.insight_dismiss, name="insight-dismiss"),
     path("<int:pk>/act/", insights_views.insight_act, name="insight-act"),
+    path("needs-you/", insights_views.insights_attention, name="insights-attention"),
+    path("goals/", insights_views.insights_goals, name="insights-goals"),
     path(
         "goals/create/",
         insights_views.insights_goal_create,

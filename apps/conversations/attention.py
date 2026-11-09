@@ -68,6 +68,8 @@ class Item:
     url: str = ""
     # An observation's action is a POST (it records that the owner acted on it).
     act_pk: int | None = None
+    # An observation that can become an automation policy ("Automate", in the drawer).
+    automate_pk: int | None = None
     since: datetime | None = None
     tone: str = (
         "neutral"  # coral (losing customers), highlight (to do), neutral (set-up)
@@ -111,6 +113,12 @@ def _from_at_risk(account, at_risk, now) -> list[Item]:
     ]
 
 
+def _automatable() -> frozenset:
+    from apps.insights.models import BusinessPolicy
+
+    return frozenset(BusinessPolicy.INSIGHT_TYPE_TO_TRIGGER)
+
+
 def _from_insights(insights) -> list[Item]:
     items: list[Item] = []
     families: dict[str, list] = {}
@@ -129,6 +137,7 @@ def _from_insights(insights) -> list[Item]:
                 cta=(insight.suggested_action or {}).get("label") or "See why",
                 url="" if action else "#observations",
                 act_pk=insight.pk if action else None,
+                automate_pk=insight.pk if insight.type in _automatable() else None,
                 since=insight.issue_since or insight.created_at,
                 tone="coral" if insight.severity == "urgent" else "highlight",
                 rank=_RANK.get(insight.severity, 99),
@@ -189,6 +198,7 @@ def attention(
     items.sort(key=lambda i: (i.rank, i.since or now))
     return {
         "items": items[:LIMIT],
+        "all_items": items,
         "more": max(0, len(items) - LIMIT),
         "total": len(items),
     }

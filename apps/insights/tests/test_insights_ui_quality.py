@@ -132,20 +132,18 @@ class TestMomentum:
         _week(account, start + timedelta(days=7, hours=1))
         assert len(reporting.momentum(account)["labels"]) == 2
 
-    def test_one_week_is_not_drawn_as_a_trend(self, account, owner_client):
+    def test_one_week_is_not_a_trend(self, account):
         _week(account, timezone.now() - timedelta(days=10))
         assert reporting.momentum(account)["enough_for_trend"] is False
-        html = owner_client.get("/insights/").content.decode()
-        assert 'data-momentum="one-week"' in html
-        assert 'data-momentum="as-of"' in html
 
-    def test_two_weeks_draw_the_charts(self, account, owner_client):
+    def test_insights_no_longer_repeats_the_weekly_trend(self, account, owner_client):
+        """The tabs' charts are the trend (weeks over 90 days); the weekly snapshots stay
+        for the weekly email."""
         start = timezone.now() - timedelta(days=17)
         _week(account, start)
         _week(account, start + timedelta(days=7))
         html = owner_client.get("/insights/").content.decode()
-        assert 'data-momentum="one-week"' not in html
-        assert "A break in a line is a week with nothing to measure" in html
+        assert 'id="momentum-h"' not in html and "data-insights-chart" in html
 
 
 # ---- email analytics ----------------------------------------------------------------------
@@ -219,8 +217,9 @@ class TestInsightsPage:
             severity=Insight.Severity.WARNING,
             title="Three customers waiting",
         )
-        html = owner_client.get("/insights/").content.decode()
-        assert 'data-insight="spotted"' in html
+        html = owner_client.get("/insights/needs-you/").content.decode()
+        item = html[html.index('data-attention="insight:test_type"') :]
+        assert "Three customers waiting" in item and "started" in item
 
     def test_the_empty_week_does_not_assume_whatsapp(self, owner_client):
         html = owner_client.get("/insights/").content.decode()
@@ -229,7 +228,7 @@ class TestInsightsPage:
 
     def test_removing_a_goal_asks_first(self, account, owner_client):
         InsightGoal.objects.create(account=account, metric="leads", target=10)
-        html = owner_client.get("/insights/").content.decode()
+        html = owner_client.get("/insights/goals/").content.decode()
         assert 'data-confirm="Remove the Leads this month goal?' in html
         assert "btn-danger-ghost" in html
 

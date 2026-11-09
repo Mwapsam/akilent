@@ -163,7 +163,4 @@ def test_every_populated_branch_renders(client, account):
     assert "Team member" in body
     # Channel performance table renders (plan has detailed_analytics), not the upgrade teaser.
     assert "Channel performance is available on higher plans" not in body
-    assert "Median first reply" in body  # momentum chart title
-    assert (
-        "Weekly numbers since your first captured week" in body
-    )  # momentum table caption
+    assert "Median first reply, in minutes" in body  # the Response tab's chart

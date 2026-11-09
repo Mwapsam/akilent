@@ -68,9 +68,10 @@ class InsightsPageTest(TestCase):
         self.assertIn(b"Urgent", resp.content)
 
     def test_insight_evidence_count_shown(self):
+        # Every open observation is in the "What needs you" drawer, one line each.
         _make_insight(self.account, evidence_count=12, title="Evidence insight")
-        resp = self.client.get("/insights/")
-        self.assertIn(b"12 records", resp.content)
+        resp = self.client.get("/insights/needs-you/")
+        self.assertIn(b"Evidence insight", resp.content)
 
 
 class InsightAcknowledgeTest(TestCase):

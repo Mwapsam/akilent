@@ -13,7 +13,7 @@ is Insights' action list (apps.conversations.attention), shown only when there i
 
   {% include "billing/_usage_warnings.html" %}
 
-  {% if attention.items %}{% include "insights/_attention.html" with more_url="/insights/#observations" %}{% endif %}
+  {% if attention.items %}{% include "insights/_attention.html" %}{% endif %}
 
   {% if next_recommended %}
   <div class="card card-pad flex flex-wrap items-center gap-4" data-testid="next-recommended">

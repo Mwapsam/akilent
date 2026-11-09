@@ -132,7 +132,9 @@ def test_each_tab_renders_with_the_headline_and_what_needs_you(shop, tab):
     assert 'data-insights="headline"' in page and "What needs you" in page
     assert f'data-insights-panel="{tab}"' in page
     assert f'aria-current="page" data-insights-tab="{tab}"' in page
-    assert 'id="observations"' in page  # under every tab
+    # Nothing repeats below the tabs: observations are in the drawer, goals in another.
+    assert 'id="observations"' not in page and 'id="momentum-h"' not in page
+    assert 'href="/insights/goals/" data-overlay-open="drawer"' in page
 
 
 def test_only_the_open_tab_is_worked_out(shop):

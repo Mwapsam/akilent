@@ -1,0 +1,44 @@
+{% comment %}
+Everything that needs you (apps.conversations.attention), in the drawer from "N more": the same
+one-line rows as the list on Insights and Home, all of them. An observation can be dismissed
+here; its action is a POST that records you acted on it. Insights whose condition stopped being
+true close themselves (apps.insights.engine.resolve_stale), so they don't show.
+{% endcomment %}
+{% load ui %}
+{% if attention.all_items %}
+<ul class="divide-y divide-border border-t border-border" data-insights="attention-all">
+  {% for item in attention.all_items %}
+  <li class="flex items-center gap-3 py-2.5" data-attention="{{ item.key }}">
+    <span class="w-1.5 h-1.5 rounded-full shrink-0 {% if item.tone == 'coral' %}bg-coral-500{% elif item.tone == 'highlight' %}bg-highlight{% else %}bg-transparent{% endif %}" aria-hidden="true"></span>
+    <p class="flex-1 min-w-0 text-sm text-ink">
+      {{ item.text }}
+      {% if item.since %}<span class="text-xs text-ink-subtle whitespace-nowrap"> · started {% when item.since %}</span>{% endif %}
+    </p>
+    <div class="flex items-center gap-1 shrink-0">
+      {% if item.act_pk %}
+      <form method="post" action="{% url 'insight-act' item.act_pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-ghost btn-sm">{{ item.cta }}</button>
+      </form>
+      {% elif item.url and item.url != "#observations" %}
+      <a href="{{ item.url }}" class="btn btn-ghost btn-sm">{{ item.cta }}</a>
+      {% endif %}
+      {% if item.automate_pk %}
+      <form method="post" action="{% url 'policy-from-insight' item.automate_pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-ghost btn-sm" title="Make an automation policy from this" aria-label="Automate: {{ item.text }}">Automate</button>
+      </form>
+      {% endif %}
+      {% if item.insight_pks|length == 1 %}
+      <form method="post" action="{% url 'insight-dismiss' item.insight_pks.0 %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-ghost btn-sm text-ink-subtle" aria-label="Dismiss: {{ item.text }}">Dismiss</button>
+      </form>
+      {% endif %}
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="empty-line">Nothing needs you right now.</p>
+{% endif %}
