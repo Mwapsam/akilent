@@ -22,6 +22,7 @@ from apps.whatsapp.models import (
     WhatsAppCampaignRecipient,
     WhatsAppContact,
 )
+from apps.whatsapp.models.templates import TEST_NUMBER_ONLY_TEMPLATE_NAMES
 from apps.whatsapp.models.tenant import (
     TenantResolutionError,
     WhatsAppBusinessNumber,
@@ -764,12 +765,26 @@ def _authorize_send(msg: OutboundMessage) -> None:
     if ptype == "template":
         template = msg.template
         if (
+            template is not None
+            and template.approval_status == MessageTemplate.ApprovalStatus.MISSING
+        ):
+            raise SendNotAuthorized(
+                "TEMPLATE_MISSING",
+                "WhatsApp no longer has this template. Create it again to send it.",
+            )
+        if (
             template is None
             or template.approval_status != MessageTemplate.ApprovalStatus.APPROVED
         ):
             raise SendNotAuthorized(
                 "TEMPLATE_NOT_APPROVED",
                 "Template sends require a linked, Meta-approved MessageTemplate.",
+            )
+        if template.whatsapp_template_name in TEST_NUMBER_ONLY_TEMPLATE_NAMES:
+            raise SendNotAuthorized(
+                "TEMPLATE_TEST_NUMBER_ONLY",
+                "Meta only lets its hello_world sample be sent from a public test number. "
+                "Use one of your own templates.",
             )
         if (
             template.category == MessageTemplate.Category.MARKETING
@@ -1804,6 +1819,7 @@ def sync_templates_for_account(account) -> dict:
     )
     synced = errors = 0
     seen_wabas: set = set()
+    listed: set[tuple[str, str]] = set()
     for number in numbers:
         if number.waba_id in seen_wabas:
             continue
@@ -1812,13 +1828,59 @@ def sync_templates_for_account(account) -> dict:
             provider = get_whatsapp_provider(account)
             for tpl in provider.list_templates(number.waba_id or ""):
                 _upsert_meta_template(account, tpl)
+                listed.add((tpl.get("name") or "", tpl.get("language") or "en"))
                 synced += 1
         except (WhatsAppProviderError, NotImplementedError) as exc:
             logger.warning(
                 "sync_templates_for_account: waba=%s failed: %s", number.waba_id, exc
             )
             errors += 1
-    return {"synced": synced, "errors": errors}
+    # Only a complete answer from Meta can say a template is gone; a failed list says nothing.
+    missing = (
+        _mark_unlisted_templates_missing(account, listed)
+        if seen_wabas and not errors
+        else 0
+    )
+    return {"synced": synced, "errors": errors, "missing": missing}
+
+
+# Statuses Meta must still list. A draft was never submitted; deleted and missing are settled.
+_LISTED_AT_META = (
+    MessageTemplate.ApprovalStatus.APPROVED,
+    MessageTemplate.ApprovalStatus.PENDING,
+    MessageTemplate.ApprovalStatus.REJECTED,
+    MessageTemplate.ApprovalStatus.PAUSED,
+)
+
+
+def _mark_unlisted_templates_missing(account, listed: set[tuple[str, str]]) -> int:
+    """Mark the account's submitted templates that Meta no longer lists as MISSING.
+
+    Without this they stay "approved" in Akilent, the pickers offer them, and every send
+    fails with 132001 ("Template name does not exist in the translation"). A template made
+    in the last few minutes is left alone in case Meta's list hasn't caught up with it.
+    """
+    recent = timezone.now() - timedelta(minutes=10)
+    gone = [
+        t.pk
+        for t in MessageTemplate.objects.filter(
+            account=account, approval_status__in=_LISTED_AT_META, created_at__lt=recent
+        ).only("pk", "whatsapp_template_name", "language_code")
+        if (t.whatsapp_template_name or "", t.language_code or "en") not in listed
+    ]
+    if gone:
+        MessageTemplate.objects.filter(pk__in=gone).update(
+            approval_status=MessageTemplate.ApprovalStatus.MISSING,
+            rejection_reason="",
+            updated_at=timezone.now(),
+        )
+        logger.warning(
+            "sync_templates_for_account: account=%s %d template(s) no longer on WhatsApp: %s",
+            account.pk,
+            len(gone),
+            gone,
+        )
+    return len(gone)
 
 
 # Errors that mean the existing draft Flow can't be updated in place (it's gone, or Meta

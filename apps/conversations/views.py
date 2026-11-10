@@ -1309,10 +1309,7 @@ def _approved_templates(account, conversation) -> list:
     from apps.whatsapp.models import MessageTemplate
 
     return list(
-        MessageTemplate.objects.filter(
-            account=account,
-            approval_status=MessageTemplate.ApprovalStatus.APPROVED,
-        ).order_by("name")
+        MessageTemplate.objects.filter(account=account).sendable().order_by("name")
     )
 
 

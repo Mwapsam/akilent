@@ -68,6 +68,12 @@ def templates_sync(request):
         messages.success(
             request, f"Synced {result['synced']} template(s) from WhatsApp."
         )
+        if result.get("missing"):
+            messages.warning(
+                request,
+                f"{result['missing']} template(s) are no longer on WhatsApp, so they can't "
+                "be sent. Create them again to use them.",
+            )
     return redirect("/email/templates/?channel=whatsapp")
 
 

@@ -29,6 +29,10 @@ _GRAPH_ERRORS = {
     "account: no valid payment method, or the last payment failed. Add or fix the "
     "payment method in Meta Business Settings → WhatsApp accounts → Payment settings.",
     "131053": "The file or image couldn't be sent — WhatsApp rejected the media.",
+    "132001": "WhatsApp doesn't have this template on your WhatsApp account any more (it was "
+    "deleted, or approved on an account this number has left). Create it again in Akilent.",
+    "131058": "Meta's hello_world sample can only be sent from a test number. Use one of "
+    "your own templates.",
     "190": "The WhatsApp connection needs to be reconnected.",
 }
 
@@ -42,6 +46,10 @@ _POLICY_ERRORS = {
     "WhatsApp only allows an approved message template, not "
     "a plain reply.",
     "TEMPLATE_NOT_APPROVED": "This message template hasn't been approved by Meta yet.",
+    "TEMPLATE_MISSING": "WhatsApp no longer has this template, so it wasn't sent. Create it "
+    "again in Akilent.",
+    "TEMPLATE_TEST_NUMBER_ONLY": "Meta's hello_world sample can only be sent from a test "
+    "number, so it wasn't sent. Use one of your own templates.",
     "MARKETING_REQUIRES_OPT_IN": "This customer hasn't opted in to marketing messages.",
     "CONTACT_OPTED_OUT": "This customer has opted out of WhatsApp messages (replied STOP).",
     "ACCOUNT_SUSPENDED": "This workspace is suspended, so messages aren't being sent. Contact support.",

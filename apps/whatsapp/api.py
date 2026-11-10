@@ -287,10 +287,8 @@ def first_approved_template(account: Account):
     from apps.whatsapp.models import MessageTemplate
 
     return (
-        MessageTemplate.objects.filter(
-            account=account,
-            approval_status=MessageTemplate.ApprovalStatus.APPROVED,
-        )
+        MessageTemplate.objects.filter(account=account)
+        .sendable()
         .exclude(whatsapp_template_name__isnull=True)
         .order_by("name")
         .first()

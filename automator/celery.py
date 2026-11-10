@@ -9,6 +9,9 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "automator.settings")
 app = Celery("automator")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
+# Beat schedules tasks that live outside a tasks.py module; the worker must import them too,
+# or it discards each run as "unregistered" (prod 2026-11-10: replay_held_webhooks).
+app.conf.imports = (*tuple(app.conf.imports or ()), "apps.core.webhook_replay")
 
 _HEADER = "x_request_id"
 _prerun_tokens: dict = {}

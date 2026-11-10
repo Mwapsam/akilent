@@ -146,10 +146,7 @@ def _engagement_starters(account, workflows):
     from apps.whatsapp.models import MessageTemplate
 
     approved = list(
-        MessageTemplate.objects.filter(
-            account=account,
-            approval_status=MessageTemplate.ApprovalStatus.APPROVED,
-        ).order_by("name")
+        MessageTemplate.objects.filter(account=account).sendable().order_by("name")
     )
     from apps.automation import variables as wa_variables
 

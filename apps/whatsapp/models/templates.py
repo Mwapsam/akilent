@@ -26,7 +26,22 @@ class MessageTemplateAsset(models.Model):
         return self.file.name
 
 
+# Meta's sample templates that Meta only lets a public test number send: from a real number
+# every send fails with 131058. They stay on the Templates page but are never offered.
+TEST_NUMBER_ONLY_TEMPLATE_NAMES = frozenset({"hello_world"})
+
+
+class MessageTemplateQuerySet(models.QuerySet):
+    def sendable(self):
+        """Approved templates a real number can send (the pickers' list)."""
+        return self.filter(
+            approval_status=MessageTemplate.ApprovalStatus.APPROVED
+        ).exclude(whatsapp_template_name__in=TEST_NUMBER_ONLY_TEMPLATE_NAMES)
+
+
 class MessageTemplate(models.Model):
+    objects = MessageTemplateQuerySet.as_manager()
+
     class ApprovalStatus(models.TextChoices):
         DRAFT = "draft", "Draft (local only)"
         PENDING = "pending", "Pending Meta approval"
@@ -36,6 +51,10 @@ class MessageTemplate(models.Model):
         # Deleted at Meta from Akilent. The row stays so past campaigns still show what was
         # sent; it is hidden from every list and picker (template_builder.delete_template).
         DELETED = "deleted", "Deleted"
+        # Akilent has it but Meta's list for the WABA doesn't (deleted in WhatsApp Manager,
+        # or approved on a WABA the number has since left). Sending it fails with 132001, so
+        # it's out of every picker. Sync restores it if Meta lists it again.
+        MISSING = "missing", "Not on WhatsApp"
 
     class Category(models.TextChoices):
         MARKETING = "marketing", "Marketing"
@@ -154,6 +173,12 @@ class MessageTemplate(models.Model):
             "Meta paused it, usually after customer feedback. It can't be sent while paused.",
         ),
         ApprovalStatus.DELETED: ("paused", "Deleted", ""),
+        ApprovalStatus.MISSING: (
+            "error",
+            "Not on WhatsApp",
+            "WhatsApp no longer has this template, so it can't be sent. Create it again "
+            "to use it.",
+        ),
         ApprovalStatus.DRAFT: ("draft", "Draft", "Not submitted to Meta."),
     }
 

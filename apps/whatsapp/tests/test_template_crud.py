@@ -159,6 +159,149 @@ def test_sync_never_brings_back_a_deleted_template(logged_in):
     assert not MessageTemplate.objects.filter(whatsapp_template_name="gone").exists()
 
 
+def _aged(t):
+    """Older than the sync's grace period for templates Meta's list may not show yet."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    MessageTemplate.objects.filter(pk=t.pk).update(
+        created_at=timezone.now() - timedelta(hours=1)
+    )
+    return t
+
+
+_APPROVED_ON_META = {
+    "id": "9001",
+    "name": "order_ready",
+    "language": "en",
+    "category": "UTILITY",
+    "status": "APPROVED",
+    "components": [{"type": "BODY", "text": "Hi {{1}}, your order is ready."}],
+}
+
+
+@pytest.mark.django_db
+def test_sync_marks_a_template_meta_no_longer_lists_as_missing(logged_in):
+    """Prod 2026-11-10: download_app stayed "approved" in Akilent after it left the WABA,
+    and every send failed with 132001."""
+    _, account = logged_in
+    listed = _aged(_template(account, status=Status.APPROVED))
+    gone = _aged(
+        _template(
+            account,
+            status=Status.APPROVED,
+            name="download_app",
+            whatsapp_template_name="download_app",
+            meta_template_id="1",
+        )
+    )
+    draft = _aged(
+        _template(
+            account,
+            status=Status.DRAFT,
+            name="draft_one",
+            whatsapp_template_name="draft_one",
+            meta_template_id="",
+        )
+    )
+    result = _sync(account, [_APPROVED_ON_META])
+    for t in (listed, gone, draft):
+        t.refresh_from_db()
+    assert gone.approval_status == Status.MISSING
+    assert listed.approval_status == Status.APPROVED
+    assert draft.approval_status == Status.DRAFT  # never submitted, so never listed
+    assert result["missing"] == 1
+    assert gone not in MessageTemplate.objects.filter(account=account).sendable()
+
+
+@pytest.mark.django_db
+def test_sync_leaves_a_just_created_template_alone(logged_in):
+    _, account = logged_in
+    t = _template(
+        account,
+        status=Status.PENDING,
+        name="brand_new",
+        whatsapp_template_name="brand_new",
+        meta_template_id="",
+    )
+    _sync(account, [_APPROVED_ON_META])
+    t.refresh_from_db()
+    assert t.approval_status == Status.PENDING
+
+
+@pytest.mark.django_db
+def test_failed_sync_marks_nothing_missing(logged_in):
+    _, account = logged_in
+    t = _aged(_template(account, status=Status.APPROVED))
+
+    class _Broken:
+        def list_templates(self, waba_id):
+            raise WhatsAppProviderError("Meta down")
+
+    with patch("apps.whatsapp.providers.get_whatsapp_provider", return_value=_Broken()):
+        result = sync_templates_for_account(account)
+    t.refresh_from_db()
+    assert result["errors"] == 1 and result["missing"] == 0
+    assert t.approval_status == Status.APPROVED
+
+
+@pytest.mark.django_db
+def test_a_missing_template_comes_back_when_meta_lists_it_again(logged_in):
+    _, account = logged_in
+    t = _aged(_template(account, status=Status.MISSING))
+    _sync(account, [_APPROVED_ON_META])
+    t.refresh_from_db()
+    assert t.approval_status == Status.APPROVED
+
+
+@pytest.mark.django_db
+def test_hello_world_is_never_offered(logged_in):
+    _, account = logged_in
+    _template(account, status=Status.APPROVED)
+    _template(
+        account,
+        status=Status.APPROVED,
+        name="hello_world",
+        whatsapp_template_name="hello_world",
+        meta_template_id="2",
+    )
+    names = set(
+        MessageTemplate.objects.filter(account=account)
+        .sendable()
+        .values_list("whatsapp_template_name", flat=True)
+    )
+    assert names == {"order_ready"}
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "name,status,code",
+    [
+        ("download_app", Status.MISSING, "TEMPLATE_MISSING"),
+        ("hello_world", Status.APPROVED, "TEMPLATE_TEST_NUMBER_ONLY"),
+    ],
+)
+def test_send_gate_stops_templates_meta_would_refuse(logged_in, name, status, code):
+    from apps.whatsapp import api as whatsapp_api
+    from apps.whatsapp.models import OutboundMessage
+    from apps.whatsapp.tasks import SendNotAuthorized, _authorize_send
+
+    _, account = logged_in
+    t = _template(account, status=status, name=name, whatsapp_template_name=name)
+    contact = whatsapp_api.get_or_create_contact(account, "+260971234567", "Ada")
+    msg = OutboundMessage.objects.create(
+        account=account,
+        contact=contact,
+        template=t,
+        idempotency_key=f"k-{name}",
+        payload={"type": "template", "template_name": name, "components": []},
+    )
+    with pytest.raises(SendNotAuthorized) as exc:
+        _authorize_send(msg)
+    assert exc.value.code == code
+
+
 # ── Edit ──────────────────────────────────────────────────────────────────────────────
 
 

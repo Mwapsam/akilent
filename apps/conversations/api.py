@@ -140,9 +140,9 @@ def assistant_context(conversation, *, recent: int = 8) -> dict:
                 "body": t.content or "",
                 "blanks": list(t.variables or []),
             }
-            for t in MessageTemplate.objects.filter(
-                account=account, approval_status=MessageTemplate.ApprovalStatus.APPROVED
-            ).order_by("name")
+            for t in MessageTemplate.objects.filter(account=account)
+            .sendable()
+            .order_by("name")
             if t.whatsapp_template_name
         ]
         if conversation.channel == Conversation.Channel.WHATSAPP
