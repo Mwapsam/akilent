@@ -40,6 +40,15 @@ def post_json(
 
     if response.status_code in (401, 403):
         raise AIProviderError("The AI service rejected the API key.")
+    if response.status_code == 402:
+        raise AIProviderError(
+            "The AI service account needs payment (402): out of credit or plan limit reached."
+        )
+    if response.status_code == 524:
+        raise AIProviderError(
+            "The AI server took longer than Cloudflare allows (524, about 100 s): "
+            "the model was probably still loading or the server is too slow."
+        )
     if response.status_code == 404:
         raise AIProviderError(f"The AI service doesn't have the model {model!r}.")
     if response.status_code == 429:
