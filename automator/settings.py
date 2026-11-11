@@ -839,6 +839,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.billing.tasks.sync_recurring",
         "schedule": 86400.0,  # provider-run subscriptions: catch missed webhooks, retry stops
     },
+    "billing-health-check": {
+        "task": "apps.billing.tasks.billing_health_check",
+        "schedule": 86400.0,  # missed renewal/trial dates and stuck payments -> operators
+    },
     "abandon-stale-checkouts": {
         "task": "apps.billing.tasks.abandon_stale_checkouts",
         "schedule": 3600.0,  # unfinished payments give their held credit back

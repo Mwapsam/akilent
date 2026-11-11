@@ -112,7 +112,11 @@ def renew(subscription_id: int, *, now=None) -> str:
             from .services import activate_subscription
 
             activate_subscription(
-                sub.account, sub.plan, FREE, billing_period=sub.billing_period
+                sub.account,
+                sub.plan,
+                FREE,
+                billing_period=sub.billing_period,
+                anchor=sub.current_period_end,
             )
             return "renewed"
 
@@ -123,7 +127,7 @@ def renew(subscription_id: int, *, now=None) -> str:
         sub.billing_period,
         provider=provider.code if provider else "",
         purpose=BillingPayment.RENEWAL,
-        reference=f"renew_{sub.pk}_{int(sub.current_period_end.timestamp())}",
+        reference=payments.renewal_reference(sub),
     )
     if payment.status == BillingPayment.SUCCEEDED:
         if payment.provider == payments.CREDIT:
@@ -141,7 +145,9 @@ def renew(subscription_id: int, *, now=None) -> str:
         else None
     )
     if method is None or provider is None:
-        payments.fail(payment, "No saved payment method for this provider")
+        # Nothing was tried: the customer renews by pay link. Their email says the renewal
+        # is due, not that a payment failed.
+        payments.fail(payment, payments.NOT_CHARGED, notice="due")
         return "past_due"
     try:
         result = provider.charge_saved_method(method, payment)
@@ -176,9 +182,38 @@ def _await_provider(sub, now) -> str:
     return "past_due"
 
 
+def renews_automatically(sub) -> bool:
+    """Will something take ``sub``'s next renewal without the customer: a provider-run
+    recurring subscription, or the active provider charging a saved method? Otherwise the
+    customer pays by link."""
+    if sub is None:
+        return False
+    if sub.recurring_id:
+        return True
+    provider = registry.active()
+    return bool(
+        provider is not None
+        and provider.off_session_charge
+        and payments.default_method(sub.account, provider.code)
+    )
+
+
 def send_due_notices(now=None) -> None:
-    """Heads-up a few days before a paid renewal, and reminders while a renewal is unpaid."""
+    """Heads-up a few days before a paid renewal or a trial's end, and reminders while a
+    renewal is unpaid."""
     now = now or timezone.now()
+    ending_trials = Subscription.objects.filter(
+        status=Subscription.TRIALING,
+        trial_ends_at__gt=now,
+        trial_ends_at__lte=now + UPCOMING_NOTICE,
+    )
+    for sub in ending_trials.select_related("plan", "account"):
+        if sub.renewal_notice_for == sub.trial_ends_at:
+            continue
+        sub.renewal_notice_for = sub.trial_ends_at
+        sub.save(update_fields=["renewal_notice_for", "updated_at"])
+        _notify(sub, "trial_ending")
+
     upcoming = _engine_managed().filter(
         status=Subscription.ACTIVE,
         cancel_at_period_end=False,
@@ -201,7 +236,20 @@ def send_due_notices(now=None) -> None:
         if sent < len(REMINDER_DAYS) and days >= REMINDER_DAYS[sent]:
             sub.dunning_notices_sent = sent + 1
             sub.save(update_fields=["dunning_notices_sent", "updated_at"])
-            _notify(sub, "reminder")
+            _notify(sub, _reminder_kind(sub))
+
+
+def _reminder_kind(sub) -> str:
+    """The reminder to send: ``due_reminder`` when this period's renewal was never charged
+    (a pay-link customer), else ``reminder`` (a payment was tried and didn't go through)."""
+    if sub.recurring_id or not sub.current_period_end:
+        return "reminder"
+    payment = BillingPayment.objects.filter(
+        reference=payments.renewal_reference(sub)
+    ).first()
+    if payment is not None and payment.failure_reason == payments.NOT_CHARGED:
+        return "due_reminder"
+    return "reminder"
 
 
 def _notify(sub, kind, payment=None) -> None:

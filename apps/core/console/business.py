@@ -323,9 +323,22 @@ def set_subscription(account, plan_id, status) -> str:
             sub.cancelled_at = sub.cancelled_at or now
         elif status in (Subscription.ACTIVE, Subscription.TRIALING):
             sub.cancelled_at = None
+            # A fresh start: the next unpaid renewal gets its own "unpaid" email and a full
+            # grace period, not the leftovers of an earlier one.
+            sub.past_due_since = None
+            sub.dunning_notices_sent = 0
+            sub.cancel_at_period_end = False
             if not sub.current_period_end or sub.current_period_end < now:
                 sub.current_period_end = now + timedelta(days=30)
-        sub.save()
+    if status == Subscription.PAST_DUE and sub.past_due_since is None:
+        # Without a start the grace period never ends, and the plan never expires.
+        sub.past_due_since = now
+    if status == Subscription.TRIALING and (
+        not sub.trial_ends_at or sub.trial_ends_at <= now
+    ):
+        # A trial needs an end in the future, or it is over (and locked) at once.
+        sub.trial_ends_at = sub.current_period_end
+    sub.save()
     return f"{plan.name} ({sub.get_status_display()})"
 
 
@@ -371,10 +384,22 @@ def extend_trial(account, days: int) -> str:
         raise ConsoleError("This business has no subscription yet. Set a plan first.")
     if not 1 <= days <= 90:
         raise ConsoleError("Extend by 1 to 90 days.")
+    if (
+        sub.status in (Subscription.ACTIVE, Subscription.PAST_DUE)
+        and sub.plan.price_monthly > 0
+    ):
+        # A trial isn't renewed: the paid period would stop renewing while a provider's
+        # recurring subscription may still charge. Give credit or set the plan instead.
+        raise ConsoleError(
+            "This business is on a paid plan. Grant credit instead of extending a trial."
+        )
     base = max(sub.trial_ends_at or timezone.now(), timezone.now())
     sub.trial_ends_at = base + timedelta(days=days)
     sub.status = Subscription.TRIALING
-    sub.save(update_fields=["trial_ends_at", "status"])
+    sub.renewal_notice_for = None  # the new end gets its own "trial ending" email
+    sub.save(
+        update_fields=["trial_ends_at", "status", "renewal_notice_for", "updated_at"]
+    )
     return f"Trial now ends {timezone.localtime(sub.trial_ends_at):%d %b %Y}"
 
 

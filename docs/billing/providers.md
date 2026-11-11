@@ -12,6 +12,26 @@ Akilent owns the subscription lifecycle. A payment provider only moves money, so
 | Credit | `apps/billing/credit.py` | Grants, the ledger, earliest-expiring-first use, restore on failure. |
 | Renewals | `apps/billing/renewals.py` | Hourly: credit, then charge the method saved with the active provider, else past due with a pay link, then expiry after the grace period. |
 | Providers | `apps/billing/providers/` | Adapters behind `PaymentProvider` (`base.py`), found through `registry.py`. |
+| Health check | `apps/billing/health.py` | Daily (`billing_health_check`) and `manage.py billing_check [--alert]`: missed renewal and trial dates, past due with no start or past grace, stops not confirmed at the provider, unresolved payments, paid payments whose plan isn't on. Emails superusers and posts to Slack only when something is found. |
+
+### Dates and what the customer is told
+
+- Periods are fixed lengths (`pricing.PERIOD_DAYS`: 30, 91, 365, 730 days), the same as the
+  PayPal plan cycles. A renewal the engine settles itself (credit, a free plan, a saved-method
+  charge) starts where the last period ended, so the date never creeps later. A payment made
+  through checkout after a plan went past due starts a fresh period when it is paid.
+- Features follow the dates themselves (`billing.api.is_lapsed`): a trial locks at
+  `trial_ends_at`, and an unpaid renewal at `past_due_since + BILLING_GRACE_DAYS`, even if the
+  hourly jobs are late.
+- Emails (`tasks.send_billing_notice`): `trial_ending` (3 days before) and `trial_ended`;
+  `upcoming` (3 days before a renewal, with a pay link when nothing charges automatically);
+  `due` / `due_reminder` when a pay-link renewal reaches its date; `unpaid` / `reminder` only
+  when a charge was tried and declined; `payment_review` once when a provider holds a first
+  payment; `auto_pay_stopped` when a provider ends a recurring subscription on its own;
+  `renewed`, `paid`, `expired`, `cancelled`.
+
+The health check runs on Celery beat, so it can't report beat itself being down. On
+production, also run `manage.py billing_check --alert` once a day from the server's own cron.
 
 ## Write the adapter
 

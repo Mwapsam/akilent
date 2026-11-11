@@ -127,7 +127,7 @@ def _read_state(account: Account) -> _State:
     # operator granted; nothing they made is deleted.
     lapsed = (
         sub is not None
-        and sub.status in LAPSED_STATUSES
+        and is_lapsed(sub)
         and not getattr(account, "is_platform_account", False)
     )
     plan_keys = (
@@ -158,6 +158,25 @@ def _read_state(account: Account) -> _State:
             k for k, m in catalog.OWNER_SWITCH_MODULE.items() if m in off_modules
         ),
     )
+
+
+def is_lapsed(sub, now=None) -> bool:
+    """Does ``sub``'s plan give no features right now? Its status says so, or a date has
+    passed that the hourly jobs haven't acted on yet: a trial past ``trial_ends_at``, or an
+    unpaid renewal past its grace period. Access follows the date itself, so a late or
+    stopped job never gives features away."""
+    from django.utils import timezone
+
+    if sub.status in LAPSED_STATUSES:
+        return True
+    now = now or timezone.now()
+    if sub.status == Subscription.TRIALING:
+        return bool(sub.trial_ends_at and sub.trial_ends_at <= now)
+    if sub.status == Subscription.PAST_DUE and sub.past_due_since:
+        from apps.billing.renewals import grace_period
+
+        return sub.past_due_since + grace_period() <= now
+    return False
 
 
 def _decide(state: _State, feature: catalog.Feature) -> tuple[bool, str]:
@@ -1022,9 +1041,11 @@ def home_notice(subscription, now=None) -> dict | None:
         return f"{local.day} {local:%b}"
 
     if subscription.status == Subscription.PAST_DUE:
+        keep = _pay_by(subscription)
         return {
             "tone": "warning",
-            "text": f"Your {subscription.plan.name} renewal didn't go through.",
+            "text": f"Your {subscription.plan.name} renewal is unpaid."
+            + (f" Pay by {day(keep)} to keep your features." if keep else ""),
             "action": "Pay now",
             "href": plans,
         }
@@ -1051,6 +1072,8 @@ def home_notice(subscription, now=None) -> dict | None:
                 "href": plans,
             }
         return None
+    if end <= now and _awaiting_provider_renewal(subscription, now):
+        return None  # the provider charges on its own schedule; nothing for the owner to do
     if end <= now:
         # Renewing: a provider-run renewal waits up to two days, a charge may be settling,
         # and the hourly renewal job moves it on. Say so, never "Active · renews <past>".
@@ -1068,6 +1091,25 @@ def home_notice(subscription, now=None) -> dict | None:
             "href": plans,
         }
     return None
+
+
+def _pay_by(subscription):
+    """The last moment an unpaid renewal keeps its features (past_due_since + grace)."""
+    if not subscription.past_due_since:
+        return None
+    from apps.billing.renewals import grace_period
+
+    return subscription.past_due_since + grace_period()
+
+
+def _awaiting_provider_renewal(subscription, now) -> bool:
+    """A provider-run recurring subscription renews this plan and its charge is still within
+    the normal wait after the period end (renewals.RECURRING_GRACE)."""
+    if not subscription.recurring_id or not subscription.current_period_end:
+        return False
+    from apps.billing.renewals import RECURRING_GRACE
+
+    return now < subscription.current_period_end + RECURRING_GRACE
 
 
 def plan_status(subscription, now=None) -> dict | None:
@@ -1091,10 +1133,22 @@ def plan_status(subscription, now=None) -> dict | None:
 
     status = subscription.status
     if status == Subscription.PAST_DUE:
+        keep = _pay_by(subscription)
+        if keep and keep <= now:
+            return {
+                "label": "Ended",
+                "tone": "danger",
+                "line": "Your renewal wasn't paid. Pay to switch your features back on.",
+            }
         return {
-            "label": "Payment failed",
+            "label": "Payment due",
             "tone": "danger",
-            "line": "Your renewal didn't go through. Pay to keep your features.",
+            "line": "Your renewal is unpaid. "
+            + (
+                f"Pay by {day(keep)} to keep your features."
+                if keep
+                else "Pay to keep your features."
+            ),
         }
     if status == Subscription.INCOMPLETE:
         return {
@@ -1123,6 +1177,13 @@ def plan_status(subscription, now=None) -> dict | None:
                 "label": "Ending",
                 "tone": "warning",
                 "line": f"Ends {day(end)} · won't renew.",
+            }
+        if end <= now and _awaiting_provider_renewal(subscription, now):
+            return {
+                "label": "Renewing",
+                "tone": "info",
+                "line": "Renewing automatically. The payment provider takes it today or "
+                "tomorrow; nothing to do.",
             }
         if end <= now:
             return {

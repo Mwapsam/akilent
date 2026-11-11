@@ -16,16 +16,40 @@ def _absolute_url(path: str) -> str:
 
 
 @shared_task
-def expire_trials():
+def expire_trials() -> int:
+    """Trials past their end become EXPIRED, and the owner is told. Features already lock at
+    trial_ends_at whether or not this has run (billing.api._read_state); this records it and
+    sends the email. Each row is moved only if it is still a trial that has ended, so an
+    operator extending the trial at the same moment wins."""
     from apps.billing.models import Subscription
 
-    count = Subscription.objects.filter(
-        status=Subscription.TRIALING,
-        trial_ends_at__lte=timezone.now(),
-    ).update(status=Subscription.EXPIRED)
-
+    now = timezone.now()
+    count = 0
+    for pk, account_id in Subscription.objects.filter(
+        status=Subscription.TRIALING, trial_ends_at__lte=now
+    ).values_list("pk", "account_id"):
+        moved = Subscription.objects.filter(
+            pk=pk, status=Subscription.TRIALING, trial_ends_at__lte=now
+        ).update(status=Subscription.EXPIRED, updated_at=now)
+        if moved:
+            count += 1
+            send_billing_notice.delay(account_id, "trial_ended", None)
     if count:
         logger.info("expire_trials: expired %s trial subscriptions", count)
+    return count
+
+
+@shared_task
+def billing_health_check() -> list[str]:
+    """Daily: anything in billing that should have moved on and hasn't (a stopped renewal
+    job, a stuck payment...). Operators are emailed and Slack is posted only when something
+    is found."""
+    from apps.billing import health
+
+    found = health.problems()
+    if found:
+        health.alert(found)
+    return found
 
 
 @shared_task
@@ -268,6 +292,13 @@ def _notice(sub, kind, payment) -> tuple[str, str] | None:
     )
     provider = registry.active()
     with_provider = f" with {provider.display_name}" if provider else ""
+    from apps.billing.renewals import grace_period, renews_automatically
+
+    deadline = (
+        f"{timezone.localtime(sub.past_due_since + grace_period()):%d %B %Y}"
+        if sub.past_due_since
+        else ""
+    )
     if kind == "upcoming":
         price = price_for(plan, sub.billing_period)
         covered = min(credit.balance(account), price)
@@ -282,14 +313,84 @@ def _notice(sub, kind, payment) -> tuple[str, str] | None:
                 "you don't need to do anything. Manage billing: "
                 f"{_absolute_url('/billing/plans/')}"
             )
-        elif covered > 0:
+            return f"Your {plan.name} plan renews on {ends}", "\n\n".join(lines)
+        if price - covered <= 0:
+            lines.append(
+                f"Your account credit covers it ({format_money(price)}), so there is "
+                "nothing to pay."
+            )
+            return f"Your {plan.name} plan renews on {ends}", "\n\n".join(lines)
+        if covered > 0:
             lines.append(
                 f"{format_money(covered)} of your account credit will be used, "
                 f"so {format_money(price - covered)} is due."
             )
         else:
             lines.append(f"The amount due is {format_money(price)}.")
+        if renews_automatically(sub):
+            lines.append(
+                "It will be charged automatically; you don't need to do anything."
+            )
+        else:
+            # Nothing charges this plan by itself: give the way to pay now, before it's due.
+            lines.append(
+                "Pay before the renewal date to keep everything running. Paying early "
+                f"doesn't lose any days: the new period starts on {ends}.\n\n"
+                f"Pay{with_provider}: {pay_link}"
+            )
         return f"Your {plan.name} plan renews on {ends}", "\n\n".join(lines)
+    if kind in ("due", "due_reminder"):
+        # The renewal date passed and nothing was charged (this plan renews by pay link).
+        price = price_for(plan, sub.billing_period)
+        keep = f" until {deadline}" if deadline else ""
+        return (
+            f"Your {plan.name} renewal is due",
+            f"The {plan.name} plan for {account.company_name} was due to renew on {ends}. "
+            f"The amount due is {format_money(price)}.\n\n"
+            f"Your features stay on{keep}. Pay{with_provider} here to keep everything "
+            f"running: {pay_link}",
+        )
+    if kind == "trial_ending":
+        trial_end = (
+            f"{timezone.localtime(sub.trial_ends_at):%d %B %Y}"
+            if sub.trial_ends_at
+            else ""
+        )
+        return (
+            f"Your free trial ends on {trial_end}",
+            f"The free trial for {account.company_name} ends on {trial_end}. After that, "
+            "the features that come with a plan switch off. Nothing is deleted.\n\n"
+            f"Choose a plan to keep everything running: {_absolute_url('/billing/plans/')}",
+        )
+    if kind == "trial_ended":
+        return (
+            "Your free trial has ended",
+            f"The free trial for {account.company_name} has ended, so the features that "
+            "come with a plan are off. Nothing has been deleted.\n\n"
+            f"Choose a plan to switch them back on: {_absolute_url('/billing/plans/')}",
+        )
+    if kind == "payment_review":
+        paid = ""
+        if payment is not None:
+            paid = (
+                f" for {format_money(payment.amount_due, payment.currency)}"
+                f" (reference {payment.reference})"
+            )
+        return (
+            "We're waiting for your payment to be confirmed",
+            f"Your payment{paid} has reached the payment provider, which is still checking "
+            "it. This can take a few days. You don't need to do anything, and please don't "
+            f"pay again: {plan.name} switches on by itself as soon as it's confirmed, and "
+            f"we'll email you.\n\nBilling: {_absolute_url('/billing/plans/')}",
+        )
+    if kind == "auto_pay_stopped":
+        return (
+            f"Automatic payments for your {plan.name} plan have stopped",
+            f"The payment provider stopped the automatic payments for "
+            f"{account.company_name}'s {plan.name} plan. Your plan and the time you've "
+            f"paid for don't change.\n\nYour next renewal is on {ends}. We'll email you a "
+            f"link to pay before then, or you can set it up now: {pay_link}",
+        )
     if kind == "paid":
         paid = ""
         if payment is not None:
@@ -316,11 +417,7 @@ def _notice(sub, kind, payment) -> tuple[str, str] | None:
             f"Billing: {_absolute_url('/billing/plans/')}",
         )
     if kind in ("unpaid", "reminder"):
-        from apps.billing.renewals import grace_period
-
-        until = ""
-        if sub.past_due_since:
-            until = f" until {timezone.localtime(sub.past_due_since + grace_period()):%d %B %Y}"
+        until = f" until {deadline}" if deadline else ""
         recurring = registry.get(sub.recurring_provider) if sub.recurring_id else None
         if recurring is not None:
             # The provider retries the payment itself; a pay link as well could pay it twice.
@@ -442,10 +539,59 @@ def _notice_parts(sub, kind, payment) -> dict:
             details=[("Plan", plan.name), *money_rows(), ("Active until", ends)],
         )
     elif kind == "upcoming":
+        from apps.billing.renewals import renews_automatically
+
         parts.update(
             heading="Your renewal is coming up",
             preheader=f"{plan.name} renews on {ends}.",
             details=[("Plan", plan.name), ("Renews on", ends)],
+        )
+        if not renews_automatically(sub):
+            parts.update(cta_url=pay_link, cta_label="Pay now")
+    elif kind in ("due", "due_reminder"):
+        from apps.billing.renewals import grace_period
+
+        details = [("Plan", plan.name), ("Was due", ends)]
+        if sub.past_due_since:
+            keep = timezone.localtime(sub.past_due_since + grace_period())
+            details.append(("Pay by", f"{keep:%d %B %Y}"))
+        parts.update(
+            heading="Your renewal is due",
+            details=details,
+            notice="Your features stay on for now. Nothing has been deleted.",
+            notice_tone="warning",
+            cta_url=pay_link,
+            cta_label="Renew now",
+        )
+    elif kind == "trial_ending":
+        parts.update(
+            heading="Your free trial ends soon",
+            cta_label="Choose a plan",
+        )
+    elif kind == "trial_ended":
+        parts.update(
+            heading="Your free trial has ended",
+            notice="Nothing has been deleted. Choose a plan to switch your features back on.",
+            cta_label="Choose a plan",
+        )
+    elif kind == "payment_review":
+        details = [("Plan", plan.name), *money_rows()]
+        if payment is not None:
+            details.append(("Reference", payment.reference))
+        parts.update(
+            heading="Your payment is being confirmed",
+            details=details,
+            notice="Please don't pay again. We'll email you once it's confirmed.",
+            notice_tone="info",
+        )
+    elif kind == "auto_pay_stopped":
+        parts.update(
+            heading="Automatic payments have stopped",
+            details=[("Plan", plan.name), ("Next renewal", ends)],
+            notice="Your plan and paid time don't change.",
+            notice_tone="warning",
+            cta_url=pay_link,
+            cta_label="Set up payment",
         )
     elif kind in ("unpaid", "reminder"):
         parts.update(

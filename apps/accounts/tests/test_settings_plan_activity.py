@@ -81,7 +81,7 @@ def test_an_overdue_renewal_reads_the_same_as_home(shop):
         (Subscription.ACTIVE, 20, False, "Active"),
         (Subscription.ACTIVE, -1, False, "Renewal pending"),
         (Subscription.ACTIVE, 5, True, "Ending"),
-        (Subscription.PAST_DUE, 5, False, "Payment failed"),
+        (Subscription.PAST_DUE, 5, False, "Payment due"),
         (Subscription.TRIALING, 3, False, "Trial"),
         (Subscription.TRIALING, -1, False, "Trial ended"),
         (Subscription.INCOMPLETE, 5, False, "Payment needed"),

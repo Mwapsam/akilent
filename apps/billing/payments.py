@@ -42,6 +42,9 @@ logger = logging.getLogger(__name__)
 CREDIT = "credit"
 # provider_ref of a renewal whose saved-method charge is in flight (see claim_for_charge).
 CHARGING = "charging"
+# failure_reason of a renewal nothing tried to charge (no automatic payment): the customer
+# renews by pay link, and is told the renewal is due rather than that a payment failed.
+NOT_CHARGED = "No saved payment method for this provider"
 ZERO = Decimal("0.00")
 # A checkout nobody finished gives its credit back after this long.
 ABANDON_AFTER = timedelta(hours=24)
@@ -192,17 +195,16 @@ def _activate(payment, provider_code, recurring_id: str = "") -> None:
     """Grant the period ``payment`` paid for, and keep provider-run recurring billing in step."""
     from . import recurring
 
-    before = (
-        Subscription.objects.select_for_update()
-        .filter(account=payment.account)
-        .values_list("plan_id", "billing_period")
-        .first()
+    current = (
+        Subscription.objects.select_for_update().filter(account=payment.account).first()
     )
+    before = (current.plan_id, current.billing_period) if current else None
     sub = activate_subscription(
         payment.account,
         payment.plan,
         provider_code,
         billing_period=payment.billing_period,
+        anchor=_renewal_anchor(payment, current),
     )
     if (payment.raw or {}).get(recurring.RECURRING_STOPPED):
         # Its recurring subscription was cancelled before this payment completed: the paid
@@ -211,6 +213,30 @@ def _activate(payment, provider_code, recurring_id: str = "") -> None:
         sub.cancel_at_period_end = True
         sub.save(update_fields=["cancel_at_period_end", "updated_at"])
     _link_recurring(sub, payment, provider_code, recurring_id, before)
+
+
+def renewal_reference(sub) -> str:
+    """The reference of the renewal engine's payment for the period after ``sub``'s current
+    one: one per subscription and period end, so a period is never renewed twice."""
+    return f"renew_{sub.pk}_{int(sub.current_period_end.timestamp())}"
+
+
+def _renewal_anchor(payment, sub):
+    """The period end a renewal-engine payment follows, when ``sub`` is still on that period
+    and hasn't lapsed: the new period starts there (see activate_subscription). None for
+    everything else: a checkout, a payment the provider took on its own schedule, or a
+    renewal confirmed after the plan had already expired."""
+    if (
+        payment.purpose != BillingPayment.RENEWAL
+        or sub is None
+        or not sub.current_period_end
+        or sub.status not in (Subscription.ACTIVE, Subscription.PAST_DUE)
+        or sub.plan_id != payment.plan_id
+        or sub.billing_period != payment.billing_period
+        or payment.reference != renewal_reference(sub)
+    ):
+        return None
+    return sub.current_period_end
 
 
 def _link_recurring(sub, payment, provider_code, recurring_id, before) -> None:
@@ -383,11 +409,39 @@ def _reconcile(payment) -> bool:
     if (
         result.status == PENDING
         and settled.status == BillingPayment.PENDING
+        and settled.purpose == BillingPayment.CHECKOUT
+        and settled.charge_started_at is not None
+    ):
+        _tell_under_review(settled)
+    if (
+        result.status == PENDING
+        and settled.status == BillingPayment.PENDING
         and settled.charge_started_at is not None
         and timezone.now() - settled.charge_started_at >= ALERT_PENDING_AFTER
     ):
         mark_unresolved(settled)
     return True
+
+
+REVIEW_NOTICE_SENT = "review_notice_sent"
+
+
+@transaction.atomic
+def _tell_under_review(payment) -> None:
+    """The provider has the money but is still deciding (e.g. a PayPal review), which can take
+    days. Tell the customer once: nothing more to do, the plan switches on by itself, and don't
+    pay again."""
+    payment = BillingPayment.objects.select_for_update().get(pk=payment.pk)
+    if (payment.raw or {}).get(REVIEW_NOTICE_SENT):
+        return
+    payment.raw = {**(payment.raw or {}), REVIEW_NOTICE_SENT: True}
+    payment.save(update_fields=["raw", "updated_at"])
+    from .tasks import send_billing_notice
+
+    account_id, payment_id = payment.account_id, payment.pk
+    transaction.on_commit(
+        lambda: send_billing_notice.delay(account_id, "payment_review", payment_id)
+    )
 
 
 @transaction.atomic
@@ -466,7 +520,11 @@ def record_result(provider_code: str, result: ProviderResult) -> BillingPayment 
         if result.provider_ref:
             payment.provider_ref = result.provider_ref[:255]
         if result.raw:
+            sent = (payment.raw or {}).get(REVIEW_NOTICE_SENT)
             payment.raw = result.raw
+            if sent:
+                # Ours, not the provider's: keeps the review email to one.
+                payment.raw = {**payment.raw, REVIEW_NOTICE_SENT: True}
         if (
             result.status in (SUCCEEDED, FAILED, REQUIRES_ACTION)
             and payment.resolution == BillingPayment.UNRESOLVED
@@ -671,19 +729,19 @@ def _refresh_refund_totals(payment) -> None:
 
 
 @transaction.atomic
-def fail(payment, reason, status=BillingPayment.FAILED) -> None:
+def fail(payment, reason, status=BillingPayment.FAILED, *, notice="unpaid") -> None:
     """The payment won't complete: give its credit back; an unpaid renewal makes the
-    subscription past due."""
+    subscription past due (``notice`` is the email that says so)."""
     payment.status = status
     payment.failure_reason = (reason or "")[:255]
     payment.save()
     credit.restore(payment)
     if payment.purpose == BillingPayment.RENEWAL:
-        mark_past_due(payment.account, payment=payment)
+        mark_past_due(payment.account, payment=payment, notice=notice)
 
 
 @transaction.atomic
-def mark_past_due(account, *, payment=None) -> None:
+def mark_past_due(account, *, payment=None, notice="unpaid") -> None:
     sub = Subscription.objects.select_for_update().filter(account=account).first()
     if sub is None or sub.status not in (Subscription.ACTIVE, Subscription.PAST_DUE):
         return
@@ -696,7 +754,7 @@ def mark_past_due(account, *, payment=None) -> None:
 
         transaction.on_commit(
             lambda: send_billing_notice.delay(
-                account.pk, "unpaid", payment.pk if payment else None
+                account.pk, notice, payment.pk if payment else None
             )
         )
 

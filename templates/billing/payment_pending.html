@@ -50,8 +50,9 @@ With no payment found (an unknown or someone else's reference) nothing is polled
       </template>
       <template x-if="status === 'pending' && gaveUp">
         <div class="space-y-2">
-          <h1 class="text-xl font-semibold text-ink">Not confirmed yet</h1>
-          <p class="text-sm text-gray-600">The payment provider hasn't confirmed it yet. You can leave this page: your plan switches on by itself once it does. Don't pay again in the meantime.</p>
+          <h1 class="text-xl font-semibold text-ink">Your payment is being checked</h1>
+          <p class="text-sm text-gray-600">The payment provider has your payment but hasn't confirmed it yet. Sometimes it reviews a payment first, which can take a few days.</p>
+          <p class="text-sm text-gray-600">You don't need to do anything. You can leave this page: your plan switches on by itself as soon as it's confirmed, and we'll email you. Please don't pay again in the meantime.</p>
         </div>
       </template>
       <template x-if="status === 'succeeded'">

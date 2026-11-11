@@ -18,6 +18,7 @@ def activate_subscription(
     provider: str,
     *,
     billing_period: str = Subscription.MONTHLY,
+    anchor=None,
 ) -> Subscription:
     """Start (or renew) a paid period of ``plan`` for ``account``.
 
@@ -26,6 +27,10 @@ def activate_subscription(
     early) extends from the current period end, so no paid day is lost. Anything else starts a
     fresh period now; the unused part of the old one was already taken off the price of this
     payment (``unused_value``, applied in payments.create_payment).
+
+    ``anchor``: the end of the period this one follows, passed by the renewal engine for a
+    renewal it settled itself. The new period then starts there, not when the hourly job (or
+    the provider's confirmation) happened to run, so the renewal date never creeps later.
     """
     now = timezone.now()
     sub = Subscription.objects.select_for_update().filter(account=account).first()
@@ -38,6 +43,8 @@ def activate_subscription(
         and sub.billing_period == billing_period
     ):
         start, period_start = sub.current_period_end, sub.current_period_start
+    elif anchor is not None and anchor <= now:
+        start = period_start = anchor
 
     fields = {
         "plan": plan,

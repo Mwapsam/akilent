@@ -4,7 +4,7 @@ import logging
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -327,20 +327,17 @@ def plan_delete(request, pk):
 def _renewal_note(account, sub) -> str:
     """How the current plan renews, as the plans page says it: only "automatically" when
     something will really take the payment without the customer."""
+    from .renewals import renews_automatically
+
     if sub is None:
         return ""
     if sub.recurring_id:
         recurring = registry.get(sub.recurring_provider)
         name = recurring.display_name if recurring else "your payment provider"
         return f"Renews automatically through {name}."
-    provider = registry.active()
-    if (
-        provider is not None
-        and provider.off_session_charge
-        and payments.default_method(account, provider.code)
-    ):
+    if renews_automatically(sub):
         return "Renews automatically; credit is used first."
-    return "We'll email you a link to pay when it renews; credit is used first."
+    return "We'll email you a link to pay a few days before it renews; credit is used first."
 
 
 def checkout_options(account=None) -> list[dict]:
@@ -432,7 +429,13 @@ def checkout(request):
         messages.error(request, "Billing is currently disabled. Contact support.")
         return redirect("/billing/plans/")
 
-    plan = get_object_or_404(Plan, slug=request.GET.get("plan"), is_active=True)
+    # Queried, not account.subscription: that would cache a copy the payment below changes.
+    sub = Subscription.objects.filter(account=account).first()
+    # A hidden plan can't be bought, but a customer already on it can still renew it (the
+    # pay link in every renewal email names their own plan).
+    plan = get_object_or_404(Plan, slug=request.GET.get("plan"))
+    if not plan.is_active and (sub is None or sub.plan_id != plan.pk):
+        raise Http404
     period = request.GET.get("period") or Subscription.MONTHLY
     problem = _not_payable(plan, period)
     if problem:
@@ -449,19 +452,30 @@ def checkout(request):
         )
         return redirect("/billing/plans/")
 
-    # Queried, not account.subscription: that would cache a copy the payment below changes.
-    sub = Subscription.objects.filter(account=account).first()
     if (
         sub is not None
         and sub.recurring_id
         and sub.plan_id == plan.pk
         and sub.billing_period == period
     ):
-        messages.error(
-            request,
-            "This plan already renews automatically, and a missed renewal is retried "
-            "automatically. Cancel it first if you want to pay another way.",
+        recurring_impl = registry.get(sub.recurring_provider)
+        name = (
+            recurring_impl.display_name if recurring_impl else "your payment provider"
         )
+        if sub.status == Subscription.PAST_DUE:
+            # Paying here as well could pay this renewal twice.
+            messages.error(
+                request,
+                f"{name} is retrying your renewal automatically. Check the card or balance "
+                f"on your {name} account. To pay another way instead, cancel the plan "
+                "below first, then choose it again.",
+            )
+        else:
+            messages.error(
+                request,
+                f"This plan already renews automatically through {name}. Cancel it first "
+                "if you want to pay another way.",
+            )
         return redirect("/billing/plans/")
 
     payments.abandon_open_checkouts(account)

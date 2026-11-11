@@ -153,6 +153,15 @@ def provider_ended(provider_code: str, recurring_id: str, *, by_customer: bool) 
     else:
         sub.recurring_provider = ""
     sub.save(update_fields=fields)
+    if not by_customer and sub.status in (Subscription.ACTIVE, Subscription.PAST_DUE):
+        # The provider stopped it (failed payments, or it expired): from now on the plan
+        # renews by pay link, and the customer must hear that before the renewal date.
+        from .tasks import send_billing_notice
+
+        account_id = sub.account_id
+        transaction.on_commit(
+            lambda: send_billing_notice.delay(account_id, "auto_pay_stopped", None)
+        )
     logger.info(
         "recurring: %s ended at the provider for account=%s (by customer: %s)",
         token,
