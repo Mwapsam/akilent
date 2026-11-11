@@ -327,7 +327,7 @@
         if (!m) return value;
         var dt = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]));
         var text = dt.toLocaleString(undefined, {
-          weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC",
+          weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC",
         });
         return text + " (" + (this.d.tz_name || "") + ")";
       },
@@ -1150,7 +1150,11 @@
       checkRecovery: function () {
         var s = storeGet(this.localKey());
         if (!s || !s.state || Date.now() - s.t > RECOVERY_MAX_AGE) return;
-        var when = new Date(s.t).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" });
+        // Nothing to offer when the copy matches what loaded, or the server has a later
+        // save: the banner lingered for days over work that was already saved.
+        var same = JSON.stringify(s.state) === JSON.stringify(this.snapshot());
+        if (same || (this.version && s.version && s.version < this.version)) { this.clearLocal(); return; }
+        var when = new Date(s.t).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
         this.recovery = { when: when, data: s };
       },
 
@@ -1230,7 +1234,7 @@
           this.postId = data.post_id;
           this.version = data.version;
           // The viewer's own clock: the workspace timezone may differ from where they sit.
-          this.savedAt = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+          this.savedAt = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
           this.saveMessage = "";
           this._retryDelay = 0;
           if (data.wa_link_urls) this.waLinkUrls = data.wa_link_urls;

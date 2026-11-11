@@ -205,7 +205,7 @@ list stays beside it and the view answers with the refreshed pane plus a toast.{
                     <template x-if="item.m.media">
                       <div class="cv-media">
                         <template x-if="item.m.media.state === 'ready' && item.m.media.kind === 'image'">
-                          <a :href="item.m.media.url" target="_blank" rel="noopener" title="Open full size">
+                          <a :href="item.m.media.url" data-viewer data-viewer-group="chat-photos" class="cursor-zoom-in" title="View full size">
                             <img :src="item.m.media.url" :alt="item.m.direction === 'outbound' ? 'Photo you sent' : 'Photo from the customer'" loading="lazy" class="cv-media-img">
                           </a>
                         </template>

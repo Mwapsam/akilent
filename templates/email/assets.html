@@ -26,7 +26,7 @@
 <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
   {% for asset in assets %}
   <div class="card card-pad">
-    <a href="{{ asset.file.url }}" target="_blank" rel="noopener">
+    <a href="{{ asset.file.url }}" data-viewer data-viewer-group="email-assets" data-viewer-alt="{{ asset.file.name }}" class="block cursor-zoom-in" aria-label="View {{ asset.file.name }} full size">
       <img src="{{ asset.file.url }}" alt="" class="w-full aspect-square object-cover rounded-lg mb-2 tone-neutral-bg">
     </a>
     <p class="text-xs text-ink-subtle truncate">{{ asset.file.name }}</p>

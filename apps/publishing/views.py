@@ -402,6 +402,25 @@ def fb_oauth_disconnect(request):
     return redirect("settings-integrations")
 
 
+@login_required
+@require_POST
+def ig_disconnect(request):
+    """Disconnect Instagram from Content Studio's Channels page (Facebook had a button,
+    Instagram had none). The account row is kept so its conversations stay."""
+    account = get_current_account(request)
+    if account is None:
+        return redirect("dashboard")
+    if (denied := _admin_required(request, account, "publishing:channels")) is not None:
+        return denied
+
+    from apps.instagram.views import disconnect_instagram_account
+
+    for iba in account.instagram_accounts.filter(is_active=True):
+        disconnect_instagram_account(iba, unsubscribe=True)
+    messages.success(request, "Instagram disconnected.")
+    return redirect("publishing:channels")
+
+
 # ---------------------------------------------------------------------------
 # Content Studio overview
 # ---------------------------------------------------------------------------
@@ -469,6 +488,8 @@ def publishing_index(request):
             "account": account,
             "work": work,
             "plans_due": plans_due,
+            "month_start": month_start,
+            "month_end": next_month - datetime.timedelta(days=1),
             "published_this_month": published_this_month,
             "upcoming": upcoming,
         },
@@ -804,7 +825,16 @@ def publishing_library(request):
     if account is None:
         return redirect("dashboard")
 
-    qs = ContentPost.objects.filter(account=account).order_by("-created_at")
+    from django.db.models.functions import Coalesce
+
+    # A post's date is when it went out, else when it goes out, else when it was written:
+    # the column, the order and the date filter all use it (the Library only showed
+    # Created, which matters least).
+    qs = (
+        ContentPost.objects.filter(account=account)
+        .annotate(when=Coalesce("published_at", "scheduled_at", "created_at"))
+        .order_by("-when", "-pk")
+    )
 
     q = request.GET.get("q", "").strip()
     if q:
@@ -846,14 +876,14 @@ def publishing_library(request):
     date_from = request.GET.get("date_from", "")
     if date_from:
         try:
-            qs = qs.filter(created_at__date__gte=datetime.date.fromisoformat(date_from))
+            qs = qs.filter(when__date__gte=datetime.date.fromisoformat(date_from))
         except ValueError:
             pass
 
     date_to = request.GET.get("date_to", "")
     if date_to:
         try:
-            qs = qs.filter(created_at__date__lte=datetime.date.fromisoformat(date_to))
+            qs = qs.filter(when__date__lte=datetime.date.fromisoformat(date_to))
         except ValueError:
             pass
 
@@ -1027,6 +1057,11 @@ def publishing_channels(request):
         {
             "account": account,
             "ig_connection": ig,
+            "ig_account_label": (
+                f"@{ig.username.lstrip('@')}" if ig.username else ig.name
+            )
+            if ig
+            else "",
             "ig_publish_scope": ig_publish_scope,
             "fb_connection": fb_connection,
             "channel_on": {
@@ -1119,11 +1154,44 @@ def planning_overview(request):
     pillars = list(ContentPillar.objects.filter(account=account))
     campaigns = list(ContentCampaign.objects.filter(account=account))
 
+    # The stat cards filter: ?status=planned lists every item in that state.
+    status = request.GET.get("status", "")
+    filtered = None
+    if status in ContentPlanItem.PlanStatus.values:
+        from django.db.models import F
+
+        filtered = list(
+            plan_qs.filter(plan_status=status)
+            .select_related("pillar")
+            .order_by(F("planned_date").asc(nulls_last=True), "-created_at")[:100]
+        )
+    else:
+        status = ""
+
     return render(
         request,
         "publishing/planning.html",
         {
             "account": account,
+            "status": status,
+            "status_label": dict(ContentPlanItem.PlanStatus.choices).get(status, ""),
+            "filtered": filtered,
+            "stat_cards": [
+                (
+                    "idea",
+                    counts["idea"],
+                    "Idea" if counts["idea"] == 1 else "Ideas",
+                    "",
+                ),
+                ("planned", counts["planned"], "Planned", ""),
+                ("in_production", counts["in_production"], "In production", ""),
+                (
+                    "published",
+                    counts["published"],
+                    "Ideas posted",
+                    "Ideas whose post has gone out, all time",
+                ),
+            ],
             "counts": counts,
             "upcoming": upcoming,
             "missed_count": len(missed),

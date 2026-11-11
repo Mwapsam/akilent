@@ -1237,6 +1237,33 @@
   .cal-col .cal-plan-pillar { display: none; }
   .cal-plan.is-missed .cal-plan-label { color: var(--tone-coral-fg); }
   .cal-plan-dot { @apply w-2 h-2 rounded-full shrink-0; background: var(--color-ink-subtle); }
+
+  /* Image viewer (static/js/app.js, a[data-viewer]): a picture over the page instead of
+     the raw file on the media host. Always dark, so the picture reads the same in both
+     themes. Above drawers and modals. */
+  .iv { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
+        background: rgb(10 12 16 / 0.92); padding: 3.5rem 0.75rem 1rem; }
+  .iv[hidden] { display: none; }
+  html.iv-open { overflow: hidden; }
+  .iv-stage { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+              max-width: 100%; max-height: 100%; min-width: 0; flex: 1; height: 100%; justify-content: center; }
+  .iv-img { max-width: 100%; max-height: calc(100% - 2rem); object-fit: contain; border-radius: 0.375rem;
+            box-shadow: 0 10px 40px rgb(0 0 0 / 0.5); background: rgb(255 255 255 / 0.04); }
+  .iv-alt { max-width: 40rem; font-size: 0.8125rem; color: rgb(255 255 255 / 0.75); text-align: center; }
+  .iv-bar { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; gap: 0.5rem;
+            padding: 0.625rem 0.75rem; padding-top: calc(0.625rem + var(--safe-top, 0px)); }
+  .iv-count { flex: 1; font-size: 0.8125rem; color: rgb(255 255 255 / 0.8); font-variant-numeric: tabular-nums; }
+  .iv-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 2.25rem; min-width: 2.25rem;
+            padding: 0 0.75rem; border-radius: 9999px; font-size: 0.8125rem; font-weight: 500; color: #fff;
+            background: rgb(255 255 255 / 0.12); }
+  .iv-btn:hover { background: rgb(255 255 255 / 0.22); }
+  .iv-close { font-size: 1.375rem; line-height: 1; padding: 0; }
+  .iv-nav { flex-shrink: 0; width: 2.75rem; height: 2.75rem; border-radius: 9999px; color: #fff; font-size: 1.75rem;
+            line-height: 1; background: rgb(255 255 255 / 0.12); }
+  .iv-nav:hover { background: rgb(255 255 255 / 0.22); }
+  .iv-nav[hidden] { display: none; }
+  .iv :focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  @media (max-width: 639px) { .iv-nav { position: absolute; bottom: 1rem; } .iv-prev { left: 1rem; } .iv-next { right: 1rem; } }
   .cal-plan-topic { @apply text-xs font-medium leading-snug line-clamp-2 break-words text-ink; }
 
   /* Agenda: one row per day, below xl and in the list view. */

@@ -8,7 +8,7 @@
   <div class="flex-1 min-w-0 space-y-2">
     <div class="flex items-start justify-between gap-3">
       <div class="min-w-0">
-        <a href="{% url 'publishing:post-detail' row.post.pk %}" data-overlay-open="drawer" class="block text-sm font-medium text-ink truncate hover:underline">{{ row.post.caption|truncatechars:80|default:"(no caption)" }}</a>
+        <a href="{% url 'publishing:post-detail' row.post.pk %}" data-overlay-open="drawer" class="block text-sm font-medium text-ink truncate hover:underline">{{ row.post.caption|truncatechars:80|default:"No caption" }}</a>
         <p class="text-xs text-ink-subtle">{{ row.post.platforms|platform_names }}</p>
       </div>
       <p class="shrink-0 text-right text-sm font-semibold text-ink tabular-nums" data-sales-revenue>{% for r in row.confirmed.revenue %}{{ r.currency }} {{ r.total }}{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="font-normal text-ink-subtle">No revenue</span>{% endfor %}</p>

@@ -31,7 +31,9 @@
 
     <div class="cmp-bar-actions">
       <a href="{% url 'publishing:index' %}" class="btn btn-ghost">Cancel</a>
-      <button type="submit" name="action" value="draft" class="btn btn-secondary" :disabled="submitting">Save draft</button>
+      {% comment %}Drafts save on their own as you type (the header says so), so this button
+      saves and leaves for the post's page rather than offering a second way to save.{% endcomment %}
+      <button type="submit" name="action" value="draft" class="btn btn-secondary" :disabled="submitting">Save and close</button>
       {% if review_gate %}
       <button type="submit" name="action" value="submit_review" class="btn btn-primary"
               :disabled="submitting || blockedFor('submit_review')">Submit for review</button>

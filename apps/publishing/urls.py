@@ -190,4 +190,5 @@ urlpatterns = [
     path("fb/callback/", views.fb_oauth_callback, name="fb-callback"),
     path("fb/select-page/", views.fb_select_page, name="fb-select-page"),
     path("fb/disconnect/", views.fb_oauth_disconnect, name="fb-disconnect"),
+    path("ig/disconnect/", views.ig_disconnect, name="ig-disconnect"),
 ]

@@ -373,3 +373,96 @@ def test_a_live_channel_never_read_is_read(shop, monkeypatch):
         tasks.collect_due_metrics()
 
     assert queued == [v.pk]
+
+
+# --- UX polish -------------------------------------------------------------------------
+
+
+def test_published_this_month_links_to_those_posts(shop):
+    _, client = shop
+    html = client.get(reverse("publishing:index")).content.decode()
+    assert 'data-bucket="published-month"' in html
+    assert "show=published&amp;date_from=" in html
+
+
+def test_planning_stat_cards_filter_the_list(shop):
+    account, client = shop
+    ContentPlanItem.objects.create(account=account, topic="Undated idea")
+    ContentPlanItem.objects.create(
+        account=account, topic="Dated one", planned_date=timezone.localdate()
+    )
+
+    html = client.get(reverse("publishing:planning") + "?status=idea").content.decode()
+
+    assert 'data-plan-filter="idea"' in html
+    assert "Undated idea" in html and "Dated one" not in html
+    assert 'aria-current="true"' in html
+
+
+def test_library_shows_when_a_post_goes_out_and_filters_by_it(shop):
+    account, client = shop
+    old = timezone.now() - datetime.timedelta(days=40)
+    post = ContentPost.objects.create(
+        account=account,
+        caption="",
+        platforms=["facebook"],
+        status=ContentPost.Status.PUBLISHED,
+        published_at=timezone.now(),
+    )
+    ContentPost.objects.filter(pk=post.pk).update(created_at=old)
+    today = timezone.localdate().isoformat()
+
+    html = client.get(
+        reverse("publishing:library") + f"?date_from={today}&date_to={today}"
+    ).content.decode()
+
+    assert f"/posts/{post.pk}/" in html  # published today, though written 40 days ago
+    assert ">When<" in html and "Published" in html
+    assert "No caption · " in html and "(no caption)" not in html
+
+
+def test_instagram_can_be_disconnected_from_channels(shop, monkeypatch):
+    from apps.instagram.models import InstagramBusinessAccount
+
+    account, client = shop
+    iba = InstagramBusinessAccount.objects.create(
+        account=account,
+        instagram_business_account_id="178",
+        username="shop",
+        access_token="tok",
+        is_active=True,
+    )
+    monkeypatch.setattr(
+        "apps.instagram.oauth.unsubscribe_ig_account_from_webhooks", lambda *a: None
+    )
+
+    html = client.get(reverse("publishing:channels")).content.decode()
+    assert "Account: @shop" in html and "Disconnect Instagram" in html
+    assert "Publishing on" not in html
+
+    client.post(reverse("publishing:ig-disconnect"))
+    iba.refresh_from_db()
+    assert not iba.is_active
+
+
+def test_post_images_open_in_the_viewer_not_the_media_host(shop):
+    account, client = shop
+    post = ContentPost.objects.create(
+        account=account,
+        caption="Two pictures",
+        platforms=["instagram"],
+        media_type="carousel",
+        media_urls=["https://cdn.example.com/a.jpg", "https://cdn.example.com/b.jpg"],
+    )
+    ContentPostVariant.objects.create(post=post, platform="instagram")
+
+    html = client.get(
+        reverse("publishing:post-detail", args=[post.pk])
+    ).content.decode()
+
+    links = [ln for ln in html.splitlines() if 'href="https://cdn.example.com/' in ln]
+    assert len(links) == 2
+    assert all(
+        f'data-viewer-group="post-{post.pk}"' in ln and "_blank" not in ln
+        for ln in links
+    )

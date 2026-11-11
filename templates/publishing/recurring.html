@@ -18,7 +18,7 @@
   <section class="card card-pad space-y-2" data-rule="{{ rule.pk }}">
     <div class="flex flex-wrap items-start justify-between gap-2">
       <div class="min-w-0 flex-1">
-        <a href="{% url 'publishing:post-detail' rule.source_id %}" class="block text-sm font-medium text-ink truncate hover:underline">{{ rule.source.caption|truncatechars:80|default:"(no caption)" }}</a>
+        <a href="{% url 'publishing:post-detail' rule.source_id %}" class="block text-sm font-medium text-ink truncate hover:underline">{{ rule.source.caption|truncatechars:80|default:"No caption" }}</a>
         <p class="text-xs text-ink-subtle">Every {{ rule.every_days }} days · {% if rule.active %}next {{ rule.next_run_at|date:"D N j, H:i" }}{% else %}paused{% endif %}{% if rule.captions %} · {{ rule.captions|length|add:1 }} captions in turn{% endif %}</p>
       </div>
       <form method="post" action="{% url 'publishing:recurring-update' rule.pk %}" class="flex gap-1" hx-boost="false">

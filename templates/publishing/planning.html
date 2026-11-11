@@ -12,26 +12,47 @@
 
 {% include "publishing/_subnav.html" %}
 
-{# Stat cards #}
-<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-  <div class="card card-pad text-center">
-    <p class="text-2xl font-bold text-ink">{{ counts.idea }}</p>
-    <p class="text-xs text-ink-subtle mt-0.5">Idea{{ counts.idea|pluralize }}</p>
-  </div>
-  <div class="card card-pad text-center">
-    <p class="text-2xl font-bold text-ink">{{ counts.planned }}</p>
-    <p class="text-xs text-ink-subtle mt-0.5">Planned</p>
-  </div>
-  <div class="card card-pad text-center">
-    <p class="text-2xl font-bold text-ink">{{ counts.in_production }}</p>
-    <p class="text-xs text-ink-subtle mt-0.5">In production</p>
-  </div>
-  <div class="card card-pad text-center">
-    <p class="text-2xl font-bold text-ink">{{ counts.published }}</p>
-    <p class="text-xs text-ink-subtle mt-0.5" title="Ideas whose post has gone out, all time">Ideas posted</p>
-  </div>
-</div>
+{# Stat cards: each filters the list below to that state; the chosen one is marked. #}
+<nav class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6" aria-label="Filter ideas by state">
+  {% url 'publishing:planning' as planning_url %}
+  {% for key, number, label, hint in stat_cards %}
+  <a href="{% if status == key %}{{ planning_url }}{% else %}{{ planning_url }}?status={{ key }}{% endif %}"
+     class="card card-pad text-center hover:border-border-strong transition-colors{% if status == key %} ring-2 ring-[var(--color-brand-500)]{% endif %}"
+     {% if status == key %}aria-current="true"{% endif %}{% if hint %} title="{{ hint }}"{% endif %}>
+    <p class="text-2xl font-bold text-ink">{{ number }}</p>
+    <p class="text-xs text-ink-subtle mt-0.5">{{ label }}</p>
+  </a>
+  {% endfor %}
+</nav>
 
+{% if filtered is not None %}
+<section class="card card-pad" aria-labelledby="filtered-title" data-plan-filter="{{ status }}">
+  <div class="flex items-center justify-between mb-3">
+    <h2 id="filtered-title" class="font-semibold text-ink">{{ status_label }} <span class="text-sm font-normal text-ink-subtle">· {{ filtered|length }}</span></h2>
+    <a href="{{ planning_url }}" class="text-xs text-accent">Show everything →</a>
+  </div>
+  {% if filtered %}
+  <ul class="divide-y divide-border">
+    {% for item in filtered %}
+    <li class="py-2 flex items-start justify-between gap-3" data-row>
+      <div class="min-w-0">
+        <a href="{% url 'publishing:plan-edit' item.pk %}?next={{ request.get_full_path|urlencode }}" data-overlay-open="drawer" class="text-sm text-ink hover:underline">{% if item.pillar %}<span class="inline-block w-2 h-2 rounded-full mr-1 align-middle" style="background:{{ item.pillar.color }}"></span>{% endif %}{{ item.topic|truncatechars:80 }}</a>
+        <p class="text-xs text-ink-subtle mt-0.5">{% if item.is_missed %}<span class="tone-coral-fg font-medium">Missed</span> · {% endif %}{% if item.planned_date %}{{ item.planned_date|date:"D, N j" }}{% else %}No date{% endif %}{% if item.platforms %} · {{ item.platforms|platform_names }}{% endif %}</p>
+      </div>
+      {% if item.not_started %}
+      <form method="post" action="{% url 'publishing:plan-create-post' item.pk %}" class="shrink-0" hx-boost="false" data-busy-submit>
+        {% csrf_token %}
+        <button type="submit" class="btn btn-ghost text-xs py-0.5 px-2">Write the post</button>
+      </form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="text-sm text-ink-subtle text-center py-4">Nothing here right now.</p>
+  {% endif %}
+</section>
+{% else %}
 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
 
   {# Upcoming 7 days #}
@@ -112,6 +133,8 @@
   </div>
 
 </div>
+
+{% endif %}
 
 {# Pillars and content themes quick links #}
 <div class="mt-4 flex gap-3 text-xs text-ink-subtle">

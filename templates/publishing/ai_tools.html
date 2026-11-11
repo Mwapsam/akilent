@@ -21,7 +21,7 @@ the fields below, Save in the panel's footer (components/_panel_foot.html).{% en
   <section class="settings-section" aria-labelledby="ai-voice-title">
     <div>
       <h2 id="ai-voice-title" class="settings-section-title">Brand voice</h2>
-      <p class="settings-section-desc">How your posts should sound when AI writes or rewrites them. Style only: facts like prices still come from your AI notes.</p>
+      <p class="settings-section-desc">How your posts should sound when AI writes or rewrites them. Style only: facts like prices still come from your <a href="{% url 'settings-ai' %}" class="cs-link">AI notes</a>.</p>
     </div>
     <div class="settings-section-body">
     <form method="post" class="space-y-3" hx-boost="false"{% if can_admin %} data-save-bar{% endif %}>
@@ -51,7 +51,7 @@ the fields below, Save in the panel's footer (components/_panel_foot.html).{% en
       <li class="py-2" data-source="{{ s.id }}">
         <a class="cs-link" href="{% url 'publishing:post-detail' s.id %}">Post {{ s.id }}</a>:
         {{ s.chats }} chat{{ s.chats|pluralize }}, {{ s.leads }} lead{{ s.leads|pluralize }}, {{ s.paid_orders }} paid order{{ s.paid_orders|pluralize }}
-        <span class="block text-xs text-ink-subtle truncate">{{ s.caption|default:"(no caption)" }}</span>
+        <span class="block text-xs text-ink-subtle truncate">{{ s.caption|default:"No caption" }}</span>
       </li>
       {% endfor %}
     </ul>

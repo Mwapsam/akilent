@@ -182,7 +182,7 @@ to show (channel, status). The selects apply as soon as they change.{% endcommen
       <a href="{% url 'publishing:post-detail' post.pk %}" data-overlay-open="drawer" data-row class="card card-hover flex items-center gap-3 p-2.5 h-full">
         {% include "publishing/_media_thumb.html" with url=post|first_media size="w-12 h-12" alt="" %}
         <span class="min-w-0 flex-1">
-          <span class="block text-sm text-ink line-clamp-2 break-words">{{ post.caption|default:"(no caption)" }}</span>
+          <span class="block text-sm text-ink line-clamp-2 break-words">{{ post.caption|default:"No caption" }}</span>
           <span class="mt-1 flex items-center gap-2">
             {% status_badge post.status post.get_status_display %}
             {% include "publishing/_platform_icons.html" with platforms=post.platforms %}

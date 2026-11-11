@@ -22,7 +22,7 @@
           <div class="flex-1 min-w-0">
             <div class="flex flex-wrap items-center gap-2">
               <a href="{% url 'publishing:post-detail' variant.post.pk %}" class="font-medium text-ink hover:underline truncate">
-                {{ variant.post.caption|truncatechars:80|default:"(no caption)" }}
+                {{ variant.post.caption|truncatechars:80|default:"No caption" }}
               </a>
               {{ variant|variant_status_badge }}
             </div>

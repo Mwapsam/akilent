@@ -99,7 +99,7 @@
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
 /* On a phone the bar wraps to three rows: it scrolls away rather than covering a third of the screen. */
 @media (max-width: 639px) { .ml-toolbar { position: static; } }
-.ml-search { display: flex; align-items: center; gap: .5rem; flex: 1 1 14rem; min-width: 0; max-width: 22rem;
+.ml-search { display: flex; align-items: center; gap: .5rem; flex: 1 1 10rem; min-width: 0; max-width: 22rem;
   padding: 0 .875rem; height: 2.375rem; border: 1px solid var(--color-border); border-radius: 999px;
   background: var(--color-surface); color: var(--color-ink-subtle); }
 .ml-search:focus-within { border-color: var(--color-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 18%, transparent); }

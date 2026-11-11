@@ -174,7 +174,8 @@ def test_overview_tiles_are_named_and_empty_ones_collapse(shop):
 
     assert 'aria-label="Failed: 1 post"' in html
     assert 'data-bucket="draft"' not in html
-    assert "Nothing in:" in html and "Drafts" in html
+    # Empty states aren't listed either: "Nothing in: …" was noise (2026-11-11 audit).
+    assert "Nothing in:" not in html
 
 
 def test_planning_counts_agree_with_the_lists(shop):

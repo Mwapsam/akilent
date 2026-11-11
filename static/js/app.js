@@ -2089,4 +2089,102 @@
       window.htmx.trigger(form, "submit");
     });
   });
+
+  // --- Image viewer ------------------------------------------------------------
+  // A picture opens over the page instead of sending people to the raw file on the
+  // media host (CloudFront). Mark the link:
+  //   <a href="{full url}" data-viewer data-viewer-group="post-12" data-viewer-alt="…">
+  // Links sharing a group step through with ←/→, the buttons, or a swipe. Esc, the ×
+  // or a click on the backdrop closes it. Ctrl/⌘/middle click still opens the file.
+  // Delegated, so it works for links the inbox and live filters add later.
+  var viewer = null;
+  function buildViewer() {
+    var root = document.createElement("div");
+    root.className = "iv";
+    root.hidden = true;
+    root.setAttribute("role", "dialog");
+    root.setAttribute("aria-modal", "true");
+    root.setAttribute("aria-label", "Image viewer");
+    root.innerHTML =
+      '<div class="iv-bar">' +
+        '<span class="iv-count" aria-live="polite"></span>' +
+        '<a class="iv-btn iv-download" download target="_blank" rel="noopener" hx-boost="false">Download</a>' +
+        '<button type="button" class="iv-btn iv-close" aria-label="Close">×</button>' +
+      '</div>' +
+      '<button type="button" class="iv-nav iv-prev" aria-label="Previous image">‹</button>' +
+      '<figure class="iv-stage"><img class="iv-img" alt=""><figcaption class="iv-alt"></figcaption></figure>' +
+      '<button type="button" class="iv-nav iv-next" aria-label="Next image">›</button>';
+    document.body.appendChild(root);
+    var v = { root: root, img: root.querySelector(".iv-img"), alt: root.querySelector(".iv-alt"),
+      count: root.querySelector(".iv-count"), dl: root.querySelector(".iv-download"),
+      prev: root.querySelector(".iv-prev"), next: root.querySelector(".iv-next"),
+      items: [], i: 0, opener: null };
+    function show(i) {
+      v.i = (i + v.items.length) % v.items.length;
+      var it = v.items[v.i];
+      v.img.src = it.src;
+      v.img.alt = it.alt;
+      v.alt.textContent = it.alt;
+      v.alt.hidden = !it.alt;
+      v.dl.href = it.src;
+      var many = v.items.length > 1;
+      v.count.textContent = many ? (v.i + 1) + " of " + v.items.length : "";
+      v.prev.hidden = v.next.hidden = !many;
+    }
+    v.show = show;
+    v.close = function () {
+      root.hidden = true;
+      document.documentElement.classList.remove("iv-open");
+      v.img.removeAttribute("src");
+      if (v.opener && document.contains(v.opener)) v.opener.focus();
+    };
+    root.querySelector(".iv-close").addEventListener("click", v.close);
+    v.prev.addEventListener("click", function () { show(v.i - 1); });
+    v.next.addEventListener("click", function () { show(v.i + 1); });
+    root.addEventListener("click", function (e) {
+      if (e.target === root || e.target.classList.contains("iv-stage")) v.close();
+    });
+    root.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") { e.preventDefault(); v.close(); }
+      else if (e.key === "ArrowLeft" && v.items.length > 1) show(v.i - 1);
+      else if (e.key === "ArrowRight" && v.items.length > 1) show(v.i + 1);
+      else if (e.key === "Tab") {
+        // Keep focus inside while it's open.
+        var f = Array.prototype.filter.call(root.querySelectorAll("button, a[href]"), function (el) { return !el.hidden; });
+        var first = f[0], last = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    });
+    var x0 = null;
+    root.addEventListener("touchstart", function (e) { x0 = e.touches[0].clientX; }, { passive: true });
+    root.addEventListener("touchend", function (e) {
+      if (x0 === null || v.items.length < 2) return;
+      var dx = e.changedTouches[0].clientX - x0;
+      x0 = null;
+      if (Math.abs(dx) > 50) show(v.i + (dx < 0 ? 1 : -1));
+    });
+    return v;
+  }
+  function viewerItem(a) {
+    var img = a.querySelector("img");
+    return { src: a.getAttribute("href"), alt: a.getAttribute("data-viewer-alt") || (img && img.alt) || "" };
+  }
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest("a[data-viewer]");
+    if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    e.stopPropagation();
+    viewer = viewer || buildViewer();
+    var group = a.getAttribute("data-viewer-group");
+    var links = group
+      ? Array.prototype.slice.call(document.querySelectorAll('a[data-viewer][data-viewer-group="' + group.replace(/"/g, '\\"') + '"]'))
+      : [a];
+    viewer.items = links.map(viewerItem);
+    viewer.opener = a;
+    viewer.show(Math.max(0, links.indexOf(a)));
+    viewer.root.hidden = false;
+    document.documentElement.classList.add("iv-open");
+    viewer.root.querySelector(".iv-close").focus();
+  }, true);
 })();

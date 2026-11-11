@@ -9,7 +9,7 @@ says what will happen to this file before it happens (media_library.remove_previ
     <video src="{{ asset.url }}#t=0.1" preload="metadata" controls playsinline aria-label="{{ asset.display }}" onloadedmetadata="var d = document.getElementById('md-dims'); if (d && !d.hasAttribute('data-known')) d.textContent = this.videoWidth + ' × ' + this.videoHeight + ' px'"></video>
     {% else %}
     <div class="ml-wash" style="background-image: url('{{ asset.url }}')" aria-hidden="true"></div>
-    <img src="{{ asset.url }}" alt="{{ asset.display }}" class="ml-img" decoding="async" onload="var d = document.getElementById('md-dims'); if (d && !d.hasAttribute('data-known')) d.textContent = this.naturalWidth + ' × ' + this.naturalHeight + ' px'">
+    <a href="{{ asset.url }}" data-viewer class="contents cursor-zoom-in" aria-label="View {{ asset.display }} full size"><img src="{{ asset.url }}" alt="{{ asset.display }}" class="ml-img" decoding="async" onload="var d = document.getElementById('md-dims'); if (d && !d.hasAttribute('data-known')) d.textContent = this.naturalWidth + ' × ' + this.naturalHeight + ' px'"></a>
     {% endif %}
   </div>
 

@@ -33,7 +33,7 @@ Review: keep both paths).
       </div>
       <div class="panel-actions">
         {% if ig_connection %}
-          {% if ig_publish_scope %}<span class="badge badge-success">Publishing on</span>
+          {% if ig_publish_scope %}<span class="badge badge-success">Connected</span>
           {% elif ig_connection.token_expired %}<span class="badge badge-warning">Reconnect needed</span>
           {% else %}<span class="badge badge-warning">Can't publish yet</span>{% endif %}
         {% else %}<span class="badge badge-neutral">Not connected</span>{% endif %}
@@ -46,6 +46,15 @@ Review: keep both paths).
     {% endif %}
     {% if not channel_on.instagram %}
     <div class="panel-alert panel-alert--warning"><span>Instagram is switched off on Akilent right now. Scheduled posts wait and go out once it's back on.</span></div>
+    {% endif %}
+    {% comment %}The account it posts as, and Connect or Reconnect, as the Facebook panel has.{% endcomment %}
+    {% if ig_connection and ig_account_label or channel_on.instagram and not ig_publish_scope %}
+    <div class="panel-foot">
+      <span>{% if ig_connection and ig_account_label %}Account: {{ ig_account_label }}{% endif %}</span>
+      {% if channel_on.instagram and not ig_publish_scope %}
+      <a href="{% url 'instagram-connect-oauth-start' %}" class="btn btn-primary btn-sm">{% if ig_connection %}Reconnect Instagram{% else %}Connect Instagram{% endif %}</a>
+      {% endif %}
+    </div>
     {% endif %}
   </section>
 
@@ -124,7 +133,7 @@ Review: keep both paths).
         <div class="flex-1 min-w-0">
           <a href="{% url 'publishing:post-detail' post.pk %}" data-overlay-open="drawer"
              class="text-sm font-medium text-ink hover:underline truncate block">
-            {{ post.caption|truncatechars:60|default:"(no caption)" }}
+            {{ post.caption|truncatechars:60|default:"No caption" }}
           </a>
           {% if post.error %}
           <p class="text-xs tone-coral-fg mt-0.5 truncate">{{ post.error|truncatechars:100 }}</p>
@@ -138,6 +147,24 @@ Review: keep both paths).
       </div>
       {% endfor %}
     </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% if ig_connection and is_admin %}
+  <section class="panel panel--danger" aria-labelledby="ch-danger-ig">
+    <div class="panel-head">
+      <div>
+        <h2 id="ch-danger-ig" class="panel-title">Disconnect Instagram</h2>
+        <p class="panel-desc">Posting and Instagram messages and comments stop. Conversations are kept, and you can connect again.</p>
+      </div>
+      <div class="panel-actions">
+      <form method="post" action="{% url 'publishing:ig-disconnect' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger-outline btn-sm"
+                data-confirm="Disconnect Instagram? Posting to it stops, and so do new Instagram messages and comments in the inbox; conversations you have are kept. Instagram posts scheduled for it can't go out until you connect it again." data-confirm-danger data-confirm-label="Disconnect">Disconnect</button>
+      </form>
+      </div>
     </div>
   </section>
   {% endif %}

@@ -147,7 +147,7 @@ column in that order.{% endcomment %}
               {% if only|media_kind == "video" %}
                 <video src="{{ only }}#t=0.1" preload="metadata" controls playsinline class="pd-media-one" aria-label="Post video"></video>
               {% else %}
-                <a href="{{ only }}" target="_blank" rel="noopener" class="block" aria-label="Open the image full size">
+                <a href="{{ only }}" data-viewer class="block cursor-zoom-in" aria-label="View the image full size">
                   <img src="{{ only }}" alt="{{ post.caption|truncatechars:80|default:'Post image' }}" class="pd-media-one" loading="lazy" decoding="async">
                 </a>
               {% endif %}
@@ -159,7 +159,7 @@ column in that order.{% endcomment %}
                   {% if url|media_kind == "video" %}
                     {% include "publishing/_media_thumb.html" with url=url size="w-full aspect-[4/5]" alt="Post video" controls=True %}
                   {% else %}
-                    <a href="{{ url }}" target="_blank" rel="noopener" class="block" aria-label="Open item {{ forloop.counter }} full size">
+                    <a href="{{ url }}" data-viewer data-viewer-group="post-{{ post.pk }}" data-viewer-alt="Item {{ forloop.counter }} of {{ post.media_urls|length }}" class="block cursor-zoom-in" aria-label="View item {{ forloop.counter }} full size">
                       {% include "publishing/_media_thumb.html" with url=url size="w-full aspect-[4/5]" alt="Carousel item" %}
                     </a>
                   {% endif %}

@@ -23,7 +23,7 @@ each step posts back into it and a clean import closes it over the Library.{% en
     <ol class="divide-y divide-border">
       {% for r in preview %}
       <li class="py-2 text-sm" data-import-row="{{ r.n }}" data-ok="{{ r.ok|yesno:'true,false' }}">
-        <p class="font-medium text-ink">Row {{ r.n }}: {{ r.caption|truncatechars:70|default:"(no caption)" }}</p>
+        <p class="font-medium text-ink">Row {{ r.n }}: {{ r.caption|truncatechars:70|default:"No caption" }}</p>
         <p class="text-xs text-ink-subtle">{{ r.platforms|platform_names|default:"no channel" }} · {{ r.media_type }} · {{ r.media_count }} file{{ r.media_count|pluralize }}{% if r.scheduled_at %} · suggested {{ r.scheduled_at|date:"N j, H:i" }}{% endif %}</p>
         {% for e in r.errors %}<p class="text-xs tone-coral-fg">{{ e }}</p>{% endfor %}
         {% if r.ok %}

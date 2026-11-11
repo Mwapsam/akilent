@@ -15,7 +15,7 @@ a post or a WhatsApp campaign is already credited. Four states, never blurred:
   <p class="text-ink-subtle mb-1">Where this came from</p>
   {% if att.credits_post %}
   <p class="font-medium text-ink">From a post:
-    <a href="{% url 'publishing:post-detail' att.source_post_id %}" class="cs-link">{{ att.source_post.caption|truncatechars:60|default:"(no caption)" }}</a>
+    <a href="{% url 'publishing:post-detail' att.source_post_id %}" class="cs-link">{{ att.source_post.caption|truncatechars:60|default:"No caption" }}</a>
   </p>
   <p class="text-xs text-ink-subtle">
     {% if att.source_variant %}{{ att.source_variant.get_platform_display }} · {% endif %}{% if att.entry_point.kind == 'tracked_link' %}{% if att.entry_point.bio_tile_id %}the customer used the post's tile on your bio page · {% else %}the customer used the post's WhatsApp link · {% endif %}{% elif att.entry_point %}a reply to their comment on the post · {% else %}the chat started from the post · {% endif %}{% if att.source_campaign %}{{ att.source_campaign.name }} · {% endif %}made from this chat{% if att.workflow_run_id %} by an automation{% endif %}

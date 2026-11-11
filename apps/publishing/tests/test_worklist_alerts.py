@@ -222,8 +222,10 @@ def test_the_overview_shows_every_bucket_and_what_needs_you(team, owner_client):
 
     html = owner_client.get(reverse("publishing:index")).content.decode()
 
-    for _, label in BUCKETS:
-        assert label in html
+    # States with posts are shown; empty ones aren't listed (the "Nothing in: …" line
+    # was dropped as noise in the 2026-11-11 audit).
+    assert 'data-bucket="failed"' in html
+    assert "Nothing in:" not in html
     assert "Broken one" in html
     assert "See why it failed and fix it" in html
 

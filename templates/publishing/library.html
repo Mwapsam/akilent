@@ -129,7 +129,7 @@ page before anything is selected.{% endcomment %}
           <th class="hidden md:table-cell text-left px-4 py-2 font-medium text-ink-subtle">Platform</th>
           <th class="hidden md:table-cell text-left px-4 py-2 font-medium text-ink-subtle">Type</th>
           <th class="text-left px-3 sm:px-4 py-2 font-medium text-ink-subtle">Status</th>
-          <th class="hidden sm:table-cell text-left px-4 py-2 font-medium text-ink-subtle">Created</th>
+          <th class="hidden sm:table-cell text-left px-4 py-2 font-medium text-ink-subtle">When</th>
         </tr>
       </thead>
       <tbody>
@@ -137,16 +137,16 @@ page before anything is selected.{% endcomment %}
         <tr class="cs-row" data-row>
           <td class="pl-3 pr-1 sm:px-3 py-2 text-center">
             <input type="checkbox" name="post_ids" value="{{ post.pk }}" class="rounded post-checkbox"
-                   aria-label="Select post {{ post.caption|truncatechars:30|default:'(no caption)' }}">
+                   aria-label="Select post {{ post.caption|truncatechars:30|default:'with no caption' }}">
           </td>
           <td class="px-1 py-2">
             {% include "publishing/_media_thumb.html" with url=post|first_media size="w-10 h-10" alt=post.caption|truncatechars:80 %}
           </td>
           <td class="px-3 sm:px-4 py-2">
             <a href="{% url 'publishing:post-detail' post.pk %}" data-overlay-open="drawer" class="font-medium text-ink hover:underline line-clamp-2">
-              {{ post.caption|truncatechars:70|default:"(no caption)" }}
+              {% if post.caption %}{{ post.caption|truncatechars:70 }}{% else %}<span class="font-normal italic text-ink-subtle">No caption · {{ post.get_media_type_display }} post</span>{% endif %}
             </a>
-            <span class="md:hidden block text-xs text-ink-subtle mt-0.5">{{ post.platforms|platform_names }} · {{ post.get_media_type_display }}<span class="sm:hidden"> · {{ post.created_at|date:"N j" }}</span></span>
+            <span class="md:hidden block text-xs text-ink-subtle mt-0.5">{{ post.platforms|platform_names }} · {{ post.get_media_type_display }}<span class="sm:hidden"> · {{ post.when|date:"N j" }}</span></span>
           </td>
           <td class="hidden md:table-cell px-4 py-2 text-ink-subtle">{{ post.platforms|platform_names }}</td>
           <td class="hidden md:table-cell px-4 py-2 text-ink-subtle">{{ post.get_media_type_display }}</td>
@@ -154,7 +154,11 @@ page before anything is selected.{% endcomment %}
             {% status_badge post.status post.get_status_display %}
             {% with reach=post|reach_summary %}{% if reach %}<span class="block text-xs text-ink-subtle mt-0.5 tabular-nums">{{ reach }}</span>{% endif %}{% endwith %}
           </td>
-          <td class="hidden sm:table-cell px-4 py-2 text-ink-subtle whitespace-nowrap">{{ post.created_at|date:"N j, Y" }}</td>
+          <td class="hidden sm:table-cell px-4 py-2 text-ink-subtle whitespace-nowrap">
+            {% if post.published_at %}<span class="block text-xs">Published</span>{{ post.published_at|date:"N j, H:i" }}
+            {% elif post.scheduled_at and post.status == 'scheduled' %}<span class="block text-xs">Goes out</span>{{ post.scheduled_at|date:"N j, H:i" }}
+            {% else %}<span class="block text-xs">Created</span>{{ post.created_at|date:"N j, Y" }}{% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>

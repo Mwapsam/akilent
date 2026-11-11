@@ -9,7 +9,7 @@ Expects ``entry`` (from views._calendar_entries); ``thumb`` adds the image (agen
       <span class="cal-time"><time datetime="{{ entry.at|date:'c' }}">{{ entry.at|time:"H:i" }}</time></span>
       {% include "publishing/_platform_icons.html" with platforms=entry.platforms %}
     </span>
-    <span class="cal-caption">{{ post.caption|default:"(no caption)" }}</span>
+    <span class="cal-caption">{{ post.caption|default:"No caption" }}</span>
     <span class="cal-state">{{ entry.status_label }}</span>
   </span>
 </a>
