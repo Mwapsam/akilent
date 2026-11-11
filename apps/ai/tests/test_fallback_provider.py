@@ -1,5 +1,6 @@
 """The self-hosted Ollama fallback: basic auth, think flag, and switching over on failure."""
 
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -137,3 +138,76 @@ def test_the_password_never_appears_in_an_error(fallback_settings):
         with pytest.raises(AIProviderError) as exc:
             get_ai_provider().chat([ChatMessage("user", "x")])
     assert "pw-very-secret" not in str(exc.value)
+
+
+def _streamed(lines, status=200):
+    r = MagicMock(status_code=status)
+    r.iter_lines.return_value = [json.dumps(x).encode() for x in lines]
+    return r
+
+
+STREAM = [
+    {"model": "gemma4:12b", "message": {"content": "Hel"}, "done": False},
+    {"model": "gemma4:12b", "message": {"content": "lo!"}, "done": False},
+    {
+        "model": "gemma4:12b",
+        "message": {"content": ""},
+        "done": True,
+        "prompt_eval_count": 9,
+        "eval_count": 2,
+    },
+]
+
+
+def test_a_streamed_answer_is_joined_and_the_connection_closed():
+    response = _streamed(STREAM)
+    provider = OllamaProvider(api_key="", stream=True, idle_timeout=90, timeout=300)
+    with patch("apps.ai.providers.http.requests.post", return_value=response) as post:
+        result = provider.chat([ChatMessage("user", "x")])
+    kwargs = post.call_args.kwargs
+    assert kwargs["stream"] is True and kwargs["json"]["stream"] is True
+    assert kwargs["timeout"] == (5, 90)
+    assert result.text == "Hello!" and result.usage == {
+        "input_tokens": 9,
+        "output_tokens": 2,
+    }
+    response.close.assert_called()
+
+
+def test_a_stream_cut_before_done_is_an_error():
+    with patch(
+        "apps.ai.providers.http.requests.post", return_value=_streamed(STREAM[:2])
+    ):
+        with pytest.raises(AIProviderError, match="before finishing"):
+            OllamaProvider(stream=True).chat([ChatMessage("user", "x")])
+
+
+def test_a_stream_past_its_deadline_stops():
+    clock = iter([0, 0, 500, 500, 500])
+    with (
+        patch("apps.ai.providers.http.requests.post", return_value=_streamed(STREAM)),
+        patch("apps.ai.providers.http.time.monotonic", lambda: next(clock)),
+    ):
+        with pytest.raises(AIProviderError, match="too long"):
+            OllamaProvider(stream=True, timeout=300).chat([ChatMessage("user", "x")])
+
+
+def test_a_streamed_error_status_is_still_readable():
+    with patch(
+        "apps.ai.providers.http.requests.post", return_value=_streamed([], status=524)
+    ):
+        with pytest.raises(AIProviderError, match="Cloudflare"):
+            OllamaProvider(stream=True).chat([ChatMessage("user", "x")])
+
+
+def test_the_configured_fallback_streams(fallback_settings):
+    backup = get_fallback_provider()
+    assert backup.stream is True and backup.idle_timeout == 90
+
+
+def test_only_a_double_failure_is_marked_not_worth_retrying():
+    assert AIProviderError("x").retryable is True
+    provider = FallbackProvider(_Stub(error="down"), _Stub(error="slow"))
+    with pytest.raises(AIProviderError) as exc:
+        provider.chat([ChatMessage("user", "x")])
+    assert exc.value.retryable is False

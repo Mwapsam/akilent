@@ -102,6 +102,10 @@ def get_fallback_provider() -> AIProvider | None:
         think=False,
         timeout=getattr(settings, "AI_FALLBACK_TIMEOUT_SECONDS", 0) or 180,
         connect_timeout=15,
+        # Streamed so Cloudflare (which drops a connection quiet for ~100 s) sees bytes as the
+        # model writes. The timeout above caps the whole answer; 90 s is the longest silence.
+        stream=True,
+        idle_timeout=90,
     )
 
 

@@ -65,8 +65,9 @@ class FallbackProvider(AIProvider):
                     self.fallback_name,
                     fallback_error,
                 )
+                # Both had their chance: a task retry would just repeat the slow fallback call.
                 raise AIProviderError(
-                    f"{primary_error} Fallback: {fallback_error}"
+                    f"{primary_error} Fallback: {fallback_error}", retryable=False
                 ) from fallback_error
         result.provider = f"fallback:{self.fallback_name}"
         return result

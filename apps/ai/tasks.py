@@ -114,7 +114,10 @@ def draft_proposal(self, proposal_id: int) -> str:
                 business_notes=ai_settings.business_notes if ai_settings else "",
             )
         except AIProviderError as exc:
-            if self.request.retries < self.max_retries:
+            if (
+                getattr(exc, "retryable", True)
+                and self.request.retries < self.max_retries
+            ):
                 cache.delete(_lock_key(conversation.pk))
                 raise self.retry(
                     countdown=10 * (2**self.request.retries), exc=exc
@@ -288,7 +291,10 @@ def refresh_memory(self, conversation_id: int) -> str:
                 conversation, get_ai_provider(conversation.account, tier="fast")
             )
         except AIProviderError as exc:
-            if self.request.retries < self.max_retries:
+            if (
+                getattr(exc, "retryable", True)
+                and self.request.retries < self.max_retries
+            ):
                 cache.delete(_memory_lock_key(conversation_id))
                 raise self.retry(
                     countdown=30 * (2**self.request.retries), exc=exc
@@ -331,7 +337,7 @@ def build_draft(self, draft_id: int) -> str:
     try:
         drafting.run(draft, get_ai_provider(draft.account))
     except AIProviderError as exc:
-        if self.request.retries < self.max_retries:
+        if getattr(exc, "retryable", True) and self.request.retries < self.max_retries:
             raise self.retry(countdown=5 * (2**self.request.retries), exc=exc) from exc
         return fail(str(exc))
     except drafting.DraftError as exc:

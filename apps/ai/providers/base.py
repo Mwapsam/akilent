@@ -42,7 +42,14 @@ class AIProviderError(Exception):
     """A provider could not produce a result (network, key, rate limit, bad response, timeout).
 
     The message is safe to log. It never contains the API key or customer text.
+
+    ``retryable`` is False when trying again soon is pointless or harmful, e.g. the fallback has
+    already been tried too: a retry would only queue another slow call on a one-slot server.
     """
+
+    def __init__(self, message: str = "", *, retryable: bool = True):
+        super().__init__(message)
+        self.retryable = retryable
 
 
 class AIProvider(ABC):
