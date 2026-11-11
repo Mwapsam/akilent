@@ -516,9 +516,10 @@ def test_an_idea_without_channels_still_becomes_a_post(shop):
     assert post.variants.count() == len(post.platforms)
 
 
-def test_the_editor_loads_its_picture_apart_from_the_grids_copy(shop, settings):
-    """The browser kept the grid's copy of a picture (cached for a year, no CORS header) and
-    handed it to the editor's CORS load, which failed: the editor asks for its own copy."""
+def test_the_editor_loads_its_picture_from_our_own_address(shop, settings):
+    """CloudFront keeps one copy per path whatever the Origin or query string, so a CORS
+    load from the media host failed whenever the grid had loaded the picture first. The
+    editor loads it from Akilent instead: same origin, no CORS."""
     account, client = shop
     settings.RELEASED_FEATURES = ALL_FLAGS
     asset = _asset(account)
@@ -527,7 +528,44 @@ def test_the_editor_loads_its_picture_apart_from_the_grids_copy(shop, settings):
         reverse("publishing:media-edit", args=[asset.pk]), **OVERLAY
     ).content.decode()
 
-    assert f'src="{asset.url}?cors=1" crossorigin="anonymous"' in html
+    file_url = reverse("publishing:media-file", args=[asset.pk])
+    assert f'<img x-ref="image" src="{file_url}"' in html
+    assert "cors=1" not in html and 'crossorigin="anonymous"' not in html
+
+
+def test_the_editors_picture_is_served_only_to_its_workspace(
+    shop, settings, monkeypatch
+):
+    account, client = shop
+    settings.RELEASED_FEATURES = ALL_FLAGS
+    asset = _asset(account)
+    monkeypatch.setattr("apps.publishing.services._is_own_media_url", lambda url: True)
+
+    class _Upstream:
+        headers = {"Content-Type": "image/png", "Content-Length": "3"}
+
+        def raise_for_status(self):
+            pass
+
+        def iter_content(self, n):
+            yield b"png"
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("requests.get", lambda *a, **kw: _Upstream())
+
+    response = client.get(reverse("publishing:media-file", args=[asset.pk]))
+    assert response.status_code == 200
+    assert b"".join(response.streaming_content) == b"png"
+    assert response["Content-Type"] == "image/png"
+
+    other = Account.objects.create(company_name="Someone else")
+    theirs = _asset(other)
+    assert (
+        client.get(reverse("publishing:media-file", args=[theirs.pk])).status_code
+        == 404
+    )
 
 
 def test_the_inbox_badge_survives_an_in_place_navigation(shop):

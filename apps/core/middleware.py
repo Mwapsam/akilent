@@ -58,6 +58,9 @@ def _build_csp() -> str:
         f" https://static.cloudflareinsights.com{script_src_extra}; "
         f"style-src 'self' 'unsafe-inline' {cdn}; "
         f"img-src 'self' data: blob: {cdn}; "
+        # Videos and audio: uploaded media plays from the CDN, previews and voice notes
+        # from blob:. Without it default-src blocked every video on the media host.
+        f"media-src 'self' blob: {cdn}; "
         f"font-src 'self' data: {cdn}; "
         f"connect-src 'self'{connect_src_extra}; "
         "frame-ancestors 'none'; "

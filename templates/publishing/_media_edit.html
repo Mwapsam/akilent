@@ -27,11 +27,10 @@ stylesheet for Cropper comes with the content, and a save closes it over the gri
     {% comment %}A fixed-height stage: Cropper sizes itself to its container, and an
     unsized one gave it a 100px box.{% endcomment %}
     <div class="me-stage overflow-hidden rounded-lg bg-surface-muted">
-      {% comment %}?cors=1: its own entry in the browser's cache. The grid shows the same picture
-      without CORS, and the browser kept that copy (cached for a year, no CORS header), then
-      handed it to this CORS load, which failed. CloudFront ignores the query string. A URL that
-      already has a query (a signed one) is left alone.{% endcomment %}
-      <img x-ref="image" src="{{ asset.url }}{% if '?' not in asset.url %}?cors=1{% endif %}" crossorigin="anonymous" alt="{{ asset.name }}" class="block max-w-full mx-auto" style="max-height: 100%">
+      {% comment %}Loaded from our own address (publishing:media-file), so the canvas can save
+      it: CloudFront keeps one copy per path whatever the Origin or query string, so a CORS
+      load from the media host failed whenever the grid had loaded the picture first.{% endcomment %}
+      <img x-ref="image" src="{% url 'publishing:media-file' asset.pk %}" alt="{{ asset.name }}" class="block max-w-full mx-auto" style="max-height: 100%">
     </div>
     <div class="me-side space-y-3 min-w-0">
     <p class="text-sm tone-coral-fg" role="alert" x-show="error" x-text="error"></p>

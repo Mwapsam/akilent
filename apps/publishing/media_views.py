@@ -417,6 +417,54 @@ def bulk(request):
     return redirect(_back(request))
 
 
+_EDIT_IMAGE_MAX_BYTES = 25 * 1024 * 1024
+
+
+@login_required
+@module_required("content_studio")
+def asset_file(request, pk):
+    """The picture itself, from our own address, for the editor's canvas.
+
+    The editor draws the picture and saves the result, which the browser only allows for
+    a same-origin picture or one sent with a CORS header. CloudFront keeps one copy per
+    path whatever the request's Origin or query string, so the header depended on who
+    loaded the picture first (usually the grid, without it) and the editor failed with
+    "blocked by CORS policy". Served from here, no CORS is involved.
+    """
+    from django.http import Http404, StreamingHttpResponse
+
+    from .services import _is_own_media_url
+
+    account = _account_or_none(request)
+    if account is None:
+        raise Http404
+    asset = get_object_or_404(MediaAsset, pk=pk, account=account, kind="image")
+    if not _is_own_media_url(asset.url):
+        raise Http404
+    import requests
+
+    try:
+        upstream = requests.get(
+            asset.url, timeout=15, stream=True, allow_redirects=False
+        )
+        upstream.raise_for_status()
+    except requests.RequestException as exc:
+        raise Http404 from exc
+    length = int(upstream.headers.get("Content-Length") or 0)
+    if length > _EDIT_IMAGE_MAX_BYTES:
+        upstream.close()
+        raise Http404
+    response = StreamingHttpResponse(
+        upstream.iter_content(64 * 1024),
+        content_type=upstream.headers.get("Content-Type") or asset.mime or "image/jpeg",
+    )
+    if length:
+        response["Content-Length"] = str(length)
+    response["Cache-Control"] = "private, max-age=3600"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
 @login_required
 @module_required("content_studio")
 def asset_edit(request, pk):

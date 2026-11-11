@@ -268,8 +268,8 @@
         var fail = function () {
           img.removeEventListener("load", start);
           self.previewOnly = true;
-          self.error = "This picture can't be edited yet: the media server doesn't allow it " +
-            "to be read back, so it's shown as a preview only. Your files and posts aren't affected.";
+          self.error = "This picture couldn't be loaded for editing, so it's shown as a " +
+            "preview only. Close and try again in a moment. Your files and posts aren't affected.";
           // A new element: the same one, with crossorigin removed, kept its failed load.
           var preview = new Image();
           preview.alt = img.alt;
