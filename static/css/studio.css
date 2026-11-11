@@ -38,6 +38,9 @@
    stage takes the modal's height: 94dvh (overlay.css, size full) less its head and paddings. */
 .me-layout { display: flex; flex-direction: column; gap: .75rem; }
 .me-stage { height: min(70vh, 40rem); }
+/* The Reel cover tool: the whole video at its own shape on a dark stage, never cropped. */
+.me-video { display: flex; align-items: center; justify-content: center; background: #0b0d10; border-radius: var(--radius-surface, .75rem); overflow: hidden; }
+.me-video video { display: block; max-width: 100%; max-height: 100%; width: auto; height: 100%; object-fit: contain; background: #0b0d10; }
 .me-layout--overlay .me-stage { height: min(55dvh, 40rem); }
 @media (min-width: 1024px) {
   .me-layout--overlay { display: grid; grid-template-columns: minmax(0, 1fr) 18rem;
@@ -99,6 +102,19 @@
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
 /* On a phone the bar wraps to three rows: it scrolls away rather than covering a third of the screen. */
 @media (max-width: 639px) { .ml-toolbar { position: static; } }
+/* Tags + sort + view at the end of the one filter row. Below 1024px tags and sort fold
+   behind "Filters" (a small panel under it) so the row never wraps into an empty band. */
+.ml-tools { position: relative; display: flex; align-items: center; gap: .5rem; margin-left: auto; }
+.ml-fold-btn { display: inline-flex; align-items: center; gap: .375rem; }
+.ml-fold { display: none; }
+.ml-fold.is-open { position: absolute; top: calc(100% + .5rem); right: 0; z-index: 30; display: flex; flex-direction: column;
+  gap: .5rem; min-width: 12rem; padding: .625rem; border: 1px solid var(--color-border); border-radius: var(--radius-surface, .75rem);
+  background: var(--color-surface); box-shadow: var(--shadow-pop); }
+.ml-fold.is-open .select { width: 100%; }
+@media (min-width: 1024px) {
+  .ml-fold-btn { display: none; }
+  .ml-fold, .ml-fold.is-open { position: static; display: contents; }
+}
 .ml-search { display: flex; align-items: center; gap: .5rem; flex: 1 1 10rem; min-width: 0; max-width: 22rem;
   padding: 0 .875rem; height: 2.375rem; border: 1px solid var(--color-border); border-radius: 999px;
   background: var(--color-surface); color: var(--color-ink-subtle); }
@@ -134,6 +150,9 @@
 .ml-wash { position: absolute; inset: -12%; z-index: -1; background-size: cover; background-position: center;
   filter: blur(22px) saturate(1.15); opacity: .55; }
 .ml-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+/* Grid tiles fill their 4:5 frame (a blurred copy behind a contained picture looked muddy);
+   the details panel still shows the whole picture. */
+.ml-frame > .ml-img { object-fit: cover; }
 .ml-video { background: #0b1020; }
 /* A picture the browser couldn't load: a quiet note instead of a broken-image icon. */
 .ml-frame.is-broken .ml-img, .ml-frame.is-broken .ml-wash { display: none; }
@@ -145,6 +164,9 @@
 .ml-check { top: .5rem; left: .5rem; display: grid; place-items: center; width: 1.75rem; height: 1.75rem;
   border-radius: var(--radius-lg); background: rgb(255 255 255 / .9); box-shadow: var(--shadow-card); cursor: pointer; }
 .ml-check input { width: 1rem; height: 1rem; accent-color: var(--color-accent); cursor: pointer; }
+/* A visible ring when the tick box is reached by keyboard (it sits on a picture). */
+.ml-check:has(input:focus-visible) { outline: 2px solid var(--color-accent); outline-offset: 2px; opacity: 1; }
+.ml-check input:focus-visible { outline: none; }
 .ml-badge { top: .5rem; right: .5rem; padding: .125rem .5rem; border-radius: 999px; font-size: .6875rem;
   font-weight: 600; letter-spacing: .02em; color: #fff; background: rgb(11 16 32 / .62);
   -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); pointer-events: none; }
@@ -172,7 +194,8 @@
   font-weight: 500; color: var(--color-ink); }
 .ml-used { flex: none; padding: .0625rem .5rem; border-radius: 999px; font-size: .6875rem; font-weight: 500;
   color: var(--color-ink-subtle); background: var(--color-surface-muted); border: 1px solid var(--color-border); }
-.ml-used.is-unused { color: var(--tone-teal-fg); background: var(--tone-teal-bg); border-color: transparent; }
+/* Not used yet is the state to notice, but not a success: plain, not green. */
+.ml-used.is-unused { color: var(--color-ink-subtle); background: transparent; border-style: dashed; }
 .ml-dup { margin-top: .25rem; font-size: .75rem; color: var(--tone-amber-fg, var(--color-ink-subtle)); }
 .ml-more .pop-panel { inset-block-start: auto; inset-block-end: calc(100% + .375rem); }
 
@@ -234,7 +257,25 @@
 @media (min-width: 1024px) { .md { grid-template-columns: minmax(0, 1fr) 20rem; align-items: start; } }
 .md-preview { position: relative; overflow: hidden; isolation: isolate; height: min(60vh, 36rem);
   border-radius: var(--radius-surface); border: 1px solid var(--color-border); background: var(--color-surface-muted); }
-@media (min-width: 1024px) { .md-preview { position: sticky; top: 0; height: calc(100dvh - 9rem); } }
+/* The drawer's header and padding take ~11rem: at 9rem the bottom of a tall picture was cut off. */
+@media (min-width: 1024px) { .md-preview { position: sticky; top: 0; height: calc(100dvh - 11.5rem); } }
+.md-preview .md-img { padding: .5rem; object-fit: contain; }
+.md-play { position: absolute; inset: 0; margin: auto; z-index: 1; display: grid; place-items: center; width: 4rem; height: 4rem;
+  border-radius: 9999px; color: #fff; background: rgb(0 0 0 / .55); box-shadow: 0 6px 24px rgb(0 0 0 / .35); }
+.md-play svg { width: 1.75rem; height: 1.75rem; margin-left: .2rem; }
+.md-play:hover { background: rgb(0 0 0 / .7); }
+.md-play:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+/* Tags as chips in one field; Enter or a comma adds one, Backspace takes the last off. */
+.md-tags { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem; min-height: 2.5rem; height: auto; padding: .3125rem .5rem; cursor: text; }
+.md-chip { display: inline-flex; align-items: center; gap: .25rem; padding: .125rem .25rem .125rem .5rem; border-radius: 999px;
+  font-size: .8125rem; background: var(--color-surface-muted); color: var(--color-ink); }
+.md-chip button { display: grid; place-items: center; width: 1.25rem; height: 1.25rem; border-radius: 999px; color: var(--color-ink-subtle); }
+.md-chip button:hover, .md-chip button:focus-visible { background: var(--color-border); color: var(--color-ink); }
+.md-tag-entry { flex: 1 1 6rem; min-width: 6rem; border: 0; outline: none; background: transparent; color: var(--color-ink); font-size: 1rem; }
+@media (min-width: 640px) { .md-tag-entry { font-size: .875rem; } }
+/* Edit, Use, Download and Remove stay in reach at the bottom of the panel. */
+.md-actions { position: sticky; bottom: 0; z-index: 2; padding: .75rem 0; margin-bottom: -.75rem;
+  border-top: 1px solid var(--color-border); background: var(--color-surface); }
 .md-preview:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 .md-preview video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #0b1020; }
 .md-facts { display: grid; grid-template-columns: auto 1fr; gap: .375rem 1rem; font-size: .8125rem; }

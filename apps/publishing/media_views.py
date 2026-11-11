@@ -124,7 +124,11 @@ def library(request):
     archived = show == "archived"
 
     live = MediaAsset.objects.filter(account=account, archived_at__isnull=True)
-    totals = live.aggregate(files=Count("pk"), size=Sum("size_bytes"))
+    totals = live.aggregate(
+        files=Count("pk"),
+        size=Sum("size_bytes"),
+        unknown=Count("pk", filter=Q(size_bytes__isnull=True)),
+    )
     qs = MediaAsset.objects.filter(account=account, archived_at__isnull=not archived)
     if show in ("image", "video"):
         qs = qs.filter(kind=show)
@@ -162,7 +166,7 @@ def library(request):
         assets = list(page)
     media_library.sync_from_checks(assets)
     _decorate(account, assets, all_counts)
-    if sort == "new" and view == "grid":
+    if sort == "new":  # the grid's day headings; both layouts are on the page
         today = timezone.localdate()
         for asset in assets:
             asset.group = media_library.date_group(asset.created_at, today)  # type: ignore[attr-defined]
@@ -179,8 +183,7 @@ def library(request):
                 f"\N{LEFT DOUBLE QUOTATION MARK}{q}\N{RIGHT DOUBLE QUOTATION MARK}",
             )
         )
-    if show != "all":
-        active.append((("show", "kind", "archived"), dict(SHOW_CHOICES)[show]))
+    # Not "show": the segmented control already says it (it showed twice).
     if tag:
         active.append((("tag",), f"#{tag}"))
     return render(
@@ -265,9 +268,21 @@ def asset_update(request, pk):
     if action == "tags":
         media_library.set_tags(asset, request.POST.get("tags", ""))
         name = " ".join(request.POST.get("name", "").split())[:200]
-        if name and name != asset.name:
+        # The field shows the display name; left as it was, the stored name is kept.
+        if (
+            name
+            and name != asset.name
+            and name != media_library.display_name(asset.name)
+        ):
             asset.name = name
             asset.save(update_fields=["name"])
+        if request.POST.get("autosave") and request.headers.get("HX-Request"):
+            # Saved as you leave a field: a toast, and the panel stays open.
+            from django.http import HttpResponse
+
+            from apps.accounts.utils import hx_toast
+
+            return hx_toast(HttpResponse(""), "success", "Saved.")
     elif action == "remove":
         outcome, posts = media_library.remove(asset)
         level, message = _remove_message(outcome, posts)
@@ -365,10 +380,20 @@ def _asset_detail(request, account, asset):
             "remove_blocking": blocking,
             "remove_rules": REMOVE_RULES,
             "derived": asset.derived.filter(archived_at__isnull=True)[:8],
+            "filename": media_library.name_from_url(asset.url),
+            "all_tags": sorted(
+                {
+                    t
+                    for tags in MediaAsset.objects.filter(
+                        account=account, archived_at__isnull=True
+                    ).values_list("tags", flat=True)
+                    for t in (tags or [])
+                }
+            ),
         },
         kind="drawer",
         size="xl",
-        title="File",
+        title=asset.display,  # type: ignore[attr-defined]
     )
 
 

@@ -1,18 +1,17 @@
 {% load static %}
-{% comment %}One file in the media grid (media_library.html): the picture itself, whole (contained
-in a 4:5 frame over a blurred copy of itself), with its controls over it. Clicking the picture
+{% comment %}One file in the media grid (media_library.html): its small thumbnail filling a 4:5
+frame (the whole picture is in the details), with its controls over it. Clicking the picture
 opens its details as a drawer (J/K or the arrow keys step through the grid). The checkbox, the
 type badge and the actions show on hover and focus, and stay on touch screens. Under it, one
 line: a clean name and how many posts use it. a: a decorated MediaAsset (media_views._decorate).{% endcomment %}
 <li class="ml-card" data-asset="{{ a.pk }}" data-row :class="selected.includes({{ a.pk }}) && 'is-selected'">
   <div class="ml-frame{% if a.kind == 'video' %} ml-video{% endif %}">
     {% if a.kind == "video" %}
-    <video src="{{ a.url }}#t=0.1" preload="metadata" muted playsinline class="ml-img" aria-hidden="true"></video>
+    <video src="{{ a.url }}#t=1" preload="metadata" muted playsinline class="ml-img" aria-hidden="true"></video>
     {% else %}
-    <div class="ml-wash" style="background-image: url('{{ a.url }}')" aria-hidden="true"></div>
-    <img src="{{ a.url }}" alt="" loading="lazy" decoding="async" class="ml-img" onerror="this.closest('.ml-frame').classList.add('is-broken')">
+    <img src="{{ a.thumb_url|default:a.url }}" alt="{{ a.display }}" loading="lazy" decoding="async" class="ml-img" onerror="this.closest('.ml-frame').classList.add('is-broken')">
     {% endif %}
-    <a href="{% url 'publishing:media-detail' a.pk %}" class="ml-open" data-overlay-open="drawer" data-overlay-size="xl" data-overlay-title="File"><span class="sr-only">{{ a.display }}: details</span></a>
+    <a href="{% url 'publishing:media-detail' a.pk %}" class="ml-open" data-overlay-open="drawer" data-overlay-size="xl" data-overlay-title="{{ a.display }}"><span class="sr-only">{{ a.display }}: details</span></a>
     <label class="ml-check" title="Select">
       <input type="checkbox" value="{{ a.pk }}" :checked="selected.includes({{ a.pk }})" @click="toggle($event, {{ a.pk }})" aria-label="Select {{ a.display }}">
     </label>
@@ -54,7 +53,7 @@ line: a clean name and how many posts use it. a: a decorated MediaAsset (media_v
   </div>
   <div class="ml-meta">
     <p class="ml-name" title="{{ a.name }}">{{ a.display }}</p>
-    <span class="ml-used{% if not a.used_in %} is-unused{% endif %}" data-used="{{ a.used_in }}">{% if a.used_in %}{{ a.used_in }} post{{ a.used_in|pluralize }}{% else %}Unused{% endif %}</span>
+    <span class="ml-used{% if not a.used_in %} is-unused{% endif %}" data-used="{{ a.used_in }}">{% if a.used_in %}{{ a.used_in }} post{{ a.used_in|pluralize }}{% else %}Not used yet{% endif %}</span>
   </div>
   {% if a.duplicate_of %}<p class="ml-dup" data-duplicate-of="{{ a.duplicate_of.pk }}">Looks like {{ a.duplicate_of.name }}, already here.</p>{% endif %}
 </li>

@@ -69,19 +69,40 @@ stylesheet for Cropper comes with the content, and a save closes it over the gri
     </div>
   </section>
   {% else %}
-  <section class="card card-pad space-y-3" aria-labelledby="me-cover">
-    <h2 id="me-cover" class="font-semibold text-ink">Reel cover from {{ asset.name }}</h2>
-    <p class="text-sm text-ink-subtle">Pick the moment to use as the cover. The frame is saved as a new picture you can choose as a Reel's cover.</p>
-    {% include "publishing/_media_thumb.html" with url=asset.url size="w-full aspect-video" alt=asset.name controls=True %}
-    {% if cover_status.error %}<p class="text-sm tone-coral-fg" role="alert">{{ cover_status.error }}</p>{% endif %}
-    <form method="post" action="{% url 'publishing:media-cover' asset.pk %}" class="flex flex-wrap items-end gap-2"{% if not in_overlay %} hx-boost="false"{% endif %}>
-      {% csrf_token %}
-      <div>
-        <label for="me-seconds" class="block text-sm font-medium text-ink mb-1">Time (seconds)</label>
-        <input id="me-seconds" name="seconds" type="number" min="0" step="0.1" value="1" {% if asset.duration %}max="{{ asset.duration|floatformat:1 }}"{% endif %} class="input" required>
-      </div>
-      <button type="submit" class="btn btn-primary btn-sm">Take this frame</button>
-    </form>
+  {% comment %}A Reel cover: the whole video at its own shape on a dark stage (a vertical Reel
+  used to be cropped into a wide 16:9 strip), and the time follows the video, so you pause on the
+  frame you want instead of guessing seconds. Typing a time moves the video there.{% endcomment %}
+  <section class="card card-pad" aria-labelledby="me-cover"
+           x-data="{ seconds: 1, label() { const s = Number(this.seconds) || 0; return Math.floor(s / 60) + ':' + (s % 60).toFixed(1).padStart(4, '0'); } }">
+    <div class="me-layout{% if in_overlay %} me-layout--overlay{% endif %}">
+    <div class="me-intro space-y-1">
+      <h2 id="me-cover" class="font-semibold text-ink">Reel cover from {{ asset.name }}</h2>
+      <p class="text-sm text-ink-subtle">Play or drag to the moment you want, pause, then take that frame. It's saved as a new picture you can choose as a Reel's cover.</p>
+    </div>
+    <div class="me-stage me-video">
+      <video x-ref="video" src="{{ asset.url }}#t=1" preload="metadata" controls playsinline muted
+             aria-label="{{ asset.name }}"
+             @timeupdate="seconds = Math.round($el.currentTime * 10) / 10"
+             @seeked="seconds = Math.round($el.currentTime * 10) / 10"></video>
+    </div>
+    <div class="me-side space-y-3 min-w-0">
+      {% if cover_status.error %}<p class="text-sm tone-coral-fg" role="alert">{{ cover_status.error }}</p>{% endif %}
+      <form method="post" action="{% url 'publishing:media-cover' asset.pk %}" class="space-y-3"{% if not in_overlay %} hx-boost="false"{% endif %}>
+        {% csrf_token %}
+        <div>
+          <label for="me-seconds" class="block text-sm font-medium text-ink mb-1">Cover frame at</label>
+          <div class="flex items-center gap-2">
+            <input id="me-seconds" name="seconds" type="number" min="0" step="0.1" x-model="seconds"
+                   @change="$refs.video.currentTime = Number(seconds) || 0"
+                   {% if asset.duration %}max="{{ asset.duration|floatformat:1 }}"{% endif %} class="input w-28" required>
+            <span class="text-sm text-ink-subtle tabular-nums" x-text="label()" aria-hidden="true"></span>
+          </div>
+          <p class="text-xs text-ink-subtle mt-1">Seconds from the start. It follows the video as you play or drag it.</p>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm w-full sm:w-auto">Take this frame</button>
+      </form>
+    </div>
+    </div>
   </section>
   {% endif %}
 

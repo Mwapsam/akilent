@@ -2852,3 +2852,9 @@
   .cv-who-line > a { display: inline-flex; align-items: center; }
   .cv-who .cv-iconbtn { width: 2.75rem; height: 2.75rem; }
 }
+
+/* Native pickers (a select's option list, the date picker, scrollbars) follow the theme;
+   with no color-scheme set they stayed white in dark mode (Media's "Any tag" list). */
+:root { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; } }

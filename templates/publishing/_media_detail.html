@@ -1,4 +1,4 @@
-{% comment %}A file's details (media_views.asset_update, GET): a drawer over the media grid, or the
+{% load publishing_filters %}{% comment %}A file's details (media_views.asset_update, GET): a drawer over the media grid, or the
 page media_detail.html. The picture large on the left (← → and J/K step through the grid in the
 drawer); its facts, name and tags, the posts that use it and its actions on the right. Remove
 says what will happen to this file before it happens (media_library.remove_preview).{% endcomment %}
@@ -6,17 +6,23 @@ says what will happen to this file before it happens (media_library.remove_previ
   {% comment %}Focused first (not the Name field), so ← → step through the files at once.{% endcomment %}
   <div class="md-preview" tabindex="0" autofocus role="group" aria-label="{{ asset.display }}{% if in_overlay %}. Left and right arrows show the previous and next file{% endif %}">
     {% if asset.kind == "video" %}
-    <video src="{{ asset.url }}#t=0.1" preload="metadata" controls playsinline aria-label="{{ asset.display }}" onloadedmetadata="var d = document.getElementById('md-dims'); if (d && !d.hasAttribute('data-known')) d.textContent = this.videoWidth + ' × ' + this.videoHeight + ' px'"></video>
+    {% comment %}A big play button over the video; the native controls once it plays (they
+    were cramped from the start).{% endcomment %}
+    <div class="contents" x-data="{ started: false }">
+      <video x-ref="v" src="{{ asset.url }}#t=1" preload="metadata" playsinline :controls="started" aria-label="{{ asset.display }}"
+             @play="started = true" onloadedmetadata="var d = document.getElementById('md-dims'); if (d && !d.hasAttribute('data-known')) d.textContent = this.videoWidth + ' × ' + this.videoHeight + ' px'"></video>
+      <button type="button" class="md-play" x-show="!started" @click="started = true; $refs.v.play()" aria-label="Play {{ asset.display }}">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z"/></svg>
+      </button>
+    </div>
     {% else %}
-    <div class="ml-wash" style="background-image: url('{{ asset.url }}')" aria-hidden="true"></div>
-    <a href="{{ asset.url }}" data-viewer class="contents cursor-zoom-in" aria-label="View {{ asset.display }} full size"><img src="{{ asset.url }}" alt="{{ asset.display }}" class="ml-img" decoding="async" onload="var d = document.getElementById('md-dims'); if (d && !d.hasAttribute('data-known')) d.textContent = this.naturalWidth + ' × ' + this.naturalHeight + ' px'"></a>
+    <a href="{{ asset.url }}" data-viewer class="contents cursor-zoom-in" aria-label="View {{ asset.display }} full size"><img src="{{ asset.url }}" alt="{{ asset.display }}" class="ml-img md-img" decoding="async" onload="var d = document.getElementById('md-dims'); if (d && !d.hasAttribute('data-known')) d.textContent = this.naturalWidth + ' × ' + this.naturalHeight + ' px'"></a>
     {% endif %}
   </div>
 
   <div class="space-y-5 min-w-0">
     <div>
       <h2 class="text-lg font-semibold text-ink break-words">{{ asset.display }}</h2>
-      {% if asset.display != asset.name %}<p class="text-xs text-ink-subtle break-all">{{ asset.name }}</p>{% endif %}
       {% if asset.duplicate_of %}<p class="ml-dup mt-1" data-duplicate-of="{{ asset.duplicate_of.pk }}">Looks like {{ asset.duplicate_of.name }}, already in the library. If it's the same file, remove this copy.</p>{% endif %}
     </div>
 
@@ -31,20 +37,40 @@ says what will happen to this file before it happens (media_library.remove_previ
       {% if asset.archived_at %}<dt>Archived</dt><dd>{{ asset.archived_at|date:"j M Y" }}</dd>{% endif %}
     </dl>
 
-    <form method="post" action="{% url 'publishing:media-update' asset.pk %}" class="space-y-3" aria-label="Name and tags">
+    {% comment %}Name and tags save as you leave a field (a toast says so); the Save button is
+    only there without JavaScript. The name field shows the display name; the stored file's
+    own name is read-only under it. Tags are chips, with the business's other tags offered.{% endcomment %}
+    <form method="post" action="{% url 'publishing:media-update' asset.pk %}" class="space-y-3" aria-label="Name and tags"
+          hx-post="{% url 'publishing:media-update' asset.pk %}" hx-trigger="change" hx-swap="none" data-media-autosave>
       {% csrf_token %}
       <input type="hidden" name="action" value="tags">
+      <input type="hidden" name="autosave" value="1">
       <input type="hidden" name="next" value="{% url 'publishing:media-library' %}">
       <div>
         <label for="md-name" class="block text-sm font-medium text-ink mb-1">Name</label>
-        <input id="md-name" name="name" value="{{ asset.name }}" maxlength="200" class="input w-full">
+        <input id="md-name" name="name" value="{{ asset.display }}" maxlength="200" class="input w-full" autocomplete="off">
+        <p class="text-xs text-ink-subtle mt-1 break-all">File: {{ filename }}</p>
       </div>
-      <div>
+      <div x-data="{ tags: {{ asset.tags|to_json }}, draft: '',
+                     add() { const t = this.draft.trim().replace(/^#/, '').toLowerCase(); this.draft = '';
+                             if (t && !this.tags.includes(t)) { this.tags.push(t); this.save(); } },
+                     drop(t) { this.tags = this.tags.filter(x => x !== t); this.save(); },
+                     save() { this.$nextTick(() => this.$refs.tags.dispatchEvent(new Event('change', { bubbles: true }))); } }">
         <label for="md-tags" class="block text-sm font-medium text-ink mb-1">Tags</label>
-        <input id="md-tags" name="tags" value="{{ asset.tags|join:', ' }}" class="input w-full" placeholder="e.g. summer, sandals">
-        <p class="text-xs text-ink-subtle mt-1">Separated by commas. Search finds files by tag.</p>
+        <input type="hidden" name="tags" x-ref="tags" :value="tags.join(', ')" value="{{ asset.tags|join:', ' }}">
+        <div class="md-tags input w-full" @click="$refs.entry.focus()">
+          <template x-for="t in tags" :key="t">
+            <span class="md-chip">#<span x-text="t"></span><button type="button" @click.stop="drop(t)" :aria-label="'Remove tag ' + t">×</button></span>
+          </template>
+          <input id="md-tags" x-ref="entry" x-model="draft" list="md-tag-list" autocomplete="off"
+                 class="md-tag-entry" :placeholder="tags.length ? 'Add a tag' : 'e.g. launch, team, product'"
+                 @keydown.enter.prevent="add()" @keydown.comma.prevent="add()" @blur="add()" @change.stop
+                 @keydown.backspace="if (!draft && tags.length) drop(tags[tags.length - 1])">
+        </div>
+        <datalist id="md-tag-list">{% for t in all_tags %}<option value="{{ t }}">{% endfor %}</datalist>
+        <p class="text-xs text-ink-subtle mt-1">Enter or a comma adds a tag. Search finds files by tag.</p>
       </div>
-      <button type="submit" class="btn btn-secondary btn-sm">Save</button>
+      <noscript><button type="submit" class="btn btn-secondary btn-sm">Save</button></noscript>
     </form>
 
     <section aria-labelledby="md-used" class="space-y-2">
@@ -72,7 +98,8 @@ says what will happen to this file before it happens (media_library.remove_previ
     </section>
     {% endif %}
 
-    <div class="flex flex-wrap gap-2 pt-1 border-t border-surface-subtle pt-4">
+    {% comment %}Pinned to the bottom of the panel, so Download and Remove are always in reach.{% endcomment %}
+    <div class="md-actions flex flex-wrap gap-2">
       {% if not asset.archived_at %}
       <a href="{% url 'publishing:media-edit' asset.pk %}" data-overlay-open="modal" data-overlay-size="full" class="btn btn-secondary btn-sm">{% include "components/icon.html" with name="pencil" class="w-4 h-4" %}{% if asset.kind == "video" %}Reel cover{% else %}Edit{% endif %}</a>
       <a href="{% url 'publishing:post-new' %}?media={{ asset.pk }}" class="btn btn-primary btn-sm">{% include "components/icon.html" with name="paper-plane" class="w-4 h-4" %}Use in new post</a>

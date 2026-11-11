@@ -944,6 +944,9 @@ class MediaAsset(models.Model):
     duration = models.FloatField(null=True, blank=True)
     fps = models.FloatField(null=True, blank=True)
     sha256 = models.CharField(max_length=64, blank=True, default="")
+    # A small WebP of a picture (media_library.fill_details) for the grid and lists, so a
+    # 190px tile doesn't load a 2048x2732 original. Empty until made; the original is used.
+    thumb_url = models.URLField(max_length=2048, blank=True, default="")
     parent = models.ForeignKey(
         "self",
         on_delete=models.SET_NULL,

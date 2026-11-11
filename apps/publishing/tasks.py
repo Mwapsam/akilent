@@ -977,3 +977,15 @@ def grab_cover_frame(asset_pk: int, seconds: float, user_pk: int | None = None) 
         return 0
     cache.set(key, {"cover": cover.pk}, 3600)
     return cover.pk
+
+
+@shared_task(queue="media", soft_time_limit=120, time_limit=150)
+def fill_asset_details(asset_id: int) -> str:
+    """A media file's thumbnail, size and dimensions (media_library.fill_details)."""
+    from . import media_library
+    from .models import MediaAsset
+
+    asset = MediaAsset.objects.select_related("account").filter(pk=asset_id).first()
+    if asset is None:
+        return "not_found"
+    return ",".join(media_library.fill_details(asset)) or "nothing"

@@ -38,22 +38,29 @@
       <label class="seg-item"><input type="radio" name="show" value="{{ value }}" class="sr-only" {% if value == show %}checked{% endif %}{% if value == "all" %} data-default{% endif %}><span>{{ label }}</span></label>
       {% endfor %}
     </fieldset>
-    {% if tags %}
-    <label class="sr-only" for="ml-tag">Tag</label>
-    <select id="ml-tag" name="tag" class="select select-sm w-auto">
-      <option value="">Any tag</option>
-      {% for t in tags %}<option value="{{ t }}" {% if t == tag %}selected{% endif %}>#{{ t }}</option>{% endfor %}
-    </select>
-    {% endif %}
-    <div class="flex items-center gap-2 ml-auto">
-      <label class="sr-only" for="ml-sort">Sort</label>
-      <select id="ml-sort" name="sort" class="select select-sm w-auto">
-        {% for value, label in sort_choices %}<option value="{{ value }}" {% if value == sort %}selected{% endif %}>{{ label }}</option>{% endfor %}
-      </select>
+    {% comment %}Tags and sort: inline on a wide screen; behind one "Filters" button on a
+    narrow one, so the row doesn't wrap into a mostly empty second band.{% endcomment %}
+    <div class="ml-tools" x-data="{ fold: false }">
+      <button type="button" class="ml-fold-btn select select-sm w-auto" @click="fold = !fold" :aria-expanded="fold" aria-controls="ml-fold">
+        Filters{% if tag or sort != "new" %} <span class="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)]" aria-hidden="true"></span>{% endif %}
+      </button>
+      <div id="ml-fold" class="ml-fold" :class="fold && 'is-open'">
+        {% if tags %}
+        <label class="sr-only" for="ml-tag">Tag</label>
+        <select id="ml-tag" name="tag" class="select select-sm w-auto">
+          <option value="">Any tag</option>
+          {% for t in tags %}<option value="{{ t }}" {% if t == tag %}selected{% endif %}>#{{ t }}</option>{% endfor %}
+        </select>
+        {% endif %}
+        <label class="sr-only" for="ml-sort">Sort</label>
+        <select id="ml-sort" name="sort" class="select select-sm w-auto">
+          {% for value, label in sort_choices %}<option value="{{ value }}" {% if value == sort %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
       <fieldset class="seg">
         <legend class="sr-only">View</legend>
-        <label class="seg-item" title="Grid"><input type="radio" name="view" value="grid" class="sr-only" {% if view == 'grid' %}checked{% endif %}>{% include "components/icon.html" with name="dashboard" %}<span class="sr-only">Grid</span></label>
-        <label class="seg-item" title="List"><input type="radio" name="view" value="list" class="sr-only" {% if view == 'list' %}checked{% endif %}>{% include "components/icon.html" with name="list" %}<span class="sr-only">List</span></label>
+        <label class="seg-item" title="Grid"><input type="radio" value="grid" class="sr-only" :checked="view === 'grid'" @change="setView('grid')">{% include "components/icon.html" with name="dashboard" %}<span class="sr-only">Grid</span></label>
+        <label class="seg-item" title="List"><input type="radio" value="list" class="sr-only" :checked="view === 'list'" @change="setView('list')">{% include "components/icon.html" with name="list" %}<span class="sr-only">List</span></label>
       </fieldset>
     </div>
     <button type="submit" class="sr-only">Show</button>
@@ -89,17 +96,16 @@
   <div id="media-results">
     {% include "publishing/_filter_chips.html" %}
     <div class="ml-summary">
-      <span data-media-total>{{ totals.files }} file{{ totals.files|pluralize }}{% if totals.size %} · {{ totals.size|filesizeformat }}{% endif %}</span>
-      <details class="pop">
-        <summary class="ml-info-btn" title="How removing works" aria-label="How removing works">{% include "components/icon.html" with name="info" class="w-4 h-4" %}</summary>
+      <span data-media-total>{{ totals.files }} file{{ totals.files|pluralize }}{% if totals.size %} · {{ totals.size|filesizeformat }}{% if totals.unknown %}<span title="{{ totals.unknown }} file{{ totals.unknown|pluralize }} without a known size yet">+</span>{% endif %}{% endif %}</span>
+      <details class="pop" title="How removing works">
+        <summary class="ml-info-btn" aria-label="How removing works">{% include "components/icon.html" with name="info" class="w-4 h-4" %}</summary>
         <div class="pop-panel pop-panel--start pop-panel--sheet w-80 p-3 text-sm text-ink-muted">{{ remove_rules }}</div>
       </details>
       {% if filtered %}<span aria-hidden="true">·</span><span>{{ page.paginator.count }} shown</span>{% endif %}
     </div>
 
     {% if assets %}
-    {% if view == "list" %}
-    <div class="card overflow-x-auto">
+    <div class="card overflow-x-auto" x-show="view === 'list'"{% if view != "list" %} x-cloak{% endif %}>
       <table class="ml-table" aria-label="Media files">
         <thead><tr><th class="w-10"><span class="sr-only">Select</span></th><th>File</th><th>Type</th><th class="ml-col-sm">Size</th><th>Used</th><th class="ml-col-md">Added</th></tr></thead>
         <tbody>
@@ -107,28 +113,26 @@
           <tr data-asset="{{ a.pk }}" data-row :class="selected.includes({{ a.pk }}) && 'bg-surface-muted'">
             <td><input type="checkbox" value="{{ a.pk }}" :checked="selected.includes({{ a.pk }})" @click="toggle($event, {{ a.pk }})" aria-label="Select {{ a.display }}" class="w-4 h-4"></td>
             <td>
-              <a href="{% url 'publishing:media-detail' a.pk %}" data-overlay-open="drawer" data-overlay-size="xl" data-overlay-title="File" class="ml-row-link">
-                <span class="ml-thumb">{% if a.kind == "video" %}<video src="{{ a.url }}#t=0.1" preload="metadata" muted playsinline class="ml-img" aria-hidden="true"></video>{% else %}<img src="{{ a.url }}" alt="" loading="lazy" decoding="async" class="ml-img" onerror="this.hidden=true">{% endif %}</span>
+              <a href="{% url 'publishing:media-detail' a.pk %}" data-overlay-open="drawer" data-overlay-size="xl" data-overlay-title="{{ a.display }}" class="ml-row-link">
+                <span class="ml-thumb">{% if a.kind == "video" %}<video src="{{ a.url }}#t=1" preload="none" muted playsinline class="ml-img" aria-hidden="true"></video>{% else %}<img src="{{ a.thumb_url|default:a.url }}" alt="{{ a.display }}" loading="lazy" decoding="async" class="ml-img" onerror="this.hidden=true">{% endif %}</span>
                 <span class="min-w-0"><span class="block truncate font-medium" title="{{ a.name }}">{{ a.display }}</span>{% if a.duplicate_of %}<span class="ml-dup block" data-duplicate-of="{{ a.duplicate_of.pk }}">Looks like {{ a.duplicate_of.name }}</span>{% endif %}</span>
               </a>
             </td>
             <td class="text-ink-subtle">{{ a.badge }}</td>
             <td class="ml-col-sm text-ink-subtle tabular-nums">{% if a.size_bytes %}{{ a.size_bytes|filesizeformat }}{% else %}—{% endif %}</td>
-            <td><span class="ml-used{% if not a.used_in %} is-unused{% endif %}" data-used="{{ a.used_in }}">{% if a.used_in %}{{ a.used_in }} post{{ a.used_in|pluralize }}{% else %}Unused{% endif %}</span></td>
-            <td class="ml-col-md text-ink-subtle">{{ a.created_at|date:"j M Y" }}</td>
+            <td class="text-ink-subtle whitespace-nowrap" data-used="{{ a.used_in }}">{% if a.used_in %}<span class="text-ink">{{ a.used_in }} post{{ a.used_in|pluralize }}</span>{% else %}Not used yet{% endif %}</td>
+            <td class="ml-col-md text-ink-subtle whitespace-nowrap"><time datetime="{{ a.created_at|date:'c' }}" title="{{ a.created_at|date:'j F Y, H:i' }}">{{ a.created_at|date:"j M Y" }}</time></td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-    {% else %}
-    <ul class="ml-grid" aria-label="Media files">
+    <ul class="ml-grid" aria-label="Media files" x-show="view === 'grid'"{% if view == "list" %} x-cloak{% endif %}>
       {% for a in assets %}
       {% if a.group %}{% ifchanged a.group %}<li class="ml-group" role="presentation"><h2>{{ a.group }}</h2></li>{% endifchanged %}{% endif %}
       {% include "publishing/_media_card.html" %}
       {% endfor %}
     </ul>
-    {% endif %}
     {% if page.has_other_pages %}
     <nav class="flex items-center justify-center gap-2 text-sm mt-6" aria-label="Pages">
       {% if page.has_previous %}<a href="{% querystring page=page.previous_page_number %}" class="btn btn-ghost btn-sm">Previous</a>{% endif %}
@@ -139,7 +143,7 @@
     {% elif filtered %}
     <div class="card card-pad" data-media-empty>
       {% if archived %}
-      {% include "components/empty_state.html" with icon="image" title="Nothing archived" message="A file only published posts use is archived when you remove it, and shows here." %}
+      {% include "components/empty_state.html" with icon="image" title="Nothing archived" message="Files you remove that are still in published posts are kept here." %}
       {% else %}
       {% include "components/empty_state.html" with icon="search" title="Nothing matches" message="Try other words, or clear the filters." action_url=clear_url action_label="Clear filters" %}
       {% endif %}

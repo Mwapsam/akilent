@@ -35,7 +35,8 @@ def shop():
 def _ids(html):
     import re
 
-    return [int(x) for x in re.findall(r'data-asset="(\d+)"', html)]
+    # Grid cards only: the list layout is on the page too (switching doesn't reload).
+    return [int(x) for x in re.findall(r'<li class="ml-card" data-asset="(\d+)"', html)]
 
 
 def _get(shop, **params):
@@ -83,7 +84,7 @@ def test_each_card_says_what_remove_will_do(shop):
     html = _get(shop)
 
     def card(asset):
-        start = html.index(f'data-asset="{asset.pk}"')
+        start = html.index(f'<li class="ml-card" data-asset="{asset.pk}"')
         return html[start : html.index("</li>", start)]
 
     assert 'data-confirm-label="Delete"' in card(free)
@@ -181,7 +182,9 @@ def test_the_grid_groups_by_date_and_counts_the_library(shop):
     html = _get(shop)
 
     assert "This week" in html and "2 files" in html
-    assert "This week" not in _get(shop, view="list")
+    # The list layout (on the same page) has no day headings: they sit in the grid only.
+    listing = _get(shop, view="list")
+    assert listing.index("This week") > listing.index("x-show=\"view === 'grid'\"")
 
 
 def test_counting_every_file_takes_a_fixed_number_of_queries(

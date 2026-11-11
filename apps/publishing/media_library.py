@@ -196,11 +196,15 @@ def record(
         values["width"], values["height"] = _dimensions(data)
     try:
         with transaction.atomic():
-            asset, _ = MediaAsset.objects.get_or_create(
+            asset, created = MediaAsset.objects.get_or_create(
                 account=account, url_digest=url_digest(url), defaults=values
             )
     except IntegrityError:
         asset = MediaAsset.objects.get(account=account, url_digest=url_digest(url))
+        created = False
+    if created:
+        # Its thumbnail and any size the upload didn't give, made in the background.
+        queue_details(asset)
     return asset
 
 
@@ -394,6 +398,11 @@ _LABELS = {
 }
 
 
+_STORAGE_SUFFIX = re.compile(
+    r"_(?=[A-Za-z0-9]{7}$)(?![A-Z][a-z]+[0-9]*$)(?=.*[A-Z])(?=.*[a-z0-9])[A-Za-z0-9]{7}$"
+)
+
+
 def display_name(name: str) -> str:
     """A file's name for the grid: no extension, underscores as spaces, and a phone's
     "WhatsApp Image 2026-09-10 at 14.22.01" as "WhatsApp image · 10 Sep". The full name
@@ -404,6 +413,9 @@ def display_name(name: str) -> str:
     stem, dot, ext = base.rpartition(".")
     if dot and stem and 1 <= len(ext) <= 5 and ext.isalnum():
         base = stem
+    # Storage's "_K2nNF6v" on a second upload of the same name: seven random letters and
+    # digits mixing cases, so a real "summer1" or "Summer1" stays.
+    base = _STORAGE_SUFFIX.sub("", base) or base
     match = _CAMERA_NAME.match(base)
     if match:
         try:
@@ -419,7 +431,9 @@ def display_name(name: str) -> str:
 def _plain_name(name: str) -> str:
     """A name with its extension and a copy's " (1)" or " copy" left off, for spotting
     the same file uploaded twice."""
-    base = (name or "").lower().rsplit(".", 1)[0]
+    base = (name or "").rsplit(".", 1)[0]
+    # A storage suffix ("_Sv1jm0R") marks the same name uploaded again, like " (1)".
+    base = (_STORAGE_SUFFIX.sub("", base) or base).lower()
     base = re.sub(r"(\s*\(\d+\)|\s+copy(\s*\d+)?)+$", "", base)
     return " ".join(base.replace("_", " ").split())
 
@@ -591,6 +605,90 @@ def bulk(account, ids, action: str, raw_tags: str = "") -> dict[str, int]:
             pk__in=[a.pk for a in assets], archived_at__isnull=False
         ).update(archived_at=None)
     return done
+
+
+# --- Thumbnails and missing facts ---------------------------------------------------------
+
+THUMB_BOX = (600, 750)  # 4:5, two pixels per point for a ~300px tile
+_DETAILS_MAX_BYTES = 40 * 1024 * 1024
+
+
+def make_thumbnail(data: bytes) -> bytes | None:
+    """A WebP no bigger than THUMB_BOX, upright (EXIF), or None if it isn't a picture."""
+    from PIL import Image, ImageOps
+
+    try:
+        with Image.open(io.BytesIO(data)) as img:
+            img = ImageOps.exif_transpose(img)
+            if img.mode not in ("RGB", "RGBA"):
+                img = img.convert("RGBA" if "A" in img.getbands() else "RGB")
+            img.thumbnail(THUMB_BOX, Image.Resampling.LANCZOS)
+            out = io.BytesIO()
+            img.save(out, "WEBP", quality=80, method=4)
+            return out.getvalue()
+    except Exception:
+        return None
+
+
+def fill_details(asset: MediaAsset) -> list[str]:
+    """Fill what a file is missing: its size, a picture's dimensions and thumbnail. Reads
+    the file from our own media host only. Returns the fields it set."""
+    import requests
+
+    from .services import _is_own_media_url
+
+    wants_size = not asset.size_bytes
+    wants_picture = asset.kind == "image" and (
+        not asset.thumb_url or not asset.width or not asset.height
+    )
+    if not (wants_size or wants_picture) or not _is_own_media_url(asset.url):
+        return []
+    changed: dict = {}
+    try:
+        if not wants_picture:
+            # A size is all that's missing (a video, say): ask, don't download.
+            head = requests.head(asset.url, timeout=10, allow_redirects=False)
+            length = int(head.headers.get("Content-Length") or 0)
+            if head.ok and length:
+                changed["size_bytes"] = length
+        else:
+            with requests.get(
+                asset.url, timeout=30, stream=True, allow_redirects=False
+            ) as resp:
+                resp.raise_for_status()
+                body = bytearray()
+                for chunk in resp.iter_content(256 * 1024):
+                    body.extend(chunk)
+                    if len(body) > _DETAILS_MAX_BYTES:
+                        return []
+            data = bytes(body)
+            if wants_size:
+                changed["size_bytes"] = len(data)
+            if not asset.width or not asset.height:
+                w, h = _dimensions(data)
+                if w and h:
+                    changed["width"], changed["height"] = w, h
+            if not asset.thumb_url and (thumb := make_thumbnail(data)):
+                changed["thumb_url"] = _save(asset.account, "thumbs", "webp", thumb)
+    except Exception as exc:
+        logger.info("fill_details: couldn't read asset %s: %s", asset.pk, exc)
+        return []
+    if changed:
+        MediaAsset.objects.filter(pk=asset.pk).update(**changed)
+        for k, v in changed.items():
+            setattr(asset, k, v)
+    return list(changed)
+
+
+def queue_details(asset: MediaAsset) -> None:
+    """Fill a new file's facts after the upload commits, off the request."""
+    if asset.size_bytes and (asset.kind != "image" or asset.thumb_url):
+        return
+    from functools import partial
+
+    from .tasks import fill_asset_details
+
+    transaction.on_commit(partial(fill_asset_details.delay, asset.pk), robust=True)
 
 
 # --- Edited copies -----------------------------------------------------------------------

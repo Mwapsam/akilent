@@ -292,3 +292,12 @@ def studio_tab(context) -> str:
         if path.startswith(prefixes):
             return label
     return ""
+
+
+@register.filter
+def to_json(value) -> str:
+    """A value as JSON for an Alpine attribute (x-data). Not marked safe on purpose: the
+    template escapes its quotes for the attribute, and the browser unescapes them."""
+    import json
+
+    return json.dumps(value if value is not None else [])

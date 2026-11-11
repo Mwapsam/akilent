@@ -81,7 +81,17 @@
 
   window.mediaLibrary = function mediaLibrary() {
     var cfg = config("media-library-config");
+    // Grid or list: both are on the page, so switching is instant (it used to reload the
+    // results). The choice is remembered in this browser; ?view= in a link still wins.
+    var fromUrl = new URLSearchParams(window.location.search).get("view");
+    var saved = null;
+    try { saved = window.localStorage.getItem("akilent:media:view"); } catch (e) { /* private mode */ }
     return {
+      view: fromUrl === "list" || fromUrl === "grid" ? fromUrl : (saved === "list" ? "list" : "grid"),
+      setView: function (v) {
+        this.view = v;
+        try { window.localStorage.setItem("akilent:media:view", v); } catch (e) { /* private mode */ }
+      },
       uploads: [],
       busy: false,
       dragging: false,

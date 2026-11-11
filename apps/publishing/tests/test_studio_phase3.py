@@ -250,7 +250,8 @@ def test_media_calendar_and_sales_filter_in_place(shop, settings):
     sales = shop.client.get(reverse("publishing:sales"))
 
     assert 'data-live-filter="#media-results"' in media.content.decode()
-    assert 'data-chip-clear="show kind archived"' in media.content.decode()
+    # No chip for "show": the segmented control already says it (2026-11-11 audit).
+    assert 'data-chip-clear="show kind archived"' not in media.content.decode()
     assert 'data-live-filter="#cal-results"' in calendar.content.decode()
     assert 'data-chip-clear="channel"' in calendar.content.decode()
     assert 'data-live-filter="#sales-results"' in sales.content.decode()
