@@ -99,6 +99,75 @@ def results_for(post: ContentPost) -> list[dict]:
     return rows
 
 
+def _rate(part: int, whole: int) -> int | None:
+    return round(100 * part / whole) if whole else None
+
+
+def funnel_for(results: list[dict]) -> dict | None:
+    """The post page's "From post to paid order" strip: ``results_for`` added up across
+    channels, with the rate from each step to the next and one tip for the step where
+    people stop. Revenue stays per currency. None when no channel has a link or a chat."""
+    if not results:
+        return None
+    has_link = any(r["link"] for r in results)
+    clicks = sum(r["clicks"] for r in results)
+    chats = sum(r["chats"] for r in results)
+    leads = sum(r["leads"] for r in results)
+    orders = sum(r["orders"] for r in results)
+    revenue: dict[str, Decimal] = {}
+    for r in results:
+        for row in r["revenue"]:
+            revenue[row["currency"]] = revenue.get(row["currency"], Decimal("0")) + (
+                row["total"] or Decimal("0")
+            )
+    tip = None
+    if has_link and clicks and not chats:
+        tip = {
+            "title": f"{clicks} {'person' if clicks == 1 else 'people'} opened WhatsApp "
+            "but nobody sent the message.",
+            "body": "A first message that asks a specific question (for example "
+            '"Which service do you need?") usually gets more people to hit send.',
+        }
+    elif chats and not leads and chats >= 3:
+        tip = {
+            "title": f"{chats} chats, no leads yet.",
+            "body": "Mark the people who are ready to buy as leads in the Inbox so the "
+            "next steps are counted.",
+        }
+    return {
+        "steps": [
+            {
+                "label": "Link clicks",
+                "value": clicks if has_link else None,
+                "note": "people opened the link" if has_link else "no chat link",
+                "definition": "Times people opened the chat link (link previews and "
+                "bots aren't counted)",
+            },
+            {
+                "label": "Chats",
+                "value": chats,
+                "rate": _rate(chats, clicks) if has_link else None,
+                "of": "clicks",
+            },
+            {
+                "label": "Leads",
+                "value": leads,
+                "rate": _rate(leads, chats),
+                "of": "chats",
+            },
+            {
+                "label": "Orders",
+                "value": orders,
+                "rate": _rate(orders, leads),
+                "of": "leads",
+            },
+        ],
+        "revenue": [{"currency": c, "total": t} for c, t in sorted(revenue.items())],
+        "tip": tip,
+        "by_channel": len(results) > 1,
+    }
+
+
 def _bio_state(bio_on: bool, page, variant, link) -> dict | None:
     """Whether this Instagram channel is on the bio page, for the card's button."""
     if not bio_on or variant.platform != ContentPostVariant.Platform.INSTAGRAM:

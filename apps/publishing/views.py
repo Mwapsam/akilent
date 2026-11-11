@@ -2049,7 +2049,7 @@ def post_detail(request, pk):
         return redirect("dashboard")
 
     from .links import cta_for, links_for_post, short_url
-    from .results import results_for
+    from .results import funnel_for, results_for
     from .services import can_reopen_failed
 
     post = get_object_or_404(ContentPost, pk=pk, account=account)
@@ -2061,6 +2061,15 @@ def post_detail(request, pk):
     can_review = False
     if requires_approval and post.approval_status == "submitted":
         can_review, _ = _can_review(post, request.user, account)
+    results = results_for(post)
+    variants = list(post.variants.all())
+    # Where the post went live, for the header's "View on …" button.
+    live_links = [
+        (v.get_platform_display(), v.publication_url)
+        for v in variants
+        if v.status == ContentPostVariant.Status.PUBLISHED
+        and (v.publication_url or "").startswith(("https://", "http://"))
+    ]
     # From a list (Library, Overview, the calendar...) it opens as a drawer over that list.
     return overlay_or_page(
         request,
@@ -2080,7 +2089,11 @@ def post_detail(request, pk):
             "approval_logs": post.approval_logs.select_related("performed_by")[:20]
             if requires_approval
             else [],
-            "results": results_for(post),
+            "results": results,
+            "funnel": funnel_for(results),
+            "has_chat_link": any(r["link"] for r in results),
+            "variants": variants,
+            "live_links": live_links,
             "cta": cta_for(post),
             "cta_links": cta_links,
             "channel_options": _channel_options_for_display(post),

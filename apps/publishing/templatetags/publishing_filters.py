@@ -94,11 +94,22 @@ def first_media(post):
 
 @register.filter
 def post_headline(post):
-    """A post's name on its own page: the caption's first line, shortened."""
+    """A post's name on its own page: the caption's first sentence (or first line), cut at
+    a word near 70 characters, never mid-word."""
+    import re
+
     for line in (post.caption or "").splitlines():
         line = line.strip()
-        if line:
-            return line if len(line) <= 80 else line[:79].rstrip() + "…"
+        if not line:
+            continue
+        # First sentence: up to the first . ! ? followed by a space (keeps "e.g." and URLs).
+        m = re.match(r"(.+?[.!?])(\s|$)", line)
+        if m and len(m.group(1)) >= 12:
+            line = m.group(1)
+        if len(line) <= 70:
+            return line
+        cut = line[:70].rsplit(" ", 1)[0].rstrip(" ,;:—-")
+        return (cut or line[:69]) + "…"
     return "Untitled post"
 
 

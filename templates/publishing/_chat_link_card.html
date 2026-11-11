@@ -1,0 +1,43 @@
+{% comment %}
+The post's WhatsApp chat links, one per channel: copy it to share anywhere, and for
+Instagram (captions can't hold tappable links) put the post on the bio page. Chats that
+start from a link are credited to this post. Expects ``results``.
+{% endcomment %}
+{% if has_chat_link %}{% with linked=results|dictsort:"channel" %}
+<section class="card card-pad space-y-3" aria-labelledby="pd-link">
+  <div>
+    <h2 id="pd-link" class="pd-section-title">WhatsApp chat link</h2>
+    <p class="mt-0.5 text-xs text-ink-subtle">Share it anywhere. Chats that start from it are credited to this post.</p>
+  </div>
+  {% for r in linked %}{% if r.link %}
+  <div class="space-y-2">
+    {% if linked|length > 1 %}<p class="text-xs font-medium text-ink-subtle">{{ r.channel }}</p>{% endif %}
+    <div class="copy-row pd-copy">
+      <code class="copy-value">{{ r.link_url }}</code>
+      <button type="button" class="copy-btn btn btn-secondary btn-sm">Copy</button>
+    </div>
+    {% if r.variant.platform == 'instagram' %}
+      {% if r.bio %}
+      <p class="text-xs text-ink-subtle">Instagram captions can't hold tappable links. Add this post to your bio page so its chats are credited to it, or use this link on a story link sticker.</p>
+      {% if r.bio.on_page %}
+      <p class="text-xs text-ink">On your <a href="{% url 'publishing:bio' %}" class="cs-link">bio page</a>.</p>
+      {% elif r.bio.page %}
+      {% if can_edit_bio %}
+      <form method="post" action="{% url 'publishing:bio-tile-add' r.variant.pk %}" hx-boost="false">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-ghost btn-sm !px-0 text-accent">Add to bio page</button>
+      </form>
+      {% else %}
+      <p class="text-xs text-ink-subtle">An Owner or Admin can add this post to your bio page.</p>
+      {% endif %}
+      {% else %}
+      <p class="text-xs"><a href="{% url 'publishing:bio' %}" class="cs-link">Set up a bio page</a> to give each post its own credit.</p>
+      {% endif %}
+      {% else %}
+      <p class="text-xs text-ink-subtle">Instagram captions can't hold tappable links. Put this link in your bio or on a story link sticker.</p>
+      {% endif %}
+    {% endif %}
+  </div>
+  {% endif %}{% endfor %}
+</section>
+{% endwith %}{% endif %}

@@ -247,7 +247,7 @@ def test_post_page_shows_the_cta_and_the_short_link(shop):
     ).content.decode()
 
     assert "Chat on WhatsApp" in html
-    assert "First message: Hello there" in html
+    assert "First message · </span>Hello there" in html
     assert short_url(link) in html
 
 

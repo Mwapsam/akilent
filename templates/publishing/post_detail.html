@@ -1,13 +1,16 @@
 {% extends "base.html" %}
-{% load publishing_filters %}
+{% load publishing_filters ui %}
 {% block title %}{{ post|post_headline }} — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
-{% comment %}A post's own page. Header: what it is and where it stands (status, channels,
-when). Wide: the post itself on the left; review, channels and details on the right.
-Narrow: review and channels first (what needs doing), then the post, then details.{% endcomment %}
+{% comment %}A post's own page (docs/design mock "Post detail"). Header: a thumbnail, a short
+title (the caption's first sentence) and one line of where it stands, with the next action
+at the top right and the rest in ⋯. Then what needs doing (a fix card for a failed post),
+then what it brought in (results, full width). Wide: performance and the post itself on the
+left; review, channels, the chat link and technical details on the right. Narrow: one
+column in that order.{% endcomment %}
 <header class="mb-6">
-  <nav class="mb-2 flex items-center gap-1.5 text-xs text-ink-subtle" aria-label="Breadcrumb">
+  <nav class="mb-3 flex items-center gap-1.5 text-xs text-ink-subtle" aria-label="Breadcrumb">
     <a href="{% url 'publishing:index' %}" class="hover:text-ink">Content Studio</a>
     <span aria-hidden="true">/</span>
     <a href="{% url 'publishing:library' %}" class="hover:text-ink">Library</a>
@@ -15,268 +18,290 @@ Narrow: review and channels first (what needs doing), then the post, then detail
     <span class="text-ink" aria-current="page">Post</span>
   </nav>
   <div class="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
-    <div class="min-w-0 flex-1 basis-80">
-      <h1 class="text-2xl sm:text-[1.75rem] font-semibold tracking-tight text-ink break-words">{{ post|post_headline }}</h1>
-      <div class="pd-meta">
-        <span>{% status_badge post.status post.get_status_display %}</span>
-        <span class="inline-flex items-center gap-3">
-          {% for p in post.platforms %}{% include "components/channel_tag.html" with channel=p compact=True %}{% endfor %}
-        </span>
-        <span>{{ post.get_media_type_display }}</span>
-        {% if post.published_at %}
-          <span>Published {{ post.published_at|date:"D N j, H:i" }}</span>
-        {% elif post.scheduled_at and post.status == 'scheduled' %}
-          <span>Goes out {{ post.scheduled_at|date:"D N j, H:i" }}</span>
-        {% elif post.scheduled_at %}
-          <span>Set for {{ post.scheduled_at|date:"D N j, H:i" }}</span>
-        {% else %}
-          <span>Not scheduled</span>
-        {% endif %}
+    <div class="flex min-w-0 flex-1 basis-[28rem] items-center gap-4">
+      {% if post.media_urls %}
+        {% include "publishing/_media_thumb.html" with url=post.media_urls.0 size="w-16 h-16 !rounded-xl" alt="" %}
+      {% endif %}
+      <div class="min-w-0">
+        <h1 class="text-xl sm:text-2xl font-semibold tracking-tight text-ink break-words">{{ post|post_headline }}</h1>
+        <div class="pd-meta">
+          {% status_badge post.status post.get_status_display %}
+          {% for p in post.platforms %}<span class="pd-chip">{% include "components/channel_tag.html" with channel=p compact=True %}</span>{% endfor %}
+          <span class="pd-chip">{{ post.get_media_type_display }}{% if post.media_urls|length > 1 %} · {{ post.media_urls|length }} items{% endif %}</span>
+          {% if post.published_at %}
+            <span>{{ post.published_at|date:"D j N Y, H:i" }}</span>
+          {% elif post.scheduled_at and post.status == 'scheduled' %}
+            <span>Goes out {{ post.scheduled_at|date:"D j N, H:i" }}</span>
+          {% elif post.scheduled_at %}
+            <span>Was set for {{ post.scheduled_at|date:"D j N, H:i" }}</span>
+          {% else %}
+            <span>Not scheduled</span>
+          {% endif %}
+          {% if post.ai_assisted %}<span aria-hidden="true">·</span><span>Started from an AI suggestion</span>{% endif %}
+        </div>
       </div>
     </div>
+
     <div class="flex flex-wrap items-center gap-2">
-      {% if post.status in 'draft,scheduled,idea' %}
-      <form method="post" action="{% url 'publishing:post-delete' post.pk %}">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-danger-ghost"
-                data-confirm="Delete this post? It's deleted for good, with its schedule. Nothing has been published from it, so nothing on Instagram or Facebook changes." data-confirm-danger data-confirm-label="Delete">
-          {% include "components/icon.html" with name="trash" class="w-4 h-4" %}Delete
-        </button>
-      </form>
-      {% endif %}
-      {% if post.status == 'scheduled' %}
-      <form method="post" action="{% url 'publishing:post-cancel' post.pk %}">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-secondary"
-                data-confirm="Cancel this scheduled post? Channels that haven't gone out won't publish. You can undo it from the message that follows, or reopen it as a draft later." data-confirm-label="Cancel post" data-confirm-cancel="Keep scheduled">Cancel</button>
-      </form>
-      {% endif %}
-      {% if post.status == 'cancelled' %}
-      <form method="post" action="{% url 'publishing:post-reopen' post.pk %}">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-secondary">Reopen as draft</button>
-      </form>
-      {% endif %}
-      {% if editable %}
-      <a href="{% url 'publishing:post-new' %}?post_id={{ post.pk }}" class="btn {% if post.status == 'failed' %}btn-secondary{% else %}btn-primary{% endif %}">
-        {% include "components/icon.html" with name="pencil" class="w-4 h-4" %}Edit
-      </a>
-      {% endif %}
       {% if post.status == 'failed' %}
-      {% comment %}Fixing comes first: retrying a post Meta refused for its content fails the
-      same way. Retry stays for outages and timeouts.{% endcomment %}
-      {% if can_fix %}
-      <form method="post" action="{% url 'publishing:post-fix' post.pk %}" hx-boost="false">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-primary">{% include "components/icon.html" with name="pencil" class="w-4 h-4" %}Edit and fix</button>
-      </form>
+        {% comment %}Fixing comes first and lives in the fix card below; Retry stays for
+        outages and timeouts.{% endcomment %}
+        <form method="post" action="{% url 'publishing:post-retry' post.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn {% if can_fix %}btn-secondary{% else %}btn-primary{% endif %}">{% include "components/icon.html" with name="refresh" class="w-4 h-4" %}Retry</button>
+        </form>
+      {% elif post.status == 'cancelled' %}
+        <form method="post" action="{% url 'publishing:post-reopen' post.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-primary">Reopen as draft</button>
+        </form>
+      {% elif editable %}
+        <a href="{% url 'publishing:post-new' %}?post_id={{ post.pk }}" class="btn {% if live_links %}btn-secondary{% else %}btn-primary{% endif %}">
+          {% include "components/icon.html" with name="pencil" class="w-4 h-4" %}Edit
+        </a>
       {% endif %}
-      <form method="post" action="{% url 'publishing:post-retry' post.pk %}">
-        {% csrf_token %}
-        <button type="submit" class="btn {% if can_fix %}btn-secondary{% else %}btn-primary{% endif %}">{% include "components/icon.html" with name="refresh" class="w-4 h-4" %}Retry</button>
-      </form>
+      {% with first=live_links.0 %}{% if first %}
+        <a href="{{ first.1 }}" target="_blank" rel="noopener" class="btn btn-primary">View on {{ first.0 }}<span class="sr-only"> (opens in a new tab)</span></a>
+      {% endif %}{% endwith %}
+
+      {% if post.status == 'scheduled' or post.status in 'draft,idea' or live_links|length > 1 %}
+      {% row_menu "More actions for this post" %}
+        {% for label, url in live_links|slice:"1:" %}
+        <a href="{{ url }}" target="_blank" rel="noopener" class="row-menu-item" role="menuitem">View on {{ label }}</a>
+        {% endfor %}
+        {% if post.status == 'scheduled' %}
+        <form method="post" action="{% url 'publishing:post-cancel' post.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="row-menu-item" role="menuitem"
+                  data-confirm="Cancel this scheduled post? Channels that haven't gone out won't publish. You can undo it from the message that follows, or reopen it as a draft later." data-confirm-label="Cancel post" data-confirm-cancel="Keep scheduled">Cancel post</button>
+        </form>
+        {% endif %}
+        {% if post.status in 'draft,scheduled,idea' %}
+        <form method="post" action="{% url 'publishing:post-delete' post.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="row-menu-item row-menu-item--danger" role="menuitem"
+                  data-confirm="Delete this post? It's deleted for good, with its schedule. Nothing has been published from it, so nothing on Instagram or Facebook changes." data-confirm-danger data-confirm-label="Delete">
+            {% include "components/icon.html" with name="trash" class="w-4 h-4" %}Delete
+          </button>
+        </form>
+        {% endif %}
+      {% endrow_menu %}
       {% endif %}
     </div>
   </div>
 </header>
 
-{% if post.error %}
-<div class="alert alert-danger mb-5" role="alert">
-  {% include "components/icon.html" with name="alert-circle" %}
-  <div class="flex-1 min-w-0">
-    <p class="font-semibold">This post didn't publish</p>
-    <p class="mt-0.5 break-words">{{ post.error }}</p>
-  </div>
-  {% if post.status == 'failed' and can_fix %}
-  <form method="post" action="{% url 'publishing:post-fix' post.pk %}" class="shrink-0" hx-boost="false">
-    {% csrf_token %}
-    <button type="submit" class="btn btn-secondary btn-sm">Edit and fix</button>
-  </form>
-  {% endif %}
-</div>
-{% endif %}
-
-<div class="pd-grid">
-
-  {# ── Where it stands: review and channels ─────────────────────────────── #}
-  <div class="pd-side space-y-5">
-    {% include "publishing/_post_review.html" %}
-
-    {% if post.variants.exists %}
-    <section class="card overflow-hidden" aria-labelledby="pd-channels">
-      <h2 id="pd-channels" class="pd-section-title px-5 pt-4 pb-1">Channels</h2>
-      <p class="px-5 text-xs text-ink-subtle">Where this post goes, and how each one went.</p>
-      <div class="mt-2">
-        {% for variant in post.variants.all %}
-          {% include "publishing/variant_result_card.html" %}
-        {% endfor %}
-      </div>
-    </section>
+<div class="space-y-6">
+  {% if post.error %}
+  {# What went wrong, in plain words, and the one thing to do about it. #}
+  <section class="pd-fix" role="alert" aria-labelledby="pd-fix-title">
+    <span class="pd-fix-icon" aria-hidden="true">{% include "components/icon.html" with name="alert-circle" class="w-5 h-5" %}</span>
+    <div class="min-w-0 flex-1 space-y-1">
+      <h2 id="pd-fix-title" class="text-base font-semibold text-ink">{% if post.status == 'failed' %}This post didn't publish{% else %}Something went wrong{% endif %}</h2>
+      <p class="text-sm leading-relaxed text-ink-muted break-words">{{ post.error }}</p>
+    </div>
+    {% if post.status == 'failed' and can_fix %}
+    <form method="post" action="{% url 'publishing:post-fix' post.pk %}" class="shrink-0 self-center" hx-boost="false">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary">{% include "components/icon.html" with name="pencil" class="w-4 h-4" %}Edit and fix</button>
+    </form>
     {% endif %}
-  </div>
+  </section>
+  {% endif %}
 
-  {# ── The post itself ──────────────────────────────────────────────────── #}
-  <div class="pd-main space-y-5 min-w-0">
-    <section class="card overflow-hidden" aria-labelledby="pd-post">
-      <h2 id="pd-post" class="sr-only">The post</h2>
-      {% if post.media_urls %}
-        {% if post.media_urls|length == 1 %}
-          {% with only=post.media_urls.0 %}
-          <div class="pd-media">
-            {% if only|media_kind == "video" %}
-              {% include "publishing/_media_thumb.html" with url=only size="w-full aspect-video !rounded-none" alt="Post video" controls=True %}
+  {% include "publishing/_results_card.html" %}
+
+  <div class="pd-grid">
+    {# ── Performance and the post itself ─────────────────────────────────── #}
+    <div class="pd-main space-y-6 min-w-0">
+      {% with published=post|published_channels %}
+      {% if published %}
+      <section class="card card-pad space-y-4" aria-labelledby="pd-performance">
+        <div class="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 id="pd-performance" class="pd-section-title">Performance</h2>
+            <p class="mt-0.5 text-xs text-ink-subtle">From {{ published|join_platforms }} · numbers can take up to 48 hours to settle. Hover a label to see what it counts.</p>
+          </div>
+          <form method="post" action="{% url 'publishing:post-refresh-insights' post.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-secondary btn-sm">{% include "components/icon.html" with name="refresh" class="w-4 h-4" %}Refresh</button>
+          </form>
+        </div>
+        {% for variant in published %}
+          {% include "publishing/_metric_card.html" %}
+        {% endfor %}
+      </section>
+      {% endif %}
+      {% endwith %}
+
+      <section class="card card-pad space-y-4" aria-labelledby="pd-post">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="pd-post" class="pd-section-title">The post</h2>
+          {% if editable %}<a href="{% url 'publishing:post-new' %}?post_id={{ post.pk }}" class="cs-link text-sm">Edit</a>{% endif %}
+        </div>
+        <div class="flex flex-wrap items-start gap-6">
+          {% if post.media_urls %}
+          <div class="pd-media-col">
+            {% if post.media_urls|length == 1 %}
+              {% with only=post.media_urls.0 %}
+              {% if only|media_kind == "video" %}
+                <video src="{{ only }}#t=0.1" preload="metadata" controls playsinline class="pd-media-one" aria-label="Post video"></video>
+              {% else %}
+                <a href="{{ only }}" target="_blank" rel="noopener" class="block" aria-label="Open the image full size">
+                  <img src="{{ only }}" alt="{{ post.caption|truncatechars:80|default:'Post image' }}" class="pd-media-one" loading="lazy" decoding="async">
+                </a>
+              {% endif %}
+              {% endwith %}
             {% else %}
-              <a href="{{ only }}" target="_blank" rel="noopener" class="block mx-auto max-w-[26rem]" aria-label="Open the image full size">
-                {% include "publishing/_media_thumb.html" with url=only size="w-full aspect-square !rounded-none" alt=post.caption|truncatechars:80 %}
-              </a>
+              <ol class="pd-strip" aria-label="{{ post.media_urls|length }} items, scroll sideways" tabindex="0">
+                {% for url in post.media_urls %}
+                <li>
+                  {% if url|media_kind == "video" %}
+                    {% include "publishing/_media_thumb.html" with url=url size="w-full aspect-[4/5]" alt="Post video" controls=True %}
+                  {% else %}
+                    <a href="{{ url }}" target="_blank" rel="noopener" class="block" aria-label="Open item {{ forloop.counter }} full size">
+                      {% include "publishing/_media_thumb.html" with url=url size="w-full aspect-[4/5]" alt="Carousel item" %}
+                    </a>
+                  {% endif %}
+                  <span class="pd-num" aria-hidden="true">{{ forloop.counter }}/{{ post.media_urls|length }}</span>
+                </li>
+                {% endfor %}
+              </ol>
             {% endif %}
           </div>
-          {% endwith %}
-        {% else %}
-          <div class="pd-media">
-            <ol class="pd-strip" aria-label="{{ post.media_urls|length }} items, scroll sideways" tabindex="0">
-              {% for url in post.media_urls %}
-              <li>
-                {% if url|media_kind == "video" %}
-                  {% include "publishing/_media_thumb.html" with url=url size="w-full aspect-square" alt="Post video" controls=True %}
-                {% else %}
-                  <a href="{{ url }}" target="_blank" rel="noopener" class="block" aria-label="Open item {{ forloop.counter }} full size">
-                    {% include "publishing/_media_thumb.html" with url=url size="w-full aspect-square" alt="Carousel item" %}
-                  </a>
+          {% endif %}
+
+          <div class="min-w-0 flex-1 basis-72 space-y-5">
+            <div>
+              <p class="pd-eyebrow mb-1.5">Caption</p>
+              <p class="text-[0.9375rem] leading-relaxed text-ink whitespace-pre-wrap break-words">{{ post.caption|default:"(none)" }}</p>
+              {% if post.caption %}<p class="mt-1.5 text-xs text-ink-subtle">{{ post.caption|length }} characters</p>{% endif %}
+            </div>
+
+            {% for platform, override in post.platform_captions.items %}
+            {% if override %}
+            <div class="rounded-xl border border-border p-3.5">
+              <p class="text-xs font-medium text-ink-subtle mb-1">{{ platform|platform_display_name }} uses its own caption</p>
+              <p class="text-sm text-ink whitespace-pre-wrap break-words">{{ override }}</p>
+            </div>
+            {% endif %}
+            {% endfor %}
+
+            <div class="pt-4 border-t border-border space-y-2.5">
+              <p class="pd-eyebrow">Call to action</p>
+              {% if cta.kind == "whatsapp" %}
+                <div class="flex items-center gap-3">
+                  <span class="pd-cta-icon" aria-hidden="true">{% include "components/icon.html" with name="message-circle" class="w-[18px] h-[18px]" %}</span>
+                  <div class="min-w-0">
+                    <p class="text-sm font-medium text-ink">Chat on WhatsApp</p>
+                    <p class="text-sm text-ink-muted">Button text: "{{ cta.text }}"</p>
+                  </div>
+                </div>
+                {% if cta.prefill %}<p class="pd-quote"><span class="text-ink-subtle">First message · </span>{{ cta.prefill }}</p>{% endif %}
+                {% if not has_chat_link %}
+                <div class="space-y-1.5">
+                {% for label, url in cta_links %}
+                <div class="copy-row flex flex-wrap items-center gap-2 text-xs">
+                  <span class="text-ink-subtle w-20 shrink-0">{{ label }}</span>
+                  <code class="copy-value min-w-0">{{ url }}</code>
+                  <button type="button" class="copy-btn copy-btn--light">Copy</button>
+                </div>
+                {% endfor %}
+                </div>
                 {% endif %}
-                <span class="pd-num" aria-hidden="true">{{ forloop.counter }}/{{ post.media_urls|length }}</span>
-              </li>
-              {% endfor %}
-            </ol>
+              {% elif cta.kind == "link" %}
+                <p class="text-sm text-ink"><span class="font-medium">Visit a link</span> · "{{ cta.text }}"</p>
+                <div class="copy-row flex flex-wrap items-center gap-2 text-xs">
+                  <a href="{{ cta.url }}" class="copy-value min-w-0 text-accent hover:underline" target="_blank" rel="noopener noreferrer">{{ cta.url }}</a>
+                  <button type="button" class="copy-btn copy-btn--light">Copy</button>
+                </div>
+              {% else %}
+                <p class="text-sm text-ink-subtle">None.{% if editable %} <a href="{% url 'publishing:post-new' %}?post_id={{ post.pk }}" class="cs-link">Add a WhatsApp chat link</a> to see which chats this post brings.{% endif %}</p>
+              {% endif %}
+            </div>
           </div>
-        {% endif %}
+        </div>
+      </section>
+
+      {% if released.cs_recurring and post.status != "cancelled" %}{% include "publishing/_repeat_card.html" %}{% endif %}
+
+      {% if channel_options %}
+      <section class="card card-pad space-y-4" aria-labelledby="pd-options">
+        <h2 id="pd-options" class="pd-section-title">Channel options</h2>
+        {% for row in channel_options %}
+        {% with o=row.options state=row.comment_state %}
+        <div class="{% if not forloop.first %}border-t border-border pt-4 {% endif %}space-y-2">
+          {% include "components/channel_tag.html" with channel=row.variant.platform %}
+          <dl class="grid grid-cols-1 sm:grid-cols-[9rem_1fr] gap-x-4 gap-y-1.5 text-sm">
+            {% if o.alt_text %}<dt class="text-ink-subtle">Alt text</dt><dd class="break-words text-ink">{{ o.alt_text }}</dd>{% endif %}
+            {% if o.location %}<dt class="text-ink-subtle">Location</dt><dd class="text-ink">{{ o.location.name|default:o.location.id }}</dd>{% endif %}
+            {% if o.collaborators %}<dt class="text-ink-subtle">Collaborators</dt><dd class="text-ink">{% for n in o.collaborators %}@{{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}</dd>{% endif %}
+            {% if "share_to_feed" in o %}<dt class="text-ink-subtle">Feed</dt><dd class="text-ink">{% if o.share_to_feed %}Shown in feed and Reels{% else %}Reels tab only{% endif %}</dd>{% endif %}
+            {% if o.cover_url %}<dt class="text-ink-subtle">Cover</dt><dd>{% include "publishing/_media_thumb.html" with url=o.cover_url size="w-12 h-20" alt="Reel cover" %}</dd>
+            {% elif o.thumb_offset %}<dt class="text-ink-subtle">Cover</dt><dd class="text-ink">Frame at {% widthratio o.thumb_offset 1000 1 %} s</dd>{% endif %}
+            {% if o.first_comment %}
+            <dt class="text-ink-subtle">First comment</dt>
+            <dd class="space-y-1">
+              <p class="whitespace-pre-wrap break-words text-ink">{{ o.first_comment }}</p>
+              {% if state.status == "posted" %}
+                <span class="text-xs font-semibold px-2 py-0.5 rounded-full tone-teal">Posted</span>
+              {% elif state.status == "queued" or state.status == "posting" %}
+                <span class="text-xs font-semibold px-2 py-0.5 rounded-full tone-info">Posting…</span>
+              {% elif state.status == "failed" %}
+                <div class="text-xs rounded-lg p-2.5 tone-coral-bg space-y-1.5">
+                  <p class="text-ink">Not posted. {{ state.error }}</p>
+                  <form method="post" action="{% url 'publishing:first-comment-retry' post.pk row.variant.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-ghost btn-sm">Try again</button>
+                  </form>
+                </div>
+              {% else %}
+                <span class="text-xs text-ink-subtle">Posted when the post goes live.</span>
+              {% endif %}
+            </dd>
+            {% endif %}
+          </dl>
+        </div>
+        {% endwith %}
+        {% endfor %}
+      </section>
+      {% endif %}
+    </div>
+
+    {# ── Where it stands: review, channels, the chat link, technical details ── #}
+    <aside class="pd-side space-y-6 min-w-0" aria-label="Status and links">
+      {% include "publishing/_post_review.html" %}
+
+      {% if variants %}
+      <section class="card overflow-hidden" aria-labelledby="pd-channels">
+        <h2 id="pd-channels" class="pd-section-title px-5 pt-5 pb-1">Channels</h2>
+        <div>
+          {% for variant in variants %}
+            {% include "publishing/variant_result_card.html" %}
+          {% endfor %}
+        </div>
+      </section>
       {% endif %}
 
-      <div class="p-5 sm:p-6 space-y-5">
-        <div>
-          <p class="text-xs font-medium text-ink-subtle mb-1.5">Caption{% if post.ai_assisted %} · Started from an AI suggestion{% endif %}</p>
-          <p class="text-[0.9375rem] leading-relaxed text-ink whitespace-pre-wrap break-words">{{ post.caption|default:"(none)" }}</p>
-        </div>
+      {% include "publishing/_chat_link_card.html" %}
 
-        {% if post.platform_captions %}
-        {% for platform, override in post.platform_captions.items %}
-        {% if override %}
-        <div class="rounded-xl border border-border p-3.5">
-          <p class="text-xs font-medium text-ink-subtle mb-1">{{ platform|platform_display_name }} uses its own caption</p>
-          <p class="text-sm text-ink whitespace-pre-wrap break-words">{{ override }}</p>
-        </div>
-        {% endif %}
-        {% endfor %}
-        {% endif %}
-
-        <div class="pt-4 border-t border-border">
-          <p class="text-xs font-medium text-ink-subtle mb-1.5">Call to action</p>
-          {% if cta.kind == "whatsapp" %}
-            <p class="text-sm text-ink"><span class="font-medium">Chat on WhatsApp</span> · "{{ cta.text }}"</p>
-            {% if cta.prefill %}<p class="text-xs text-ink-subtle mt-0.5">First message: {{ cta.prefill }}</p>{% endif %}
-            <div class="mt-2 space-y-1.5">
-            {% for label, url in cta_links %}
-            <div class="copy-row flex flex-wrap items-center gap-2 text-xs">
-              <span class="text-ink-subtle w-20 shrink-0">{{ label }}</span>
-              <code class="copy-value min-w-0">{{ url }}</code>
-              <button type="button" class="copy-btn copy-btn--light">Copy</button>
-            </div>
-            {% endfor %}
-            </div>
-          {% elif cta.kind == "link" %}
-            <p class="text-sm text-ink"><span class="font-medium">Visit a link</span> · "{{ cta.text }}"</p>
-            <div class="copy-row flex flex-wrap items-center gap-2 text-xs mt-2">
-              <a href="{{ cta.url }}" class="copy-value min-w-0 text-accent hover:underline" target="_blank" rel="noopener noreferrer">{{ cta.url }}</a>
-              <button type="button" class="copy-btn copy-btn--light">Copy</button>
-            </div>
-          {% else %}
-            <p class="text-sm text-ink-subtle">None{% if editable %} · <a href="{% url 'publishing:post-new' %}?post_id={{ post.pk }}" class="text-accent hover:underline">Add one</a>{% endif %}</p>
-          {% endif %}
-        </div>
-      </div>
-    </section>
-
-    {% include "publishing/_results_card.html" %}
-
-    {% if released.cs_recurring and post.status != "cancelled" %}{% include "publishing/_repeat_card.html" %}{% endif %}
-
-    {% with published=post|published_channels %}
-    {% if published %}
-    <section class="card card-pad space-y-3" aria-labelledby="pd-performance">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="pd-performance" class="pd-section-title">Performance</h2>
-        <form method="post" action="{% url 'publishing:post-refresh-insights' post.pk %}">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-ghost btn-sm">{% include "components/icon.html" with name="refresh" class="w-4 h-4" %}Refresh numbers</button>
-        </form>
-      </div>
-      {% for variant in published %}
-        {% include "publishing/_metric_card.html" %}
-      {% endfor %}
-      <p class="text-xs text-ink-subtle">Numbers come from {{ published|join_platforms }} and can take up to 48 hours to settle. Hover a label to see what it counts.</p>
-    </section>
-    {% endif %}
-    {% endwith %}
-
-    {% if channel_options %}
-    <section class="card card-pad space-y-4" aria-labelledby="pd-options">
-      <h2 id="pd-options" class="pd-section-title">Channel options</h2>
-      {% for row in channel_options %}
-      {% with o=row.options state=row.comment_state %}
-      <div class="{% if not forloop.first %}border-t border-border pt-4 {% endif %}space-y-2">
-        {% include "components/channel_tag.html" with channel=row.variant.platform %}
-        <dl class="grid grid-cols-1 sm:grid-cols-[9rem_1fr] gap-x-4 gap-y-1.5 text-sm">
-          {% if o.alt_text %}<dt class="text-ink-subtle">Alt text</dt><dd class="break-words text-ink">{{ o.alt_text }}</dd>{% endif %}
-          {% if o.location %}<dt class="text-ink-subtle">Location</dt><dd class="text-ink">{{ o.location.name|default:o.location.id }}</dd>{% endif %}
-          {% if o.collaborators %}<dt class="text-ink-subtle">Collaborators</dt><dd class="text-ink">{% for n in o.collaborators %}@{{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}</dd>{% endif %}
-          {% if "share_to_feed" in o %}<dt class="text-ink-subtle">Feed</dt><dd class="text-ink">{% if o.share_to_feed %}Shown in feed and Reels{% else %}Reels tab only{% endif %}</dd>{% endif %}
-          {% if o.cover_url %}<dt class="text-ink-subtle">Cover</dt><dd>{% include "publishing/_media_thumb.html" with url=o.cover_url size="w-12 h-20" alt="Reel cover" %}</dd>
-          {% elif o.thumb_offset %}<dt class="text-ink-subtle">Cover</dt><dd class="text-ink">Frame at {% widthratio o.thumb_offset 1000 1 %} s</dd>{% endif %}
-          {% if o.first_comment %}
-          <dt class="text-ink-subtle">First comment</dt>
-          <dd class="space-y-1">
-            <p class="whitespace-pre-wrap break-words text-ink">{{ o.first_comment }}</p>
-            {% if state.status == "posted" %}
-              <span class="text-xs font-semibold px-2 py-0.5 rounded-full tone-teal">Posted</span>
-            {% elif state.status == "queued" or state.status == "posting" %}
-              <span class="text-xs font-semibold px-2 py-0.5 rounded-full tone-info">Posting…</span>
-            {% elif state.status == "failed" %}
-              <div class="text-xs rounded-lg p-2.5 tone-coral-bg space-y-1.5">
-                <p class="text-ink">Not posted. {{ state.error }}</p>
-                <form method="post" action="{% url 'publishing:first-comment-retry' post.pk row.variant.pk %}">
-                  {% csrf_token %}
-                  <button type="submit" class="btn btn-ghost btn-sm">Try again</button>
-                </form>
-              </div>
-            {% else %}
-              <span class="text-xs text-ink-subtle">Posted when the post goes live.</span>
-            {% endif %}
-          </dd>
+      <details class="card pd-tech">
+        <summary>Technical details</summary>
+        <dl class="pd-facts mt-3">
+          <dt>Created</dt><dd>{{ post.created_at|date:"j N Y, H:i" }}</dd>
+          {% if post.scheduled_at %}<dt>Scheduled</dt><dd>{{ post.scheduled_at|date:"j N Y, H:i" }}</dd>{% endif %}
+          {% if post.published_at %}<dt>Published</dt><dd>{{ post.published_at|date:"j N Y, H:i" }}</dd>{% endif %}
+          {% for v in variants %}
+            {% if v.publication_id %}<dt>{{ v.get_platform_display }} post ID</dt><dd class="font-mono text-xs">{{ v.publication_id }}</dd>{% endif %}
+            {% if v.attempt_count %}<dt>{{ v.get_platform_display }} attempts</dt><dd>{{ v.attempt_count }}{% if v.last_error_type %} · {{ v.get_last_error_type_display }}{% endif %}</dd>{% endif %}
+          {% endfor %}
+          {% if post.plan_item %}
+          <dt>Plan item</dt>
+          <dd><a href="{% url 'publishing:plan-edit' post.plan_item.pk %}?next={{ request.get_full_path|urlencode }}" class="cs-link">{{ post.plan_item.topic|truncatechars:40 }}</a></dd>
           {% endif %}
         </dl>
-      </div>
-      {% endwith %}
-      {% endfor %}
-    </section>
-    {% endif %}
-  </div>
-
-  {# ── Details ──────────────────────────────────────────────────────────── #}
-  <div class="pd-side2">
-    <section class="card card-pad" aria-labelledby="pd-details">
-      <h2 id="pd-details" class="pd-section-title mb-3">Details</h2>
-      <dl class="pd-facts">
-        <dt>Type</dt><dd>{{ post.get_media_type_display }}</dd>
-        <dt>Channels</dt><dd>{{ post.platforms|platform_labels|default:"—" }}</dd>
-        {% if post.scheduled_at %}<dt>Scheduled</dt><dd>{{ post.scheduled_at|date:"N j, Y H:i" }}</dd>{% endif %}
-        {% if post.published_at %}<dt>Published</dt><dd>{{ post.published_at|date:"N j, Y H:i" }}</dd>{% endif %}
-        <dt>Created</dt><dd>{{ post.created_at|date:"N j, Y H:i" }}</dd>
-        {% if post.plan_item %}
-        <dt>Plan item</dt>
-        <dd><a href="{% url 'publishing:plan-edit' post.plan_item.pk %}?next={{ request.get_full_path|urlencode }}" class="text-accent hover:underline">{{ post.plan_item.topic|truncatechars:60 }}</a></dd>
-        {% endif %}
-      </dl>
-    </section>
+      </details>
+    </aside>
   </div>
 </div>
 {% endblock %}

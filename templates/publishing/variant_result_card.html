@@ -8,14 +8,17 @@ Expects ``variant`` and ``post``.{% endcomment %}
     {{ variant|variant_status_badge }}
   </div>
 
-  {# This channel's own time #}
-  {% if variant.status == 'scheduled' and variant.scheduled_at %}
-  <p class="text-sm text-ink-muted">Goes out {{ variant.scheduled_at|date:"D N j, H:i" }}</p>
-  {% elif variant.status == 'published' and variant.published_at %}
-  <p class="text-sm text-ink-muted">Published {{ variant.published_at|date:"D N j, H:i" }}</p>
-  {% elif variant.last_attempt_at %}
-  <p class="text-xs text-ink-subtle">Last tried {{ variant.last_attempt_at|timesince }} ago</p>
-  {% endif %}
+  {# This channel's own timeline: created, then where it stands now #}
+  <ol class="pd-timeline">
+    <li><span class="pd-dot" aria-hidden="true"></span><span class="flex-1">Created</span><time>{{ post.created_at|date:"N j, H:i" }}</time></li>
+    {% if variant.status == 'scheduled' and variant.scheduled_at %}
+    <li class="is-next"><span class="pd-dot" aria-hidden="true"></span><span class="flex-1">Goes out</span><time>{{ variant.scheduled_at|date:"N j, H:i" }}</time></li>
+    {% elif variant.status == 'published' and variant.published_at %}
+    <li class="is-done"><span class="pd-dot" aria-hidden="true"></span><span class="flex-1">Published{% if variant.attempt_count == 1 %}, first try{% endif %}</span><time>{{ variant.published_at|date:"N j, H:i" }}</time></li>
+    {% elif variant.last_attempt_at %}
+    <li class="{% if variant.status == 'failed' %}is-failed{% else %}is-next{% endif %}"><span class="pd-dot" aria-hidden="true"></span><span class="flex-1">{% if variant.status == 'failed' %}Failed{% else %}Last tried{% endif %}{% if variant.attempt_count > 1 %} ({{ variant.attempt_count }} tries){% endif %}</span><time>{{ variant.last_attempt_at|date:"N j, H:i" }}</time></li>
+    {% endif %}
+  </ol>
   {% if variant.status == 'draft' and variant.last_error %}
   <p class="text-xs text-ink-subtle">{{ variant.last_error }}</p>
   {% endif %}
@@ -32,14 +35,6 @@ Expects ``variant`` and ``post``.{% endcomment %}
   </form>
   {% endif %}
 
-  {# Publication URL (if successful) #}
-  {% if variant.status == 'published' and variant.publication_url|slice:":8" == "https://" or variant.status == 'published' and variant.publication_url|slice:":7" == "http://" %}
-  <a href="{{ variant.publication_url }}" target="_blank" rel="noopener"
-     class="inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline">
-    View on {{ variant.platform|platform_display_name }}
-    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-  </a>
-  {% endif %}
 
   {% if variant.status == 'reconciling' %}
   <div class="alert alert-warning !p-3 !text-ink flex-col !gap-1">
@@ -53,33 +48,29 @@ Expects ``variant`` and ``post``.{% endcomment %}
     {% if variant.last_error %}
     <p class="text-sm break-words">{{ variant|variant_error_message }}</p>
     {% else %}
-    <p class="text-sm break-words" data-no-reason>No reason was recorded for this channel. If another channel says what to change, it likely applies here too.</p>
+    <p class="text-sm break-words" data-no-reason>{% if post.error %}No reason was recorded for this channel. The post's error ({{ post.error|truncatechars:90 }}) likely applies here too.{% else %}No reason was recorded for this channel. If another channel says what to change, it likely applies here too.{% endif %}</p>
     {% endif %}
   </div>
   {% endif %}
 
   {% if variant|is_variant_retryable %}
   <div class="flex flex-wrap gap-2">
-    {% if can_fix and variant.last_error_type == 'validation' %}
-    <form method="post" action="{% url 'publishing:post-fix' post.pk %}" hx-boost="false">
-      {% csrf_token %}
-      <button type="submit" class="btn btn-primary btn-sm">{% include "components/icon.html" with name="pencil" class="w-4 h-4" %}Edit and fix</button>
-    </form>
-    {% endif %}
     <form method="post" action="{% url 'publishing:post-retry-variant' post.pk variant.platform %}">
       {% csrf_token %}
-      <button type="submit" class="btn {% if can_fix and variant.last_error_type == 'validation' %}btn-ghost{% else %}btn-secondary{% endif %} btn-sm">{% include "components/icon.html" with name="refresh" class="w-4 h-4" %}Retry this channel</button>
+      <button type="submit" class="btn btn-secondary btn-sm">{% include "components/icon.html" with name="refresh" class="w-4 h-4" %}Retry this channel</button>
     </form>
   </div>
   {% endif %}
 
-  {% if variant.publication_id and variant.status == 'published' %}
-  <a href="{% url 'conversations:comments' %}?channel={{ variant.platform }}&variant={{ variant.pk }}" class="btn btn-ghost btn-sm">{% include "components/icon.html" with name="chat" class="w-4 h-4" %}Comments</a>
+  {% if variant.status == 'published' %}
+  <div class="flex flex-wrap gap-2">
+    {% if variant.publication_url|slice:":8" == "https://" or variant.publication_url|slice:":7" == "http://" %}
+    <a href="{{ variant.publication_url }}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">View on {{ variant.platform|platform_display_name }}<span class="sr-only"> (opens in a new tab)</span></a>
+    {% endif %}
+    {% if variant.publication_id %}
+    <a href="{% url 'conversations:comments' %}?channel={{ variant.platform }}&variant={{ variant.pk }}" class="btn btn-secondary btn-sm">{% include "components/icon.html" with name="chat" class="w-4 h-4" %}Comments</a>
+    {% endif %}
+  </div>
   {% endif %}
 
-  {% if variant.attempt_count > 0 or variant.publication_id and variant.status == 'published' %}
-  <p class="text-xs text-ink-subtle">
-    {% if variant.attempt_count > 0 %}{{ variant.attempt_count }} attempt{{ variant.attempt_count|pluralize }}{% if variant.last_error_type %} · {{ variant.get_last_error_type_display }}{% endif %}{% endif %}{% if variant.publication_id and variant.status == 'published' %}{% if variant.attempt_count > 0 %} · {% endif %}ID {{ variant.publication_id }}{% endif %}
-  </p>
-  {% endif %}
 </div>

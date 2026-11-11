@@ -1,83 +1,72 @@
 {% comment %}
-What this post brought in, per channel. Expects ``results`` from apps.publishing.results.
+"From post to paid order": what this post brought in, all channels added up, one step to
+the next with the rate between them, and one tip for the step where people stop. Each
+channel's own link and bio options are in the side column (_chat_link_card.html).
+Expects ``results`` (apps.publishing.results.results_for) and ``funnel`` (funnel_for).
 {% endcomment %}
-{% if results %}
-<section class="card card-pad space-y-4" aria-labelledby="pd-results">
-  <h2 id="pd-results" class="pd-section-title">Results</h2>
-  {% for r in results %}
-  <div class="space-y-3{% if not forloop.first %} pt-4 border-t border-border{% endif %}">
-    {% include "components/channel_tag.html" with channel=r.variant.platform %}
-
-    {% if r.link %}
-    <div class="space-y-1" x-data="{ copied: false }">
-      <p class="text-xs text-ink-subtle">WhatsApp chat link</p>
-      <div class="flex flex-wrap items-center gap-2">
-        <code class="text-sm break-all">{{ r.link_url }}</code>
-        <button type="button" class="btn btn-ghost text-xs"
-                @click="navigator.clipboard.writeText('{{ r.link_url|escapejs }}'); copied = true; setTimeout(() => copied = false, 2000)">
-          <span x-show="!copied">Copy</span><span x-show="copied" x-cloak>Copied</span>
-        </button>
-      </div>
-      {% if r.variant.platform == 'instagram' %}
-        {% if r.bio %}
-        <p class="text-xs text-ink-subtle">Instagram captions can't hold tappable links. Add this post to your bio page so its chats are credited to it, or use this link on a story link sticker.</p>
-        {% if r.bio.on_page %}
-        <p class="text-xs text-ink">On your <a href="{% url 'publishing:bio' %}" class="cs-link">bio page</a>.</p>
-        {% elif r.bio.page %}
-        {% if can_edit_bio %}
-        <form method="post" action="{% url 'publishing:bio-tile-add' r.variant.pk %}" hx-boost="false">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-secondary btn-sm">Add to bio page</button>
-        </form>
-        {% else %}
-        <p class="text-xs text-ink-subtle">An Owner or Admin can add this post to your bio page.</p>
-        {% endif %}
-        {% else %}
-        <p class="text-xs"><a href="{% url 'publishing:bio' %}" class="cs-link">Set up a bio page</a> to give each post its own credit.</p>
-        {% endif %}
-        {% else %}
-        <p class="text-xs text-ink-subtle">Instagram captions can't hold tappable links. Put this link in your bio or on a story link sticker.</p>
-        {% endif %}
-      {% endif %}
+{% if funnel %}
+<section class="card card-pad space-y-5" aria-labelledby="pd-results">
+  <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+    <div>
+      <p class="pd-eyebrow">Results</p>
+      <h2 id="pd-results" class="pd-section-title">From post to paid order</h2>
+      <p class="mt-0.5 text-xs text-ink-subtle">Counted from this post's WhatsApp chat link{% if 'instagram' in post.platforms %} and replies to comments on it{% endif %} only.</p>
     </div>
-    {% endif %}
-
-    <dl class="pd-stats grid-cols-3 sm:grid-cols-5">
-      <div class="pd-stat">
-        <dt class="text-xs text-ink-subtle" title="Times people opened the chat link (link previews and bots aren't counted)">Link clicks</dt>
-        <dd>{% if r.link %}{{ r.clicks }}{% else %}—{% endif %}</dd>
-      </div>
-      <div class="pd-stat">
-        <dt class="text-xs text-ink-subtle" title="Chats started from this post's link{% if r.variant.platform == 'instagram' %} or from a reply to a comment on it{% endif %}">Chats</dt>
-        <dd>{{ r.chats }}</dd>
-      </div>
-      <div class="pd-stat">
-        <dt class="text-xs text-ink-subtle">Leads</dt>
-        <dd>{{ r.leads }}</dd>
-      </div>
-      <div class="pd-stat">
-        <dt class="text-xs text-ink-subtle">Orders</dt>
-        <dd>{{ r.orders }}</dd>
-      </div>
-      <div class="pd-stat">
-        <dt class="text-xs text-ink-subtle">Paid</dt>
-        <dd>
-          {% for row in r.revenue %}{{ row.currency }} {{ row.total }}{% if not forloop.last %}<br>{% endif %}{% empty %}—{% endfor %}
-        </dd>
-      </div>
-    </dl>
-    {% if r.credit_breakdown %}{% with b=r.credit_breakdown %}
-    {% if b.bio_unconfirmed or b.direct_link %}
-    <p class="text-xs text-ink-subtle" data-credit-breakdown>
-      Of the chats from this post's link:
-      {% if b.confirmed %}{{ b.confirmed }} came through your bio page{% if b.bio_unconfirmed or b.direct_link %}; {% endif %}{% endif %}
-      {% if b.bio_unconfirmed %}{{ b.bio_unconfirmed }} via bio link, post not confirmed (the link was in your bio, so the customer may have seen another post){% if b.direct_link %}; {% endif %}{% endif %}
-      {% if b.direct_link %}{{ b.direct_link }} direct link: confirmed for the link, not proven to be from this post{% endif %}.
-    </p>
-    {% endif %}
-    {% endwith %}{% endif %}
   </div>
-  {% endfor %}
-  <p class="text-xs text-ink-subtle">Only chats that used this post's link{% if 'instagram' in post.platforms %} or came from a reply to a comment on it{% endif %} are counted. Customers who found you another way aren't, so the real total can be higher.</p>
+
+  <dl class="pd-funnel">
+    {% for step in funnel.steps %}
+    <div class="pd-funnel-step">
+      <dt{% if step.definition %} title="{{ step.definition }}"{% endif %}>{{ step.label }}</dt>
+      <dd class="pd-funnel-value{% if not step.value %} is-zero{% endif %}">{% if step.value is None %}—{% else %}{{ step.value }}{% endif %}</dd>
+      <dd class="pd-funnel-note">
+        {% if step.note %}{{ step.note }}
+        {% elif step.rate is not None %}<span class="{% if step.rate == 0 %}tone-amber-fg{% endif %}">{{ step.rate }}% of {{ step.of }}</span>
+        {% else %}—{% endif %}
+      </dd>
+    </div>
+    {% endfor %}
+    <div class="pd-funnel-step">
+      <dt>Paid revenue</dt>
+      <dd class="pd-funnel-value{% if not funnel.revenue %} is-zero{% endif %}">
+        {% for row in funnel.revenue %}<span class="block">{{ row.currency }} {{ row.total }}</span>{% empty %}—{% endfor %}
+      </dd>
+      <dd class="pd-funnel-note">{% if funnel.revenue %}from paid orders{% else %}no paid orders yet{% endif %}</dd>
+    </div>
+  </dl>
+
+  {% if funnel.tip %}
+  <div class="pd-tip">
+    {% include "components/icon.html" with name="sparkles" class="w-4 h-4 shrink-0 mt-0.5" %}
+    <div class="min-w-0 text-sm">
+      <p class="font-medium text-ink">{{ funnel.tip.title }}</p>
+      <p class="text-ink-muted">{{ funnel.tip.body }}{% if editable %} <a href="{% url 'publishing:post-new' %}?post_id={{ post.pk }}" class="cs-link">Change the first message</a>{% endif %}</p>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if funnel.by_channel %}
+  <ul class="pd-by-channel">
+    {% for r in results %}
+    <li>
+      {% include "components/channel_tag.html" with channel=r.variant.platform compact=True %}
+      <span>{% if r.link %}{{ r.clicks }} click{{ r.clicks|pluralize }} · {% endif %}{{ r.chats }} chat{{ r.chats|pluralize }} · {{ r.leads }} lead{{ r.leads|pluralize }} · {{ r.orders }} order{{ r.orders|pluralize }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% for r in results %}{% if r.credit_breakdown %}{% with b=r.credit_breakdown %}
+  {% if b.bio_unconfirmed or b.direct_link %}
+  <p class="text-xs text-ink-subtle" data-credit-breakdown>
+    Of the chats from this post's Instagram link:
+    {% if b.confirmed %}{{ b.confirmed }} came through your bio page{% if b.bio_unconfirmed or b.direct_link %}; {% endif %}{% endif %}
+    {% if b.bio_unconfirmed %}{{ b.bio_unconfirmed }} via bio link, post not confirmed (the link was in your bio, so the customer may have seen another post){% if b.direct_link %}; {% endif %}{% endif %}
+    {% if b.direct_link %}{{ b.direct_link }} direct link: confirmed for the link, not proven to be from this post{% endif %}.
+  </p>
+  {% endif %}
+  {% endwith %}{% endif %}{% endfor %}
+
+  <p class="text-xs text-ink-subtle">Customers who found you another way aren't counted, so the real total can be higher.</p>
 </section>
 {% endif %}
