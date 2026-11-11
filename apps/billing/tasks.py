@@ -350,6 +350,26 @@ def _notice(sub, kind, payment) -> tuple[str, str] | None:
             f"Your features stay on{keep}. Pay{with_provider} here to keep everything "
             f"running: {pay_link}",
         )
+    if kind == "finish_payment":
+        from apps.billing import payments as billing_payments
+
+        quote = billing_payments.quote(account, plan, sub.billing_period)
+        term = sub.get_billing_period_display().lower()
+        lines = [
+            f"You created {account.company_name}'s Akilent account on the {plan.name} plan "
+            f"({term}), but the payment wasn't finished, so the plan isn't on yet.",
+            f"The amount due is {format_money(quote['due'])}."
+            + (
+                f" ({format_money(quote['credit'])} of your account credit is already "
+                "taken off.)"
+                if quote["credit"]
+                else ""
+            ),
+            "If you've already paid, you don't need to do anything: the plan switches on "
+            "as soon as the payment is confirmed.",
+            f"Finish paying: {_absolute_url('/billing/pay/')}",
+        ]
+        return f"Finish setting up your {plan.name} plan", "\n\n".join(lines)
     if kind == "trial_ending":
         trial_end = (
             f"{timezone.localtime(sub.trial_ends_at):%d %B %Y}"
@@ -562,6 +582,14 @@ def _notice_parts(sub, kind, payment) -> dict:
             notice_tone="warning",
             cta_url=pay_link,
             cta_label="Renew now",
+        )
+    elif kind == "finish_payment":
+        parts.update(
+            heading="Your plan is waiting for payment",
+            preheader=f"Finish paying to switch on {plan.name}.",
+            details=[("Plan", plan.name), ("Billed", sub.get_billing_period_display())],
+            cta_url=_absolute_url("/billing/pay/"),
+            cta_label="Finish paying",
         )
     elif kind == "trial_ending":
         parts.update(

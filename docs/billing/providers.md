@@ -28,6 +28,8 @@ Akilent owns the subscription lifecycle. A payment provider only moves money, so
   `due` / `due_reminder` when a pay-link renewal reaches its date; `unpaid` / `reminder` only
   when a charge was tried and declined; `payment_review` once when a provider holds a first
   payment; `auto_pay_stopped` when a provider ends a recurring subscription on its own;
+  `finish_payment` 1 and 3 days after a paid signup that wasn't paid for (only signups from
+  the last 7 days; never while a payment or bank transfer is pending, or with no way to pay);
   `renewed`, `paid`, `expired`, `cancelled`.
 
 The health check runs on Celery beat, so it can't report beat itself being down. On

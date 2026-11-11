@@ -44,6 +44,10 @@ UPCOMING_NOTICE = timedelta(days=3)
 RECURRING_GRACE = timedelta(days=2)
 # Days after a renewal went unpaid on which a reminder is sent.
 REMINDER_DAYS = (3, 6)
+# Days after a paid signup that wasn't paid for on which a reminder to finish paying is sent;
+# signups older than FINISH_PAYMENT_WINDOW are left alone (never a surprise email months on).
+FINISH_PAYMENT_DAYS = (1, 3)
+FINISH_PAYMENT_WINDOW = timedelta(days=7)
 FREE = "free"
 
 
@@ -237,6 +241,53 @@ def send_due_notices(now=None) -> None:
             sub.dunning_notices_sent = sent + 1
             sub.save(update_fields=["dunning_notices_sent", "updated_at"])
             _notify(sub, _reminder_kind(sub))
+
+    send_finish_payment_reminders(now)
+
+
+def send_finish_payment_reminders(now=None) -> int:
+    """A business that signed up for a paid plan and didn't pay (left at the provider's page,
+    or closed the tab) is reminded on FINISH_PAYMENT_DAYS after signup, with a link back to
+    its payment page. Not while a payment may already be on its way (in flight at the
+    provider, or a bank transfer waiting for review): paying again could pay twice. Not when
+    there is no way to pay right now. Returns how many were sent."""
+    from apps.core.models import SiteSettings
+
+    from .models import ManualPaymentRequest
+
+    now = now or timezone.now()
+    if not SiteSettings.load().payments_enabled or (
+        registry.active() is None and not registry.manual_enabled()
+    ):
+        return 0  # a reminder with nothing to pay with would be a dead end
+    sent_count = 0
+    for sub in Subscription.objects.filter(
+        status=Subscription.INCOMPLETE,
+        created_at__gt=now - FINISH_PAYMENT_WINDOW,
+        dunning_notices_sent__lt=len(FINISH_PAYMENT_DAYS),
+        plan__is_active=True,
+        plan__price_monthly__gt=0,
+        account__is_active=True,
+    ).select_related("plan", "account"):
+        sent = sub.dunning_notices_sent
+        if now - sub.created_at < timedelta(days=FINISH_PAYMENT_DAYS[sent]):
+            continue
+        if payments.has_unconfirmed_charge(sub.account) or (
+            ManualPaymentRequest.objects.filter(
+                account_id=sub.account_id, status=ManualPaymentRequest.PENDING
+            ).exists()
+        ):
+            continue
+        # Only the run that moves the count on sends, so overlapping runs send once.
+        moved = Subscription.objects.filter(
+            pk=sub.pk,
+            status=Subscription.INCOMPLETE,
+            dunning_notices_sent=sent,
+        ).update(dunning_notices_sent=sent + 1, updated_at=now)
+        if moved:
+            _notify(sub, "finish_payment")
+            sent_count += 1
+    return sent_count
 
 
 def _reminder_kind(sub) -> str:
