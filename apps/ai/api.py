@@ -736,15 +736,32 @@ def usage_summary(account=None, *, since, until=None) -> dict:
     )
 
 
-def test_connection() -> dict:
-    """``{"ok", "model", "latency_ms", "error"}`` for one tiny round trip. Sends no customer data."""
+def test_connection(which: str = "") -> dict:  # noqa: PT028 (not a pytest test)
+    """``{"ok", "model", "latency_ms", "error"}`` for one tiny round trip. Sends no customer data.
+
+    ``which``: "" tests what callers get (primary, with the fallback behind it), "primary" only
+    the configured backend, "fallback" only the backup.
+    """
     import time
 
-    from apps.ai.providers import AIProviderError, get_ai_provider
+    from apps.ai.providers import (
+        AIProviderError,
+        get_ai_provider,
+        get_fallback_provider,
+    )
+    from apps.ai.providers.fallback import FallbackProvider
 
     started = time.monotonic()
     try:
-        result = get_ai_provider().health()
+        if which == "fallback":
+            provider = get_fallback_provider()
+            if provider is None:
+                raise AIProviderError("No AI fallback is configured.")
+        else:
+            provider = get_ai_provider()
+            if which == "primary" and isinstance(provider, FallbackProvider):
+                provider = provider.primary
+        result = provider.health()
     except AIProviderError as exc:
         return {"ok": False, "error": str(exc), "model": "", "latency_ms": None}
     return {

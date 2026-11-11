@@ -148,12 +148,13 @@ def _propose(
         "knowledge_ids": [e["id"] for e in facts["knowledge"]],
     }
 
-    started, used, model = time.monotonic(), [], ""
+    started, used, model, served_by = time.monotonic(), [], "", ""
     for round_no in range(MAX_LOOKUPS + 1):
         result = provider.chat(
             messages, system=system, max_tokens=MAX_TOKENS, temperature=TEMPERATURE
         )
         model = result.model or model
+        served_by = getattr(result, "provider", "") or served_by
         data = proposals.extract_json(result.text)
         wanted = proposals.tool_request(data)
         if wanted is None:
@@ -174,7 +175,7 @@ def _propose(
     return {
         "proposal": proposal,
         "model": model,
-        "provider": backend_name(),
+        "provider": served_by or backend_name(),
         "latency_ms": int((time.monotonic() - started) * 1000),
         "tools_used": used,
         "route": route,

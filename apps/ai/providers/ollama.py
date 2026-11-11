@@ -4,6 +4,9 @@ Plain ``requests`` against ``/api/chat``: no vendor SDK to keep in step. Reasoni
 gpt-oss return their thinking in a separate ``message.thinking`` field. Only ``message.content`` is
 used, and thinking tokens count towards ``num_predict``, so callers should leave generous headroom
 in ``max_tokens``.
+
+A self-hosted server behind a proxy with basic auth takes ``username`` + ``password`` instead of an
+API key. ``think`` is sent only when set, so models without a thinking mode are unaffected.
 """
 
 from __future__ import annotations
@@ -11,7 +14,7 @@ from __future__ import annotations
 from django.conf import settings
 
 from apps.ai.providers.base import AIProvider, AIProviderError, CompletionResult
-from apps.ai.providers.http import post_json
+from apps.ai.providers.http import CONNECT_TIMEOUT, post_json
 
 DEFAULT_MODEL = "gpt-oss:120b"
 
@@ -24,6 +27,10 @@ class OllamaProvider(AIProvider):
         api_key: str | None = None,
         model: str = "",
         timeout: float = 0,
+        username: str = "",
+        password: str = "",
+        think: bool | None = None,
+        connect_timeout: float = CONNECT_TIMEOUT,
     ):
         self.base_url = (
             base_url or getattr(settings, "OLLAMA_BASE_URL", "") or "https://ollama.com"
@@ -34,6 +41,9 @@ class OllamaProvider(AIProvider):
         )
         self.model = model or getattr(settings, "AI_MODEL", "") or DEFAULT_MODEL
         self.timeout = timeout or getattr(settings, "AI_TIMEOUT_SECONDS", 0) or 45
+        self.auth = (username, password) if username and password else None
+        self.think = think
+        self.connect_timeout = connect_timeout
 
     def chat(
         self,
@@ -51,19 +61,24 @@ class OllamaProvider(AIProvider):
             for m in messages
         ]
         headers = {"Content-Type": "application/json"}
-        if self.api_key:
+        if self.api_key and not self.auth:
             headers["Authorization"] = f"Bearer {self.api_key}"
+        body = {
+            "model": self.model,
+            "messages": wire,
+            "stream": False,
+            "options": {"temperature": temperature, "num_predict": max_tokens},
+        }
+        if self.think is not None:
+            body["think"] = self.think
         data = post_json(
             f"{self.base_url}/api/chat",
             headers=headers,
             timeout=timeout or self.timeout,
             model=self.model,
-            body={
-                "model": self.model,
-                "messages": wire,
-                "stream": False,
-                "options": {"temperature": temperature, "num_predict": max_tokens},
-            },
+            body=body,
+            auth=self.auth,
+            connect_timeout=self.connect_timeout,
         )
         text = (
             ((data.get("message") or {}).get("content") or "").strip()

@@ -376,6 +376,16 @@ WHATSAPP_PLATFORM_MAX_PER_HOUR = int(
 )
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "https://ollama.com")
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "")
+# Backup AI: when the primary provider fails, the same call goes to this self-hosted Ollama.
+# Empty AI_FALLBACK_BACKEND = off. Basic auth (username + password) for a server behind a proxy.
+AI_FALLBACK_BACKEND = (os.getenv("AI_FALLBACK_BACKEND") or "").strip()
+AI_FALLBACK_BASE_URL = (os.getenv("AI_FALLBACK_BASE_URL") or "").strip()
+AI_FALLBACK_MODEL = (os.getenv("AI_FALLBACK_MODEL") or "").strip()
+AI_FALLBACK_USERNAME = (os.getenv("AI_FALLBACK_USERNAME") or "").strip()
+AI_FALLBACK_PASSWORD = os.getenv("AI_FALLBACK_PASSWORD") or ""
+AI_FALLBACK_TIMEOUT_SECONDS = int(
+    (os.getenv("AI_FALLBACK_TIMEOUT_SECONDS") or "180").strip()
+)
 
 
 # --- Encryption ---

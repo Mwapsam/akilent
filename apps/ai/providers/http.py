@@ -14,11 +14,22 @@ CONNECT_TIMEOUT = 5
 
 
 def post_json(
-    url: str, *, headers: dict, body: dict, timeout: float, model: str
+    url: str,
+    *,
+    headers: dict,
+    body: dict,
+    timeout: float,
+    model: str,
+    auth: tuple[str, str] | None = None,
+    connect_timeout: float = CONNECT_TIMEOUT,
 ) -> dict:
     try:
         response = requests.post(
-            url, json=body, headers=headers, timeout=(CONNECT_TIMEOUT, timeout)
+            url,
+            json=body,
+            headers=headers,
+            timeout=(connect_timeout, timeout),
+            **({"auth": auth} if auth else {}),
         )
     except requests.Timeout as exc:
         raise AIProviderError("The AI service took too long to answer.") from exc

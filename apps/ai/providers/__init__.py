@@ -61,13 +61,57 @@ def get_ai_provider(account=None, tier: str = "standard") -> AIProvider:
     if not (isinstance(cls, type) and issubclass(cls, AIProvider)):
         raise AIProviderError(f"AI backend {name!r} is not an AIProvider.")
     model = model_for(tier)
-    return cls(model=model) if model else cls()  # type: ignore[call-arg]
+    primary = cls(model=model) if model else cls()  # type: ignore[call-arg]
+    fallback = get_fallback_provider()
+    if fallback is None:
+        return primary
+    from apps.ai.providers.fallback import FallbackProvider
+
+    return FallbackProvider(
+        primary, fallback, primary_name=name, fallback_name=fallback_name()
+    )
+
+
+def fallback_name() -> str:
+    return (getattr(settings, "AI_FALLBACK_BACKEND", "") or "").strip().lower()
+
+
+def fallback_configured() -> bool:
+    return bool(fallback_name())
+
+
+def get_fallback_provider() -> AIProvider | None:
+    """The backup provider (a self-hosted Ollama) when ``AI_FALLBACK_BACKEND`` is set, else None.
+
+    Raises:
+        AIProviderError: if the fallback backend is set to something unsupported.
+    """
+    name = fallback_name()
+    if not name:
+        return None
+    if name != "ollama":
+        raise AIProviderError(f"Unknown AI fallback backend {name!r}.")
+    from apps.ai.providers.ollama import OllamaProvider
+
+    return OllamaProvider(
+        base_url=(getattr(settings, "AI_FALLBACK_BASE_URL", "") or "").strip(),
+        api_key="",
+        model=(getattr(settings, "AI_FALLBACK_MODEL", "") or "").strip(),
+        username=(getattr(settings, "AI_FALLBACK_USERNAME", "") or "").strip(),
+        password=getattr(settings, "AI_FALLBACK_PASSWORD", "") or "",
+        think=False,
+        timeout=getattr(settings, "AI_FALLBACK_TIMEOUT_SECONDS", 0) or 180,
+        connect_timeout=15,
+    )
 
 
 __all__ = [
     "AIProvider",
     "AIProviderError",
     "backend_name",
+    "fallback_configured",
+    "fallback_name",
+    "get_fallback_provider",
     "get_ai_provider",
     "is_configured",
 ]

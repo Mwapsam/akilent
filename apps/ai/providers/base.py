@@ -30,6 +30,9 @@ class CompletionResult:
     error: str | None = None
     """Error message if the call failed."""
 
+    provider: str = ""
+    """Which backend answered when it wasn't the configured one (e.g. "fallback:ollama")."""
+
     def __post_init__(self):
         if self.usage is None:
             self.usage = {}
