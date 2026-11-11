@@ -1045,6 +1045,9 @@ def _build_state(ctx, essentials_only: bool) -> dict:
         "next_step": next_step,
         "next_recommended": next_recommended,
         "paused": list(ctx.paused),
+        # Which channel the header's "Waiting on …" pill names: "a channel" said nothing,
+        # and read as wrong while Instagram and Facebook were connected.
+        "paused_labels": [CHANNEL_REGISTRY[ch].label for ch in ctx.paused],
         # Whether Content Studio has somewhere to publish (for the tour's slide).
         "can_publish": _can_publish(ctx),
         "wants_whatsapp": ctx.wants_whatsapp,

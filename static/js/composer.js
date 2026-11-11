@@ -1030,10 +1030,16 @@
       readyTone: function () {
         var a = this.primaryAction();
         if (!this.selectedPlatforms.length || this.blocking(a).length) return "is-bad";
-        return this.visibleIssues().length || this.readinessFailed ? "is-warn" : "is-ok";
+        if (this.readinessFailed) return "is-warn";
+        // Neutral until the first check answers: a tick then "1 thing to fix" misleads.
+        if (!this.issuesLoaded) return "is-checking";
+        return this.visibleIssues().length ? "is-warn" : "is-ok";
       },
 
-      readyIcon: function () { return this.readyTone() === "is-ok" ? "✓" : "!"; },
+      readyIcon: function () {
+        var tone = this.readyTone();
+        return tone === "is-ok" ? "✓" : tone === "is-checking" ? "" : "!";
+      },
 
       readyText: function () {
         var a = this.primaryAction();

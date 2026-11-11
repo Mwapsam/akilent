@@ -479,3 +479,33 @@ class RequestMemoMiddleware:
             return self.get_response(request)
         with request_memo():
             return self.get_response(request)
+
+
+class WorkspaceTimezoneMiddleware:
+    """Content Studio shows and reads times on the business's own clock.
+
+    The business sets its timezone with its opening hours. Only some Content Studio
+    views switched to it, so the same failure read 17:23 on one page and 19:23 on
+    another. Every page under ``/publishing/`` now uses it.
+    """
+
+    PREFIX = "/publishing/"
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if not request.path.startswith(self.PREFIX):
+            return self.get_response(request)
+        from zoneinfo import ZoneInfo
+
+        from django.utils import timezone
+
+        from apps.accounts.business_hours import workspace_timezone
+        from apps.accounts.utils import get_current_account
+
+        account = get_current_account(request)
+        if account is None:
+            return self.get_response(request)
+        with timezone.override(ZoneInfo(workspace_timezone(account))):
+            return self.get_response(request)

@@ -18,7 +18,7 @@
       <span class="min-w-0">
         <span class="block text-sm font-semibold text-ink">{{ d.label }}</span>
         <span class="cmp-status is-{{ d.status }}">
-          {% if d.status == "connected" %}<span class="truncate">{{ d.account_name|default:"Connected" }}</span>
+          {% if d.status == "connected" %}<span class="truncate" title="{{ d.account_name|default:'Connected' }}">{{ d.account_name|default:"Connected" }}</span>
           {% elif d.status == "reconnect" %}Reconnect needed
           {% elif d.status == "off" %}Switched off
           {% else %}Not connected{% endif %}

@@ -100,6 +100,68 @@ def _dimensions(data: bytes) -> tuple[int | None, int | None]:
         return None, None
 
 
+_SIZE_CACHE_SECONDS = 24 * 3600
+_SIZE_UNKNOWN_CACHE_SECONDS = 300
+_SIZE_READ_MAX_BYTES = 8 * 1024 * 1024
+
+
+def image_size(account, url: str) -> tuple[int, int] | None:
+    """A picture's (width, height): from the media library when it knows, else read from
+    the file's header on our own media host and remembered for a day. None when unknown
+    (someone else's host, unreadable, or not a picture)."""
+    from django.core.cache import cache
+
+    if not url:
+        return None
+    asset = MediaAsset.objects.filter(
+        account=account, url_digest=url_digest(url)
+    ).first()
+    if asset is not None and asset.width and asset.height:
+        return asset.width, asset.height
+
+    from .services import _is_own_media_url
+
+    if not _is_own_media_url(url):
+        return None
+    key = f"publishing:image-size:{url_digest(url)}"
+    cached = cache.get(key)
+    if cached is not None:
+        return tuple(cached) if cached else None
+    size = _read_image_size(url)
+    cache.set(
+        key,
+        list(size) if size else [],
+        _SIZE_CACHE_SECONDS if size else _SIZE_UNKNOWN_CACHE_SECONDS,
+    )
+    if size and asset is not None:
+        MediaAsset.objects.filter(pk=asset.pk).update(width=size[0], height=size[1])
+    return size
+
+
+def _read_image_size(url: str) -> tuple[int, int] | None:
+    """Read just enough of the file for its size: a JPEG or PNG says it in the first
+    few kilobytes."""
+    import requests
+    from PIL import ImageFile
+
+    parser = ImageFile.Parser()
+    read = 0
+    try:
+        with requests.get(url, timeout=5, stream=True, allow_redirects=False) as resp:
+            resp.raise_for_status()
+            for chunk in resp.iter_content(16 * 1024):
+                parser.feed(chunk)
+                read += len(chunk)
+                if parser.image is not None:
+                    w, h = parser.image.size
+                    return (w, h) if w and h else None
+                if read > _SIZE_READ_MAX_BYTES:
+                    return None
+    except Exception as exc:
+        logger.debug("image_size: could not read %s: %s", url, exc)
+    return None
+
+
 def record(
     account,
     url: str,

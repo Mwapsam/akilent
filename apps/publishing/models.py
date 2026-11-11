@@ -124,6 +124,17 @@ class ContentPlanItem(models.Model):
     def __str__(self) -> str:
         return self.topic
 
+    @property
+    def is_missed(self) -> bool:
+        """Its day has passed and nobody started the post: not "Planned" any more."""
+        from django.utils import timezone
+
+        return bool(
+            self.planned_date
+            and self.planned_date < timezone.localdate()
+            and self.plan_status in (self.PlanStatus.IDEA, self.PlanStatus.PLANNED)
+        )
+
     def clean(self) -> None:
         if (
             self.pillar_id

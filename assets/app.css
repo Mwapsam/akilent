@@ -1235,6 +1235,7 @@
   .cal-plan-label { @apply inline-flex items-center gap-1.5 text-[0.6875rem] font-semibold uppercase tracking-wider; color: var(--color-ink-subtle); }
   .cal-plan-pillar { @apply normal-case tracking-normal font-medium truncate; }
   .cal-col .cal-plan-pillar { display: none; }
+  .cal-plan.is-missed .cal-plan-label { color: var(--tone-coral-fg); }
   .cal-plan-dot { @apply w-2 h-2 rounded-full shrink-0; background: var(--color-ink-subtle); }
   .cal-plan-topic { @apply text-xs font-medium leading-snug line-clamp-2 break-words text-ink; }
 

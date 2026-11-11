@@ -98,6 +98,8 @@ MIDDLEWARE = [
     "apps.core.middleware.BrowserSessionMiddleware",
     "apps.core.middleware.SuspendedAccountMiddleware",
     "apps.core.middleware.ViewAsReadOnlyMiddleware",
+    # Content Studio pages use the business's own timezone.
+    "apps.core.middleware.WorkspaceTimezoneMiddleware",
     # In-place navigation: falls back to a full page load whenever a fragment won't do.
     "apps.core.htmx.ShellMiddleware",
 ]

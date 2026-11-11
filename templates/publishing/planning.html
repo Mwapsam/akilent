@@ -37,7 +37,7 @@
   {# Upcoming 7 days #}
   <div class="md:col-span-2 card card-pad">
     <div class="flex items-center justify-between mb-3">
-      <h2 class="font-semibold text-ink">Next 7 days</h2>
+      <h2 class="font-semibold text-ink">Next 7 days{% if missed_count %} <span class="text-xs font-medium tone-coral-fg">· {{ missed_count }} missed</span>{% endif %}</h2>
       <a href="{% url 'publishing:calendar' %}" class="text-xs text-accent">Open calendar →</a>
     </div>
     {% if upcoming %}
@@ -46,8 +46,8 @@
       <div class="flex items-start gap-3 p-2 rounded-lg hover:bg-surface-subtle group" data-row>
         <div class="shrink-0 text-center w-10">
           {% if item.planned_date %}
-          <p class="text-xs text-ink-subtle">{{ item.planned_date|date:"D" }}</p>
-          <p class="text-sm font-semibold text-ink">{{ item.planned_date|date:"j" }}</p>
+          <p class="text-xs {% if item.is_missed %}tone-coral-fg{% else %}text-ink-subtle{% endif %}">{{ item.planned_date|date:"D" }}</p>
+          <p class="text-sm font-semibold {% if item.is_missed %}tone-coral-fg{% else %}text-ink{% endif %}">{{ item.planned_date|date:"j" }}</p>
           {% endif %}
         </div>
         <div class="flex-1 min-w-0">
@@ -58,13 +58,13 @@
             <p class="text-sm font-medium text-ink truncate">{{ item.topic }}</p>
           </div>
           <p class="text-xs text-ink-subtle mt-0.5">
-            {{ item.get_media_type_display }}
+            {% if item.is_missed %}<span class="tone-coral-fg font-medium">Missed: its day has passed</span> · {% endif %}{{ item.get_media_type_display }}
             {% if item.platforms %} · {{ item.platforms|platform_names }}{% endif %}
             {% if item.pillar %} · {{ item.pillar.name }}{% endif %}
           </p>
         </div>
         <div class="shrink-0 flex gap-1 md:pointer-fine:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 transition-opacity">
-          <form method="post" action="{% url 'publishing:plan-create-post' item.pk %}">
+          <form method="post" action="{% url 'publishing:plan-create-post' item.pk %}" hx-boost="false" data-busy-submit>
             {% csrf_token %}
             <button type="submit" class="btn btn-ghost text-xs py-0.5 px-2">Create post</button>
           </form>
@@ -95,7 +95,7 @@
           <p class="text-xs text-ink-subtle mt-0.5">{{ item.get_plan_status_display }}</p>
         </div>
         <div class="shrink-0 flex gap-1 md:pointer-fine:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 transition-opacity">
-          <form method="post" action="{% url 'publishing:plan-create-post' item.pk %}">
+          <form method="post" action="{% url 'publishing:plan-create-post' item.pk %}" hx-boost="false" data-busy-submit>
             {% csrf_token %}
             <button type="submit" class="text-xs text-accent hover:underline">→ Post</button>
           </form>

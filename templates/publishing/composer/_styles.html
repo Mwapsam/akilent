@@ -55,8 +55,11 @@
 
   /* Destinations -------------------------------------------------------------- */
   .cmp-dests { display: grid; gap: .75rem; }
-  @media (min-width: 640px) { .cmp-dests { grid-template-columns: 1fr 1fr; } }
-  .cmp-dest { position: relative; display: flex; align-items: center; gap: .75rem; padding: .75rem .875rem; border: 1px solid var(--color-border); border-radius: var(--radius-surface); cursor: pointer; transition: border-color .15s, background-color .15s; }
+  /* Side by side while each card has room for its account name; else stacked. minmax(0, …)
+     so a long Page name truncates instead of pushing the card out of the panel. */
+  .cmp-dests { grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); }
+  .cmp-dest > .min-w-0 { flex: 1 1 auto; }
+  .cmp-dest { min-width: 0; position: relative; display: flex; align-items: center; gap: .75rem; padding: .75rem .875rem; border: 1px solid var(--color-border); border-radius: var(--radius-surface); cursor: pointer; transition: border-color .15s, background-color .15s; }
   .cmp-dest:hover { border-color: var(--color-brand-300); }
   .cmp-dest.is-on { border-color: var(--color-brand-500); background: var(--tone-brand-bg); box-shadow: inset 0 0 0 1px var(--color-brand-500); }
   .cmp-dest:has(input:focus-visible) { outline: 2px solid var(--color-brand-600); outline-offset: 2px; }
@@ -65,8 +68,9 @@
   .cmp-dest-icon.is-fb { background: #1877F2; }
   .cmp-dest-check { margin-left: auto; width: 1.25rem; height: 1.25rem; border-radius: 9999px; border: 1.5px solid var(--color-border-strong); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #fff; }
   .cmp-dest.is-on .cmp-dest-check { background: var(--color-brand-600); border-color: var(--color-brand-600); }
-  .cmp-status { display: inline-flex; align-items: center; gap: .3rem; font-size: .75rem; color: var(--color-ink-subtle); }
-  .cmp-status::before { content: ""; width: .4rem; height: .4rem; border-radius: 9999px; background: var(--color-gray-300); }
+  .cmp-status { display: inline-flex; max-width: 100%; align-items: center; gap: .3rem; font-size: .75rem; color: var(--color-ink-subtle); }
+  .cmp-status > .truncate { min-width: 0; }
+  .cmp-status::before { content: ""; flex-shrink: 0; width: .4rem; height: .4rem; border-radius: 9999px; background: var(--color-gray-300); }
   .cmp-status.is-connected::before { background: var(--color-teal-500); }
   .cmp-status.is-reconnect::before { background: var(--color-coral-500); }
   .cmp-status.is-not_connected::before { background: var(--color-amber-400); }
@@ -147,6 +151,8 @@
   .cmp-ready-icon.is-ok { background: var(--tone-teal-bg); color: var(--tone-teal-fg); }
   .cmp-ready-icon.is-warn { background: var(--tone-amber-bg); color: var(--tone-amber-fg); }
   .cmp-ready-icon.is-bad { background: var(--tone-coral-bg); color: var(--tone-coral-fg); }
+  .cmp-ready-icon.is-checking { background: var(--color-surface-subtle); border: 2px solid var(--color-border); border-top-color: var(--color-ink-subtle); animation: spin 0.8s linear infinite; }
+  @media (prefers-reduced-motion: reduce) { .cmp-ready-icon.is-checking { animation: none; } }
   .cmp-pop { position: absolute; bottom: calc(100% + .5rem); left: 0; width: min(24rem, calc(100vw - 2rem)); max-height: 60vh; overflow-y: auto; padding: .5rem; border-radius: var(--radius-surface); background: var(--color-surface); border: 1px solid var(--color-border); box-shadow: var(--shadow-modal); text-align: left; }
   .cmp-issue { display: flex; gap: .625rem; width: 100%; padding: .625rem; border-radius: var(--radius-control); text-align: left; font-size: .8125rem; line-height: 1.45; color: var(--color-ink); }
   .cmp-issue:hover { background: var(--color-hover); }

@@ -26,7 +26,7 @@ from apps.accounts.utils import get_current_account
 from apps.core.htmx import full_page_load, overlay_done, overlay_or_page
 from apps.core.module_gate import module_required
 
-from . import ai_plus, direct_upload
+from . import ai_plus, direct_upload, readiness
 from .composer import (
     EDITABLE_STATUSES as _EDITABLE_POST_STATUSES,
 )
@@ -453,7 +453,8 @@ def publishing_index(request):
     plans_due = list(
         ContentPlanItem.objects.filter(
             account=account,
-            planned_date__gte=today,
+            # Missed days too (up to a month back), so they don't drop off unseen.
+            planned_date__gte=today - datetime.timedelta(days=30),
             planned_date__lte=today + datetime.timedelta(days=PLAN_DUE_DAYS),
             posts__isnull=True,
         )
@@ -1087,7 +1088,17 @@ def planning_overview(request):
         ).count(),
     }
 
-    upcoming = list(
+    # Missed days come first: their date passed and no post was started.
+    missed = list(
+        plan_qs.filter(
+            planned_date__lt=today,
+            plan_status__in=(
+                ContentPlanItem.PlanStatus.IDEA,
+                ContentPlanItem.PlanStatus.PLANNED,
+            ),
+        ).order_by("planned_date")[:10]
+    )
+    upcoming = missed + list(
         plan_qs.filter(
             planned_date__gte=today,
             planned_date__lte=week_ahead,
@@ -1111,6 +1122,7 @@ def planning_overview(request):
             "account": account,
             "counts": counts,
             "upcoming": upcoming,
+            "missed_count": len(missed),
             "backlog": backlog,
             "pillars": pillars,
             "campaigns": campaigns,
@@ -1318,6 +1330,17 @@ def plan_item_create_post(request, pk):
 
     item = get_object_or_404(ContentPlanItem, pk=pk, account=account)
 
+    # A second click (or a resubmitted form) opens the idea's draft instead of making another.
+    draft = (
+        ContentPost.objects.filter(
+            account=account, plan_item=item, status=ContentPost.Status.DRAFT
+        )
+        .order_by("-pk")
+        .first()
+    )
+    if draft is not None:
+        return redirect(f"{reverse('publishing:post-new')}?post_id={draft.pk}")
+
     from .composer import CONNECTED, OFF, destinations
     from .services import initialize_post_with_variants
 
@@ -1340,6 +1363,8 @@ def plan_item_create_post(request, pk):
                 status=ContentPost.Status.DRAFT,
                 created_by=request.user,
                 brief_objective=item.objective,
+                # The idea's words start the caption: the draft used to open empty.
+                caption=_caption_from_plan(item),
             )
             item.plan_status = ContentPlanItem.PlanStatus.IN_PRODUCTION
             item.save(update_fields=["plan_status", "updated_at"])
@@ -1348,9 +1373,16 @@ def plan_item_create_post(request, pk):
         messages.error(request, f"Cannot create a post from this plan item: {exc!s}")
         return redirect("publishing:planning")
 
-    return redirect(
-        f"{request.build_absolute_uri('/publishing/new/')}?post_id={post.pk}"
-    )
+    return redirect(f"{reverse('publishing:post-new')}?post_id={post.pk}")
+
+
+def _caption_from_plan(item) -> str:
+    """A first caption from a plan item: its topic, then its objective if it adds anything."""
+    parts = [item.topic.strip()]
+    objective = (item.objective or "").strip()
+    if objective and objective.lower() != parts[0].lower():
+        parts.append(objective)
+    return "\n\n".join(p for p in parts if p)
 
 
 @login_required
@@ -1901,10 +1933,16 @@ def post_new(request):
     review_gate = requires_review and not approved
     # A new post, or a draft nobody has written yet (e.g. one made from a plan item),
     # can start from AI captions.
-    show_ai_start = existing_post is None or (
-        existing_post.status in AUTOSAVE_STATUSES and not existing_post.caption
-    )
     plan_item = existing_post.plan_item if existing_post else None
+    # A draft made from a plan item starts with the idea's words, and can still start
+    # from AI captions until someone changes them.
+    show_ai_start = existing_post is None or (
+        existing_post.status in AUTOSAVE_STATUSES
+        and (
+            not existing_post.caption
+            or (plan_item and existing_post.caption == _caption_from_plan(plan_item))
+        )
+    )
     # "Use in post" from the media library (?media=<file>): a new post starting with it.
     library_file = None
     if existing_post is None and request.GET.get("media", "").isdigit():
@@ -2138,6 +2176,12 @@ def post_retry(request, pk):
     if post.status != ContentPost.Status.FAILED:
         messages.error(request, "Only failed posts can be retried.")
         return redirect("publishing:post-detail", pk=post.pk)
+    # Instagram would refuse the picture again: say so instead of retrying.
+    if post.variants.filter(platform="instagram").exclude(
+        status=ContentPostVariant.Status.PUBLISHED
+    ).exists() and (problem := readiness.ig_ratio_problem(post)):
+        messages.error(request, f"Not retried. {problem}")
+        return redirect("publishing:post-detail", pk=post.pk)
 
     # Validate scheduled_at is in the future (or allow override via POST)
     scheduled_at_raw = request.POST.get("scheduled_at", "").strip()
@@ -2188,6 +2232,11 @@ def post_retry_variant(request, pk, platform):
 
     if variant.status != ContentPostVariant.Status.FAILED:
         messages.error(request, "Only failed variants can be retried.")
+        return redirect("publishing:post-detail", pk=post.pk)
+    if variant.platform == "instagram" and (
+        problem := readiness.ig_ratio_problem(post)
+    ):
+        messages.error(request, f"Not retried. {problem}")
         return redirect("publishing:post-detail", pk=post.pk)
 
     # Atomically transition variant to PUBLISHING to prevent duplicate enqueues

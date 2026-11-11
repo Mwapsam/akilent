@@ -401,47 +401,65 @@ def _already_published_on_facebook(account, hashes: set[str]) -> bool:
     return reused
 
 
-def _ig_ratio_issues(inp: ComposerInput, account) -> list[dict]:
-    """Instagram refuses pictures outside 4:5 portrait to 1.91:1 landscape. When the media
-    library knows a picture's size, say so now, instead of failing at publish time."""
-    from .media_library import url_digest
-    from .models import MediaAsset
+def _ig_bad_ratio(account, urls) -> tuple[int, int] | None:
+    """The first picture in ``urls`` Instagram refuses for its shape, as (width, height)."""
+    from .media_library import image_size
 
+    for u in urls:
+        size = image_size(account, u)
+        if size and not limits.IG_RATIO_MIN <= size[0] / size[1] <= limits.IG_RATIO_MAX:
+            return size
+    return None
+
+
+def _ig_ratio_message(size: tuple[int, int]) -> str:
+    w, h = size
+    return (
+        f"Instagram takes pictures from 4:5 portrait to 1.91:1 landscape; this one is "
+        f"{w} by {h} pixels. Crop it (in Media → Edit, or upload it again)."
+    )
+
+
+def _ig_ratio_issues(inp: ComposerInput, account) -> list[dict]:
+    """Instagram refuses pictures outside 4:5 portrait to 1.91:1 landscape. Say so now,
+    instead of failing at publish time: the size comes from the media library, or from
+    the file itself on our own host."""
     if "instagram" not in inp.platforms or inp.media_type not in (
         limits.IMAGE,
         limits.CAROUSEL,
     ):
         return []
     urls = inp.media_urls if inp.media_type == limits.CAROUSEL else inp.media_urls[:1]
-    if not urls:
+    bad = _ig_bad_ratio(account, urls)
+    if bad is None:
         return []
-    sizes = {
-        a.url: (a.width, a.height)
-        for a in MediaAsset.objects.filter(
-            account=account, url_digest__in=[url_digest(u) for u in urls]
-        )
-        if a.width and a.height
-    }
-    bad = [
-        (w, h)
-        for u in urls
-        if (size := sizes.get(u))
-        for w, h in [size]
-        if not limits.IG_RATIO_MIN <= w / h <= limits.IG_RATIO_MAX
-    ]
-    if not bad:
-        return []
-    w, h = bad[0]
     return [
         _issue(
             "ig_ratio",
-            f"Instagram takes pictures from 4:5 portrait to 1.91:1 landscape; this one is "
-            f"{w} by {h} pixels. Crop it (in Media → Edit, or upload it again).",
+            _ig_ratio_message(bad),
             "media",
             _CONTENT,
             platform="instagram",
         )
     ]
+
+
+def ig_ratio_problem(post) -> str:
+    """Why Instagram would refuse this post's picture, or "". Retry asks first, so a
+    channel isn't sent again only to fail the same way."""
+    if "instagram" not in (post.platforms or []) or post.media_type not in (
+        limits.IMAGE,
+        limits.CAROUSEL,
+    ):
+        return ""
+    variant = post.variants.filter(platform="instagram").first()
+    urls = (variant.media_urls if variant and variant.media_urls else None) or (
+        post.media_urls or []
+    )
+    if post.media_type != limits.CAROUSEL:
+        urls = urls[:1]
+    bad = _ig_bad_ratio(post.account, urls)
+    return _ig_ratio_message(bad) if bad else ""
 
 
 def _fb_reels_last_day(account, now) -> int:

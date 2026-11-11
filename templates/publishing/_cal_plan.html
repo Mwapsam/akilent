@@ -1,10 +1,11 @@
-{% comment %}A planned idea in the calendar (not a post yet): dashed, labelled "Planned", with
+{% comment %}A planned idea in the calendar (not a post yet): dashed, labelled "Planned" ("Missed"
+once its day has passed with no post started), with
 its theme's colour as a dot. Expects ``item`` (a ContentPlanItem); ``plan_draggable`` when its
 wrapper is dragged (the month view), so the link itself isn't.{% endcomment %}
-<a href="{% url 'publishing:plan-edit' item.pk %}?next={{ request.get_full_path|urlencode }}" data-overlay-open="drawer" data-row class="cal-plan"{% if item.pillar %} title="Theme: {{ item.pillar.name }}"{% endif %}{% if plan_draggable %} draggable="false"{% endif %}>
+<a href="{% url 'publishing:plan-edit' item.pk %}?next={{ request.get_full_path|urlencode }}" data-overlay-open="drawer" data-row class="cal-plan{% if item.is_missed %} is-missed{% endif %}"{% if item.pillar %} title="Theme: {{ item.pillar.name }}"{% endif %}{% if plan_draggable %} draggable="false"{% endif %}>
   <span class="cal-plan-label min-w-0">
     <span class="cal-plan-dot"{% if item.pillar %} style="background-color: {{ item.pillar.color }}"{% endif %} aria-hidden="true"></span>
-    Planned{% if item.pillar %}<span class="cal-plan-pillar"> · {{ item.pillar.name }}</span>{% endif %}
+    {% if item.is_missed %}Missed{% else %}Planned{% endif %}{% if item.pillar %}<span class="cal-plan-pillar"> · {{ item.pillar.name }}</span>{% endif %}
   </span>
   <span class="cal-plan-topic">{{ item.topic }}</span>
 </a>
