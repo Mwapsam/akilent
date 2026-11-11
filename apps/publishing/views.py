@@ -702,7 +702,11 @@ def publishing_calendar(request):
                 "posts": len(
                     {e["post"].pk for _, _, posts in week_days for e in posts}
                 ),
-                "planned": sum(len(items) for _, items, _ in week_days),
+                # Ideas not written yet, as Planning counts them; a written one shows
+                # as its post.
+                "planned": sum(
+                    1 for _, items, _ in week_days for i in items if i.not_started
+                ),
                 "failed": len(
                     {
                         e["post"].pk
@@ -773,7 +777,7 @@ def _month_context(request, account, today, tz, channel_filter, status_filter):
         for d in (first + datetime.timedelta(days=i) for i in range(last.day))
     ]
     posts = {e["post"].pk for d, _, es in month_days for e in es}
-    planned = sum(len(ps) for _, ps, _ in month_days)
+    planned = sum(1 for _, ps, _ in month_days for i in ps if i.not_started)
     return {
         "month_first": first,
         "month_weeks": weeks,

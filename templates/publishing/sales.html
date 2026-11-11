@@ -72,6 +72,8 @@
       <p class="kpi-label">{{ k.label }}</p>
       <p class="kpi-value tabular-nums">{{ k.value }}</p>
       {% include "publishing/_kpi_change.html" with change=k.change days=report.days %}
+      {% if k.key == "chats" %}{% comment %}The tile counts chats credited to a post; the
+      footnote's chats came without one, so say they're not in it.{% endcomment %}<p class="kpi-note" data-kpi-note="chats">From posts{% if report.not_credited.chats %} · {{ report.not_credited.chats }} more not from a post{% endif %}</p>{% endif %}
       {% include "publishing/_kpi_spark.html" with trend=k.trend label=k.label %}
     </div>
     {% endif %}
@@ -149,7 +151,7 @@
           <dd class="font-medium text-ink tabular-nums">{% for r in n.untracked_revenue %}{{ r.currency }} {{ r.total }}{% if not forloop.last %} · {% endif %}{% empty %}—{% endfor %}</dd>
         </div>
         {% if n.chats is not None %}
-        <p class="text-xs text-ink-subtle pt-1">{{ n.chats }} chat{{ n.chats|pluralize }} started without naming a post.</p>
+        <p class="text-xs text-ink-subtle pt-1">{{ n.chats }} more chat{{ n.chats|pluralize }} started without naming a post, so {{ n.chats|pluralize:"it isn't,they aren't" }} in the totals above.</p>
         {% endif %}
         {% endwith %}
       </dl>

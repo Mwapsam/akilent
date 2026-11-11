@@ -6,7 +6,7 @@ import importlib
 import pytest
 from django.apps import apps as django_apps
 from django.contrib.auth.models import User
-from django.test import Client
+from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -277,3 +277,99 @@ def test_a_started_post_is_not_missed():
         plan_status=ContentPlanItem.PlanStatus.IN_PRODUCTION,
     )
     assert not item.is_missed
+
+
+# --- Numbers that disagreed ------------------------------------------------------------
+
+
+def test_a_dated_idea_is_planned_and_an_undated_one_is_an_idea(shop):
+    account, _ = shop
+    item = ContentPlanItem.objects.create(
+        account=account, topic="t", planned_date=timezone.localdate()
+    )
+    assert item.plan_status == ContentPlanItem.PlanStatus.PLANNED
+
+    item.planned_date = None
+    item.save(update_fields=["planned_date"])
+    item.refresh_from_db()
+    assert item.plan_status == ContentPlanItem.PlanStatus.IDEA
+
+
+def test_an_idea_is_published_when_its_post_goes_out(shop):
+    from apps.publishing.services import refresh_parent_post
+
+    account, _ = shop
+    item = ContentPlanItem.objects.create(account=account, topic="t")
+    post = ContentPost.objects.create(
+        account=account,
+        caption="x",
+        platforms=["facebook"],
+        plan_item=item,
+        status=ContentPost.Status.PUBLISHING,
+    )
+    ContentPostVariant.objects.create(
+        post=post, platform="facebook", status="published"
+    )
+
+    refresh_parent_post(post)
+
+    item.refresh_from_db()
+    assert item.plan_status == ContentPlanItem.PlanStatus.PUBLISHED
+
+
+def test_the_calendar_counts_planned_ideas_as_planning_does(shop):
+    account, client = shop
+    today = timezone.localdate()
+    ContentPlanItem.objects.create(account=account, topic="a", planned_date=today)
+    ContentPlanItem.objects.create(
+        account=account,
+        topic="b",
+        planned_date=today,
+        plan_status=ContentPlanItem.PlanStatus.PUBLISHED,
+    )
+
+    html = client.get(
+        reverse("publishing:calendar") + f"?month={today:%Y-%m}"
+    ).content.decode()
+
+    assert "1 planned" in html
+
+
+def test_reach_says_why_a_channel_has_no_number():
+    from apps.publishing.templatetags.publishing_filters import reach_summary
+
+    ig = ContentPostVariant(platform="instagram", status="published")
+    fb = ContentPostVariant(
+        platform="facebook",
+        status="published",
+        metrics_latest={"values": {"reach": 340}},
+        metrics_collected_at=timezone.now(),
+    )
+
+    class _Variants:
+        def all(self):
+            return [ig, fb]
+
+    holder = type("P", (), {"variants": _Variants()})()
+    assert reach_summary(holder) == "Reach: Instagram not read yet · Facebook 340"
+
+
+def test_a_live_channel_never_read_is_read(shop, monkeypatch):
+    from apps.publishing import tasks
+
+    account, _ = shop
+    post = ContentPost.objects.create(
+        account=account, caption="x", platforms=["facebook"], status="published"
+    )
+    v = ContentPostVariant.objects.create(
+        post=post, platform="facebook", status="published"
+    )
+    queued = []
+    monkeypatch.setattr(
+        tasks.collect_variant_metrics_task, "delay", lambda pk: queued.append(pk)
+    )
+
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        tasks.collect_due_metrics()
+
+    assert queued == [v.pk]

@@ -210,12 +210,30 @@ def join_platforms(variants):
 
 @register.filter
 def reach_summary(post):
-    """'Reach: Instagram 1,204 · Facebook 340' from each channel's latest read; '' if none."""
+    """'Reach: Instagram 1,204 · Facebook 340' from each live channel's latest read; a
+    channel without a number says why ('not read yet', 'needs permission', '—') instead of
+    dropping out, so a post on both channels never looks Facebook-only. '' if none is live."""
+    from apps.publishing.metrics import State
+
+    short = {
+        State.NEEDS_PERMISSION: "needs permission",
+        State.PENDING: "not read yet",
+        State.UNSUPPORTED: "not available",
+        State.BELOW_THRESHOLD: "too few to show",
+    }
     parts = []
     for v in post.variants.all():
-        value = ((v.metrics_latest or {}).get("values") or {}).get("reach")
+        if v.status != "published" or v.platform not in ("facebook", "instagram"):
+            continue
+        latest = v.metrics_latest or {}
+        value = (latest.get("values") or {}).get("reach")
         if value is not None:
             parts.append(f"{v.get_platform_display()} {value:,}")
+        elif not v.metrics_collected_at:
+            parts.append(f"{v.get_platform_display()} not read yet")
+        else:
+            state = (latest.get("states") or {}).get("reach")
+            parts.append(f"{v.get_platform_display()} {short.get(state, '—')}")
     return f"Reach: {' · '.join(parts)}" if parts else ""
 
 

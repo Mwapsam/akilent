@@ -5,7 +5,7 @@ wrapper is dragged (the month view), so the link itself isn't.{% endcomment %}
 <a href="{% url 'publishing:plan-edit' item.pk %}?next={{ request.get_full_path|urlencode }}" data-overlay-open="drawer" data-row class="cal-plan{% if item.is_missed %} is-missed{% endif %}"{% if item.pillar %} title="Theme: {{ item.pillar.name }}"{% endif %}{% if plan_draggable %} draggable="false"{% endif %}>
   <span class="cal-plan-label min-w-0">
     <span class="cal-plan-dot"{% if item.pillar %} style="background-color: {{ item.pillar.color }}"{% endif %} aria-hidden="true"></span>
-    {% if item.is_missed %}Missed{% else %}Planned{% endif %}{% if item.pillar %}<span class="cal-plan-pillar"> · {{ item.pillar.name }}</span>{% endif %}
+    {% if item.is_missed %}Missed{% elif item.plan_status == 'in_production' %}Being written{% elif item.plan_status == 'published' %}Posted{% else %}Planned{% endif %}{% if item.pillar %}<span class="cal-plan-pillar"> · {{ item.pillar.name }}</span>{% endif %}
   </span>
   <span class="cal-plan-topic">{{ item.topic }}</span>
 </a>

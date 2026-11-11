@@ -185,7 +185,9 @@ def test_planning_counts_agree_with_the_lists(shop):
 
     html = client.get(reverse("publishing:planning")).content.decode()
 
-    assert ">Idea<" in html  # one idea, singular
+    # A date makes it planned, as the calendar shows it (it used to count as an idea).
+    assert ContentPlanItem.objects.get().plan_status == "planned"
+    assert ">Ideas<" in html  # no ideas left, so the plural
     assert "Not on the calendar yet" in html
     assert "Everything you've planned has a date" in html
     assert "No ideas yet" not in html

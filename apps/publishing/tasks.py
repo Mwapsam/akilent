@@ -373,18 +373,23 @@ def collect_due_metrics() -> int:
     """Queue a read for every published channel whose next planned read has come."""
     from datetime import timedelta
 
+    from django.db.models import Q
+
     from .models import ContentPostVariant
 
     now = timezone.now()
     count = 0
     with transaction.atomic():
         due = ContentPostVariant.objects.select_for_update(skip_locked=True).filter(
+            # Or never read and never planned: a channel live before reads were planned
+            # (or repaired to published later) had no reach at all in the Library.
+            Q(metrics_next_at__lte=now)
+            | Q(metrics_next_at__isnull=True, metrics_collected_at__isnull=True),
             status=ContentPostVariant.Status.PUBLISHED,
             platform__in=(
                 ContentPostVariant.Platform.FACEBOOK,
                 ContentPostVariant.Platform.INSTAGRAM,
             ),
-            metrics_next_at__lte=now,
         )[:200]
         for variant in due:
             # Lease the slot: the read moves metrics_next_at on, and a lost enqueue

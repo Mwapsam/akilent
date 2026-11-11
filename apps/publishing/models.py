@@ -125,6 +125,25 @@ class ContentPlanItem(models.Model):
         return self.topic
 
     @property
+    def not_started(self) -> bool:
+        """No post written for it yet: what Planning and the calendar count as planned."""
+        return self.plan_status in (self.PlanStatus.IDEA, self.PlanStatus.PLANNED)
+
+    def save(self, *args, **kwargs):
+        # A date makes an idea planned, and taking it away makes it an idea again, however
+        # it was saved (form, calendar drag, import). Planning counted "Idea" items that
+        # showed as "Planned" on the calendar, so its counts and the calendar's disagreed.
+        before = self.plan_status
+        if self.plan_status == self.PlanStatus.IDEA and self.planned_date:
+            self.plan_status = self.PlanStatus.PLANNED
+        elif self.plan_status == self.PlanStatus.PLANNED and not self.planned_date:
+            self.plan_status = self.PlanStatus.IDEA
+        fields = kwargs.get("update_fields")
+        if fields is not None and self.plan_status != before:
+            kwargs["update_fields"] = {*fields, "plan_status"}
+        super().save(*args, **kwargs)
+
+    @property
     def is_missed(self) -> bool:
         """Its day has passed and nobody started the post: not "Planned" any more."""
         from django.utils import timezone
