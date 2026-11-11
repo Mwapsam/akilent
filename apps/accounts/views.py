@@ -1758,6 +1758,23 @@ def _load_recovery_display(request):
     return codes
 
 
+def _2fa_leave(request, url):
+    """Leave the 2FA step for ``url``.
+
+    The page posts its forms with htmx and swaps in only the card (auth/2fa_verify.html).
+    Staying on the step is a plain redirect back, which htmx follows to pick the card out
+    of. Leaving it (signed in, or the pending sign-in expired) must be a real page load,
+    so an htmx request gets HX-Redirect instead.
+    """
+    from apps.core.htmx import is_background
+
+    if is_background(request):
+        response = HttpResponse(status=204)
+        response["HX-Redirect"] = url
+        return response
+    return redirect(url)
+
+
 def _2fa_verify(request):
     """Step 2 of sign-in. Offers the authenticator app, emailed codes, or a passkey.
 
@@ -1772,7 +1789,7 @@ def _2fa_verify(request):
 
     user, device = _pending_second_factor(request)
     if user is None:
-        return redirect(settings.LOGIN_URL)
+        return _2fa_leave(request, settings.LOGIN_URL)
     user_pk = user.pk
 
     stepup = bool(request.session.get(_2FA_STEPUP_KEY))
@@ -1836,7 +1853,9 @@ def _2fa_verify(request):
                 return redirect(reverse("2fa-verify"))
             passed = factor_device is not None
         if passed:
-            return redirect(_finish_second_factor(request, user, factor_device))
+            return _2fa_leave(
+                request, _finish_second_factor(request, user, factor_device)
+            )
 
         platform_record(
             action="auth.2fa_failed",

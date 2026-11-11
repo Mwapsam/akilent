@@ -44,7 +44,8 @@ class SignInFieldIsOnlyForAppCodesTest(TestCase):
     def test_the_code_field_asks_for_six_digits(self):
         resp = self.client.get(reverse("2fa-verify"))
 
-        self.assertContains(resp, 'placeholder="123456"')
+        self.assertContains(resp, 'inputmode="numeric"')
+        self.assertNotContains(resp, 'placeholder="123456"')
         self.assertNotContains(resp, "recovery code</label>")
         self.assertNotContains(resp, "000 000")
 
@@ -300,3 +301,51 @@ class EmailCapMessageTest(TestCase):
 
         self.assertContains(resp, "Too many codes have been sent")
         self.assertNotContains(resp, "sent just now")
+
+
+class SignInStepSwapsTheCardTest(TestCase):
+    """The 2FA page posts with htmx and swaps only its card (auth/2fa_verify.html)."""
+
+    def setUp(self):
+        self.user = _user("ux-htmx@example.com")
+        self.device = _enrolled(self.user)
+        self.client = Client()
+        _login_to_second_step(self.client, self.user.email)
+
+    def test_a_right_code_from_htmx_leaves_with_hx_redirect(self):
+        resp = self.client.post(
+            reverse("2fa-verify"),
+            {"token": _current_token(self.device)},
+            HTTP_HX_REQUEST="true",
+        )
+
+        self.assertEqual(resp.status_code, 204)
+        self.assertTrue(resp["HX-Redirect"])
+        self.assertTrue(get_user(self.client).is_authenticated)
+
+    def test_a_wrong_code_from_htmx_redirects_back_for_the_card(self):
+        resp = self.client.post(
+            reverse("2fa-verify"), {"token": "000000"}, HTTP_HX_REQUEST="true"
+        )
+
+        self.assertEqual(resp.status_code, 302)
+        page = self.client.get(resp["Location"])
+        self.assertContains(page, 'id="tfa-card"')
+        self.assertContains(page, "That code didn&#x27;t work")
+
+    def test_an_expired_sign_in_from_htmx_goes_to_login_for_real(self):
+        self.client.logout()
+
+        resp = self.client.post(
+            reverse("2fa-verify"), {"token": "000000"}, HTTP_HX_REQUEST="true"
+        )
+
+        self.assertEqual(resp.status_code, 204)
+        self.assertIn("HX-Redirect", resp)
+
+    def test_a_plain_post_still_redirects(self):
+        resp = self.client.post(
+            reverse("2fa-verify"), {"token": _current_token(self.device)}
+        )
+
+        self.assertEqual(resp.status_code, 302)
