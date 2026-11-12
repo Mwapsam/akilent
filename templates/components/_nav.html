@@ -18,7 +18,7 @@ Arrow Up/Down move through every link in the nav.{% endcomment %}
   <div class="pt-3 mt-3 border-t border-border space-y-0.5" role="group" aria-label="Account">
     {% if enabled_channels %}{% include "components/_nav_item.html" with href="/channels/" label="Connections" icon="mail" match="channels email/domains whatsapp instagram facebook" exclude="instagram/rules whatsapp/templates" collapsible=collapsible %}{% endif %}
     {% url 'settings-profile' as settings_url %}
-    {% include "components/_nav_item.html" with href=settings_url label="Settings" icon="settings" match="settings logs" collapsible=collapsible %}
+    {% include "components/_nav_item.html" with href=settings_url label="Settings" icon="settings" match="settings logs billing" collapsible=collapsible %}
 
     {% comment %}Help: a small menu in place, not a page.{% endcomment %}
     <div x-data="{ open: {% if '/help/' in request.path or '/docs/' in request.path or '/support/' in request.path %}true{% else %}false{% endif %} }">
@@ -29,8 +29,8 @@ Arrow Up/Down move through every link in the nav.{% endcomment %}
         {% include "components/icon.html" with name="chevron-down" class="w-4 h-4 ml-auto shrink-0 transition-transform" %}
       </button>
       <div id="nav-help-{% if collapsible %}desktop{% else %}mobile{% endif %}" x-show="open" x-cloak class="space-y-0.5 {% if collapsible %}lg:pl-3{% else %}pl-3{% endif %}">
-        {% include "components/_nav_item.html" with href="/help/" label="Help & guides" icon="book-open" match="help" collapsible=collapsible %}
-        {% include "components/_nav_item.html" with href="/docs/" label="Developer / API docs" icon="code-bracket" match="docs" collapsible=collapsible %}
+        {% include "components/_nav_item.html" with href="/help/" label="Help & guides" icon="book-open" match="help" new_tab=True collapsible=collapsible %}
+        {% include "components/_nav_item.html" with href="/docs/" label="Developer / API docs" icon="code-bracket" match="docs" new_tab=True collapsible=collapsible %}
         {% if released.support %}{% include "components/_nav_item.html" with href="/support/" label="Contact support" icon="mail" match="support" collapsible=collapsible %}{% endif %}
       </div>
     </div>

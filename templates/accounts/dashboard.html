@@ -17,6 +17,9 @@
     <h1 class="text-xl sm:text-2xl font-semibold tracking-tight text-ink">
       {{ greeting }}{% if request.user.first_name %}, {{ request.user.first_name }}{% endif %}
     </h1>
+    {% comment %}Signup asks for a first name; accounts made before that have none, so the greeting
+    had nobody to greet.{% endcomment %}
+    {% if not request.user.first_name %}<a href="{% url 'settings-profile' %}" class="link-quiet text-sm">Add your name <span aria-hidden="true">→</span></a>{% endif %}
     <p class="mt-1 text-sm text-ink-subtle">
       {% if onboarding_paused %}
         {% with names=onboarding_paused_labels|join:" and " %}

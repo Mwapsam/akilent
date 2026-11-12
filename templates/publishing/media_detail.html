@@ -2,11 +2,12 @@
 {% block title %}{{ asset.display }} — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
+{% include "publishing/_subnav.html" %}
+
 <div class="cs-head">
   {% include "publishing/_cs_title.html" %}
 </div>
 
-{% include "publishing/_subnav.html" %}
 
 <p class="text-sm mb-4"><a href="{% url 'publishing:media-library' %}" class="ml-link">← Media</a></p>
 {% include "publishing/_media_detail.html" %}

@@ -3,6 +3,8 @@
 {% block title %}Library — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
+{% include "publishing/_subnav.html" %}
+
 <div class="cs-head">
   <div>
     {% include "publishing/_cs_title.html" %}
@@ -13,7 +15,6 @@
   </div>
 </div>
 
-{% include "publishing/_subnav.html" %}
 
 {# Filter form #}
 {% comment %}The same toolbar as Media (static/css/studio.css .ml-toolbar): a pill search, then the
@@ -174,7 +175,7 @@ page before anything is selected.{% endcomment %}
     {% include "components/empty_state.html" with icon="search" title="No posts match these filters" message="Try a different search, or clear the filters to see every post." action_url=library_url action_label="Clear filters" %}
   {% else %}
     {% url 'publishing:post-new' as new_url %}
-    {% include "components/empty_state.html" with icon="image" title="No posts yet" message="Posts you write, schedule or publish to Instagram and Facebook are kept here." action_url=new_url action_label="Create a post" %}
+    {% include "components/empty_state.html" with icon="image" title="No posts yet" message="Posts you write, schedule or publish to Instagram and Facebook are kept here." action_url=new_url action_label="New post" %}
   {% endif %}
   </div>
   {% endif %}

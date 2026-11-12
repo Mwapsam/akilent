@@ -2,11 +2,12 @@
 {% block title %}Which posts sold — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
+{% include "publishing/_subnav.html" %}
+
 <div class="cs-head">
   {% include "publishing/_cs_title.html" %}
 </div>
 
-{% include "publishing/_subnav.html" %}
 
 <div class="space-y-4">
   <header class="sales-head">
@@ -95,7 +96,7 @@
         <div data-sales-empty>
           {% url 'publishing:post-new' as new_url %}
           {% with n=report.min_chats|stringformat:"d" %}{% with title="No post has "|add:n|add:" confirmed chats yet" %}
-          {% include "components/empty_state.html" with icon="trending-up" title=title message="Share a post with a WhatsApp chat link and the chats it starts are counted here." action_url=new_url action_label="Create a post" compact=True %}
+          {% include "components/empty_state.html" with icon="trending-up" title=title message="Share a post with a WhatsApp chat link and the chats it starts are counted here." action_url=new_url action_label="New post" compact=True %}
           {% endwith %}{% endwith %}
         </div>
         {% endif %}

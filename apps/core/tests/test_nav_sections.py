@@ -295,9 +295,12 @@ def test_ctrl_k_finds_every_page_and_old_names(owner_client):
         "Settings \u203a Activity log",
     ):
         assert expected in labels
-    old = {i["label"]: i["hint"] for i in items if i["hint"]}
-    assert old["Message history"] == "now Settings \u203a Activity log"
-    assert old["Billing & plans"] == "in your account menu"
+    # Old names find the page they became, without a row of their own.
+    assert "Message history" not in labels
+    assert not any(i["hint"].startswith("now ") for i in items)
+    by_label = {i["label"]: i for i in items}
+    assert "Message history" in by_label["Settings \u203a Activity log"]["keywords"]
+    assert by_label["Billing & plans"]["hint"] == "in your account menu"
 
 
 def test_the_inbox_badge_stays_cheap(

@@ -108,6 +108,23 @@
   </div>
   {% endif %}
 
+  {% for ch in paused_channels %}
+  <div class="card p-5" data-paused-channel="{{ ch.key }}">
+    <div class="flex items-center gap-3">
+      <span class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-canvas text-ink-subtle">
+        {% include "components/icon.html" with name="clock" class="w-5 h-5" %}
+      </span>
+      <div>
+        <p class="font-semibold text-ink">{{ ch.label }}</p>
+        <p class="text-sm text-ink-subtle">{{ ch.label }} is paused on Akilent for now. Its setup continues here when it's back, and we'll let you know.</p>
+      </div>
+    </div>
+    <div class="mt-4">
+      <span class="badge badge-neutral">Paused</span>
+    </div>
+  </div>
+  {% endfor %}
+
 </div>
 
 {% endblock %}

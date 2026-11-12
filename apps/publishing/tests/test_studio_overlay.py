@@ -463,12 +463,13 @@ def test_every_tab_has_the_same_header_so_the_tabs_dont_move(shop, url):
     html = client.get(url).content.decode()
 
     main = html.split('id="main"', 1)[1]
-    before_tabs = main.split("data-instant-tabs", 1)[0]
-    assert 'class="cs-head"' in before_tabs
+    # The tabs come first, as on every section (2026-11-12 audit), so nothing above them can
+    # change their height; the page's own header follows them.
+    before_tabs, after_tabs = main.split("data-instant-tabs", 1)
+    assert 'class="cs-head"' not in before_tabs
+    assert 'class="cs-head"' in after_tabs
     assert "<style" not in before_tabs
-    assert (
-        "text-ink-subtle mt-0.5" not in before_tabs
-    )  # no subtitle changing its height
+    assert "<h1" not in before_tabs
 
 
 def test_today_is_marked_for_assistive_tech(shop):

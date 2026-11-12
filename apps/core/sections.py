@@ -318,14 +318,29 @@ def build(ctx, path: str) -> dict:
 
 
 def palette_items(ctx, nav: dict) -> list[dict]:
-    """Ctrl+K's "Go to" list: every page in the sidebar and its tabs, the account pages,
-    and the old names of pages that moved (searchable as "Interested", "Templates"...)."""
+    """Ctrl+K's "Go to" list: every page in the sidebar and its tabs, and the account pages.
+    The old names of pages that moved ("Dashboard", "Templates"...) are search keywords on
+    the page they became, never rows of their own, so the list shows each page once."""
     from django.urls import reverse
 
     items: list[dict] = []
+    by_href: dict[str, dict] = {}
 
     def add(label: str, href: str, hint: str = "") -> None:
-        items.append({"group": "Go to", "label": label, "href": href, "hint": hint})
+        item = {
+            "group": "Go to",
+            "label": label,
+            "href": href,
+            "hint": hint,
+            "keywords": "",
+        }
+        items.append(item)
+        by_href.setdefault(href, item)
+
+    def also_known_as(href: str, *names: str) -> None:
+        item = by_href.get(href)
+        if item is not None:
+            item["keywords"] = " ".join(filter(None, [item["keywords"], *names]))
 
     for section in nav["sections"]:
         tabs = [t for t in section["tabs"] if not t["locked"]]
@@ -336,30 +351,27 @@ def palette_items(ctx, nav: dict) -> list[dict]:
                 else f"{section['label']} \u203a {tab['label']}"
             )
             add(label, tab["href"])
-            for alias in tab["aliases"]:
-                add(alias, tab["href"], f"now {label}")
+            also_known_as(tab["href"], *tab["aliases"])
         if section["key"] == "inbox":
             add("Inbox \u203a Saved replies", reverse("conversations:saved_replies"))
             add(
                 "Inbox \u203a Teams & routing",
                 reverse("conversations:inbox_settings_teams"),
             )
-            for alias in section["aliases"]:
-                add(
-                    alias, reverse("conversations:inbox_settings"), "now Inbox settings"
-                )
+            add("Inbox \u203a Inbox settings", reverse("conversations:inbox_settings"))
+            also_known_as(reverse("conversations:inbox_settings"), *section["aliases"])
 
     channels = ctx.get("enabled_channels") or set()
     if channels:
-        add("Connections", "/channels/", "")
-        add("Channels", "/channels/", "now Connections")
+        add("Connections", "/channels/")
+        also_known_as("/channels/", "Channels")
     if "email" in channels:
         add("Email domains", "/email/domains/")
     if ctx.get("WHATSAPP_ENABLED"):
         add("WhatsApp numbers", "/whatsapp/numbers/")
     add("Settings", reverse("settings-profile"))
     add("Settings \u203a Activity log", reverse("logs:messages"))
-    add("Message history", reverse("logs:messages"), "now Settings \u203a Activity log")
+    also_known_as(reverse("logs:messages"), "Message history")
     add("Billing & plans", "/billing/plans/", "in your account menu")
     add("Help & guides", "/help/")
     add("API docs", "/docs/")

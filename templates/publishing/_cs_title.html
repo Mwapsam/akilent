@@ -1,7 +1,6 @@
-{% load publishing_filters %}{% comment %}The title in .cs-head: the tab's name, under a "Content Studio"
-breadcrumb, so the page says where you are in large type and the studio's name once. Pages
-outside the tabs keep "Content Studio" itself as the title.{% endcomment %}{% studio_tab as tab %}
+{% load publishing_filters %}{% comment %}The title in .cs-head: the page's own name, as on every other section ("Orders",
+"Interested customers"). The tabs sit above it (publishing/_subnav.html), so there is no
+"Content Studio" crumb; Overview, which would only repeat its tab, is titled "Content Studio".{% endcomment %}{% studio_tab as tab %}
 <div class="cs-title">
-  {% if tab %}<a href="{% url 'publishing:index' %}" class="cs-crumb">Content Studio</a>{% endif %}
-  <h1 class="cs-h1">{{ tab|default:"Content Studio" }}</h1>
+  <h1 class="cs-h1">{% if tab and tab != "Overview" %}{{ tab }}{% else %}Content Studio{% endif %}</h1>
 </div>

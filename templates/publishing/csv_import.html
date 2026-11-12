@@ -3,11 +3,12 @@
 {% block title %}Import posts — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
+{% include "publishing/_subnav.html" %}
+
 <div class="cs-head">
   {% include "publishing/_cs_title.html" %}
 </div>
 
-{% include "publishing/_subnav.html" %}
 
 {% include "publishing/_csv_import.html" %}
 {% endblock %}

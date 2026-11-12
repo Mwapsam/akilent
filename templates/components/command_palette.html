@@ -110,7 +110,7 @@ Open programmatically with: window.dispatchEvent(new CustomEvent('palette-open')
         const q = this.q.trim().toLowerCase();
         if (!q) return this.items;
         return this.items.filter((it) =>
-          (it.label + " " + it.group + " " + (it.hint || "")).toLowerCase().includes(q)
+          (it.label + " " + it.group + " " + (it.hint || "") + " " + (it.keywords || "")).toLowerCase().includes(q)
         );
       },
       onKey(e) {

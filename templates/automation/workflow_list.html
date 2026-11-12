@@ -8,17 +8,21 @@
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">What do you want Akilent to help with?</h1>
     <p class="mt-1 text-sm text-gray-600">Pick what should happen on its own. Each one stops as soon as the customer replies, and you can pause it any time.</p>
   </div>
-  {% comment %}"Why didn't it reply?" is a tab of this section (apps/core/sections.py), so it
-  isn't repeated here; the button's label matches its tab.{% endcomment %}
-  <div class="flex flex-wrap gap-2">
-    <a href="{% url 'build:home' %}" class="btn btn-primary btn-sm">Build with AI</a>
-  </div>
+  {% comment %}"Build with AI" and "Why didn't it reply?" are tabs of this section
+  (apps/core/sections.py), so neither is repeated here as a button.{% endcomment %}
 </header>
 
 {% comment %}
   The goal gallery is the home of this page. Every card maps onto an existing starter, so what is
   installed is a normal automation. A card that can't work yet says why and how to fix it.
 {% endcomment %}
+{% for b in shared_blockers %}
+<div class="notice-strip mb-6" role="status" data-shared-blocker>
+  <span class="flex items-center gap-2 min-w-0"><span class="notice-strip-icon shrink-0">{% include "components/icon.html" with name="alert" class="w-4 h-4" %}</span>{{ b.headline }}: {{ b.count }} automations below need it before they can be set up.</span>
+  {% if b.fix %}<a href="{{ b.fix.url }}" class="link-quiet">{{ b.fix.label }} <span aria-hidden="true">→</span></a>{% endif %}
+</div>
+{% endfor %}
+
 {% for group in goal_groups %}
 <section class="mb-8">
   <h2 class="text-lg font-semibold text-ink mb-3">{{ group.title }}</h2>
@@ -28,19 +32,19 @@
       <h3 class="font-semibold text-ink">{{ starter.name }}</h3>
       <p class="mt-1 text-sm text-gray-600">{{ starter.explain }}</p>
       <div class="mt-auto pt-3">
+        {% comment %}Every card ends the same way: its state, then one full-width button.{% endcomment %}
         {% if starter.installed %}
-        <p class="text-sm text-success-700 flex items-center gap-1">
+        <p class="text-sm text-success-700 flex items-center gap-1 mb-2">
           {% include "components/icon.html" with name="check" class="w-4 h-4" %} On
-          <a href="#running-{{ starter.installed.slug }}" class="ml-2 text-xs text-ink-subtle underline">Manage</a>
         </p>
+        <a href="#running-{{ starter.installed.slug }}" class="btn btn-secondary btn-sm w-full">Manage</a>
         {% elif starter.paused %}
-        <p class="text-sm text-gray-600">Paused
-          <a href="#running-{{ starter.paused.slug }}" class="ml-2 text-xs text-ink-subtle underline">Turn it on</a>
-        </p>
+        <p class="text-sm text-ink-subtle mb-2">Paused</p>
+        <a href="#running-{{ starter.paused.slug }}" class="btn btn-secondary btn-sm w-full">Turn it on</a>
         {% else %}
-        {% for i in starter.readiness.items %}{% if i.blocking %}
-        <p class="text-xs text-red-700 mb-2">⚠ {{ i.headline }}. <a href="{{ i.fix.url }}" class="underline">{{ i.fix.label }}</a></p>
-        {% endif %}{% endfor %}
+        {% for i in starter.own_blockers %}
+        <p class="text-xs text-ink-subtle mb-2">{{ i.headline }}. {% if i.fix %}<a href="{{ i.fix.url }}" class="link-quiet">{{ i.fix.label }}</a>{% endif %}</p>
+        {% endfor %}
         <button type="button" class="btn btn-primary btn-sm w-full" @click="$dispatch('modal-open', '{{ starter.key }}')">Set this up</button>
         {% endif %}
       </div>

@@ -3,6 +3,8 @@
 {% block title %}Needs check — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
+{% include "publishing/_subnav.html" %}
+
 <div class="cs-head">
   <div>
     {% include "publishing/_cs_title.html" %}
@@ -10,7 +12,6 @@
   <a href="{% url 'publishing:post-new' %}" class="btn btn-primary">New post</a>
 </div>
 
-{% include "publishing/_subnav.html" %}
 <p class="text-sm text-ink-subtle -mt-2 mb-4">Publications we couldn't confirm. Check the channel before you act, so nothing is posted twice.</p>
 
 {% if variants %}

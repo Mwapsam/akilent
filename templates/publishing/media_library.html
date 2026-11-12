@@ -3,6 +3,8 @@
 {% block title %}Media — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
+{% include "publishing/_subnav.html" %}
+
 <div class="cs-head">
   {% include "publishing/_cs_title.html" %}
   <div class="flex items-center gap-2">
@@ -11,7 +13,6 @@
   </div>
 </div>
 
-{% include "publishing/_subnav.html" %}
 
 {{ uploader|json_script:"media-library-config" }}
 {% comment %}

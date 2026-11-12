@@ -2,11 +2,12 @@
 {% block title %}AI tools — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
+{% include "publishing/_subnav.html" %}
+
 <div class="cs-head">
   {% include "publishing/_cs_title.html" %}
 </div>
 
-{% include "publishing/_subnav.html" %}
 
 {% comment %}Panels, like Settings (2026-11-09, spec §20): title and one-line description on top,
 the fields below, Save in the panel's footer (components/_panel_foot.html).{% endcomment %}

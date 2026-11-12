@@ -13,7 +13,9 @@
 .cs-title { display: flex; flex-direction: column; justify-content: flex-end; min-width: 0; }
 .cs-crumb { font-size: .75rem; font-weight: 500; color: var(--color-ink-subtle); line-height: 1rem; }
 .cs-crumb:hover { color: var(--color-ink); }
-.cs-h1 { font-size: 1.75rem; line-height: 2.25rem; font-weight: 600; letter-spacing: -.022em; color: var(--color-ink); }
+/* The same size as every other page's title (text-2xl, sm:text-3xl). */
+.cs-h1 { font-size: 1.5rem; line-height: 2rem; font-weight: 600; letter-spacing: -.022em; color: var(--color-ink); }
+@media (min-width: 640px) { .cs-h1 { font-size: 1.875rem; line-height: 2.25rem; } }
 
 /* Four sizes across the studio: the title (.cs-h1), a section (h2), a card's heading (h3) and
    body text, with captions at .75rem. Headings are tighter and heavier than the text under them.
@@ -227,7 +229,7 @@
 .ml-bulkbar .input { height: 2rem; width: 9rem; font-size: 1rem; }
 @media (min-width: 640px) { .ml-bulkbar .input { font-size: .8125rem; } }
 .ml-bulkbar .btn { --tw-ring-color: transparent; }
-.ml-bulk-btn { padding: .3125rem .75rem; border-radius: var(--radius-control); font-size: .8125rem; font-weight: 500;
+.ml-bulk-btn { padding: .3125rem .75rem; border-radius: var(--radius-control-sm); font-size: .8125rem; font-weight: 500;
   color: inherit; background: color-mix(in srgb, var(--color-surface) 14%, transparent); border: 0; cursor: pointer; }
 .ml-bulk-btn:hover, .ml-bulk-btn:focus-visible { background: color-mix(in srgb, var(--color-surface) 26%, transparent); outline: none; }
 .ml-bulk-btn--danger { color: #fca5a5; }

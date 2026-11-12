@@ -7,8 +7,8 @@
   The server-rendered subnav in the new page is always the truth. data-skeleton names the
   placeholder shown if the page is slow to arrive. No preload on these tabs: a click that
   lands while a hover preload is in flight was dropped by htmx, and the tab never opened.
-  The header above it is .cs-head on every page (static/css/studio.css): one fixed height,
-  with or without buttons, so the tab row never moves between tabs.
+  It sits above the page's .cs-head, like every section's tabs (components/_section_tabs.html),
+  so the tab row is at the same height on every page of the app.
 {% endcomment %}
 <nav class="flex items-center gap-1 mb-6 border-b border-surface-subtle pb-0 -mt-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Content Studio"
      data-shortcut-new="{% url 'publishing:post-new' %}" data-instant-tabs data-active-class="border-highlight text-ink" data-inactive-class="border-transparent text-ink-subtle hover:text-ink hover:border-border-strong">

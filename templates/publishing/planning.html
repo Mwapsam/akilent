@@ -3,6 +3,8 @@
 {% block title %}Planning — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
+{% include "publishing/_subnav.html" %}
+
 <div class="cs-head">
   <div>
     {% include "publishing/_cs_title.html" %}
@@ -10,7 +12,6 @@
   <a href="{% url 'publishing:plan-new' %}" data-overlay-open="modal" class="btn btn-primary">Add idea</a>
 </div>
 
-{% include "publishing/_subnav.html" %}
 
 {# Stat cards: each filters the list below to that state; the chosen one is marked. #}
 <nav class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6" aria-label="Filter ideas by state">

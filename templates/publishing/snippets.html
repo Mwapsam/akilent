@@ -2,11 +2,12 @@
 {% block title %}Caption templates and hashtags — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
+{% include "publishing/_subnav.html" %}
+
 <div class="cs-head">
   {% include "publishing/_cs_title.html" %}
 </div>
 
-{% include "publishing/_subnav.html" %}
 
 {% include "publishing/_snippets.html" %}
 {% endblock %}

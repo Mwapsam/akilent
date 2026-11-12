@@ -3,6 +3,8 @@
 {% block title %}Calendar — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
+{% include "publishing/_subnav.html" %}
+
 <div class="cs-head">
   <div>
     {% include "publishing/_cs_title.html" %}
@@ -14,7 +16,6 @@
   </div>
 </div>
 
-{% include "publishing/_subnav.html" %}
 
 {% comment %}Which week, and what is in it; then how to look at it (Week / List) and what
 to show (channel, status). The selects apply as soon as they change.{% endcomment %}
@@ -95,7 +96,7 @@ to show (channel, status). The selects apply as soon as they change.{% endcommen
     {% if channel_filter or status_filter %}
       {% include "components/empty_state.html" with icon="clock" title="Nothing matches these filters this week" message="Try all channels and statuses, or another week." %}
     {% else %}
-      {% include "components/empty_state.html" with icon="clock" title="No content this week" message="Plan an idea or create a post for one of these days." action_url=post_new_url action_label="Create a post" %}
+      {% include "components/empty_state.html" with icon="clock" title="No content this week" message="Plan an idea or create a post for one of these days." action_url=post_new_url action_label="New post" %}
     {% endif %}
   </div>
   {% endif %}

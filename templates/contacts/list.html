@@ -67,29 +67,30 @@
       hx-indicator="#contact-results"
       hx-trigger="submit, input from:find input[type=search] delay:400ms, change from:find select"
       @htmx:before-request="$dispatch('contacts-filtered')"
-      class="flex flex-wrap items-center gap-2 mb-4">
+      class="flex flex-wrap lg:flex-nowrap items-center gap-2 mb-4">
   <input type="search" name="q" value="{{ q }}" placeholder="Search name, phone or email…"
-         class="input w-full sm:w-64" aria-label="Search customers" />
-  <select name="wa" class="select w-full sm:w-52" aria-label="Filter by WhatsApp status">
+         class="input w-full sm:w-64 lg:w-auto lg:flex-1 lg:min-w-[12rem]" aria-label="Search customers" />
+  <select name="wa" class="select w-full sm:w-52 lg:w-48 lg:shrink-0" aria-label="Filter by WhatsApp status">
     <option value="">Any WhatsApp status</option>
     {% for value, label in wa_choices %}
       <option value="{{ value }}" {% if value == wa %}selected{% endif %}>{{ label }}</option>
     {% endfor %}
   </select>
+  {% include "components/help_tip.html" with text="Opted in: can get any campaign, offers included. Updates only: can get order or appointment updates, but no offers until they opt in. Opted out: replied STOP, so campaigns skip them." %}
   {% if contact_lists %}
-  <select name="list" class="select w-full sm:w-44" aria-label="Filter by list">
+  <select name="list" class="select w-full sm:w-44 lg:w-36 lg:shrink-0" aria-label="Filter by list">
     <option value="">Any list</option>
     {% for l in contact_lists %}<option value="{{ l.pk }}" {% if l.pk|stringformat:"s" == list %}selected{% endif %}>{{ l.name }}</option>{% endfor %}
   </select>
   {% endif %}
   {% if saved_segments %}
-  <select name="segment" class="select w-full sm:w-44" aria-label="Filter by segment">
+  <select name="segment" class="select w-full sm:w-44 lg:w-36 lg:shrink-0" aria-label="Filter by segment">
     <option value="">Any segment</option>
     {% for sg in saved_segments %}<option value="{{ sg.pk }}" {% if sg.pk|stringformat:"s" == segment %}selected{% endif %}>{{ sg.name }}</option>{% endfor %}
   </select>
   {% endif %}
   {% if tags %}
-  <select name="tag" class="select w-full sm:w-44" aria-label="Filter by tag">
+  <select name="tag" class="select w-full sm:w-44 lg:w-36 lg:shrink-0" aria-label="Filter by tag">
     <option value="">Any tag</option>
     {% for t in tags %}<option value="{{ t.slug }}" {% if t.slug == tag %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
   </select>

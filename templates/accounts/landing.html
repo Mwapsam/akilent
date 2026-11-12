@@ -43,6 +43,7 @@
         <a href="#platform">Platform</a>
         <a href="#pricing">Pricing</a>
         <a href="{% url 'help' %}">Help</a>
+        <a href="{% url 'docs' %}">Developers</a>
       </nav>
 
       {% comment %}One style for the header's button at every scroll position: the hero's own button
@@ -70,6 +71,7 @@
           <a href="#platform" class="lp-mlink">Platform</a>
           <a href="#pricing" class="lp-mlink">Pricing</a>
           <a href="{% url 'help' %}" class="lp-mlink">Help</a>
+          <a href="{% url 'docs' %}" class="lp-mlink">Developers</a>
           <a href="{% url 'demo' %}" class="lp-mlink" data-cta="book_demo" data-cta-location="menu">Book a demo</a>
           {% if user.is_authenticated %}
             <a href="/dashboard/" class="lp-btn lp-btn-primary">Open dashboard</a>

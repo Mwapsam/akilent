@@ -272,7 +272,7 @@
 
         {# Command palette trigger — desktop #}
         <button type="button"
-                class="hidden sm:flex items-center gap-2 rounded-xl border border-border
+                class="hidden sm:flex items-center gap-2 rounded-lg border border-border
                        px-2.5 py-1.5 text-sm text-ink-subtle hover:text-ink hover:border-border-strong"
                 @click="$dispatch('palette-open')"
                 aria-label="Search (Ctrl+K)">
@@ -323,7 +323,7 @@
         {# User menu #}
         <div class="relative" x-data="{ open: false }" @keydown.escape="open = false">
           <button type="button"
-                  class="flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-canvas"
+                  class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-canvas"
                   @click="open = !open"
                   :aria-expanded="open"
                   aria-label="Account menu"
@@ -348,9 +348,12 @@
                aria-label="Account">
 
             <div class="px-3 py-2 border-b border-border mb-1">
-              <p class="text-sm font-medium text-ink truncate">{{ user.get_username }}</p>
-              {% if user.email %}
+              {% firstof user.get_full_name user.get_username as account_name %}
+              <p class="text-sm font-medium text-ink truncate">{{ account_name }}</p>
+              {% if user.email and user.email != account_name %}
                 <p class="text-xs text-ink-subtle truncate">{{ user.email }}</p>
+              {% elif not user.get_full_name %}
+                <a href="{% url 'settings-profile' %}" class="text-xs text-ink-subtle underline">Add your name</a>
               {% endif %}
             </div>
 

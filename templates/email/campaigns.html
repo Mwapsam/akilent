@@ -98,15 +98,17 @@
       <tbody>
         {% for c in whatsapp_campaigns %}
         <tr>
-          <td data-label="Campaign">
+          <td data-label="Campaign" class="min-w-[14rem]">
             <a href="{% url 'whatsapp-campaign-detail' c.pk %}" data-skeleton="campaign" class="font-medium text-accent hover:text-accent-strong">{{ c.name }}</a>
-            <span class="block text-xs text-ink-subtle">{{ c.audience_name|default:"Retry of failed messages" }} · {% if c.status == 'scheduled' %}goes out {{ c.when_label }}{% else %}{{ c.started_at|default:c.created_at|timezone:wa_zone|date:"j M, H:i" }}{% endif %}</span>
+            {% comment %}"To <list>" so the list's name isn't read as a count beside "1 of 1" (the
+            list may have grown since); the date never breaks across lines.{% endcomment %}
+            <span class="block text-xs text-ink-subtle">{% if c.audience_name %}To {{ c.audience_name }}{% else %}Retry of failed messages{% endif %} · <span class="whitespace-nowrap">{% if c.status == 'scheduled' %}goes out {{ c.when_label }}{% else %}{{ c.started_at|default:c.created_at|timezone:wa_zone|date:"j M, H:i" }}{% endif %}</span></span>
           </td>
           <td data-label="Status" class="whitespace-nowrap">{% include "components/status.html" with state=c.state badge=True %}</td>
           {% if c.state == 'draft' or c.state == 'scheduled' %}
           <td data-label="Sent" class="text-ink-subtle" colspan="6">Not sent yet</td>
           {% else %}
-          <td data-label="Sent" class="tabular-nums whitespace-nowrap" title="{{ c.rates.sent }} accepted by WhatsApp of {{ c.recipient_count }} on the list{% if c.skipped_count %}; {{ c.skipped_count }} not sent{% endif %}">{{ c.rates.sent }}<span class="text-ink-subtle"> of {{ c.recipient_count }}</span></td>
+          <td data-label="Sent" class="tabular-nums whitespace-nowrap" title="{{ c.rates.sent }} accepted by WhatsApp of {{ c.recipient_count }} on the list{% if c.skipped_count %}; {{ c.skipped_count }} not sent{% endif %}">{{ c.rates.sent }}<span class="text-ink-subtle"> of {{ c.recipient_count }} sent</span></td>
           <td data-label="Delivered" class="tabular-nums" title="{{ c.rates.delivered }} of {{ c.rates.prepared }}">{{ c.rates.pct.delivered|default:"—" }}</td>
           <td data-label="Read" class="tabular-nums" title="{{ c.rates.read }} of {{ c.rates.prepared }}">{{ c.rates.pct.read|default:"—" }}</td>
           <td data-label="Failed" class="tabular-nums" title="{{ c.rates.failed }} of {{ c.rates.prepared }}">{{ c.rates.pct.failed|default:"—" }}</td>

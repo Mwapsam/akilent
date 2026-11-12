@@ -2,11 +2,12 @@
 {% block title %}Bio page — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
+{% include "publishing/_subnav.html" %}
+
 <div class="cs-head">
   {% include "publishing/_cs_title.html" %}
 </div>
 
-{% include "publishing/_subnav.html" %}
 
 {% comment %}Panels, like Settings (2026-11-09, spec §20): title and one-line description on top,
 lists as hairline rows to the panel's edges, Save in the panel's footer.{% endcomment %}

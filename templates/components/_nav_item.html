@@ -10,6 +10,7 @@
   collapsible — hide the label text when the desktop rail is collapsed
   active — the state already worked out (the section registry: a main item is active on any
            of its tabs); omitted, it is matched from ``match``
+  new_tab — open in a new tab (Help and the API docs are the public site, not the app)
   feature — catalog key; when the business isn't entitled to it (``locked_features`` from the
             plan_features context processor) the link shows a lock and opens the locked page
 {% endcomment %}
@@ -31,7 +32,7 @@
 <a href="{{ href }}" title="{{ label }}"
    class="nav-link {% if on %}nav-link-active{% endif %}"
    data-nav-link data-nav-match="{% nav_targets match|default:href %}"{% if exact %} data-nav-exact{% endif %}{% if exclude %} data-nav-exclude="{% nav_targets exclude %}"{% endif %}
-   preload="mouseover"
+   {% if new_tab %}target="_blank" rel="noopener"{% else %}preload="mouseover"{% endif %}
    {% if on %}aria-current="page"{% endif %}>
   {% include "components/icon.html" with name=icon class="w-5 h-5 shrink-0" %}
   {% if collapsible %}

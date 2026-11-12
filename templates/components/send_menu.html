@@ -8,6 +8,7 @@ nothing here has to query the account on every page.
 Following a choice closes the dialog: the navigation is boosted and the topbar is kept
 across it, so the dialog used to stay open over the page it had just opened.
 {% endcomment %}
+{% if "email" in enabled_channels and "whatsapp" in enabled_channels %}
 <div x-data="{ open: false, trigger: null }" @keydown.escape.window="open = false" @send-menu-open.window="open = true">
   <button type="button"
           id="send-menu-trigger"
@@ -84,3 +85,12 @@ across it, so the dialog used to stay open over the page it had just opened.
     </div>
   </template>
 </div>
+{% elif "whatsapp" in enabled_channels or "email" in enabled_channels %}
+{% comment %}One channel that sends: a dialog with a single choice was a wasted click.{% endcomment %}
+<a id="send-menu-trigger" class="btn btn-secondary btn-sm touch-target"
+   href="{% if "whatsapp" in enabled_channels %}{% url 'whatsapp-campaign-new' %}{% else %}/email/campaigns/new/{% endif %}"
+   title="New campaign">
+  {% include "components/icon.html" with name="plus" class="w-4 h-4" %}
+  <span class="hidden sm:inline">Send</span>
+</a>
+{% endif %}

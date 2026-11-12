@@ -1612,7 +1612,8 @@
   .empty-line a { @apply font-medium; color: var(--color-ink); }
   /* One quiet link style on Home and Insights (2026-11-09): plain text, an arrow when it goes
      somewhere, underline only on hover. "See all →", "Check billing", "Schedule a post". */
-  .link-quiet { @apply inline-flex items-center gap-1 font-medium whitespace-nowrap; color: var(--color-ink-muted); text-decoration: none; }
+  /* min-height: 24px is the smallest comfortable target (WCAG 2.5.8); these were 20px. */
+  .link-quiet { @apply inline-flex items-center gap-1 font-medium whitespace-nowrap; min-height: 1.5rem; color: var(--color-ink-muted); text-decoration: none; }
   .link-quiet:hover { color: var(--color-ink); text-decoration: underline; text-underline-offset: 3px; }
   .link-quiet:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; border-radius: 2px; }
   .empty-line a:hover { text-decoration: underline; text-underline-offset: 3px; }
@@ -2099,6 +2100,9 @@
   .cv-automate { opacity: 1; }
 }
 .cv-fail { display: flex; align-items: center; gap: .25rem; margin-top: .25rem; font-size: .75rem; color: var(--tone-coral-fg); }
+/* On the patterned thread background small red text was hard to read: it sits on a plain chip. */
+.cv-fail { width: fit-content; max-width: 100%; padding: .125rem .5rem; border-radius: .5rem; background: var(--cv-surface, var(--color-surface)); }
+.cv-msg--out .cv-fail { margin-left: auto; }
 
 /* Composer */
 .cv-footer { border-top: 1px solid var(--cv-line); background: var(--cv-surface-muted); padding: .5rem .75rem .625rem; }
@@ -2163,6 +2167,13 @@
 .help-tip-label:hover { color: var(--cv-ink, var(--color-ink)); }
 .help-tip-label:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; border-radius: .25rem; }
 .cv-closedwin-body { flex: 1; min-width: 0; }
+/* 2026-11-12 audit: the reply area (template picker, AI card) took about half the pane, so little
+   of the thread fit. Each grows to a few lines and then scrolls inside itself; the footer itself
+   isn't capped, so the saved-replies popover above the input is never clipped. */
+@media (min-height: 40rem) {
+  .cv-closedwin-body { max-height: 13rem; overflow-y: auto; }
+  .cv-ai { max-height: 11rem; overflow-y: auto; }
+}
 .cv-closedwin-empty { display: flex; flex-direction: column; align-items: flex-start; gap: .5rem;
                       padding: .625rem .75rem; border-radius: .75rem; font-size: .875rem; }
 .cv-closedwin-empty { background: var(--cv-surface); border: 1px solid var(--cv-line); color: var(--cv-ink-muted); }
@@ -2707,11 +2718,13 @@
 .inbox-row { align-items: center; padding-top: .625rem; padding-bottom: .625rem; }
 /* Three columns, so the name only gives way to the time on its own line, not to a badge below
    it: the middle column takes what the badges need beyond the time's width. */
-.inbox-row-body { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "name name when" "preview meta meta"; row-gap: .125rem; }
+/* 2026-11-12 audit: the badges sat at the end of the preview line and cut it to a few
+   characters, so they have a line of their own under the full-width preview. */
+.inbox-row-body { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "name name when" "preview preview preview" "meta meta meta"; row-gap: .125rem; }
 /* One line of badges: one that doesn't fit wraps onto a hidden second line and drops out whole,
    never cut mid-word (the state comes first, so it's the last to go). */
-.inbox-meta { margin-top: 0; flex-wrap: wrap; justify-content: flex-end; align-content: flex-start; row-gap: 2rem;
-  height: 1.375rem; overflow: hidden; justify-self: end; max-width: 11rem; }
+.inbox-meta { margin-top: .25rem; flex-wrap: wrap; justify-content: flex-start; align-content: flex-start; row-gap: 2rem;
+  height: 1.375rem; overflow: hidden; justify-self: start; max-width: 100%; }
 /* The view's count and "33 missed" stay on one line each; the view's name gives way first. */
 .inbox-tab-count { white-space: nowrap; flex-shrink: 0; }
 .inbox-meta > * { flex-shrink: 0; }
@@ -2734,11 +2747,13 @@
   padding: .125rem; border-radius: var(--radius-control); background: var(--color-surface); box-shadow: var(--shadow-pop);
   opacity: 0; pointer-events: none; transition: opacity var(--duration-fast) var(--ease-emphasized); }
 .inbox-list > li:hover .inbox-row-actions, .inbox-list > li:focus-within .inbox-row-actions { opacity: 1; pointer-events: auto; }
-/* Under them: the badges step aside, the preview takes the whole line, and only its end fades
-   out before the actions. */
+/* They sit on the badge line, so the preview above stays whole; the badges' end fades out under
+   them. A row with no badges fades the preview's end instead. */
 @media (hover: hover) {
-  .inbox-list > li:is(:hover, :focus-within) .inbox-meta { visibility: hidden; }
-  .inbox-list > li:is(:hover, :focus-within) .inbox-preview { grid-column: 1 / -1;
+  .inbox-list > li:is(:hover, :focus-within) .inbox-meta {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 8rem), transparent calc(100% - 6.5rem));
+            mask-image: linear-gradient(to right, #000 calc(100% - 8rem), transparent calc(100% - 6.5rem)); }
+  .inbox-list > li:is(:hover, :focus-within):has(.inbox-meta:empty) .inbox-preview {
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 8rem), transparent calc(100% - 6.5rem));
             mask-image: linear-gradient(to right, #000 calc(100% - 8rem), transparent calc(100% - 6.5rem)); }
 }

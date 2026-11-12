@@ -1552,11 +1552,23 @@ def channels(request):
 
         facebook_state = page_state(account)[1]
 
+    # A channel the business chose that's switched off on Akilent is listed as paused, so
+    # "Email paused" in the header has a place here instead of the channel vanishing.
+    from apps.accounts.onboarding import _channel_plan
+    from apps.core.channels import CHANNEL_REGISTRY
+
+    paused_channels = [
+        {"key": ch, "label": CHANNEL_REGISTRY[ch].label}
+        for ch in _channel_plan(account)[2]
+        if ch in CHANNEL_REGISTRY
+    ]
+
     return render(
         request,
         "accounts/channels.html",
         {
             "account": account,
+            "paused_channels": paused_channels,
             "facebook_state": facebook_state,
             "email_domains": email_domains,
             "email_connected": any(d.status == "verified" for d in email_domains),

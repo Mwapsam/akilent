@@ -5,11 +5,12 @@
 {% block extra_head %}{% if asset.kind == "image" %}<link rel="stylesheet" href="{% static 'css/cropper.min.css' %}">{% endif %}{% endblock %}
 
 {% block content %}
+{% include "publishing/_subnav.html" %}
+
 <div class="cs-head">
   {% include "publishing/_cs_title.html" %}
 </div>
 
-{% include "publishing/_subnav.html" %}
 
 {% include "publishing/_media_edit.html" %}
 {% endblock %}

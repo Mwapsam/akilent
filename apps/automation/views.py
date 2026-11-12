@@ -61,6 +61,35 @@ _TRIGGER_TYPES = [
 ]
 
 
+def _shared_blockers(groups) -> list[dict]:
+    """What stops several cards at once ("No approved message yet"), said once at the top
+    of the page with how many it unlocks; each card then only names its own gaps."""
+    open_cards = [
+        card
+        for group in groups
+        for card in group["cards"]
+        if not card.get("installed") and not card.get("paused")
+    ]
+    seen: dict[str, dict] = {}
+    for card in open_cards:
+        for item in card["readiness"]["items"]:
+            if item.get("blocking"):
+                entry = seen.setdefault(
+                    item["headline"],
+                    {"headline": item["headline"], "fix": item.get("fix"), "count": 0},
+                )
+                entry["count"] += 1
+    shared = [b for b in seen.values() if b["count"] > 1]
+    headlines = {b["headline"] for b in shared}
+    for card in open_cards:
+        card["own_blockers"] = [
+            i
+            for i in card["readiness"]["items"]
+            if i.get("blocking") and i["headline"] not in headlines
+        ]
+    return shared
+
+
 @login_required
 @module_required("automations")
 def workflow_list(request):
@@ -93,6 +122,7 @@ def workflow_list(request):
         )
         wf.summary = explain.explain_definition(wf.definition)  # type: ignore[attr-defined]
     groups, engagement, approved_templates = _engagement_starters(account, workflows)
+    shared_blockers = _shared_blockers(groups)
     return render(
         request,
         "automation/workflow_list.html",
@@ -102,6 +132,7 @@ def workflow_list(request):
             "starters": list_templates(),
             "engagement_starters": engagement,
             "goal_groups": groups,
+            "shared_blockers": shared_blockers,
             "approved_templates": approved_templates,
             "blank_choices": wa_variables_choices(),
             "pause_hour_choices": _PAUSE_HOUR_CHOICES,
