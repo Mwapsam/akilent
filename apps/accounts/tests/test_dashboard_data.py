@@ -76,8 +76,12 @@ def test_home_shows_the_overdue_line_not_the_plan_block(owner):
     _sub(
         account, status=Subscription.ACTIVE, current_period_end=NOW - timedelta(days=2)
     )
+    # The warning leads the page itself, above the optional welcome card...
+    page = client.get("/dashboard/").content.decode()
+    assert "data-plan-notice" in page and "gone through yet" in page
+    # ...and isn't repeated in the lazy panels.
     html = client.get("/dashboard/panels/").content.decode()
-    assert "data-plan-notice" in html and "gone through yet" in html
+    assert "gone through yet" not in html
     assert "renews" not in html and 'id="dash-plan"' not in html
 
 

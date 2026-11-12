@@ -15,8 +15,9 @@ starting point is one muted line until there's a comparison to show.
 
   {% comment %}The plan only when it needs something (billing_api.home_notice), as a slim strip.
   Never "Active · renews" on a past date.{% endcomment %}
-  {% if plan_notice %}
-  <div class="notice-strip{% if plan_notice.tone != 'warning' %} notice-strip--info{% endif %}" role="status" data-plan-notice>
+  {% comment %}Warnings are shown at the top of the page by dashboard.html, not repeated here.{% endcomment %}
+  {% if plan_notice and plan_notice.tone != "warning" %}
+  <div class="notice-strip notice-strip--info" role="status" data-plan-notice>
     <span class="flex items-center gap-2 min-w-0"><span class="notice-strip-icon shrink-0">{% include "components/icon.html" with name="alert" class="w-4 h-4" %}</span>{{ plan_notice.text }}</span>
     <a href="{{ plan_notice.href }}" class="link-quiet">{{ plan_notice.action }} <span aria-hidden="true">→</span></a>
   </div>

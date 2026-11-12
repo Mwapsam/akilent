@@ -109,6 +109,12 @@ it out, with a one-click way back to every channel.{% endcomment %}
           past the overdue/missed line — the situation the Unassigned tab
           exists to surface, called out on the row itself too.{% endcomment %}
           <span class="badge badge-danger" title="Nobody is assigned to this conversation">Unassigned</span>
+          {% elif not c.is_closed %}
+          {% comment %}Every open row says who has it, so the list matches the inbox's
+          "Nobody assigned" count; red is kept for the ones that are already late.{% endcomment %}
+          <span class="inbox-assignee text-ink-subtle" title="Nobody is assigned to this conversation">
+            {% include "components/icon.html" with name="user" class="w-3.5 h-3.5" %}Unassigned
+          </span>
           {% endif %}
         </div>
       </div>

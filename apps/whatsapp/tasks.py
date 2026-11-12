@@ -697,12 +697,40 @@ def _log_type_for_payload(payload: dict) -> str:
     )
 
 
-def _log_content_for_payload(payload: dict) -> str:
+def _template_text(account, payload: dict) -> str:
+    """What a template send said, for the transcript: the approved body with this
+    customer's values in its blanks, never the raw Meta name ("welcome_new_customer")."""
+    from apps.whatsapp.campaign_ui import render_body
+    from apps.whatsapp.models import MessageTemplate
+
+    name = payload.get("template_name", "") or ""
+    if account is not None and name:
+        scoped = MessageTemplate.objects.filter(
+            account=account, whatsapp_template_name=name
+        )
+        template = (
+            scoped.filter(language_code=payload.get("language") or "").first()
+            or scoped.first()
+        )
+        if template is not None:
+            text = render_body(template, payload.get("params") or {}).strip()
+            if text:
+                return text
+    return humanize_template_name(name)
+
+
+def humanize_template_name(name: str) -> str:
+    """'welcome_new_customer' -> 'Welcome new customer' (a fallback when the body is gone)."""
+    words = (name or "").replace("_", " ").strip()
+    return words[:1].upper() + words[1:]
+
+
+def _log_content_for_payload(payload: dict, account=None) -> str:
     ptype = payload.get("type", "text")
     if ptype == "text":
         return payload.get("body", payload.get("text", "")) or ""
     if ptype == "template":
-        return payload.get("template_name", "") or ""
+        return _template_text(account, payload)
     if ptype == "interactive":
         # The transcript should show what the customer was offered, not just the question.
         body = payload.get("body", "") or ""
@@ -840,7 +868,7 @@ def _ensure_outbound_log(msg: OutboundMessage) -> MessageLog:
         contact=msg.contact,
         direction=MessageLog.Direction.OUTBOUND,
         message_type=_log_type_for_payload(msg.payload),
-        content=_log_content_for_payload(msg.payload),
+        content=_log_content_for_payload(msg.payload, msg.account),
         status=MessageLog.Status.QUEUED,
         timestamp=timezone.now(),
         raw_payload=msg.payload,

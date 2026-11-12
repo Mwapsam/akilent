@@ -1304,6 +1304,14 @@ def dashboard(request):
 
     state = ob.get_state(account, essentials_only=True, request=request)
 
+    # A billing problem (overdue renewal, ended trial) leads the page, above the optional
+    # welcome card; quieter plan notices stay in the lazy panels below the work queue.
+    from apps.billing import api as billing_api
+
+    plan_alert = billing_api.home_notice(getattr(account, "subscription", None))
+    if plan_alert and plan_alert["tone"] != "warning":
+        plan_alert = None
+
     from apps.accounts import welcome
 
     membership = Membership.objects.filter(user=request.user, account=account).first()
@@ -1327,10 +1335,12 @@ def dashboard(request):
             # paused channel is left, setup is done for now, never "almost ready" at 4/4.
             "onboarding_complete": state["complete"] or state["only_paused_left"],
             "onboarding_paused": state["only_paused_left"],
+            "onboarding_paused_labels": state.get("paused_labels") or [],
             "onboarding_done": state["required_done"],
             "onboarding_total": state["required_total"],
             "onboarding_next": state["next_step"],
             "greeting": greeting,
+            "plan_alert": plan_alert,
             "welcome_form": welcome_form,
             **_work_queue(account),
         },

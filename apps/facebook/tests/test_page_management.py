@@ -30,7 +30,7 @@ def test_channels_page_lists_facebook(client):
 
     html = client.get("/channels/").content.decode()
 
-    assert "Manage Facebook" in html
+    assert "Reconnect Facebook" in html
     assert "Reconnect needed" in html
 
 

@@ -19,7 +19,9 @@
     </h1>
     <p class="mt-1 text-sm text-ink-subtle">
       {% if onboarding_paused %}
-        Setup is done for now. A channel is waiting on its provider; we'll let you know when it's ready.
+        {% with names=onboarding_paused_labels|join:" and " %}
+        Setup is done for now. {% if names %}{{ names }} is paused on Akilent{% else %}A channel is paused on Akilent{% endif %}; we'll let you know when it's ready.
+        {% endwith %}
       {% elif onboarding_complete %}
         Here's what's happening with your communications.
       {% else %}
@@ -41,6 +43,13 @@
       {% enddropdown %}
     </div>
   </header>
+
+  {% if plan_alert %}
+  <div class="notice-strip mb-5" role="status" data-plan-notice>
+    <span class="flex items-center gap-2 min-w-0"><span class="notice-strip-icon shrink-0">{% include "components/icon.html" with name="alert" class="w-4 h-4" %}</span>{{ plan_alert.text }}</span>
+    <a href="{{ plan_alert.href }}" class="link-quiet">{{ plan_alert.action }} <span aria-hidden="true">→</span></a>
+  </div>
+  {% endif %}
 
   {% if welcome_form %}{% include "accounts/_welcome_card.html" with form=welcome_form %}{% endif %}
 

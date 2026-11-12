@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 from typing import TYPE_CHECKING
 
 from django.conf import settings
@@ -98,6 +99,19 @@ def followup_card(f, viewer, *, now, zone, reply=False) -> dict:
     from apps.conversations import followups
 
     return followups.card(f, viewer, now=now, zone=zone, reply=reply)
+
+
+_RAW_TEMPLATE_NAME = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)+$")
+
+
+def _shown_body(body, metadata) -> str:
+    """A template send recorded before its body was rendered stored Meta's raw name
+    ("welcome_new_customer"); show it as words, not as code."""
+    body = body or ""
+    if (metadata or {}).get("message_type") == "template" and _RAW_TEMPLATE_NAME.match(body):
+        words = body.replace("_", " ")
+        return words[:1].upper() + words[1:]
+    return body
 
 
 def _as_dict(value) -> dict:
@@ -253,6 +267,7 @@ def _inbox_context(request, account) -> dict:
             and c.snapshot.last_customer_message_at is not None
         )
         c.has_messages = c.preview_direction is not None
+        c.preview_body = _shown_body(c.preview_body, _as_dict(c.preview_metadata))
         # The latest message is ours and didn't go: the row says so, with why on hover,
         # instead of reading like any other "You: …".
         c.not_sent = c.preview_direction == Message.Direction.OUTBOUND and (
@@ -1070,7 +1085,9 @@ def _message_json(m, conversation) -> dict:
         "direction": m.direction,
         # The AI's narrow no-break spaces made words run together; proposals.plain_spaces now
         # stops them at the source, and what it sent before shows with plain spaces.
-        "body": plain_spaces(m.body) if meta.get("sent_by") == "ai" else m.body,
+        "body": plain_spaces(m.body)
+        if meta.get("sent_by") == "ai"
+        else _shown_body(m.body, meta),
         "ts": m.timestamp.isoformat(),
         "status": m.status,
         "failureReason": reason,

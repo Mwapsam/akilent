@@ -53,7 +53,7 @@
       {% else %}
         <span class="badge badge-neutral">Not connected</span>
       {% endif %}
-      <a href="/whatsapp/numbers/" class="btn btn-secondary btn-sm">Manage WhatsApp</a>
+      <a href="/whatsapp/numbers/" class="btn btn-secondary btn-sm">{% if whatsapp_connected %}Manage WhatsApp{% else %}Connect WhatsApp{% endif %}</a>
     </div>
   </div>
   {% endif %}
@@ -77,7 +77,7 @@
       {% else %}
         <span class="badge badge-neutral">Not connected</span>
       {% endif %}
-      <a href="{% url 'instagram-accounts' %}" class="btn btn-secondary btn-sm">Manage Instagram</a>
+      <a href="{% url 'instagram-accounts' %}" class="btn btn-secondary btn-sm">{% if instagram_connected %}Manage Instagram{% else %}Connect Instagram{% endif %}</a>
     </div>
   </div>
   {% endif %}
@@ -103,7 +103,7 @@
       {% else %}
         <span class="badge badge-warning">Reconnect needed</span>
       {% endif %}
-      <a href="{% url 'facebook-page' %}" class="btn btn-secondary btn-sm">Manage Facebook</a>
+      <a href="{% url 'facebook-page' %}" class="btn btn-secondary btn-sm">{% if facebook_state == "ready" %}Manage Facebook{% elif facebook_state == "none" %}Connect Facebook{% else %}Reconnect Facebook{% endif %}</a>
     </div>
   </div>
   {% endif %}
