@@ -130,7 +130,12 @@ class Command(BaseCommand):
             f"Facebook, {active.exclude(channels__in=covering).count()} are "
             "Instagram-only"
         )
-        trigger = first_matching_trigger(account, "facebook", body)
+        trigger = first_matching_trigger(
+            account,
+            "facebook",
+            body,
+            variant=thread.content_variant if thread else None,
+        )
         if trigger is None:
             out(
                 "  STOP: no active reply rule covering Facebook matches this text. "

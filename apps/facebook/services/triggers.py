@@ -22,7 +22,9 @@ def evaluate_triggers(thread: FacebookCommentThread, body: str, conn) -> bool:
 
     if not body or thread.trigger_fired_at is not None:
         return False
-    trigger = first_matching_trigger(conn.account, "facebook", body)
+    trigger = first_matching_trigger(
+        conn.account, "facebook", body, variant=thread.content_variant
+    )
     if trigger is None:
         return False
     _fire_trigger(thread, trigger, conn)
@@ -33,12 +35,18 @@ def _fire_trigger(thread: FacebookCommentThread, trigger, conn) -> None:
     from apps.facebook.models.message import FacebookOutboundMessage
     from apps.facebook.services.outbound import enqueue_reply, send_outbound
     from apps.instagram.api import CommentTrigger
+    from apps.instagram.services.triggers import reply_links
 
     if not _claim_trigger(thread):
         return
 
     first_name = (thread.facebook_contact.name or "").split(" ")[0]
-    body = trigger.render_reply(first_name)
+    links = (
+        reply_links(conn.account, thread.content_variant)
+        if trigger.uses_links()
+        else {}
+    )
+    body = trigger.render_reply(first_name, links)
     action_type = (
         FacebookOutboundMessage.ActionType.COMMENT_REPLY
         if trigger.reply_type == CommentTrigger.ReplyType.COMMENT

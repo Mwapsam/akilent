@@ -37,6 +37,17 @@
 <h2>What the customer sees</h2>
 <p>Tapping the link opens WhatsApp with a message ready to send, for example "Hi! I saw your post and I'd like to know more. (ref K7Q2MX)". The code at the end is how the chat is matched to the post. If they delete it before sending, the chat still reaches your inbox, but it isn't counted for the post.</p>
 
+{% if released.cs_comment_dm_link %}
+<h2>Reply to comments with the chat link</h2>
+<p>On a post's page, <strong>Auto-reply to comments</strong> sends a private message to anyone who comments on that post, for example when the comment says "price" or "how much". Put <code>{whatsapp_link}</code> in the message and it becomes the post's WhatsApp chat link, so the chat they start is credited to the post. <code>{username}</code> becomes their name.</p>
+<ul>
+  <li>It only answers comments on that post, and it's tried before your other comment rules.</li>
+  <li>Instagram and Facebook allow one private message per comment, within 7 days of the comment.</li>
+  <li>If the post has no chat link yet, saving the message makes one on your WhatsApp number. If you've switched the link off, the message goes out without it.</li>
+  <li>You can pause, edit or remove it from the post's page, or from Comment rules.</li>
+</ul>
+{% endif %}
+
 <h2>See the results</h2>
 <p>Open the post in Content Studio. The <strong>Results</strong> card shows, for each channel:</p>
 <ul>

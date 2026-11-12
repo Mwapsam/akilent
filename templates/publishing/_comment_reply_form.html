@@ -1,0 +1,20 @@
+{% comment %}The auto-reply form in _comment_reply_card.html: ``action``, ``keywords``, ``reply``,
+``match`` (the rule's match type, "keyword" for a new one) and the ``button`` label.{% endcomment %}
+<form method="post" action="{{ action }}" hx-boost="false" class="space-y-3 pt-2"
+      x-data="{ every: {% if match == 'any_comment' %}true{% else %}false{% endif %} }">
+  {% csrf_token %}
+  <div>
+    <label class="label" for="cr-keywords-{{ action|slugify }}">When a comment includes</label>
+    <input type="text" name="keywords" id="cr-keywords-{{ action|slugify }}" class="input" value="{{ keywords }}"
+           :disabled="every" placeholder="price, how much, cost">
+    <label class="mt-2 flex items-center gap-2 text-sm text-ink">
+      <input type="checkbox" name="every_comment" value="1" x-model="every"> Reply to every comment instead
+    </label>
+  </div>
+  <div>
+    <label class="label" for="cr-reply-{{ action|slugify }}">Send them this private message</label>
+    <textarea name="reply_template" id="cr-reply-{{ action|slugify }}" class="textarea" rows="4" maxlength="1000" required>{{ reply }}</textarea>
+    <p class="text-xs text-ink-subtle mt-1">{username} becomes their name. {whatsapp_link} becomes this post's WhatsApp chat link{% if released.cs_bio_page %}, and {bio_link} your bio page{% endif %}.</p>
+  </div>
+  <button type="submit" class="btn btn-primary btn-sm">{{ button }}</button>
+</form>

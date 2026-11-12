@@ -53,22 +53,70 @@ def evaluate_triggers(thread: CommentThread, body: str) -> bool:
         return False
 
     account = thread.instagram_account.account
-    trigger = first_matching_trigger(account, "instagram", body)
+    trigger = first_matching_trigger(
+        account, "instagram", body, variant=thread.content_variant
+    )
     if trigger is None:
         return False
     _fire_trigger(thread, trigger)
     return True
 
 
-def first_matching_trigger(account, channel: str, body: str) -> CommentTrigger | None:
+def first_matching_trigger(
+    account, channel: str, body: str, variant=None
+) -> CommentTrigger | None:
     """The account's first active trigger for ``channel`` ("instagram" or "facebook")
-    that matches the comment text, by priority. Shared by Instagram and Facebook."""
+    that matches the comment text. Shared by Instagram and Facebook.
+
+    ``variant``: the Content Studio post channel the comment is on, if known. A rule made
+    for that post is tried before the general ones; a rule made for another post never
+    answers. Then by priority, as before.
+    """
+    from django.db.models import Q
+
     from apps.instagram.models.moderation import RuleChannels
 
-    triggers = CommentTrigger.objects.filter(
-        account=account, is_active=True, channels__in=RuleChannels.covering(channel)
-    ).order_by("priority", "created_at")
+    post_id = getattr(variant, "post_id", None)
+    scope = Q(post__isnull=True) | (Q(post_id=post_id) if post_id else Q(pk__in=[]))
+    triggers = sorted(
+        CommentTrigger.objects.filter(
+            scope,
+            account=account,
+            is_active=True,
+            channels__in=RuleChannels.covering(channel),
+        ),
+        key=lambda t: (t.post_id is None, t.priority, t.created_at),
+    )
     return next((t for t in triggers if _trigger_matches(t, body)), None)
+
+
+def reply_links(account, variant) -> dict:
+    """The links a reply's placeholders stand for: the commented post's tracked WhatsApp
+    chat link on that channel ({whatsapp_link}) and the live bio page ({bio_link}).
+
+    A chat that starts from the link carries the post's ref code, so it is credited to the
+    post like any other (apps.conversations.entry_points.match_ref_code). Never creates a
+    link: one the business hasn't made, or has switched off, is left out.
+    """
+    links: dict = {}
+    try:
+        from apps.publishing import bio
+        from apps.publishing import links as tracked
+        from apps.publishing.models import BioPage
+
+        if variant is not None:
+            link = tracked.active_link(variant)
+            if link is not None:
+                links["whatsapp_link"] = tracked.short_url(link)
+        if bio.is_released():
+            page = BioPage.objects.filter(account=account, is_active=True).first()
+            if page is not None:
+                links["bio_link"] = bio.page_url(page)
+    except Exception:
+        logger.exception(
+            "reply_links failed for variant=%s", getattr(variant, "pk", None)
+        )
+    return links
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +163,12 @@ def _fire_trigger(thread: CommentThread, trigger: CommentTrigger) -> None:
     ig_account = thread.instagram_account
     ig_contact = thread.instagram_contact
     username = ig_contact.username or ""
-    body = trigger.render_reply(username)
+    links = (
+        reply_links(ig_account.account, thread.content_variant)
+        if trigger.uses_links()
+        else {}
+    )
+    body = trigger.render_reply(username, links)
 
     # Deterministic idempotency key: one outbox record per comment thread.
     idempotency_key = f"private_reply:{ig_account.pk}:{thread.comment_id}"

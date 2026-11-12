@@ -46,6 +46,10 @@ UNRELEASED_FEATURES: dict[str, tuple[str, ...]] = {
     # Direct-to-S3 uploads (apps/publishing/direct_upload.py) and Meta's byte upload as
     # the fallback when Facebook can't fetch a video by URL. Also needs cs_fb_formats.
     "cs_direct_upload": ("publishing/posts/media/direct/",),
+    # A post's own comment auto-reply with its WhatsApp chat link (outreach plan Phase C,
+    # apps/publishing/comment_replies.py). Its URLs sit under each post, so the views and
+    # the post page check the flag themselves.
+    "cs_comment_dm_link": (),
 }
 
 

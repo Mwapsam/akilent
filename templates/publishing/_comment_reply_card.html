@@ -1,0 +1,47 @@
+{% comment %}
+The post's own comment auto-reply (apps/publishing/comment_replies.py, flag cs_comment_dm_link).
+When someone comments on this post, they get a private message, usually with the post's
+WhatsApp chat link, so the chat they start is credited to this post. Expects ``cr`` (state()).
+Plain forms (hx-boost="false"): they post and come back to #pd-replies with a message.
+{% endcomment %}
+<section class="card card-pad space-y-3" id="pd-replies" aria-labelledby="pd-replies-title">
+  <div>
+    <h2 id="pd-replies-title" class="pd-section-title">Auto-reply to comments</h2>
+    <p class="mt-0.5 text-xs text-ink-subtle">When someone comments on this post, Akilent sends them a private message. Chats they start from its WhatsApp link are credited to this post.</p>
+  </div>
+
+  {% for rule in cr.rules %}
+  <div class="rounded-xl border border-border p-3 space-y-2" data-comment-reply="{{ rule.pk }}">
+    <div class="flex items-start justify-between gap-2">
+      <p class="text-sm text-ink min-w-0">
+        {% if rule.match_type == "any_comment" %}Every comment{% else %}Comments with <span class="font-medium">{{ rule.keywords }}</span>{% endif %}
+      </p>
+      {% include "components/status_badge.html" with status=rule.display_status %}
+    </div>
+    <p class="text-xs text-ink-subtle whitespace-pre-line break-words">{{ rule.reply_template }}</p>
+    <details>
+      <summary class="text-xs font-medium text-accent cursor-pointer">Edit</summary>
+      {% url 'publishing:comment-reply-edit' post.pk rule.pk as save_url %}
+      {% include "publishing/_comment_reply_form.html" with action=save_url keywords=rule.keywords reply=rule.reply_template match=rule.match_type button="Save changes" %}
+    </details>
+    <div class="flex flex-wrap gap-2">
+      <form method="post" action="{% url 'publishing:comment-reply-toggle' post.pk rule.pk %}" hx-boost="false">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-secondary btn-sm">{% if rule.is_active %}Pause{% else %}Turn on{% endif %}</button>
+      </form>
+      <form method="post" action="{% url 'publishing:comment-reply-delete' post.pk rule.pk %}" hx-boost="false">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-ghost btn-sm">Remove</button>
+      </form>
+    </div>
+  </div>
+  {% empty %}
+  {% url 'publishing:comment-reply-add' post.pk as add_url %}
+  {% include "publishing/_comment_reply_form.html" with action=add_url keywords=cr.default_keywords reply=cr.default_reply match="keyword" button="Turn on auto-reply" %}
+  {% endfor %}
+
+  {% if not cr.has_link %}
+  <p class="text-xs text-ink-subtle">This post has no WhatsApp chat link yet. Saving a message with {whatsapp_link} makes one, on your WhatsApp number.</p>
+  {% endif %}
+  <p class="text-xs text-ink-subtle">Instagram and Facebook allow one private message per comment, within 7 days of it. This post's reply is tried before your other <a href="{% url 'instagram-comment-rules' %}" class="cs-link">comment rules</a>.</p>
+</section>

@@ -285,6 +285,8 @@ column in that order.{% endcomment %}
 
       {% include "publishing/_chat_link_card.html" %}
 
+      {% if comment_reply %}{% include "publishing/_comment_reply_card.html" with cr=comment_reply %}{% endif %}
+
       <details class="card pd-tech">
         <summary>Post history</summary>
         <dl class="pd-facts mt-3">

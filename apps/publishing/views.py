@@ -2150,6 +2150,12 @@ def _channel_options_for_display(post) -> list[dict]:
     return rows
 
 
+def _comment_reply_state(post, account):
+    from . import comment_replies
+
+    return comment_replies.state(post, account)
+
+
 @login_required
 @module_required("content_studio")
 @_in_workspace_tz
@@ -2207,6 +2213,8 @@ def post_detail(request, pk):
             "cta": cta_for(post),
             "cta_links": cta_links,
             "channel_options": _channel_options_for_display(post),
+            # The post's own comment auto-reply (outreach plan Phase C); None hides it.
+            "comment_reply": _comment_reply_state(post, account),
         },
         size="lg",
         title="Post",

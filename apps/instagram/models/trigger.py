@@ -2,6 +2,10 @@ from django.db import models
 
 from .moderation import RuleChannels
 
+# Placeholders a reply can carry besides {username}: the commented post's tracked WhatsApp
+# chat link for that channel, and the business's bio page.
+LINK_PLACEHOLDERS = ("whatsapp_link", "bio_link")
+
 
 class CommentTrigger(models.Model):
     """
@@ -59,6 +63,17 @@ class CommentTrigger(models.Model):
         help_text="How to send the reply: private DM or a public comment reply.",
     )
 
+    # Set when the rule was made for one Content Studio post (its page's "Auto-reply to
+    # comments"): it only answers comments on that post, and comes before the general
+    # rules there. Null: every post.
+    post = models.ForeignKey(
+        "publishing.ContentPost",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="comment_triggers",
+    )
+
     # Priority: lower number fires first; only the first matching trigger fires.
     priority = models.PositiveSmallIntegerField(default=10)
 
@@ -85,8 +100,29 @@ class CommentTrigger(models.Model):
     def keyword_list(self) -> list[str]:
         return [k.strip().lower() for k in self.keywords.split(",") if k.strip()]
 
-    def render_reply(self, username: str = "") -> str:
-        return self.reply_template.replace("{username}", username or "there")
+    def render_reply(self, username: str = "", links: dict | None = None) -> str:
+        """The reply with its placeholders filled.
+
+        ``links``: {"whatsapp_link": url, "bio_link": url} for the commented post
+        (apps.instagram.services.triggers.reply_links). A placeholder with no link is
+        dropped with the space before it, so the reply never shows "{whatsapp_link}".
+        """
+        import re
+
+        text = self.reply_template.replace("{username}", username or "there")
+        for name in LINK_PLACEHOLDERS:
+            url = (links or {}).get(name, "")
+            text = (
+                text.replace("{" + name + "}", url)
+                if url
+                else re.sub(r"[ \t]*\{" + name + r"\}", "", text)
+            )
+        return text.strip()
+
+    def uses_links(self) -> bool:
+        return any(
+            "{" + name + "}" in self.reply_template for name in LINK_PLACEHOLDERS
+        )
 
     def __str__(self):
         return f"{self.name} ({self.match_type})"

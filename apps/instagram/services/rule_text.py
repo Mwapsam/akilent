@@ -24,6 +24,12 @@ def _or_list(words: list[str], limit: int = 4) -> str:
 
 
 def _where(rule, show_channels: bool) -> str:
+    post = getattr(rule, "post", None) if getattr(rule, "post_id", None) else None
+    if post is not None:
+        # A rule made on a post's page answers that post only, on its channels.
+        from apps.publishing.templatetags.publishing_filters import post_headline
+
+        return f"a comment on your post “{post_headline(post)}”"
     if not show_channels:
         return "a comment"
     return {

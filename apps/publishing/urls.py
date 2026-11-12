@@ -4,6 +4,7 @@ from . import (
     ai_views,
     analytics_views,
     bio_views,
+    comment_reply_views,
     import_views,
     media_views,
     recurring_views,
@@ -58,6 +59,26 @@ urlpatterns = [
     path("new/readiness/", views.composer_readiness, name="composer-readiness"),
     path("new/autosave/", views.composer_autosave, name="composer-autosave"),
     path("posts/<int:pk>/", views.post_detail, name="post-detail"),
+    path(
+        "posts/<int:pk>/comment-replies/",
+        comment_reply_views.comment_reply_save,
+        name="comment-reply-add",
+    ),
+    path(
+        "posts/<int:pk>/comment-replies/<int:rule_pk>/",
+        comment_reply_views.comment_reply_save,
+        name="comment-reply-edit",
+    ),
+    path(
+        "posts/<int:pk>/comment-replies/<int:rule_pk>/toggle/",
+        comment_reply_views.comment_reply_toggle,
+        name="comment-reply-toggle",
+    ),
+    path(
+        "posts/<int:pk>/comment-replies/<int:rule_pk>/delete/",
+        comment_reply_views.comment_reply_delete,
+        name="comment-reply-delete",
+    ),
     path("posts/<int:pk>/delete/", views.post_delete, name="post-delete"),
     path("posts/<int:pk>/retry/", views.post_retry, name="post-retry"),
     path(

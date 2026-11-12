@@ -323,7 +323,11 @@ def lint_rules(account) -> LintResult:
     )
     result = LintResult()
     result.warnings += _pairs(moderation, "moderation", "rule")
-    result.warnings += _pairs(triggers, "reply", "reply rule")
+    # A rule made for one post fires first on that post and nowhere else, so it neither
+    # hides a general rule nor is hidden by one: only the general rules are compared.
+    result.warnings += _pairs(
+        [t for t in triggers if t.post_id is None], "reply", "reply rule"
+    )
     for rule in moderation:
         if rule.is_active:
             result.warnings += _broad(rule, "moderation")

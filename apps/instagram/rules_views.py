@@ -177,7 +177,9 @@ def comment_rules(request):
     # (rule, its warnings, the rule in a sentence), in the order they run.
     triggers = [
         (rule, lint.for_rule("reply", rule.pk), sentence(rule, show_channels=both))
-        for rule in CommentTrigger.objects.filter(account=account)
+        for rule in CommentTrigger.objects.filter(account=account).select_related(
+            "post"
+        )
     ]
     moderation_rules = [
         (rule, lint.for_rule("moderation", rule.pk), sentence(rule, show_channels=both))
