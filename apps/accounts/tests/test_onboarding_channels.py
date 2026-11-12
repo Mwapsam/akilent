@@ -87,12 +87,13 @@ def test_facebook_comes_after_instagram_and_completes_once_connected():
     assert ob.get_state(acc)["complete"]
 
 
-def test_a_switched_off_pick_is_paused_not_dropped():
+def test_a_switched_off_pick_is_dropped():
+    """Its setup isn't shown at all (2026-11-12), not as "paused" either."""
     acc = _account(["facebook", "whatsapp"])
     site = SiteSettings.load()
     site.disabled_channels = ["facebook"]
     site.save()
-    assert "facebook_paused" in _required(acc)
+    assert "facebook_paused" not in _required(acc)
     assert "connect_facebook" not in _required(acc)
 
 

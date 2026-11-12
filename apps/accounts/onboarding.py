@@ -10,10 +10,11 @@ includes it, the owner hasn't switched it off) and the cheap query that proves
 it's done. Only the "Get set up" steps are required; everything else is a
 recommendation that shows the business what else Akilent does for them.
 
-When a channel the business chose is switched off by the admin (or its state
-can't be read yet), its setup is shown as *paused* rather than dropped: the
-checklist never claims "all set" and the stored state never moves on until the
-channel is back (see ``_channel_plan``).
+A channel the business chose that is switched off (by the admin, or not set up on this
+server) has no setup steps at all: nothing about it shows, and the counts leave it out. When
+it's switched back on its steps simply apply again. Only a channel whose state can't be read
+right now is *paused*, so a passing database hiccup never writes COMPLETED early (see
+``_channel_plan``).
 """
 
 from collections.abc import Callable
@@ -58,10 +59,10 @@ def _channel_plan(account) -> tuple[frozenset, frozenset, tuple[str, ...]]:
     the plan.
 
     Returns ``(enabled channels, chosen channels to set up, chosen channels paused)``.
-    A chosen channel that is on is set up. One the admin switched off, or whose state
-    can't be read yet, is *paused*: it's coming back, so its setup waits rather than
-    being skipped. One this server isn't set up for at all (its env flag is off) is
-    dropped, since waiting on it would hold onboarding open forever.
+    A chosen channel that is on is set up. One that is switched off (by the admin, or its
+    env flag) is dropped: its setup isn't shown anywhere, not even as "paused", and the
+    counts leave it out (2026-11-12: "Setup done · Email paused" read as broken). Only one
+    whose state can't be read yet is *paused*, so a failed read never completes setup.
     """
     from apps.core.channels import available_channels
 
@@ -70,7 +71,7 @@ def _channel_plan(account) -> tuple[frozenset, frozenset, tuple[str, ...]]:
     chosen = set(account.selected_channels or [])
     ordered = [ch for ch in SETUP_ORDER if ch in chosen and ch in available]
     setup = frozenset(ch for ch in ordered if ch in enabled)
-    paused = tuple(ch for ch in ordered if channel_state(ch) != "enabled")
+    paused = tuple(ch for ch in ordered if channel_state(ch) == "unknown")
     return enabled, setup, paused
 
 
@@ -208,6 +209,10 @@ class _Ctx:
         return _has_ready_instagram(self.account)
 
     @cached_property
+    def whatsapp_ready(self) -> bool:
+        return _has_ready_whatsapp_number(self.account)
+
+    @cached_property
     def whatsapp(self) -> dict:
         return _whatsapp_step(self.account)
 
@@ -296,7 +301,9 @@ def _instagram_usable(ctx) -> bool:
 
 def _channel_connected(ctx, channel: str) -> bool:
     if channel == "whatsapp":
-        return _done_whatsapp(ctx)
+        # Connected means a ready number, as on Connections; the required "Set up WhatsApp"
+        # step (for a business that chose it) still waits for the whole setup console.
+        return ctx.whatsapp_ready
     if channel == "instagram":
         return ctx.instagram_ready
     if channel == "facebook":
@@ -378,15 +385,18 @@ def _done_bio_link(ctx) -> bool:
     return bool(page and bio_link_set(page))
 
 
-def _publish_blocked(ctx) -> str:
-    """Until a page or account is connected there is nothing to publish to."""
+def _publish_blocked(ctx) -> tuple[str, ...]:
+    """Until a page or account is connected there is nothing to publish to.
+
+    The steps that would unblock it, by key: get_state names whichever of them are on this
+    business's checklist, by their own titles ("Add Instagram" or "Connect your Facebook
+    Page"), so the label never names a step that isn't on the page. Either channel will do.
+    """
     if _instagram_usable(ctx) and _done_instagram(ctx):
-        return ""
+        return ()
     if ctx.facebook_connected:
-        return ""
-    if _instagram_usable(ctx) and ("instagram" in ctx.public or ctx.wants_instagram):
-        return "Connect Instagram"
-    return "Connect a Facebook Page"
+        return ()
+    return ("connect_instagram", "add_instagram", "connect_facebook", "add_facebook")
 
 
 def _done_profile(ctx) -> bool:
@@ -981,8 +991,13 @@ def _build_state(ctx, essentials_only: bool) -> dict:
             if not needed["done"]:
                 step.update(url=None, cta=None, locked=titles[defn.needs])
                 continue
-        reason = defn.blocked(ctx) if defn.blocked else ""
-        if reason:
+        first = defn.blocked(ctx) if defn.blocked else ()
+        if first:
+            on_list = [by_key[k]["title"] for k in first if k in by_key]
+            # The template wraps the label in quotes, giving: "Add Instagram" or "Add Facebook".
+            reason = (
+                "\u201d or \u201c".join(on_list) or "Connect a channel you can post to"
+            )
             step.update(url=None, cta=None, locked=reason)
 
     required = [s for s in steps if not s["optional"]]
@@ -1025,8 +1040,14 @@ def _build_state(ctx, essentials_only: bool) -> dict:
                     "key": key,
                     "label": label,
                     "steps": items,
-                    "done": sum(1 for s in items if s["done"]),
-                    "total": len(items),
+                    # Counted like the header's figure: a paused step is listed, not counted,
+                    # so "Essentials 2/2" and the top bar's "2/2" agree.
+                    "done": sum(
+                        1
+                        for s in items
+                        if s["done"] and not s["key"].endswith("_paused")
+                    ),
+                    "total": sum(1 for s in items if not s["key"].endswith("_paused")),
                 }
             )
 

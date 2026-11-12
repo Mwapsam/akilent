@@ -324,24 +324,22 @@ def all_wired(settings):
 
 
 @pytest.mark.django_db
-def test_email_account_with_email_off_is_paused_not_done(account, all_wired):
+def test_email_account_with_email_off_has_no_email_setup(account, all_wired):
+    """2026-11-12: a switched-off channel's setup isn't shown at all, not even as paused."""
     _switch_off("email")
     state = ob.get_state(account)
     keys = [s["key"] for s in state["steps"]]
-    assert "email_paused" in keys and "domain" not in keys
-    assert state["complete"] is False
-    assert state["next_step"]["key"] == "email_paused"
-    assert state["next_step"]["url"] is None
+    assert not {"email_paused", "domain", "verify"} & set(keys)
+    assert state["paused"] == [] and not state["only_paused_left"]
 
-    # Nothing is written while paused, so setup resumes when email is back.
+    # Nothing is left to wait for, so setup completes...
     assert ob.advance_onboarding(account) == ""
     account.refresh_from_db()
-    assert account.onboarding_state == Account.Onboarding.ACCOUNT_CREATED
+    assert account.onboarding_state == Account.Onboarding.COMPLETED
 
+    # ...and when email is back its steps apply again on the live checklist.
     _switch_on("email")
-    assert ob.advance_onboarding(account) == "/email/domains/"
-    account.refresh_from_db()
-    assert account.onboarding_state == Account.Onboarding.DOMAIN_SETUP
+    assert "domain" in _keys(account)
 
 
 @pytest.mark.django_db
@@ -355,14 +353,13 @@ def test_channel_the_server_is_not_set_up_for_is_dropped_not_paused(db, settings
 
 
 @pytest.mark.django_db
-def test_whatsapp_account_with_whatsapp_off_is_paused(db, all_wired):
+def test_whatsapp_account_with_whatsapp_off_has_no_whatsapp_setup(db, all_wired):
     _switch_off("whatsapp")
     acc = _make_account(WHATSAPP)
     keys = _keys(acc)
-    assert "whatsapp_paused" in keys
+    assert not {"whatsapp", "whatsapp_paused"} & set(keys)
     # It is not pushed into email setup it never chose.
     assert not {"domain", "verify"} & set(keys)
-    assert ob.get_state(acc)["complete"] is False
 
 
 @pytest.mark.django_db
@@ -370,60 +367,45 @@ def test_both_with_one_channel_off(db, all_wired):
     _switch_off("email")
     acc = _make_account(BOTH)
     state = ob.get_state(acc, essentials_only=True)
-    # What can be done today comes first, and is what "next up" points at.
-    assert [s["key"] for s in state["steps"]] == [
-        "account",
-        "verify_email",
-        "whatsapp",
-        "email_paused",
-    ]
+    assert [s["key"] for s in state["steps"]] == ["account", "verify_email", "whatsapp"]
     assert state["next_step"]["key"] == "whatsapp"
 
-    # The live channel still moves the stored state along...
     assert ob.advance_onboarding(acc) == "/whatsapp/numbers/"
     acc.refresh_from_db()
     assert acc.onboarding_state == Account.Onboarding.WHATSAPP_SETUP
 
-    # ...but once it's done, COMPLETED waits for the paused one.
+    # Once the live channel is done, setup is complete: nothing waits on email.
     n = _wa_number(acc, registration_status="registered")
     n.connection_tests.create(recipient="+260971234567", status="sent")
     assert ob.advance_onboarding(acc) == ""
     acc.refresh_from_db()
-    assert acc.onboarding_state == Account.Onboarding.WHATSAPP_SETUP
-    assert ob.get_state(acc)["next_step"]["key"] == "email_paused"
+    assert acc.onboarding_state == Account.Onboarding.COMPLETED
 
 
 @pytest.mark.django_db
-def test_a_paused_step_is_listed_but_not_counted(db, all_wired, client):
+def test_a_switched_off_channel_is_nowhere_in_the_app(db, all_wired, client):
+    """Top bar, dashboard, setup popover and /onboarding/ say nothing about it, and the
+    header and the Essentials section count the same."""
     _switch_off("email")
     acc = _make_account(BOTH)
-    n = _wa_number(acc, registration_status="registered")
-    n.connection_tests.create(recipient="+260971234567", status="sent")
-
     state = ob.get_state(acc, essentials_only=True)
-
-    assert "email_paused" in [s["key"] for s in state["steps"]]
-    assert state["required_done"] == state["required_total"]  # not stuck at 3 of 4
-    assert state["only_paused_left"] and not state["complete"]  # still not complete
+    essentials = next(s for s in ob.get_state(acc)["sections"] if s["key"] == "setup")
+    assert (essentials["done"], essentials["total"]) == (
+        state["required_done"],
+        state["required_total"],
+    )
     client.force_login(acc.owner)
-    html = client.get("/publishing/").content.decode()
-    assert "Setup done · Email paused" in html and "Not counted" not in html
-    assert "Not counted" in client.get("/onboarding/").content.decode()
+    for url in ("/dashboard/", "/publishing/", "/onboarding/"):
+        html = client.get(url).content.decode()
+        assert "Email paused" not in html and "Email setup is paused" not in html
+        assert "waiting on its provider" not in html and "On hold" not in html
 
 
 @pytest.mark.django_db
 def test_both_channels_off(db, all_wired):
     _switch_off("email", "whatsapp")
     acc = _make_account(BOTH)
-    assert _keys(acc, essentials_only=True) == [
-        "account",
-        "verify_email",
-        "whatsapp_paused",
-        "email_paused",
-    ]
-    assert ob.advance_onboarding(acc) == ""
-    acc.refresh_from_db()
-    assert acc.onboarding_state == Account.Onboarding.ACCOUNT_CREATED
+    assert _keys(acc, essentials_only=True) == ["account", "verify_email"]
 
 
 @pytest.mark.django_db
@@ -435,17 +417,6 @@ def test_unknown_channel_state_never_completes_onboarding(account, monkeypatch):
     assert ob.advance_onboarding(account) == ""
     account.refresh_from_db()
     assert account.onboarding_state == Account.Onboarding.ACCOUNT_CREATED
-
-
-@pytest.mark.django_db
-def test_onboarding_page_with_email_off(client, account, all_wired):
-    _switch_off("email")
-    client.force_login(account.owner)
-    resp = client.get("/onboarding/")
-    assert resp.status_code == 200
-    assert b"Email setup is paused" in resp.content
-    assert b"getting-started" not in resp.content
-    assert b"all set up" not in resp.content
 
 
 @pytest.mark.django_db
@@ -492,7 +463,8 @@ def test_post_step_needs_somewhere_to_publish(account, monkeypatch, settings):
 
     _open_to_public("instagram")
     post = next(s for s in ob.get_state(account)["steps"] if s["key"] == "post")
-    assert post["url"] is None and post["locked"] == "Connect Instagram"
+    # Named by the step on this business's list ("Add Instagram"), never one that isn't.
+    assert post["url"] is None and post["locked"] == "Add Instagram"
 
     _usable(monkeypatch, {"instagram"})  # no Content Studio on the plan
     assert "post" not in _keys(account)
@@ -693,3 +665,14 @@ def test_dashboard_panels_skip_the_full_checklist_until_setup_is_done(
     )
     resp = client.get("/dashboard/panels/", HTTP_HX_REQUEST="true")
     assert b'data-testid="next-recommended"' in resp.content
+
+
+@pytest.mark.django_db
+def test_add_whatsapp_is_done_once_a_number_is_connected(db, all_wired, monkeypatch):
+    """2026-11-12: "Reach customers" kept saying "Add WhatsApp" with WhatsApp connected,
+    because it waited for the whole setup console (a test message) like the required step."""
+    _usable(monkeypatch, {"whatsapp_inbox", "whatsapp_campaigns", "whatsapp"})
+    acc = _make_account(EMAIL)  # didn't pick WhatsApp at signup, connected it later
+    _wa_number(acc, registration_status="registered")
+    step = next(s for s in ob.get_state(acc)["steps"] if s["key"] == "add_whatsapp")
+    assert step["done"] is True
