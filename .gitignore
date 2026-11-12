@@ -72,3 +72,6 @@ docs/design/qa/
 
 # seed_signup_preview: values saved before copying production plans into a dev database
 /.signup-preview-backup.json
+
+# Manual deploy settings (SSH host, tokens): tools/deploy/manual_deploy.env.example is the template
+tools/deploy/manual_deploy.env
