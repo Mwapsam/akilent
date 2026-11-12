@@ -49,10 +49,17 @@ CONFIG=${MANUAL_DEPLOY_ENV:-$HERE/manual_deploy.env}
 if [ -f "$CONFIG" ]; then
   # shellcheck disable=SC1090
   set -a; . <(tr -d '\r' < "$CONFIG"); set +a
+elif [ -z "${DEPLOY_SSH_HOST:-}" ]; then
+  die "no settings file. Create it from the template and fill in the server details:
+    cp tools/deploy/manual_deploy.env.example tools/deploy/manual_deploy.env
+  The values are your GitHub secrets SSH_HOST, SSH_USER, SSH_PORT and DEPLOY_PATH."
 fi
-: "${DEPLOY_SSH_HOST:?set DEPLOY_SSH_HOST in $CONFIG (see manual_deploy.env.example)}"
-: "${DEPLOY_SSH_USER:?set DEPLOY_SSH_USER in $CONFIG}"
-: "${DEPLOY_PATH:?set DEPLOY_PATH in $CONFIG}"
+missing=""
+for name in DEPLOY_SSH_HOST DEPLOY_SSH_USER DEPLOY_PATH; do
+  [ -n "${!name:-}" ] || missing="$missing $name"
+done
+[ -z "$missing" ] || die "empty in $CONFIG:$missing
+  They are your GitHub secrets SSH_HOST, SSH_USER and DEPLOY_PATH (Settings > Secrets > Actions)."
 DEPLOY_SSH_PORT=${DEPLOY_SSH_PORT:-22}
 SITE_URL=${SITE_URL:-https://akilent.com}
 GITHUB_REPO=${GITHUB_REPO:-}
