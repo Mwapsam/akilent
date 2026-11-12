@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('publishing', '0029_plan_status_follows_date_and_posts'),
+        ("publishing", "0029_plan_status_follows_date_and_posts"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='mediaasset',
-            name='thumb_url',
-            field=models.URLField(blank=True, default='', max_length=2048),
+            model_name="mediaasset",
+            name="thumb_url",
+            field=models.URLField(blank=True, default="", max_length=2048),
         ),
     ]

@@ -241,8 +241,14 @@ def test_contact_sales_is_its_own_form_and_is_saved_as_sales(client, settings):
     req = DemoRequest.objects.get()
     assert req.topic == "sales" and req.phone == "+44 20 7946 0958"
     notify = send.call_args_list[0]
-    assert notify.args[1].startswith("Sales enquiry") and "+44 20" in notify.kwargs["text_body"]
-    assert "Thanks, we've got your message" in client.get(resp["Location"]).content.decode()
+    assert (
+        notify.args[1].startswith("Sales enquiry")
+        and "+44 20" in notify.kwargs["text_body"]
+    )
+    assert (
+        "Thanks, we've got your message"
+        in client.get(resp["Location"]).content.decode()
+    )
 
 
 @pytest.mark.django_db
@@ -280,9 +286,15 @@ def test_reply_to_reaches_the_provider_without_line_breaks(settings):
             sent.append(message)
 
     with (
-        mock.patch("apps.email.providers.get_system_email_provider", return_value=Provider()),
-        mock.patch("apps.email.services.suppression.is_suppressed_globally", return_value=False),
-        mock.patch("apps.email.services.validation.validate_recipient", return_value=True),
+        mock.patch(
+            "apps.email.providers.get_system_email_provider", return_value=Provider()
+        ),
+        mock.patch(
+            "apps.email.services.suppression.is_suppressed_globally", return_value=False
+        ),
+        mock.patch(
+            "apps.email.services.validation.validate_recipient", return_value=True
+        ),
         mock.patch("apps.core.models.SiteSettings.load", side_effect=RuntimeError),
     ):
         send_mod.send_system_email(

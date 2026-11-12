@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import Iterator
+from typing import Any
 
 import requests
 
@@ -22,14 +23,19 @@ CONNECT_TIMEOUT = 5
 
 
 def _send(url, *, headers, body, timeout, auth, connect_timeout, stream=False):
+    # Optional arguments only when set, so a provider without basic auth sends none.
+    extra: dict[str, Any] = {}
+    if auth:
+        extra["auth"] = auth
+    if stream:
+        extra["stream"] = True
     try:
         return requests.post(
             url,
             json=body,
             headers=headers,
             timeout=(connect_timeout, timeout),
-            **({"auth": auth} if auth else {}),
-            **({"stream": True} if stream else {}),
+            **extra,
         )
     except requests.Timeout as exc:
         raise AIProviderError("The AI service took too long to answer.") from exc

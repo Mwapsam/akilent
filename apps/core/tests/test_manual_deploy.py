@@ -23,7 +23,9 @@ def _body(source: str, name: str) -> list[str]:
 def test_the_manual_release_runs_every_command_the_github_deploy_runs():
     remote = _body(REMOTE, "release")
     for command in _body(WORKFLOW, "release"):
-        assert command in remote, f"deploy.yml runs `{command}`; remote_release.sh doesn't"
+        assert command in remote, (
+            f"deploy.yml runs `{command}`; remote_release.sh doesn't"
+        )
 
 
 def test_the_manual_health_check_matches_the_github_one():

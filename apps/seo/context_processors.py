@@ -158,8 +158,8 @@ def resolve_seo_context(request):
     page_defaults = getattr(settings, "SEO_PAGES", {}).get(request.path, {})
 
     # Merge title
-    page_title = (
-        (db_override.title if db_override else "") or page_defaults.get("title", "")
+    page_title = (db_override.title if db_override else "") or page_defaults.get(
+        "title", ""
     )
     if page_title and page_title != site_name:
         title = f"{page_title} {title_suffix}"

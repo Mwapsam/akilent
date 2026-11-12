@@ -1048,7 +1048,9 @@ def _demo_confirm(req) -> None:
             cta_label="Start free trial" if base else "",
         )
     except Exception:
-        logger.exception("Demo confirmation %s: HTML shell failed; sending text", req.pk)
+        logger.exception(
+            "Demo confirmation %s: HTML shell failed; sending text", req.pk
+        )
         html = ""
     try:
         send_system_email(

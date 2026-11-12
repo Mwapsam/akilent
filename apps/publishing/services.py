@@ -1941,7 +1941,7 @@ def refresh_parent_post(post: ContentPost) -> None:
 
     # The idea it came from follows it: published once its posts are all out. Nothing
     # called this before, so Planning never counted an idea as published.
-    if post.plan_item_id:
+    if post.plan_item_id and post.plan_item is not None:
         post.plan_item.refresh_plan_status()
 
     # Plan the first performance read of each channel that just went live. The

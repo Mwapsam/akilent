@@ -223,7 +223,10 @@ def test_enterprise_offers_only_what_exists_today(client, plans):
 def test_meta_fees_are_explained_only_with_whatsapp(client, plans, settings):
     pricing = _pricing(client)
     assert "billed by Meta directly" in pricing and "never adds a markup" in pricing
-    assert 'href="https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing"' in pricing
+    assert (
+        'href="https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing"'
+        in pricing
+    )
     settings.WHATSAPP_ENABLED = False
     assert "billed by Meta" not in _section(client.get("/").content.decode(), "pricing")
 

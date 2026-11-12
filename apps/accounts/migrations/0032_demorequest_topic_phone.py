@@ -4,20 +4,25 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0031_remove_membership_nav_notice_seen'),
+        ("accounts", "0031_remove_membership_nav_notice_seen"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='demorequest',
-            name='phone',
-            field=models.CharField(blank=True, default='', max_length=32, verbose_name='phone or WhatsApp'),
+            model_name="demorequest",
+            name="phone",
+            field=models.CharField(
+                blank=True, default="", max_length=32, verbose_name="phone or WhatsApp"
+            ),
         ),
         migrations.AddField(
-            model_name='demorequest',
-            name='topic',
-            field=models.CharField(choices=[('demo', 'Demo'), ('sales', 'Sales')], default='demo', max_length=8),
+            model_name="demorequest",
+            name="topic",
+            field=models.CharField(
+                choices=[("demo", "Demo"), ("sales", "Sales")],
+                default="demo",
+                max_length=8,
+            ),
         ),
     ]

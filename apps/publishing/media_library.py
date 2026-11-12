@@ -618,8 +618,8 @@ def make_thumbnail(data: bytes) -> bytes | None:
     from PIL import Image, ImageOps
 
     try:
-        with Image.open(io.BytesIO(data)) as img:
-            img = ImageOps.exif_transpose(img)
+        with Image.open(io.BytesIO(data)) as src:
+            img: Image.Image = ImageOps.exif_transpose(src) or src
             if img.mode not in ("RGB", "RGBA"):
                 img = img.convert("RGBA" if "A" in img.getbands() else "RGB")
             img.thumbnail(THUMB_BOX, Image.Resampling.LANCZOS)

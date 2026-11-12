@@ -233,7 +233,7 @@ def reach_summary(post):
             parts.append(f"{v.get_platform_display()} not read yet")
         else:
             state = (latest.get("states") or {}).get("reach")
-            parts.append(f"{v.get_platform_display()} {short.get(state, '—')}")
+            parts.append(f"{v.get_platform_display()} {short.get(state or '', '—')}")
     return f"Reach: {' · '.join(parts)}" if parts else ""
 
 
