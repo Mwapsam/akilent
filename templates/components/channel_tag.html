@@ -4,20 +4,24 @@
 channel ∈ email | whatsapp | sms | instagram | facebook. `compact` is the small size used
 inside a list row, where the full-size tag was louder than the status it sits beside.
 
+The icon size is passed to icon.html here: its default (w-5 h-5) is a utility, which beats
+the .channel-tag > svg rule in assets/app.css, so the compact tag got a 20px icon that the
+conversation header's 22px status row cropped into a spinner-like shape.
+
 SMS used to fall through to the email branch and render as "Email", which in
 the inbox labelled every text-message conversation with the wrong channel.{% endcomment %}
-{% with c=channel|default:"email" %}
+{% with c=channel|default:"email" ic=compact|yesno:"w-3.5 h-3.5 shrink-0,w-4 h-4 shrink-0" %}
 <span class="channel-tag{% if compact %} channel-tag--compact{% endif %}" data-channel="{{ c }}">
   {% if c == "whatsapp" %}
-    {% include "components/icon.html" with name="message-circle" %}WhatsApp
+    {% include "components/icon.html" with name="message-circle" class=ic %}WhatsApp
   {% elif c == "sms" %}
-    {% include "components/icon.html" with name="chat" %}SMS
+    {% include "components/icon.html" with name="chat" class=ic %}SMS
   {% elif c == "instagram" %}
-    {% include "components/icon.html" with name="instagram" %}Instagram
+    {% include "components/icon.html" with name="instagram" class=ic %}Instagram
   {% elif c == "facebook" %}
-    {% include "components/icon.html" with name="facebook" %}Facebook
+    {% include "components/icon.html" with name="facebook" class=ic %}Facebook
   {% else %}
-    {% include "components/icon.html" with name="mail" %}Email
+    {% include "components/icon.html" with name="mail" class=ic %}Email
   {% endif %}
 </span>
 {% endwith %}

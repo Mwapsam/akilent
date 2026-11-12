@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Channels — {{ site.app_name|default:"Akilent" }}{% endblock %}
+{% block title %}Connections — {{ site.app_name|default:"Akilent" }}{% endblock %}
 
 {% block content %}
 
 <header class="mb-6">
-  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Channels</h1>
+  <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Connections</h1>
   <p class="mt-1 text-sm text-ink-subtle">Connect and manage the channels Akilent uses to communicate with your customers.</p>
 </header>
 
@@ -25,7 +25,7 @@
     </div>
     <div class="mt-4 flex items-center justify-between">
       {% if email_connected %}
-        {% include "components/status.html" with state="sent" badge=True %}
+        <span class="badge badge-success">Connected</span>
       {% else %}
         <span class="badge badge-neutral">Not connected</span>
       {% endif %}
@@ -49,7 +49,7 @@
     </div>
     <div class="mt-4 flex items-center justify-between">
       {% if whatsapp_connected %}
-        {% include "components/status.html" with state="sent" badge=True %}
+        <span class="badge badge-success">Connected</span>
       {% else %}
         <span class="badge badge-neutral">Not connected</span>
       {% endif %}
@@ -73,7 +73,7 @@
     </div>
     <div class="mt-4 flex items-center justify-between">
       {% if instagram_connected %}
-        {% include "components/status.html" with state="sent" badge=True %}
+        <span class="badge badge-success">Connected</span>
       {% else %}
         <span class="badge badge-neutral">Not connected</span>
       {% endif %}

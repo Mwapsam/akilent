@@ -1325,6 +1325,20 @@
   const isPreloaded = (detail) =>
     !!(detail && detail.requestConfig && detail.requestConfig.headers && detail.requestConfig.headers["HX-Preloaded"] === "true");
 
+  // A hover preload of the page already on screen (the cursor is still over the sidebar link
+  // just clicked) is a wasted request: cancel it, and leave the link ready to preload again
+  // once the user has moved to another page.
+  document.addEventListener("htmx:configRequest", function (e) {
+    const h = e.detail.headers || {};
+    if (h["HX-Preloaded"] !== "true" || !e.detail.path) return;
+    let target;
+    try { target = new URL(e.detail.path, window.location.href); } catch (err) { return; }
+    if (target.pathname + target.search !== window.location.pathname + window.location.search) return;
+    e.preventDefault();
+    const src = e.detail.elt;
+    if (src && src.preloadState === "LOADING") src.preloadState = "READY";
+  });
+
   document.addEventListener("htmx:configRequest", function (e) {
     if (isBoosted(e.detail) || (e.detail.elt && e.detail.elt.closest && e.detail.elt.closest("[hx-boost]"))) {
       e.detail.headers["X-Akilent-Shell"] = shellName();
@@ -1421,10 +1435,20 @@
   // A boosted request under ~120ms should feel instant, with nothing shown; past that it needs
   // to read as "loading" rather than "stuck". #main dims (aria-busy) and a thin bar creeps across
   // the top — both driven by CSS in assets/app.css, this just toggles the classes/attribute at
-  // the right moments. navBusyCount covers the rare case of two boosted requests overlapping
-  // (a background poll landing mid-navigation does not count — it is never boosted).
-  let navBusyCount = 0;
-  let navProgressTimer = null;
+  // the right moments.
+  //
+  // Only the newest navigation is tracked, by its XHR, never by counting htmx events: htmx fires
+  // afterRequest on the element that sent the request, and when that element has already been
+  // swapped out (a link inside #main, overtaken by a sidebar click) the event never reaches
+  // document. A counter then never returned to zero and the bar stayed stuck at 80% with #main
+  // dimmed until a full reload. The bar ends when the new page has settled (not when the response
+  // arrives - the swap takes a few hundred ms more), straight away for a response that will not
+  // swap, and in any case after a watchdog, so it can never stick.
+  let navXhr = null;
+  let navVerb = "";
+  let navShowTimer = null;
+  let navLateTimer = null;
+  let navWatchdog = null;
   let navProgressEl = null;
   function navProgressBar() {
     if (!navProgressEl) {
@@ -1439,30 +1463,67 @@
   // (the unsaved-work guard does that when you choose "Stay on this page"), and a
   // cancelled one never reaches afterRequest - the bar stuck halfway and <main> stayed
   // dimmed for good. beforeSend only fires for a request that is actually going out.
-  document.addEventListener("htmx:beforeSend", function (e) {
-    if (!isBoosted(e.detail) || isPreloaded(e.detail)) return;
-    navBusyCount++;
-    navProgressTimer = setTimeout(function () {
-      const bar = navProgressBar();
-      bar.classList.remove("is-done");
-      bar.classList.add("is-active");
-      const main = mainEl();
-      if (main) main.setAttribute("aria-busy", "true");
-    }, 120);
-  });
-  document.addEventListener("htmx:afterRequest", function (e) {
-    if (!isBoosted(e.detail) || isPreloaded(e.detail)) return;
-    navBusyCount = Math.max(0, navBusyCount - 1);
-    if (navBusyCount > 0) return;
-    clearTimeout(navProgressTimer);
+  function navShow() {
+    const bar = navProgressBar();
+    bar.classList.remove("is-done");
+    bar.classList.add("is-active");
+    const main = mainEl();
+    if (main) main.setAttribute("aria-busy", "true");
+  }
+  function navReset() {
+    navXhr = null;
+    navVerb = "";
+    clearTimeout(navShowTimer);
+    clearTimeout(navLateTimer);
+    clearTimeout(navWatchdog);
     const main = mainEl();
     if (main) main.removeAttribute("aria-busy");
     if (navProgressEl && navProgressEl.classList.contains("is-active")) {
-      navProgressEl.classList.remove("is-active");
-      navProgressEl.classList.add("is-done");
-      setTimeout(function () { navProgressEl.classList.remove("is-done"); }, 300);
+      const bar = navProgressEl;
+      bar.classList.remove("is-active");
+      bar.classList.add("is-done");
+      setTimeout(function () { if (!bar.classList.contains("is-active")) bar.classList.remove("is-done"); }, 300);
     }
+  }
+  document.addEventListener("htmx:beforeSend", function (e) {
+    if (!isBoosted(e.detail) || isPreloaded(e.detail)) return;
+    const xhr = e.detail.xhr;
+    if (!xhr) return;
+    const prev = navXhr;
+    const prevVerb = navVerb;
+    navXhr = xhr;
+    navVerb = (e.detail.requestConfig.verb || "get").toLowerCase();
+    // A newer click wins: the older page load is cancelled so it can't render in between.
+    // Only a GET - a form post still in flight may already have been saved on the server.
+    if (prev && prev !== xhr && prevVerb === "get" && prev.readyState !== 4) {
+      try { prev.abort(); } catch (err) { /* already finished */ }
+    }
+    clearTimeout(navLateTimer);
+    clearTimeout(navWatchdog);
+    navWatchdog = setTimeout(navReset, 20000);
+    if (!navProgressEl || !navProgressEl.classList.contains("is-active")) {
+      clearTimeout(navShowTimer);
+      navShowTimer = setTimeout(function () { if (navXhr === xhr) navShow(); }, 120);
+    }
+    xhr.addEventListener("loadend", function () {
+      if (navXhr !== xhr) return;
+      const s = xhr.status;
+      // Statuses htmx swaps into #main (the 400/422 re-render included, see beforeSwap above).
+      const swaps = (s >= 200 && s < 300 && s !== 204) || s === 400 || s === 422;
+      if (!swaps) { navReset(); return; }
+      // afterSettle normally ends it; this only covers a response htmx decided not to swap.
+      navLateTimer = setTimeout(function () { if (navXhr === xhr) navReset(); }, 1500);
+    });
   });
+  document.addEventListener("htmx:afterSettle", function (e) {
+    if (!isBoosted(e.detail)) return;
+    // An older navigation settling while a newer one is still loading leaves the bar up.
+    if (navXhr && e.detail.xhr && e.detail.xhr !== navXhr) return;
+    navReset();
+  });
+  document.addEventListener("htmx:historyRestore", navReset);
+  window.addEventListener("pageshow", navReset);
+  window.addEventListener("popstate", function () { if (navXhr && navVerb === "get") { try { navXhr.abort(); } catch (err) { /* done */ } } navReset(); });
 
   // A form's submit buttons are disabled while its htmx request is in flight, so a slow save
   // can't be sent twice. beforeSend runs after htmx has read the form (the clicked button's

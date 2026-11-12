@@ -853,7 +853,7 @@
   /* #main dims slightly once a boosted navigation has been pending a beat, so a
      slow page reads as "loading" rather than "unresponsive" without a skeleton
      of its own. aria-busy is the semantic half; the opacity is the visual one. */
-  #main[aria-busy="true"] { opacity: 0.6; transition: opacity 0.15s linear; }
+  #main[aria-busy="true"] { opacity: 0.85; transition: opacity 0.2s linear 0.1s; }
 
   @media (prefers-reduced-motion: reduce) {
     #nav-progress { transition: none; }
@@ -1314,6 +1314,10 @@
   /* The post: media capped at 300px high beside the caption */
   .pd-media-col { @apply w-full sm:w-60 shrink-0; }
   .pd-media-one { @apply block w-full max-h-[300px] rounded-xl object-contain; background: var(--tone-neutral-bg); }
+  /* A single video gets a wider column and more height: at 15rem a portrait clip was a sliver
+     with the caption column leaving empty space beside it. */
+  .pd-media-col--video { @apply sm:w-80; }
+  .pd-media-col--video .pd-media-one { max-height: 28rem; background: #000; }
   .pd-strip { @apply flex gap-2 overflow-x-auto snap-x snap-mandatory; scrollbar-width: thin; }
   .pd-strip > li { @apply relative snap-start shrink-0 w-[78%] max-h-[300px]; }
   .pd-num { @apply absolute top-2 left-2 text-xs font-semibold px-1.5 py-0.5 rounded-md bg-gray-900/65 text-white tabular-nums; }
@@ -2723,20 +2727,22 @@
 .inbox-avatar-channel[data-channel="instagram"] { color: var(--tone-coral-fg); }
 .inbox-avatar-channel[data-channel="facebook"] { color: var(--tone-info-fg); }
 .inbox-avatar-channel[data-channel="email"] { color: var(--tone-amber-fg); }
-/* Quick actions over the row's end, on hover or focus; a touch screen opens the row instead. */
-.inbox-row-actions { position: absolute; top: 50%; right: .5rem; transform: translateY(-50%); display: flex; gap: .125rem;
+/* Quick actions over the end of the row's second line (where the badges sit), on hover or
+   focus; a touch screen opens the row instead. The name and the time stay readable above them:
+   centred on the row, they covered the time and half the preview. */
+.inbox-row-actions { position: absolute; bottom: .25rem; right: .5rem; display: flex; gap: .125rem;
   padding: .125rem; border-radius: var(--radius-control); background: var(--color-surface); box-shadow: var(--shadow-pop);
   opacity: 0; pointer-events: none; transition: opacity var(--duration-fast) var(--ease-emphasized); }
 .inbox-list > li:hover .inbox-row-actions, .inbox-list > li:focus-within .inbox-row-actions { opacity: 1; pointer-events: auto; }
-/* Under them: the time and the badges step aside, the preview takes the whole line, and only
-   its end fades out before the actions. */
+/* Under them: the badges step aside, the preview takes the whole line, and only its end fades
+   out before the actions. */
 @media (hover: hover) {
-  .inbox-list > li:is(:hover, :focus-within) :is(.inbox-when, .inbox-meta) { visibility: hidden; }
+  .inbox-list > li:is(:hover, :focus-within) .inbox-meta { visibility: hidden; }
   .inbox-list > li:is(:hover, :focus-within) .inbox-preview { grid-column: 1 / -1;
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 8rem), transparent calc(100% - 6.5rem));
             mask-image: linear-gradient(to right, #000 calc(100% - 8rem), transparent calc(100% - 6.5rem)); }
 }
-.inbox-row-act { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; border-radius: calc(var(--radius-control) - 2px);
+.inbox-row-act { display: inline-flex; align-items: center; justify-content: center; width: 1.625rem; height: 1.625rem; border-radius: calc(var(--radius-control) - 2px);
   color: var(--color-ink-muted); }
 .inbox-row-act:hover { background: var(--color-hover); color: var(--color-ink); }
 .inbox-row-act.htmx-request { opacity: .5; }

@@ -289,9 +289,9 @@
         count would sit short of full for good.{% endcomment %}
         {% with names=onboarding.paused_labels|join:" and " %}
         <button type="button" class="ob-launch" x-data @click="$dispatch('ob-toggle')"
-                aria-label="Waiting on {{ names|default:'a channel' }}: setup is done for now" title="Setup is done for now. {{ names|default:'A channel' }} is paused on Akilent; its setup continues here when it's back.">
+                aria-label="Setup done. {{ names|default:'A channel' }} is paused on Akilent" title="Setup is done for now. {{ names|default:'A channel' }} is paused on Akilent; its setup continues here when it's back.">
           {% include "components/icon.html" with name="clock" class="w-4 h-4 text-ink-subtle" %}
-          <span class="hidden sm:inline">Waiting on {{ names|default:"a channel" }}</span>
+          <span class="hidden sm:inline">Setup done · {{ names|default:"a channel" }} paused</span>
         </button>
         {% endwith %}
         {% else %}

@@ -137,11 +137,11 @@ column in that order.{% endcomment %}
       <section class="card card-pad space-y-4" aria-labelledby="pd-post">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <h2 id="pd-post" class="pd-section-title">The post</h2>
-          {% if editable %}<a href="{% url 'publishing:post-new' %}?post_id={{ post.pk }}" class="cs-link text-sm">Edit</a>{% endif %}
+          {% comment %}No Edit link here: the header's Edit button is the one way in.{% endcomment %}
         </div>
         <div class="flex flex-wrap items-start gap-6">
           {% if post.media_urls %}
-          <div class="pd-media-col">
+          <div class="pd-media-col{% if post.media_urls|length == 1 and post.media_urls.0|media_kind == "video" %} pd-media-col--video{% endif %}">
             {% if post.media_urls|length == 1 %}
               {% with only=post.media_urls.0 %}
               {% if only|media_kind == "video" %}
@@ -268,7 +268,7 @@ column in that order.{% endcomment %}
       {% endif %}
     </div>
 
-    {# ── Where it stands: review, channels, the chat link, technical details ── #}
+    {# ── Where it stands: review, channels, the chat link, post history ── #}
     <aside class="pd-side space-y-6 min-w-0" aria-label="Status and links">
       {% include "publishing/_post_review.html" %}
 
@@ -286,7 +286,7 @@ column in that order.{% endcomment %}
       {% include "publishing/_chat_link_card.html" %}
 
       <details class="card pd-tech">
-        <summary>Technical details</summary>
+        <summary>Post history</summary>
         <dl class="pd-facts mt-3">
           <dt>Created</dt><dd>{{ post.created_at|date:"j N Y, H:i" }}</dd>
           {% if post.scheduled_at %}<dt>Scheduled</dt><dd>{{ post.scheduled_at|date:"j N Y, H:i" }}</dd>{% endif %}

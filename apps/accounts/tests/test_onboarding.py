@@ -407,7 +407,7 @@ def test_a_paused_step_is_listed_but_not_counted(db, all_wired, client):
     assert state["only_paused_left"] and not state["complete"]  # still not complete
     client.force_login(acc.owner)
     html = client.get("/publishing/").content.decode()
-    assert "Waiting on Email" in html and "Not counted" not in html
+    assert "Setup done · Email paused" in html and "Not counted" not in html
     assert "Not counted" in client.get("/onboarding/").content.decode()
 
 
