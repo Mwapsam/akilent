@@ -249,6 +249,10 @@ class PayPalClient:
     def get_sale_refund(self, refund_id: str) -> dict:
         return self._request("GET", f"/v1/payments/refund/{refund_id}")
 
+    def get_webhook(self, webhook_id: str) -> dict:
+        """The webhook as PayPal has it: ``url`` and ``event_types`` (``[{"name": ...}]``)."""
+        return self._request("GET", f"/v1/notifications/webhooks/{webhook_id}")
+
     def verify_webhook_signature(self, fields: dict, raw_event: str) -> bool:
         """``fields`` are the transmission headers and webhook_id; ``raw_event`` is the body
         exactly as PayPal sent it. It is spliced in unchanged, because a re-serialised event

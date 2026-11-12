@@ -26,7 +26,10 @@ redirects to the provider, and form-action would block that after a form submit.
       <span class="font-medium text-ink">Due now</span>
       <span class="text-lg font-semibold text-ink tabular-nums">{{ quote.due|money }}</span>
     </div>
-    <p class="text-xs text-ink-subtle">It renews every {{ per }} until you cancel. Cancel any time from Billing.</p>
+    <p class="text-xs text-ink-subtle">
+      {% if auto_renews %}Renews automatically at {{ quote.gross|money }} every {{ per }} until you cancel. Cancel any time from Billing; you keep your plan until the period you paid for ends.{% else %}Your plan runs for one {{ per }}. Before it ends we'll email you a link to renew at {{ quote.gross|money }}.{% endif %}
+      Prices in {% currency_code %}, excluding applicable taxes. By paying you agree to our <a href="{% url 'terms' %}" class="underline hover:text-ink" target="_blank" rel="noopener">Terms of Service</a>.
+    </p>
   </section>
 
   {% if methods %}

@@ -116,6 +116,11 @@ class PaymentProvider(ABC):
     # Does this provider receive webhooks at /billing/webhooks/<code>/?
     has_webhooks: bool = True
 
+    def checkout_renews(self) -> bool:
+        """Does paying through this provider set up renewals that need nothing from the
+        customer? Checkout copy says "renews automatically" only when it does."""
+        return self.off_session_charge
+
     def is_configured(self) -> bool:
         """Are the provider's server settings (keys, secrets) present?"""
         return True

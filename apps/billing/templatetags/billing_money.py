@@ -24,6 +24,12 @@ def currency_symbol():
 
 
 @register.simple_tag
+def currency_code():
+    """The ISO code prices are charged in ("USD"), for "Prices in USD" copy."""
+    return billing_currency()
+
+
+@register.simple_tag
 def campaign_hold_hours():
     """How long a campaign message held by the plan's limit waits before it's dropped
     (apps.whatsapp.campaigns.cancel_stale_campaign_holds), for copy that says so."""

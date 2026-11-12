@@ -176,6 +176,10 @@ class PayPalProvider(PaymentProvider):
             )
         return " ".join(problems)
 
+    def checkout_renews(self) -> bool:
+        # Only a PayPal subscription renews by itself; a one-off order renews by pay link.
+        return subs.enabled()
+
     def account_key(self) -> str:
         return f"{config('PAYPAL_ENV')}:{config('PAYPAL_MERCHANT_ID')}"
 

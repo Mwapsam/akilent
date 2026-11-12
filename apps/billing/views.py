@@ -412,6 +412,11 @@ def pay(request):
             "per": PERIOD_PER[period],
             "quote": payments.quote(account, plan, period),
             "methods": methods,
+            # "Renews automatically" only when this checkout sets that up (a PayPal
+            # subscription); otherwise renewals go out as pay links.
+            "auto_renews": bool(
+                (provider := registry.active()) and provider.checkout_renews()
+            ),
             "autostart_url": methods[0]["url"]
             if autostart and len(methods) == 1
             else "",

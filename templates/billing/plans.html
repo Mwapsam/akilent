@@ -116,7 +116,7 @@ Checkout leaves for the provider (hx-boost="false"); data-busy-link: one click, 
   <div class="panel-head">
     <div>
       <h2 id="change-plan-h" class="panel-title">{% if subscription %}Change plan{% else %}Choose a plan{% endif %}</h2>
-      <p class="panel-desc">Pay monthly, quarterly or yearly. Cancel anytime.{% if credit.balance %} Your {{ credit.balance|money }} credit comes off at checkout.{% endif %}</p>
+      <p class="panel-desc">Pay monthly, quarterly or yearly. Cancel anytime. Prices in {% currency_code %}, excluding applicable taxes.{% if credit.balance %} Your {{ credit.balance|money }} credit comes off at checkout.{% endif %}</p>
     </div>
     <div class="panel-actions">
       <div class="seg flex-wrap" role="group" aria-label="Billing period">

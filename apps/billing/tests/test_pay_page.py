@@ -206,3 +206,18 @@ def test_setup_pages_wait_until_the_plan_is_paid(
     assert client.get("/dashboard/").status_code == 200
     onboarding = client.get("/onboarding/")
     assert getattr(onboarding, "url", "") != PAY_URL
+
+
+def test_says_renews_automatically_only_when_checkout_sets_it_up(
+    client, owner, unpaid, payments_on, fake_provider, monkeypatch
+):
+    monkeypatch.setattr(fake_provider, "checkout_renews", lambda: True)
+    html = _get(client, owner).content.decode()
+    assert "Renews automatically" in html
+    assert "excluding applicable taxes" in html
+    assert 'href="/terms/"' in html
+
+    monkeypatch.setattr(fake_provider, "checkout_renews", lambda: False)
+    html = _get(client, owner).content.decode()
+    assert "Renews automatically" not in html
+    assert "email you a link to renew" in html
