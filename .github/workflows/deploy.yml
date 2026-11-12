@@ -167,8 +167,7 @@ jobs:
           SEO_ALLOW_INDEXING: ${{ secrets.SEO_ALLOW_INDEXING }}
           GOOGLE_ANALYTICS_ID: ${{ secrets.GOOGLE_ANALYTICS_ID }}
           SALES_NOTIFY_EMAIL: ${{ secrets.SALES_NOTIFY_EMAIL }}
-          STATUS_PAGE_URL: ${{ secrets.STATUS_PAGE_URL }}
-          SECURITY_CONTACT_EMAIL: ${{ secrets.SECURITY_CONTACT_EMAIL }}
+
           INSTAGRAM_APP_ID: ${{ secrets.INSTAGRAM_APP_ID }}
           INSTAGRAM_APP_SECRET: ${{ secrets.INSTAGRAM_APP_SECRET }}
           INSTAGRAM_GRAPH_VERSION: ${{ secrets.INSTAGRAM_GRAPH_VERSION }}
@@ -387,6 +386,7 @@ jobs:
             fi
             docker image prune -f
 
+
       - name: Invalidate CloudFront
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -415,3 +415,4 @@ jobs:
             -H "Authorization: Bearer $CF_TOKEN" -H "Content-Type: application/json" \
             --data "{\"files\":[\"$SITE_URL/\"]}" \
             || echo "::warning::Cloudflare purge failed; the landing page may be stale for up to ten minutes"
+

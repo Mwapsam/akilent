@@ -14,6 +14,12 @@
 # fails when deploy.yml's release commands are missing here.
 set -euo pipefail
 
+# Everything runs inside main(), called on the last line. This file arrives on bash's stdin
+# (`bash -s`), and docker compose exec/run read stdin too: without the function, the first one
+# swallows the rest of the script and bash stops early with success. bash parses the whole
+# function before it runs any of it.
+main() {
+
 DEPLOY_PATH=${1:?usage: remote_release.sh <deploy-path> <sha> [<bundle-file>] [<invalidate 1|0>]}
 SHA=${2:?commit sha required}
 BUNDLE=${3:-}
@@ -94,11 +100,11 @@ healthy() {
 }
 
 # Snapshot the database before migrations run (keeps the last 5), as deploy.yml does.
-if docker compose ps --status running db | grep -q db; then
+if docker compose ps --status running db </dev/null | grep -q db; then
   say "Snapshotting the database"
   mkdir -p backups/pre-deploy
   docker compose exec -T db pg_dump -Fc --no-owner -U "$POSTGRES_USER" "$POSTGRES_DB" \
-    > "backups/pre-deploy/$(date -u +%Y%m%dT%H%M%SZ)-$PREV.dump"
+    </dev/null >"backups/pre-deploy/$(date -u +%Y%m%dT%H%M%SZ)-$PREV.dump"
   ls -1t backups/pre-deploy/*.dump | tail -n +6 | xargs -r rm -f
 fi
 
@@ -155,3 +161,6 @@ PY
 fi
 
 say "Deployed $SHA (was $PREV)"
+}
+
+main "$@"

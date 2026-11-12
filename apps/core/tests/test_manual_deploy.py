@@ -61,3 +61,12 @@ def test_settings_with_secrets_are_never_committed():
         ROOT / "tools/deploy/manual_deploy.env.example"
     ).read_text(encoding="utf-8")
     assert 'Type "deploy"' in LOCAL  # a typed confirmation before production
+
+
+def test_the_server_script_is_parsed_whole_before_it_runs():
+    """remote_release.sh arrives on bash's stdin; docker compose exec reads stdin too. Unless the
+    body is one function called on the last line, the first docker command swallows the rest of
+    the script and bash exits early with success (12 Nov 2026: "Done" after only a snapshot)."""
+    assert "\nmain() {\n" in REMOTE
+    assert REMOTE.rstrip().endswith('main "$@"')
+    assert "NOW_LIVE" in LOCAL  # the local half confirms DEPLOY_SHA really changed

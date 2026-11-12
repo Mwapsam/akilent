@@ -192,6 +192,10 @@ status=$?
 set -e
 [ "$status" = 0 ] || die "release failed (exit $status) after $(( $(date +%s) - started ))s - see the output above"
 
+# Don't trust the exit code alone: confirm the server really moved to the new commit.
+NOW_LIVE=$(remote "grep -m1 '^DEPLOY_SHA=' '$DEPLOY_PATH/.env' | cut -d= -f2-; true" | tr -d '\r\n ')
+[ "$NOW_LIVE" = "$SHA" ] || die "the server script ended early: .env still says DEPLOY_SHA=${NOW_LIVE:-<empty>}, not $SHA. Nothing was released - see the output above"
+
 if [ -n "${CLOUDFLARE_ZONE_ID:-}" ] && [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
   say "Purging the landing page from Cloudflare"
   curl -fsS -X POST "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/purge_cache" \
