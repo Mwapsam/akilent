@@ -1,92 +1,207 @@
 {% extends "public/_base.html" %}
 {% comment %}
-  Book a demo / contact sales (accounts.views.demo). One real form: it saves the request and emails
-  sales. No calendar. Works without JavaScript and is never boosted, so an error re-render keeps
-  what was typed. Uses the app's compiled .card / .input / .btn; layout lives in the scoped styles.
+  Book a demo / contact sales (accounts.views.demo). One real form: it saves the request, emails
+  sales (Reply-To the person who asked) and confirms to that person by email. No calendar.
+  ?topic=sales is the same form under "Contact sales", with its own words throughout.
+
+  Works without JavaScript and is never boosted, so an error re-render keeps what was typed; the
+  first field with an error takes focus (first_error). The small script at the end only stops a
+  second click sending the form twice, and reports the completed request to analytics.
+  Uses the app's compiled .card / .input / .btn; layout lives in the scoped styles.
+
+  The thank-you shows once, to the browser that just sent a request (the view redirects a cold
+  ?sent=1 back to the form), and is never indexed.
 {% endcomment %}
-{% block title %}{% if sales %}Talk to sales{% else %}Book a demo{% endif %} · {{ site.app_name|default:"Akilent" }}{% endblock %}
+{% block title %}{% if sent %}Thanks{% elif sales %}Contact sales{% else %}Book a demo{% endif %} · {{ site.app_name|default:"Akilent" }}{% endblock %}
 {% block extra_head %}
+{% if sent %}<meta name="robots" content="noindex">{% endif %}
 <style>
-  .demo-wrap{ max-width:44rem; padding-block:3.5rem 2rem; }
-  .demo-head h1{ margin:0; font-size:clamp(1.75rem,4vw,2.25rem); line-height:1.15; font-weight:700; letter-spacing:-.02em; color:var(--color-ink); }
-  .demo-head p{ margin:.75rem 0 0; color:var(--color-ink-muted); line-height:1.6; }
+  .demo-wrap{ padding-block:3.5rem 2rem; }
+  .demo-grid{ display:grid; gap:2.5rem; }
+  @media (min-width:960px){ .demo-grid{ grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); gap:4rem; align-items:start; } }
+  .demo-head h1{ margin:0; font-size:clamp(1.75rem,4vw,2.5rem); line-height:1.12; font-weight:700; letter-spacing:-.02em; color:var(--color-ink); }
+  .demo-head p{ margin:.75rem 0 0; max-width:36rem; color:var(--color-ink-muted); line-height:1.6; }
   .demo-form{ display:grid; gap:1.25rem; margin-top:2rem; }
   .demo-row{ display:grid; gap:1.25rem; }
   @media (min-width:640px){ .demo-row{ grid-template-columns:1fr 1fr; } }
-  .demo-form fieldset{ border:0; margin:0; padding:0; }
+  .demo-form fieldset{ border:0; margin:0; padding:0; min-width:0; }
   .demo-form legend{ padding:0; }
-  .demo-checks{ display:flex; flex-wrap:wrap; gap:.5rem 1.25rem; }
-  .demo-checks label{ display:inline-flex; align-items:center; gap:.5rem; min-height:44px; color:var(--color-ink); }
+  .demo-opt{ font-weight:400; color:var(--color-ink-subtle); }
+  .demo-hint{ margin:.375rem 0 0; font-size:.8125rem; color:var(--color-ink-subtle); }
+  .demo-checks{ display:flex; flex-wrap:wrap; gap:.25rem 1.25rem; }
+  .demo-checks label{ display:inline-flex; align-items:center; gap:.5rem; min-height:44px; color:var(--color-ink); cursor:pointer; }
   .demo-error{ margin:.375rem 0 0; font-size:.875rem; color:var(--tone-coral-fg); }
-  .demo-alert{ padding:.75rem 1rem; border-radius:var(--radius-control); border:1px solid var(--color-border); background:var(--tone-coral-bg); color:var(--tone-coral-fg); }
+  .demo-alert{ padding:.75rem 1rem; border-radius:var(--radius-control); border:1px solid var(--color-border); background:var(--tone-coral-bg); color:var(--tone-coral-fg); font-size:.9375rem; }
   .demo-hp{ position:absolute; left:-10000px; width:1px; height:1px; overflow:hidden; }
-  .demo-actions{ display:flex; flex-wrap:wrap; align-items:center; gap:1rem; }
+  .demo-actions{ display:flex; flex-wrap:wrap; align-items:center; gap:.75rem 1rem; }
   .demo-actions p{ margin:0; font-size:.875rem; color:var(--color-ink-muted); }
+  .demo-actions .btn[disabled]{ opacity:.7; cursor:progress; }
+
+  /* Beside the form: what happens next, and other ways to reach us. */
+  .demo-side{ display:grid; gap:1.25rem; }
+  @media (min-width:960px){ .demo-side{ position:sticky; top:6rem; } }
+  .demo-side h2{ margin:0; font-size:1rem; font-weight:600; color:var(--color-ink); }
+  .demo-steps{ list-style:none; margin:1rem 0 0; padding:0; display:grid; gap:1rem; counter-reset:demo; }
+  .demo-steps li{ display:grid; grid-template-columns:1.75rem minmax(0,1fr); gap:.75rem; counter-increment:demo; font-size:.9375rem; line-height:1.5; color:var(--color-ink-muted); }
+  .demo-steps li::before{ content:counter(demo); display:inline-flex; align-items:center; justify-content:center; width:1.75rem; height:1.75rem;
+    border-radius:999px; background:var(--tone-teal-bg); color:var(--tone-teal-fg); font-size:.8125rem; font-weight:600; }
+  .demo-steps strong{ display:block; color:var(--color-ink); font-weight:600; }
+  .demo-other{ margin:.75rem 0 0; padding:0; list-style:none; display:grid; gap:.5rem; font-size:.9375rem; }
+  .demo-other a{ color:var(--color-teal-700); text-decoration:underline; text-underline-offset:3px; }
+  .demo-other span{ color:var(--color-ink-muted); }
+
+  /* Thank-you */
+  .demo-done{ max-width:40rem; margin-inline:auto; text-align:center; }
+  .demo-done-icon{ display:inline-flex; align-items:center; justify-content:center; width:3rem; height:3rem; border-radius:999px;
+    background:var(--tone-teal-bg); color:var(--tone-teal-fg); }
+  .demo-done h1{ margin:1rem 0 0; }
+  .demo-done p{ margin-inline:auto; }
+  .demo-done-actions{ display:flex; flex-wrap:wrap; justify-content:center; gap:.75rem; margin-top:1.75rem; }
 </style>
 {% endblock %}
 {% block content %}
+{% with app=site.app_name|default:"Akilent" %}
 <section class="pub-wrap demo-wrap" aria-labelledby="demo-title">
   {% if sent %}
-    <div class="card card-pad demo-head" role="status">
-      <h1 id="demo-title">Thanks, we've got your request</h1>
-      <p>We'll email you to arrange a time. Want to look around first? The free trial needs no card.</p>
-      <p><a href="/signup/" class="btn btn-primary">Start free trial</a></p>
+    <div class="card card-pad demo-head demo-done" role="status" data-demo-sent="{{ topic }}">
+      <span class="demo-done-icon" aria-hidden="true">{% include "components/icon.html" with name="check" class="w-6 h-6" %}</span>
+      <h1 id="demo-title" tabindex="-1">Thanks, we've got your {% if sales %}message{% else %}request{% endif %}</h1>
+      <p>{% if sales %}We'll reply by email.{% else %}We'll email you to arrange a time.{% endif %} A confirmation is on its way to your inbox; if you don't see it in a few minutes, check your spam folder.</p>
+      <p>Want to look around first? The free trial needs no card.</p>
+      <div class="demo-done-actions">
+        {% if user.is_authenticated %}
+          <a href="/dashboard/" class="btn btn-primary">Open dashboard</a>
+        {% else %}
+          <a href="/signup/" class="btn btn-primary">Start free trial</a>
+        {% endif %}
+        <a href="/" class="btn btn-secondary">Back to the home page</a>
+      </div>
     </div>
   {% else %}
-    <div class="demo-head">
-      <h1 id="demo-title">{% if sales %}Talk to sales{% else %}Book a demo{% endif %}</h1>
-      <p>Tell us a little about your team and we'll email you to set up a call. Questions about plans, invoices or higher limits go here too.</p>
-    </div>
-    <form method="post" action="{% url 'demo' %}{% if sales %}?topic=sales{% endif %}" class="demo-form" hx-boost="false" novalidate>
-      {% csrf_token %}
-      {% if form.non_field_errors %}<div class="demo-alert" role="alert">{% for e in form.non_field_errors %}{{ e }}{% endfor %}</div>{% endif %}
-      <div class="demo-row">
-        <div>
-          <label class="label" for="{{ form.name.id_for_label }}">Name</label>
-          <input class="input" type="text" name="name" id="{{ form.name.id_for_label }}" value="{{ form.name.value|default:'' }}" maxlength="120" required autocomplete="name"{% if form.name.errors %} aria-invalid="true" aria-describedby="err-name"{% endif %}>
-          {% if form.name.errors %}<p class="demo-error" id="err-name">{{ form.name.errors.0 }}</p>{% endif %}
-        </div>
-        <div>
-          <label class="label" for="{{ form.email.id_for_label }}">Work email</label>
-          <input class="input" type="email" name="email" id="{{ form.email.id_for_label }}" value="{{ form.email.value|default:'' }}" required autocomplete="email"{% if form.email.errors %} aria-invalid="true" aria-describedby="err-email"{% endif %}>
-          {% if form.email.errors %}<p class="demo-error" id="err-email">{{ form.email.errors.0 }}</p>{% endif %}
-        </div>
+  <div class="demo-grid">
+    <div>
+      <div class="demo-head">
+        {% if sales %}
+          <h1 id="demo-title">Contact sales</h1>
+          <p>Questions about plans, higher limits or what {{ app }} can do for a larger team? Tell us a little about your business and we'll reply by email.</p>
+        {% else %}
+          <h1 id="demo-title">Book a demo</h1>
+          <p>Tell us a little about your team and we'll email you to set up a call, shaped around the channels you use.</p>
+        {% endif %}
       </div>
-      <div class="demo-row">
-        <div>
-          <label class="label" for="{{ form.company.id_for_label }}">Company</label>
-          <input class="input" type="text" name="company" id="{{ form.company.id_for_label }}" value="{{ form.company.value|default:'' }}" maxlength="160" required autocomplete="organization"{% if form.company.errors %} aria-invalid="true" aria-describedby="err-company"{% endif %}>
-          {% if form.company.errors %}<p class="demo-error" id="err-company">{{ form.company.errors.0 }}</p>{% endif %}
+      <form method="post" action="{% url 'demo' %}{% if sales %}?topic=sales{% endif %}" class="demo-form" hx-boost="false" novalidate data-demo-form>
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div class="demo-alert" role="alert">{% for e in form.non_field_errors %}{{ e }}{% endfor %}</div>
+        {% elif form.errors %}<div class="demo-alert" role="alert">Please check the highlighted {{ form.errors|length|pluralize:"field,fields" }} below and send again.</div>{% endif %}
+        <div class="demo-row">
+          <div>
+            <label class="label" for="{{ form.name.id_for_label }}">Name</label>
+            <input class="input" type="text" name="name" id="{{ form.name.id_for_label }}" value="{{ form.name.value|default:'' }}" maxlength="120" required autocomplete="name"{% if form.name.errors %} aria-invalid="true" aria-describedby="err-name"{% endif %}{% if first_error == "name" %} autofocus{% endif %}>
+            {% if form.name.errors %}<p class="demo-error" id="err-name">{{ form.name.errors.0 }}</p>{% endif %}
+          </div>
+          <div>
+            <label class="label" for="{{ form.company.id_for_label }}">Company</label>
+            <input class="input" type="text" name="company" id="{{ form.company.id_for_label }}" value="{{ form.company.value|default:'' }}" maxlength="160" required autocomplete="organization"{% if form.company.errors %} aria-invalid="true" aria-describedby="err-company"{% endif %}{% if first_error == "company" %} autofocus{% endif %}>
+            {% if form.company.errors %}<p class="demo-error" id="err-company">{{ form.company.errors.0 }}</p>{% endif %}
+          </div>
+        </div>
+        <div class="demo-row">
+          <div>
+            <label class="label" for="{{ form.email.id_for_label }}">Work email</label>
+            <input class="input" type="email" name="email" id="{{ form.email.id_for_label }}" value="{{ form.email.value|default:'' }}" required autocomplete="email" inputmode="email"{% if form.email.errors %} aria-invalid="true" aria-describedby="err-email"{% endif %}{% if first_error == "email" %} autofocus{% endif %}>
+            {% if form.email.errors %}<p class="demo-error" id="err-email">{{ form.email.errors.0 }}</p>{% endif %}
+          </div>
+          <div>
+            <label class="label" for="{{ form.phone.id_for_label }}">Phone or WhatsApp <span class="demo-opt">(optional)</span></label>
+            <input class="input" type="tel" name="phone" id="{{ form.phone.id_for_label }}" value="{{ form.phone.value|default:'' }}" maxlength="32" autocomplete="tel" inputmode="tel" placeholder="+44 20 7946 0958"{% if form.phone.errors %} aria-invalid="true" aria-describedby="err-phone"{% endif %}{% if first_error == "phone" %} autofocus{% endif %}>
+            {% if form.phone.errors %}<p class="demo-error" id="err-phone">{{ form.phone.errors.0 }}</p>{% endif %}
+          </div>
         </div>
         <div>
           <label class="label" for="{{ form.team_size.id_for_label }}">Team size</label>
-          <select class="select" name="team_size" id="{{ form.team_size.id_for_label }}" required{% if form.team_size.errors %} aria-invalid="true" aria-describedby="err-team"{% endif %}>
+          <select class="select" name="team_size" id="{{ form.team_size.id_for_label }}" required{% if form.team_size.errors %} aria-invalid="true" aria-describedby="err-team"{% endif %}{% if first_error == "team_size" %} autofocus{% endif %}>
             {% for value, label in form.fields.team_size.choices %}<option value="{{ value }}"{% if form.team_size.value == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
           </select>
           {% if form.team_size.errors %}<p class="demo-error" id="err-team">{{ form.team_size.errors.0 }}</p>{% endif %}
         </div>
-      </div>
-      <fieldset>
-        <legend class="label">Channels you use with customers</legend>
-        <div class="demo-checks">
-          {% for value, label in form.fields.channels.choices %}
-            <label><input type="checkbox" name="channels" value="{{ value }}"{% if value in form.channels.value %} checked{% endif %}>{{ label }}</label>
-          {% endfor %}
+        <fieldset>
+          <legend class="label">Channels you use with customers <span class="demo-opt">(optional)</span></legend>
+          <div class="demo-checks">
+            {% for value, label in form.fields.channels.choices %}
+              <label><input type="checkbox" name="channels" value="{{ value }}"{% if value in form.channels.value %} checked{% endif %}>{{ label }}</label>
+            {% endfor %}
+          </div>
+        </fieldset>
+        <div>
+          <label class="label" for="{{ form.message.id_for_label }}">{% if sales %}How can we help?{% else %}What would you like to see?{% endif %} <span class="demo-opt">(optional)</span></label>
+          <textarea class="textarea" name="message" id="{{ form.message.id_for_label }}" rows="4" maxlength="2000"{% if form.message.errors %} aria-invalid="true" aria-describedby="err-message"{% endif %}{% if first_error == "message" %} autofocus{% endif %}>{{ form.message.value|default:'' }}</textarea>
+          {% if form.message.errors %}<p class="demo-error" id="err-message">{{ form.message.errors.0 }}</p>{% endif %}
         </div>
-      </fieldset>
-      <div>
-        <label class="label" for="{{ form.message.id_for_label }}">What would you like to see? <span>(optional)</span></label>
-        <textarea class="textarea" name="message" id="{{ form.message.id_for_label }}" rows="4">{{ form.message.value|default:'' }}</textarea>
+        <div class="demo-hp" aria-hidden="true">
+          <label for="id_website">Leave this empty</label>
+          <input type="text" name="website" id="id_website" tabindex="-1" autocomplete="off">
+        </div>
+        <div class="demo-actions">
+          <button type="submit" class="btn btn-primary" data-sending="Sending…">{% if sales %}Send message{% else %}Request a demo{% endif %}</button>
+          <p>We only use these details to reply to you. <a href="{% url 'privacy' %}" class="underline">Privacy policy</a></p>
+        </div>
+      </form>
+    </div>
+
+    <aside class="demo-side" aria-label="What happens next">
+      <div class="card card-pad">
+        <h2>What happens next</h2>
+        <ol class="demo-steps">
+          <li><span><strong>You get a confirmation</strong>An email straight away, so you know it reached us.</span></li>
+          {% if sales %}
+          <li><span><strong>We reply by email</strong>From a person on our team, with answers to what you asked.</span></li>
+          <li><span><strong>We set things up for you</strong>Limits and features matched to your volume, if you go ahead.</span></li>
+          {% else %}
+          <li><span><strong>We email you to arrange a time</strong>A call that suits your timezone.</span></li>
+          <li><span><strong>We show you {{ app }}</strong>A walkthrough of the inbox, follow-ups and orders, on the channels you use.</span></li>
+          {% endif %}
+        </ol>
       </div>
-      <div class="demo-hp" aria-hidden="true">
-        <label for="id_website">Leave this empty</label>
-        <input type="text" name="website" id="id_website" tabindex="-1" autocomplete="off">
+      <div class="card card-pad">
+        <h2>Other ways to get going</h2>
+        <ul class="demo-other">
+          {% if not user.is_authenticated %}<li><a href="/signup/">Start a free trial</a> <span>· {% if trial_days %}{{ trial_days }} days, {% endif %}no card required</span></li>{% endif %}
+          <li><a href="{% url 'help' %}">Help centre</a> <span>· setup guides for every channel</span></li>
+          {% if sales %}<li><a href="{% url 'demo' %}">Book a demo</a> <span>· see it on a call</span></li>
+          {% else %}<li><a href="{% url 'demo' %}?topic=sales">Contact sales</a> <span>· plans and higher limits</span></li>{% endif %}
+          {% if site.support_email %}<li><a href="mailto:{{ site.support_email }}">{{ site.support_email }}</a> <span>· existing customers</span></li>{% endif %}
+        </ul>
       </div>
-      <div class="demo-actions">
-        <button type="submit" class="btn btn-primary">Request a demo</button>
-        <p>We only use these details to reply to you.</p>
-      </div>
-    </form>
+    </aside>
+  </div>
   {% endif %}
 </section>
+{% endwith %}
+{% endblock %}
+{% block extra_js %}
+<script>
+  (function () {
+    // One send per click: the button locks and says so while the request is on its way.
+    var form = document.querySelector('[data-demo-form]');
+    var button = form && form.querySelector('[type=submit]');
+    var label = button ? button.textContent : '';
+    if (button) form.addEventListener('submit', function () {
+      if (button.disabled) return;
+      // After the browser has read the form, so the button's state can't change what is sent.
+      setTimeout(function () { button.disabled = true; button.textContent = button.getAttribute('data-sending') || label; }, 0);
+    });
+    // Back to this page from history: never leave the button locked.
+    window.addEventListener('pageshow', function () {
+      if (button && button.disabled) { button.disabled = false; button.textContent = label; }
+    });
+    // A completed request, once (the thank-you only renders straight after a send). gtag only
+    // exists with a GA ID, and nothing leaves the page unless analytics cookies were accepted.
+    var done = document.querySelector('[data-demo-sent]');
+    if (done) {
+      var h = document.getElementById('demo-title');
+      if (h) h.focus({ preventScroll: true });
+      if (typeof window.gtag === 'function') window.gtag('event', 'generate_lead', { topic: done.getAttribute('data-demo-sent') });
+    }
+  })();
+</script>
 {% endblock %}

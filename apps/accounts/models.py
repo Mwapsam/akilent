@@ -546,8 +546,14 @@ class DemoRequest(models.Model):
         ("email", "Email"),
     ]
 
+    # Which form it came from: "Book a demo" or "Contact sales" (/demo/?topic=sales).
+    TOPICS = [("demo", "Demo"), ("sales", "Sales")]
+
+    topic = models.CharField(max_length=8, choices=TOPICS, default="demo")
     name = models.CharField(max_length=120)
     email = models.EmailField("work email")
+    # Optional: a number to reach them on (phone or WhatsApp), as they typed it.
+    phone = models.CharField("phone or WhatsApp", max_length=32, blank=True, default="")
     company = models.CharField(max_length=160)
     team_size = models.CharField(max_length=8, choices=TEAM_SIZES)
     channels = models.JSONField(default=list, blank=True)

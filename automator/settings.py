@@ -334,6 +334,14 @@ SEO_DEFAULTS = {
     "title_suffix": "— Akilent",
     "og_image": "img/seo/og-default.png",
 }
+# Title and description for public pages that would otherwise share the site-wide ones. An
+# SEOPage row for the same path (Operator Console) still wins.
+SEO_PAGES = {
+    "/demo/": {
+        "title": "Book a demo",
+        "description": "See Akilent on a call: the shared inbox, follow-ups and orders, on the channels your team uses. Tell us about your team and we'll email you to arrange a time.",
+    },
+}
 
 # Set to True only in production. Staging/dev emit noindex globally and robots.txt Disallow: /
 SEO_ALLOW_INDEXING = os.getenv("SEO_ALLOW_INDEXING", "False").lower() == "true"

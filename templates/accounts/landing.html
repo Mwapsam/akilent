@@ -23,8 +23,10 @@
   <a href="#main" class="lp-skip">Skip to content</a>
 
   {% if messages %}
+    {% comment %}Each message in its own tone (success, error, or a plain notice), with a
+    button to put it away (landing.js); without the script it simply stays.{% endcomment %}
     <div class="lp-messages" role="status">
-      {% for message in messages %}<div>{{ message }}</div>{% endfor %}
+      {% for message in messages %}<div class="lp-message{% if 'success' in message.tags %} is-success{% elif 'error' in message.tags %} is-error{% endif %}"><span>{{ message }}</span><button type="button" class="lp-message-x" data-dismiss aria-label="Dismiss">×</button></div>{% endfor %}
     </div>
   {% endif %}
 
@@ -49,6 +51,7 @@
         {% if user.is_authenticated %}
           <a href="/dashboard/" class="lp-btn lp-btn-sm lp-btn-nav">Open dashboard</a>
         {% else %}
+          <a href="{% url 'demo' %}" class="lp-signin lp-nav-demo" data-cta="book_demo" data-cta-location="header">Book a demo</a>
           <a href="/auth/login/" class="lp-signin">Sign in</a>
           <a href="/signup/{% if trial_slug %}?plan={{ trial_slug }}{% endif %}" data-cta-plan="{{ trial_slug }}" class="lp-btn lp-btn-sm lp-btn-nav" data-cta="start_trial" data-cta-location="nav">Start free trial</a>
         {% endif %}
@@ -67,6 +70,7 @@
           <a href="#platform" class="lp-mlink">Platform</a>
           <a href="#pricing" class="lp-mlink">Pricing</a>
           <a href="{% url 'help' %}" class="lp-mlink">Help</a>
+          <a href="{% url 'demo' %}" class="lp-mlink" data-cta="book_demo" data-cta-location="menu">Book a demo</a>
           {% if user.is_authenticated %}
             <a href="/dashboard/" class="lp-btn lp-btn-primary">Open dashboard</a>
           {% else %}

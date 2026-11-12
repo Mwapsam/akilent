@@ -44,6 +44,7 @@ class InvitationAdmin(admin.ModelAdmin):
 
 @admin.register(DemoRequest)
 class DemoRequestAdmin(admin.ModelAdmin):
-    list_display = ("created_at", "name", "company", "email", "team_size")
-    search_fields = ("name", "company", "email")
+    list_display = ("created_at", "topic", "name", "company", "email", "team_size")
+    list_filter = ("topic",)
+    search_fields = ("name", "company", "email", "phone")
     readonly_fields = ("created_at", "source")

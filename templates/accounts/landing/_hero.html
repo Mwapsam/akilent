@@ -19,10 +19,15 @@
       <p class="lp-lead lp-mid" data-claim="follow-ups customers orders">Follow-up reminders, customer records and orders, kept together in one place.</p>
     {% endif %}
     <div class="lp-ctas" id="hero-ctas">
+      {% comment %}Someone already signed in goes to their workspace, not to signup.{% endcomment %}
+      {% if user.is_authenticated %}
+      <a href="/dashboard/" class="lp-btn lp-btn-primary" data-cta="open_dashboard" data-cta-location="hero">Open dashboard<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+      {% else %}
       <a href="/signup/{% if trial_slug %}?plan={{ trial_slug }}{% endif %}" data-cta-plan="{{ trial_slug }}" class="lp-btn lp-btn-primary" data-cta="start_trial" data-cta-location="hero">Start free trial<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+      {% endif %}
       <a href="{% url 'demo' %}" class="lp-btn lp-btn-ghost" data-cta="book_demo" data-cta-location="hero">Book a demo</a>
     </div>
-    {% if trial_days %}
+    {% if trial_days and not user.is_authenticated %}
     <p class="lp-note" data-claim="trial">
       <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>{{ trial_days }}-day free trial</span>
       <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>No card required</span>

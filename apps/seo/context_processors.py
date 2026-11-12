@@ -154,15 +154,22 @@ def resolve_seo_context(request):
     else:
         index = follow = True
 
+    # A page's own words from settings.SEO_PAGES, under any DB override.
+    page_defaults = getattr(settings, "SEO_PAGES", {}).get(request.path, {})
+
     # Merge title
-    page_title = (db_override.title if db_override else "") or ""
+    page_title = (
+        (db_override.title if db_override else "") or page_defaults.get("title", "")
+    )
     if page_title and page_title != site_name:
         title = f"{page_title} {title_suffix}"
     else:
         title = f"{default_title} {title_suffix}"
 
-    description = (db_override.description if db_override else "") or defaults.get(
-        "default_description", ""
+    description = (
+        (db_override.description if db_override else "")
+        or page_defaults.get("description", "")
+        or defaults.get("default_description", "")
     )
     canonical_url = (
         db_override.canonical_url if db_override else ""

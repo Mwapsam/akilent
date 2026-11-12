@@ -7,13 +7,22 @@
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
 
   // Analytics: one GA4 event for every call to action, named by data-cta and placed by
-  // data-cta-location (hero, nav, menu, pricing, final). Nothing is sent when gtag isn't loaded.
+  // data-cta-location (hero, nav, header, menu, pricing, final, footer). Nothing is sent when gtag isn't loaded.
   document.addEventListener('click', function (e) {
     var a = e.target.closest && e.target.closest('[data-cta]');
     if (!a || typeof window.gtag !== 'function') return;
     var params = { cta: a.getAttribute('data-cta'), location: a.getAttribute('data-cta-location') || '' };
     if (a.hasAttribute('data-cta-plan')) params.plan = a.getAttribute('data-cta-plan');
     window.gtag('event', 'cta_click', params);
+  });
+
+  // A flash message's × puts it away; the bar goes with its last message.
+  document.addEventListener('click', function (e) {
+    var x = e.target.closest && e.target.closest('.lp-messages [data-dismiss]');
+    if (!x) return;
+    var bar = x.closest('.lp-messages');
+    x.parentNode.remove();
+    if (bar && !bar.children.length) bar.remove();
   });
 
   // Blocks rise in once as they come into view (landing.css: html.js .lp-reveal). The hidden start

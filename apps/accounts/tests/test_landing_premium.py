@@ -196,12 +196,108 @@ def test_a_demo_request_is_saved_and_sent_to_sales(client, settings):
     assert resp.status_code == 302 and resp["Location"].endswith("/demo/?sent=1")
     req = DemoRequest.objects.get()
     assert req.company == "Analytical Ltd" and req.channels == ["whatsapp", "instagram"]
-    to, subject = send.call_args.args[:2]
+    # Two emails: sales is told (Reply-To the person who asked), then the person is confirmed.
+    notify, confirm = send.call_args_list
+    to, subject = notify.args[:2]
     assert to == "sales@example.com" and "Analytical Ltd" in subject
-    assert "WhatsApp, Instagram" in send.call_args.kwargs["text_body"]
+    assert "WhatsApp, Instagram" in notify.kwargs["text_body"]
+    assert notify.kwargs["reply_to"] == "ada@example.com"
+    assert confirm.args[0] == "ada@example.com"
+    assert "Hi Ada," in confirm.kwargs["text_body"]
+    assert confirm.kwargs["reply_to"] == "sales@example.com"
     assert (
         "Thanks, we've got your request" in client.get("/demo/?sent=1").content.decode()
     )
+
+
+@pytest.mark.django_db
+def test_the_thank_you_shows_once_and_only_after_a_request(client):
+    """Opened cold (a shared or indexed link), ?sent=1 goes back to the form."""
+    resp = client.get("/demo/?sent=1")
+    assert resp.status_code == 302 and resp["Location"].endswith("/demo/")
+    with mock.patch("apps.email.services.send.send_system_email"):
+        _demo_post(client)
+    html = client.get("/demo/?sent=1").content.decode()
+    assert "Thanks, we've got your request" in html and 'content="noindex"' in html
+    assert client.get("/demo/?sent=1").status_code == 302  # a reload: the form again
+
+
+@pytest.mark.django_db
+def test_contact_sales_is_its_own_form_and_is_saved_as_sales(client, settings):
+    settings.SALES_NOTIFY_EMAIL = "sales@example.com"
+    html = client.get("/demo/?topic=sales").content.decode()
+    assert "Contact sales</h1>" in html and "Send message" in html
+    assert "Request a demo" not in html
+    data = {
+        "name": "Ada Lovelace",
+        "email": "ada@example.com",
+        "phone": "+44 20 7946 0958",
+        "company": "Analytical Ltd",
+        "team_size": "21-100",
+    }
+    with mock.patch("apps.email.services.send.send_system_email") as send:
+        resp = client.post("/demo/?topic=sales", data)
+    assert resp["Location"].endswith("/demo/?topic=sales&sent=1")
+    req = DemoRequest.objects.get()
+    assert req.topic == "sales" and req.phone == "+44 20 7946 0958"
+    notify = send.call_args_list[0]
+    assert notify.args[1].startswith("Sales enquiry") and "+44 20" in notify.kwargs["text_body"]
+    assert "Thanks, we've got your message" in client.get(resp["Location"]).content.decode()
+
+
+@pytest.mark.django_db
+def test_a_failed_confirmation_does_not_lose_the_request(client, settings):
+    settings.SALES_NOTIFY_EMAIL = "sales@example.com"
+    calls = []
+
+    def send(to, *args, **kwargs):
+        calls.append(to)
+        if to == "ada@example.com":
+            raise RuntimeError("mailbox full")
+
+    with mock.patch("apps.email.services.send.send_system_email", side_effect=send):
+        resp = _demo_post(client)
+    assert resp.status_code == 302 and DemoRequest.objects.count() == 1
+    assert calls == ["sales@example.com", "ada@example.com"]
+
+
+@pytest.mark.django_db
+def test_the_demo_form_focuses_the_first_field_in_error(client):
+    html = _demo_post(client, email="not-an-email", phone="call me").content.decode()
+    assert 'id="err-email"' in html and 'id="err-phone"' in html
+    assert html.count(" autofocus") == 1
+    assert 'aria-describedby="err-email" autofocus' in html
+    assert "Please check the highlighted fields" in html
+
+
+def test_reply_to_reaches_the_provider_without_line_breaks(settings):
+    from apps.email.services import send as send_mod
+
+    sent = []
+
+    class Provider:
+        def send(self, message):
+            sent.append(message)
+
+    with (
+        mock.patch("apps.email.providers.get_system_email_provider", return_value=Provider()),
+        mock.patch("apps.email.services.suppression.is_suppressed_globally", return_value=False),
+        mock.patch("apps.email.services.validation.validate_recipient", return_value=True),
+        mock.patch("apps.core.models.SiteSettings.load", side_effect=RuntimeError),
+    ):
+        send_mod.send_system_email(
+            "sales@example.com",
+            "Hi",
+            text_body="x",
+            reply_to="ada@example.com\r\nBcc: x@y.z",
+        )
+    assert sent[0].headers["Reply-To"] == "ada@example.comBcc: x@y.z"
+
+
+@pytest.mark.django_db
+def test_the_demo_page_has_its_own_description(client):
+    html = client.get("/demo/").content.decode()
+    assert "See Akilent on a call" in html
 
 
 @pytest.mark.django_db

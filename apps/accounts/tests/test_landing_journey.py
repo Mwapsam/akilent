@@ -43,7 +43,8 @@ def test_every_channel_that_is_on_is_sold_by_its_features(client, meta_open):
     if meta_open:
         _open_meta()
     html = _html(client)
-    assert "WhatsApp and Instagram messages" in html
+    # The FAQ names every inbox channel in one sentence, email (never in the inbox) last.
+    assert "WhatsApp, Instagram and Facebook Page messages arrive in one shared inbox" in html
     for gone in (
         "Opening soon",
         "waiting for Meta",

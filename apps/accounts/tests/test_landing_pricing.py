@@ -101,14 +101,25 @@ def test_cards_share_one_structure_and_list_what_each_plan_adds(client, plans):
             card.index("lp-price") < card.index("lp-btn") < card.index("lp-plan-plus")
         )
 
-    def points(card):
-        return re.findall(r"</svg>([^<]+)</li>", card.split('class="lp-points"', 1)[1])
+    def key(card):
+        """The card's headline limits: the same rows on every card, so cards line up."""
+        block = card.split('class="lp-points lp-points-key"', 1)[1].split("</ul>", 1)[0]
+        return re.findall(r"</svg>([^<]+)</li>", block)
 
-    assert "Includes:" in starter and "1,000 conversations/mo" in points(starter)
-    # Each card after the first lists only what it adds.
+    def adds(card):
+        """What the card lists after its headline limits."""
+        rest = card.split('class="lp-points lp-points-key"', 1)[1].split("</ul>", 1)[1]
+        return re.findall(r"</svg>([^<]+)</li>", rest)
+
+    business = next(c for c in cards if ">Business<" in c)
+    assert len(key(starter)) == len(key(pro)) == len(key(business)) == 3
+    assert "1,000 conversations/mo" in key(starter)
+    assert "5,000 conversations/mo" in key(pro) and "1 WhatsApp number" in key(pro)
+    # After the headline, each card after the first lists only what it adds.
     assert "Everything in Starter, plus:" in pro
-    assert "5,000 conversations/mo" in points(pro) and "Automations" in points(pro)
-    assert "1 WhatsApp number" not in points(pro)
+    assert "Automations" in adds(pro)
+    assert not any("conversations" in line for line in adds(pro))  # already a headline
+    assert "Everything in Professional" in business
     # Message history isn't advertised: nothing enforces it.
     assert "message history" not in pricing
     # Professional is the one amber button.
@@ -212,7 +223,7 @@ def test_enterprise_offers_only_what_exists_today(client, plans):
 def test_meta_fees_are_explained_only_with_whatsapp(client, plans, settings):
     pricing = _pricing(client)
     assert "billed by Meta directly" in pricing and "never adds a markup" in pricing
-    assert 'href="https://developers.facebook.com/docs/whatsapp/pricing"' in pricing
+    assert 'href="https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing"' in pricing
     settings.WHATSAPP_ENABLED = False
     assert "billed by Meta" not in _section(client.get("/").content.decode(), "pricing")
 
@@ -220,7 +231,7 @@ def test_meta_fees_are_explained_only_with_whatsapp(client, plans, settings):
 @pytest.mark.django_db
 def test_contact_sales_opens_the_demo_form_under_its_own_name(client):
     html = client.get("/demo/?topic=sales").content.decode()
-    assert '<h1 id="demo-title">Talk to sales</h1>' in html
+    assert '<h1 id="demo-title">Contact sales</h1>' in html
     assert 'action="/demo/?topic=sales"' in html
     assert "Book a demo</h1>" in client.get("/demo/").content.decode()
 

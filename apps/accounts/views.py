@@ -967,11 +967,13 @@ def use_case(request, slug):
 
 
 DEMO_REQUESTS_PER_HOUR = 5  # per client address
+DEMO_SENT_KEY = "demo_sent"  # session: the topic of a request just sent, shown once
 
 
 def _demo_notify(req) -> None:
     """Email a new demo request to sales: SALES_NOTIFY_EMAIL, else the site's support address.
-    The request is already saved, so a missing address or a failed send only logs."""
+    Reply-To is the person who asked, so sales answers with Reply. The request is already
+    saved, so a missing address or a failed send only logs."""
     from apps.core.models import SiteSettings
     from apps.email.services.send import send_system_email
 
@@ -980,29 +982,131 @@ def _demo_notify(req) -> None:
         logger.warning("Demo request %s saved; no SALES_NOTIFY_EMAIL to notify", req.pk)
         return
     channels = ", ".join(dict(req.CHANNELS).get(c, c) for c in req.channels) or "-"
-    body = (
-        f"Name: {req.name}\nWork email: {req.email}\nCompany: {req.company}\n"
-        f"Team size: {req.get_team_size_display()}\nChannels: {channels}\n\n"
-        f"{req.message or '-'}\n"
+    kind = "Sales enquiry" if req.topic == "sales" else "Demo request"
+    body = "\n".join(
+        [
+            kind,
+            "",
+            f"Name: {req.name}",
+            f"Work email: {req.email}",
+            f"Phone or WhatsApp: {req.phone or '-'}",
+            f"Company: {req.company}",
+            f"Team size: {req.get_team_size_display()}",
+            f"Channels: {channels}",
+            "",
+            req.message or "-",
+            "",
+            "Reply to this email to answer them directly.",
+            "",
+        ]
     )
     try:
         send_system_email(
-            to, f"Demo request: {req.company}", text_body=body, sender_label="Sales"
+            to,
+            f"{kind}: {req.company}",
+            text_body=body,
+            sender_label="Sales",
+            reply_to=req.email,
         )
     except Exception:
         logger.exception("Demo request %s saved; notification email failed", req.pk)
 
 
+def _demo_confirm(req) -> None:
+    """Tell the person their request arrived, with what they sent. Best effort: the request
+    is saved and sales has been told, so a failed send only logs."""
+    from apps.core.models import SiteSettings
+    from apps.email.services.html_email import build_transactional_html
+    from apps.email.services.send import send_system_email
+
+    site = SiteSettings.load()
+    app = site.app_name or "Akilent"
+    sales = req.topic == "sales"
+    subject = f"We've got your {'message' if sales else 'demo request'} · {app}"
+    first = (req.name or "").split(" ")[0] or "there"
+    lines = [
+        f"Hi {first},",
+        (
+            f"Thanks for getting in touch with {app}. Your message has reached our team, "
+            "and we'll reply to this address by email."
+            if sales
+            else f"Thanks for asking to see {app}. Your request has reached our team, "
+            "and we'll email you at this address to arrange a time."
+        ),
+        "You don't need to do anything else. If you'd like to look around first, "
+        "the free trial needs no card.",
+    ]
+    text = "\n\n".join(lines)
+    reply_to = settings.SALES_NOTIFY_EMAIL or site.support_email or ""
+    try:
+        base = (getattr(settings, "SITE_URL", "") or "").rstrip("/")
+        html = build_transactional_html(
+            text,
+            subject,
+            heading="We've got your message" if sales else "We've got your request",
+            cta_url=f"{base}/signup/" if base else "",
+            cta_label="Start free trial" if base else "",
+        )
+    except Exception:
+        logger.exception("Demo confirmation %s: HTML shell failed; sending text", req.pk)
+        html = ""
+    try:
+        send_system_email(
+            req.email, subject, text_body=text, html_body=html, reply_to=reply_to
+        )
+    except Exception:
+        logger.exception("Demo request %s saved; confirmation email failed", req.pk)
+
+
+def _demo_url(topic: str, **params) -> str:
+    """/demo/ for a topic, with any extra query (sent=1)."""
+    from urllib.parse import urlencode
+
+    query = {**({"topic": "sales"} if topic == "sales" else {}), **params}
+    return reverse("demo") + (f"?{urlencode(query)}" if query else "")
+
+
+def _demo_initial(request) -> dict:
+    """What a signed-in visitor would otherwise type again."""
+    user = request.user
+    if not user.is_authenticated:
+        return {}
+    initial = {"name": user.get_full_name(), "email": user.email}
+    account = get_current_account(request)
+    if account is not None:
+        initial["company"] = account.company_name
+    return {k: v for k, v in initial.items() if v}
+
+
 @never_cache
 def demo(request):
-    """Book a demo / contact sales: one real form that saves the request and emails sales."""
+    """Book a demo / contact sales: one real form that saves the request, emails sales and
+    confirms to the person who asked. ``?topic=sales`` is the same form under "Contact sales"."""
     from apps.accounts.forms import DemoRequestForm
     from apps.logs.observability import _client_ip
 
-    form = DemoRequestForm(request.POST or None)
+    topic = "sales" if request.GET.get("topic") == "sales" else "demo"
+
+    # The thank-you shows once, to the browser that just sent a request: opened cold (a shared
+    # or indexed link) it goes back to the form.
+    if request.method == "GET" and request.GET.get("sent") == "1":
+        sent_topic = request.session.pop(DEMO_SENT_KEY, None)
+        if sent_topic is None:
+            return redirect(_demo_url(topic))
+        return render(
+            request,
+            "public/demo.html",
+            {"sent": True, "sales": sent_topic == "sales", "topic": sent_topic},
+        )
+
+    form = DemoRequestForm(
+        request.POST or None,
+        initial=None if request.method == "POST" else _demo_initial(request),
+    )
     if request.method == "POST" and form.is_valid():
         if form.is_bot():
-            return redirect(f"{reverse('demo')}?sent=1")
+            request.session[DEMO_SENT_KEY] = topic
+            return redirect(_demo_url(topic, sent=1))
         key = f"demo-requests:{_client_ip(request) or 'unknown'}"
         count = cache.get(key, 0)
         if count >= DEMO_REQUESTS_PER_HOUR:
@@ -1012,19 +1116,36 @@ def demo(request):
         else:
             cache.set(key, count + 1, timeout=3600)
             req = form.save(commit=False)
+            req.topic = topic
             req.source = (request.META.get("HTTP_REFERER") or "")[:200]
             req.save()
             _demo_notify(req)
-            return redirect(f"{reverse('demo')}?sent=1")
+            _demo_confirm(req)
+            request.session[DEMO_SENT_KEY] = topic
+            return redirect(_demo_url(topic, sent=1))
+    trial_days = 0
+    try:
+        from apps.billing import api as billing_api
+
+        trial_days = billing_api.default_signup_trial()[1]
+    except Exception:
+        logger.exception("demo: trial length unavailable")
     return render(
         request,
         "public/demo.html",
         {
             "form": form,
-            "sent": request.GET.get("sent") == "1",
+            "sent": False,
             # "Contact sales" (pricing's Enterprise card) opens the same form under its own name.
-            "sales": request.GET.get("topic") == "sales",
+            "sales": topic == "sales",
+            "topic": topic,
+            "trial_days": trial_days,
+            # The first field with an error takes focus when the form comes back.
+            "first_error": next(
+                (name for name in form.fields if name in form.errors), ""
+            ),
         },
+        status=200,
     )
 
 

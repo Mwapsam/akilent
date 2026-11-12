@@ -84,6 +84,7 @@ def send_system_email(
     text_body: str = "",
     html_body: str = "",
     sender_label: str = "",
+    reply_to: str = "",
 ) -> None:
     """Send a system email (password reset, verification, etc.) with suppression checks.
 
@@ -94,6 +95,9 @@ def send_system_email(
     ``sender_label`` is appended to the platform name in the From display name,
     e.g. "Security" → "Akilent Security <no-reply@akilent.com>".
     When omitted the display name is just the platform app_name.
+
+    ``reply_to`` sets the Reply-To header, for a notification whose natural reply goes to
+    someone else (a demo request: sales replies to the person who asked).
 
     Raises on non-suppression errors (caller should log/retry).
     """
@@ -139,6 +143,9 @@ def send_system_email(
     headers = {
         "X-Auto-Response-Suppress": "OOF, AutoReply",
     }
+    if reply_to:
+        # One address only, and never a header injection through a pasted line break.
+        headers["Reply-To"] = reply_to.replace("\r", "").replace("\n", "").strip()
 
     provider = get_system_email_provider()
     try:

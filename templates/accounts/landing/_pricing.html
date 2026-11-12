@@ -6,7 +6,8 @@
   Layout: the free plan isn't a card but a line above the cards (a way to start, not a plan to
   compare), beside the Monthly / Annual switch. Every card has the same structure: name and who
   it's for, price with a reserved line for the other term, the button straight under the price,
-  then what it adds to the plan before ("Everything in Starter, plus:"). Professional is the one
+  its three headline limits (key_limits: the same rows on every card, so they line up), then
+  what it adds to the plan before ("Everything in Starter, plus:"). Professional is the one
   tinted card with the one amber button; Enterprise is the dark card that ends the row.
 
   Monthly / annual: two radios before the cards; the one checked hides the other term's price,
@@ -70,14 +71,23 @@
             <a href="/signup/?plan={{ plan.slug }}" data-cta="plan" data-cta-plan="{{ plan.slug }}" data-cta-location="pricing" class="lp-btn lp-when-m {% if plan.slug == 'professional' %}lp-btn-primary{% else %}lp-btn-outline{% endif %}">Choose {{ plan.name }}</a>
             {% if save > 0 %}<a href="/signup/?plan={{ plan.slug }}&amp;period=annually" data-cta="plan" data-cta-plan="{{ plan.slug }}" data-cta-location="pricing_annual" class="lp-btn lp-when-a {% if plan.slug == 'professional' %}lp-btn-primary{% else %}lp-btn-outline{% endif %}">Choose {{ plan.name }}</a>{% endif %}
             <p class="lp-plan-foot" data-claim="cancel">Cancel anytime</p>
-            {% if card.points %}
             <div class="lp-plan-plus">
-              <p class="lp-plan-plus-head">{% if card.plus_from %}Everything in {{ card.plus_from.name }}, plus:{% else %}Includes:{% endif %}</p>
+              {% if card.key_limits %}
+              <ul class="lp-points lp-points-key">
+                {% for line in card.key_limits %}<li><svg class="lp-ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>{{ line }}</li>{% endfor %}
+              </ul>
+              {% endif %}
+              {% if card.plus_from %}
+              <p class="lp-plan-plus-head">Everything in {{ card.plus_from.name }}{% if card.points %}, plus:{% endif %}</p>
+              {% elif card.points %}
+              <p class="lp-plan-plus-head">Includes:</p>
+              {% endif %}
+              {% if card.points %}
               <ul class="lp-points">
                 {% for point in card.points %}<li><svg class="lp-ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>{{ point }}</li>{% endfor %}
               </ul>
+              {% endif %}
             </div>
-            {% endif %}
           </div>
         {% endif %}{% endwith %}{% endfor %}
 
@@ -116,7 +126,7 @@
     {% endif %}
 
     {% if ch.whatsapp == "live" %}
-    <p class="lp-fees lp-reveal" data-claim="meta-fees"><svg class="lp-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span>WhatsApp message fees are billed by Meta directly to your WhatsApp Business account, at Meta's rates for each country. {{ app }} never adds a markup. <a href="https://developers.facebook.com/docs/whatsapp/pricing" class="lp-link" rel="noopener">See Meta's pricing</a></span></p>
+    <p class="lp-fees lp-reveal" data-claim="meta-fees"><svg class="lp-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span>WhatsApp message fees are billed by Meta directly to your WhatsApp Business account, at Meta's rates for each country. {{ app }} never adds a markup. <a href="https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing" class="lp-link" target="_blank" rel="noopener">See Meta's pricing<span class="sr-only"> (opens in a new tab)</span></a></span></p>
     {% endif %}
 
     {% if pricing.rows %}

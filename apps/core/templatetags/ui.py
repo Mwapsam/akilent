@@ -277,3 +277,22 @@ def row_menu(content, label="More actions"):
             {"slot": mark_safe(content), "label": label},  # nosec B703 B308
         )
     )
+
+
+@register.inclusion_tag("public/_site_footer.html", takes_context=True)
+def site_footer(context, p="pub", home="/"):
+    """The public site's footer contents (company block and link columns), the same on the
+    landing page and on every other public page. ``p`` is the shell's class prefix ("lp" or
+    "pub"); ``home`` is "" on the landing page, whose section links are in-page anchors."""
+    from apps.accounts.views import marketing_channels
+
+    site = context.get("site")
+    return {
+        "p": p,
+        "home": home,
+        "ch": context.get("ch") or marketing_channels(),
+        "site": site,
+        "app": getattr(site, "app_name", "") or "Akilent",
+        "user": context.get("user"),
+        "STATUS_PAGE_URL": context.get("STATUS_PAGE_URL", ""),
+    }

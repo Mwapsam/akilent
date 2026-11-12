@@ -373,7 +373,15 @@ class DemoRequestForm(forms.ModelForm):
 
     class Meta:
         model = DemoRequest
-        fields = ["name", "email", "company", "team_size", "channels", "message"]
+        fields = [
+            "name",
+            "email",
+            "phone",
+            "company",
+            "team_size",
+            "channels",
+            "message",
+        ]
         labels = {"team_size": "Team size", "message": "What would you like to see?"}
         widgets = {
             "message": forms.Textarea(attrs={"rows": 4}),
@@ -388,6 +396,27 @@ class DemoRequestForm(forms.ModelForm):
         self.fields["name"].widget.attrs["autocomplete"] = "name"
         self.fields["email"].widget.attrs["autocomplete"] = "email"
         self.fields["company"].widget.attrs["autocomplete"] = "organization"
+
+    MESSAGE_MAX = 2000
+
+    def clean_phone(self):
+        """Optional. Kept as typed; only checked to look like a phone number."""
+        import re
+
+        phone = (self.cleaned_data.get("phone") or "").strip()
+        if phone and not re.fullmatch(r"\+?[0-9][0-9 ()\-.]{5,30}", phone):
+            raise forms.ValidationError(
+                "Enter a phone number with its country code, for example +44 20 7946 0958."
+            )
+        return phone
+
+    def clean_message(self):
+        message = (self.cleaned_data.get("message") or "").strip()
+        if len(message) > self.MESSAGE_MAX:
+            raise forms.ValidationError(
+                f"Please keep this under {self.MESSAGE_MAX:,} characters."
+            )
+        return message
 
     def is_bot(self) -> bool:
         return bool(self.cleaned_data.get("website"))

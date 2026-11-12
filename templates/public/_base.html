@@ -1,4 +1,4 @@
-{% load static seo_tags %}<!DOCTYPE html>
+{% load static seo_tags ui %}<!DOCTYPE html>
 {% comment %}
 Shell for the public, signed-out-friendly pages: help centre, developer docs and
 legal pages. It never extends base.html, so these pages look the same signed in
@@ -7,6 +7,10 @@ or out and never show the dashboard sidebar.
 Always light (data-theme="light" stops app.css's prefers-color-scheme override),
 like the landing page. Header and footer styles live here as .pub-* classes, so
 nothing depends on Tailwind utilities that may not be compiled.
+
+One site with the landing page (templates/accounts/landing.html): the same header links in
+the same order with the same light button, the same footer contents (the site_footer tag,
+templates/public/_site_footer.html) and the same heading typeface (Inter Tight).
 
 Blocks: title, extra_head, body_class, content, extra_js. The nav highlights
 Help centre or Developers from the request path.
@@ -20,10 +24,15 @@ Help centre or Developers from the request path.
   {% seo_meta title=False %}
   {% google_analytics %}
   <link rel="preload" href="{% static 'fonts/inter-variable.woff2' %}" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="{% static 'fonts/inter-tight-variable.woff2' %}" as="font" type="font/woff2" crossorigin>
   <link rel="icon" type="image/svg+xml" href="{% static 'img/brand/icon-color.svg' %}">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
   <script defer src="{% static 'js/alpine.min.js' %}"></script>
   <style>
+    /* Headings in the landing page's display face (assets/landing.css). */
+    @font-face{ font-family:"Inter Tight"; font-style:normal; font-weight:100 900; font-display:swap;
+      src:url("{% static 'fonts/inter-tight-variable.woff2' %}") format("woff2"); }
+    .pub-main h1, .pub-main h2{ font-family:"Inter Tight","Inter Variable",var(--font-sans); }
     *{ box-sizing:border-box; }
     html{ scroll-padding-top:5.5rem; }
     html:focus-within{ scroll-behavior:smooth; }
@@ -46,15 +55,23 @@ Help centre or Developers from the request path.
     .pub-header-row{ height:4rem; display:flex; align-items:center; justify-content:space-between; gap:1.5rem; }
     .pub-brand{ display:flex; align-items:center; gap:.625rem; min-height:44px; font-weight:700; font-size:1.0625rem;
       color:var(--color-gray-50); text-decoration:none; flex-shrink:0; }
-    .pub-nav{ display:none; align-items:center; gap:1.75rem; font-size:.875rem; font-weight:500; }
-    .pub-nav a{ position:relative; padding:.5rem 0; color:var(--color-gray-400); text-decoration:none; transition:color .15s ease; }
-    .pub-nav a::after{ content:""; position:absolute; left:0; right:0; bottom:0; height:2px; border-radius:2px;
-      background:var(--color-teal-300); transform:scaleX(0); transition:transform .2s ease; }
-    .pub-nav a:hover, .pub-nav a[aria-current="page"]{ color:var(--color-gray-50); }
-    .pub-nav a[aria-current="page"]::after{ transform:scaleX(1); }
-    .pub-actions{ display:none; align-items:center; gap:1.25rem; font-size:.875rem; }
-    .pub-signin{ display:inline-flex; align-items:center; min-height:1.5rem; color:var(--color-gray-400); font-weight:500; text-decoration:none; }
+    /* The landing page's header: links in a pill, the current one filled. */
+    .pub-nav{ display:none; align-items:center; gap:.25rem; padding:.3125rem; border-radius:999px;
+      border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.03); }
+    .pub-nav a{ padding:.5rem .875rem; border-radius:999px; color:var(--color-gray-400); font-size:.9375rem; font-weight:500;
+      white-space:nowrap; text-decoration:none; transition:color .2s ease, background-color .2s ease; }
+    .pub-nav a:hover{ color:var(--color-gray-50); }
+    .pub-nav a[aria-current="page"]{ color:var(--color-gray-50); background:rgba(255,255,255,.08); }
+    .pub-actions{ display:none; align-items:center; gap:1rem; font-size:.9375rem; }
+    .pub-signin{ display:inline-flex; align-items:center; min-height:1.5rem; padding:.5rem .25rem; color:var(--color-gray-400); font-weight:500;
+      white-space:nowrap; text-decoration:none; }
     .pub-signin:hover{ color:var(--color-gray-50); }
+    /* "Book a demo" joins the header only where there is room beside the nav. */
+    .pub-actions .pub-nav-demo{ display:none; }
+    @media (min-width:1280px){ .pub-actions .pub-nav-demo{ display:inline-flex; } }
+    /* The header's button: light on navy, as on the landing page. Amber is the page's own action. */
+    .pub-header .pub-cta-nav{ background:var(--color-gray-50); color:var(--color-gray-950); border-radius:999px; }
+    .pub-header .pub-cta-nav:hover{ background:white; }
     .pub-cta{ display:inline-flex; align-items:center; justify-content:center; min-height:40px; padding:.5rem 1rem;
       border-radius:10px; background:var(--color-amber-400); color:var(--color-ink); font-weight:600; font-size:.875rem;
       text-decoration:none; white-space:nowrap; transition:background .15s ease; }
@@ -69,19 +86,26 @@ Help centre or Developers from the request path.
     .pub-mobile .pub-cta{ justify-content:center; margin-top:.75rem; color:var(--color-ink); }
     #pub-menu:checked ~ .pub-mobile{ display:block; }
     #pub-menu:focus-visible ~ .pub-header-row .pub-burger{ outline:2px solid var(--color-teal-500); outline-offset:3px; }
-    @media (min-width:900px){
+    @media (min-width:1040px){
       .pub-nav, .pub-actions{ display:flex; }
       .pub-burger, .pub-mobile, #pub-menu:checked ~ .pub-mobile{ display:none; }
     }
 
     /* Footer */
     .pub-footer{ flex-shrink:0; margin-top:4rem; background:var(--color-gray-950); color:var(--color-gray-400); border-top:1px solid var(--color-gray-800); font-size:.875rem; }
-    .pub-footer-grid{ display:grid; gap:2rem; padding-top:3rem; padding-bottom:2.5rem; grid-template-columns:repeat(2,minmax(0,1fr)); }
-    @media (min-width:768px){ .pub-footer-grid{ grid-template-columns:1.4fr 1fr 1fr 1fr; } }
-    .pub-footer-about{ grid-column:1 / -1; max-width:20rem; }
-    @media (min-width:768px){ .pub-footer-about{ grid-column:auto; } }
-    .pub-footer-about p{ margin:.75rem 0 0; line-height:1.6; }
-    .pub-footer h2{ font-size:.8125rem; font-weight:600; color:var(--color-gray-50); margin:0 0 .5rem; }
+    .pub-footer-grid{ display:grid; gap:2.5rem; padding-top:4rem; padding-bottom:3rem; grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .pub-foot-about{ grid-column:1 / -1; max-width:22rem; }
+    @media (min-width:1024px){
+      .pub-footer-grid{ grid-template-columns:1.6fr repeat(4,minmax(0,1fr)); }
+      .pub-foot-about{ grid-column:auto; }
+    }
+    .pub-foot-p{ margin:1rem 0 0; line-height:1.6; }
+    .pub-foot-mid{ color:var(--color-gray-300); }
+    .pub-foot-lo, .pub-foot-lo a{ color:var(--color-gray-400); }
+    .pub-foot-lo a{ text-decoration:none; }
+    .pub-foot-lo a:hover{ color:var(--color-gray-50); }
+    .pub-social{ display:flex; flex-wrap:wrap; gap:0 1.25rem; margin-top:.5rem; }
+    .pub-footer h2{ font-size:.8125rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--color-gray-50); margin:0 0 .75rem; }
     .pub-footer ul{ list-style:none; margin:0; padding:0; }
     .pub-footer li a{ display:inline-flex; align-items:center; min-height:36px; color:var(--color-gray-300); text-decoration:none; }
     .pub-footer li a:hover{ color:var(--color-gray-50); }
@@ -119,20 +143,24 @@ Help centre or Developers from the request path.
         {{ app }}
       </a>
 
+      {% comment %}The landing page's links in its order, then Developers (these pages include
+      the docs, so their section is marked).{% endcomment %}
       <nav class="pub-nav" aria-label="Primary">
         <a href="/#channels">Channels</a>
         <a href="/#how-it-works">How it works</a>
+        <a href="/#platform">Platform</a>
         <a href="/#pricing">Pricing</a>
-        <a href="{% url 'help' %}" {% if section == "/help/" %}aria-current="page"{% endif %}>Help centre</a>
+        <a href="{% url 'help' %}" {% if section == "/help/" %}aria-current="page"{% endif %}>Help</a>
         <a href="{% url 'docs' %}" {% if section == "/docs/" %}aria-current="page"{% endif %}>Developers</a>
       </nav>
 
       <div class="pub-actions">
         {% if user.is_authenticated %}
-          <a href="/dashboard/" class="pub-cta">Open dashboard</a>
+          <a href="/dashboard/" class="pub-cta pub-cta-nav">Open dashboard</a>
         {% else %}
+          {% if section != "/demo/" %}<a href="{% url 'demo' %}" class="pub-signin pub-nav-demo">Book a demo</a>{% endif %}
           <a href="{% url 'login' %}" class="pub-signin">Sign in</a>
-          <a href="/signup/" class="pub-cta">Start free trial</a>
+          <a href="/signup/" class="pub-cta pub-cta-nav">Start free trial</a>
         {% endif %}
       </div>
 
@@ -144,9 +172,11 @@ Help centre or Developers from the request path.
     <nav class="pub-mobile pub-wrap" aria-label="Mobile">
       <a href="/#channels">Channels</a>
       <a href="/#how-it-works">How it works</a>
+      <a href="/#platform">Platform</a>
       <a href="/#pricing">Pricing</a>
-      <a href="{% url 'help' %}" {% if section == "/help/" %}aria-current="page"{% endif %}>Help centre</a>
+      <a href="{% url 'help' %}" {% if section == "/help/" %}aria-current="page"{% endif %}>Help</a>
       <a href="{% url 'docs' %}" {% if section == "/docs/" %}aria-current="page"{% endif %}>Developers</a>
+      <a href="{% url 'demo' %}" {% if section == "/demo/" %}aria-current="page"{% endif %}>Book a demo</a>
       {% if user.is_authenticated %}
         <a href="/dashboard/" class="pub-cta">Open dashboard</a>
       {% else %}
@@ -162,53 +192,11 @@ Help centre or Developers from the request path.
 
   <footer class="pub-footer">
     <div class="pub-wrap pub-footer-grid">
-      <div class="pub-footer-about">
-        <a href="/" class="pub-brand">
-          <img src="{% static 'img/brand/icon-color-on-dark.svg' %}" alt="" width="24" height="24">
-          {{ app }}
-        </a>
-        <p>{% if site.tagline %}{{ site.tagline }}{% else %}Turn customer conversations into opportunities you don't miss.{% endif %}</p>
-      </div>
-      <div>
-        <h2>Product</h2>
-        <ul>
-          <li><a href="/#channels">Channels</a></li>
-          <li><a href="/#how-it-works">How it works</a></li>
-          <li><a href="/#features">Features</a></li>
-          <li><a href="/#pricing">Pricing</a></li>
-          {% if user.is_authenticated %}
-            <li><a href="/dashboard/">Dashboard</a></li>
-          {% else %}
-            <li><a href="{% url 'login' %}">Sign in</a></li>
-          {% endif %}
-        </ul>
-      </div>
-      <div>
-        <h2>Resources</h2>
-        <ul>
-          <li><a href="{% url 'help' %}">Help centre</a></li>
-          <li><a href="{% url 'docs' %}">Developer docs</a></li>
-          <li><a href="{% url 'docs-page' 'channels' %}">Channels &amp; the API</a></li>
-          {% if "whatsapp" in public_channels %}<li><a href="{% url 'use-case' 'missed-enquiries' %}">Missed enquiries</a></li>
-          <li><a href="{% url 'use-case' 'shared-inbox' %}">Shared inbox</a></li>{% endif %}
-          {% if "instagram" in enabled_channels or "facebook" in enabled_channels %}<li><a href="{% url 'use-case' 'content-studio' %}">Content Studio</a></li>{% endif %}
-        </ul>
-      </div>
-      <div>
-        <h2>Legal</h2>
-        <ul>
-          <li><a href="{% url 'privacy' %}">Privacy policy</a></li>
-          <li><a href="{% url 'terms' %}">Terms of service</a></li>
-          <li><a href="{% url 'cookies' %}">Cookie policy</a></li>
-          <li><a href="{% url 'data-deletion' %}">Data deletion</a></li>
-          <li><a href="{% url 'security' %}">Security</a></li>
-          {% if STATUS_PAGE_URL %}<li><a href="{{ STATUS_PAGE_URL }}" rel="noopener">Status</a></li>{% endif %}
-        </ul>
-      </div>
+      {% site_footer p="pub" home="/" %}
     </div>
     <div class="pub-wrap pub-footer-base">
-      <span>© {% now "Y" %} {{ app }}. All rights reserved.</span>
-      {% if site.support_email %}<span>Questions? <a href="mailto:{{ site.support_email }}">{{ site.support_email }}</a></span>{% endif %}
+      <span>© {% now "Y" %} {{ app }}</span>
+      <a href="#main">Back to top ↑</a>
     </div>
   </footer>
 

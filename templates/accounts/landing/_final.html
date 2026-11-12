@@ -5,9 +5,13 @@
       <div class="lp-aurora" aria-hidden="true"><span></span></div>
       <div class="lp-head section-head center">
         <h2 id="final-title" class="lp-h2" data-claim="positioning">The customer conversation platform for teams that sell through chat.</h2>
-        {% if trial_days %}<p class="lp-lead lp-mid" data-claim="trial">{{ trial_days }}-day free trial · No card required</p>{% endif %}
+        {% if trial_days and not user.is_authenticated %}<p class="lp-lead lp-mid" data-claim="trial">{{ trial_days }}-day free trial · No card required</p>{% endif %}
         <div class="lp-ctas">
+          {% if user.is_authenticated %}
+          <a href="/dashboard/" class="lp-btn lp-btn-primary" data-cta="open_dashboard" data-cta-location="final">Open dashboard<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          {% else %}
           <a href="/signup/{% if trial_slug %}?plan={{ trial_slug }}{% endif %}" data-cta-plan="{{ trial_slug }}" class="lp-btn lp-btn-primary" data-cta="start_trial" data-cta-location="final">Start free trial<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          {% endif %}
           <a href="{% url 'demo' %}" class="lp-btn lp-btn-ghost" data-cta="book_demo" data-cta-location="final">Book a demo</a>
         </div>
       </div>

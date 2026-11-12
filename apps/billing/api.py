@@ -813,13 +813,13 @@ def pricing_table(offered, data=None) -> dict:
     }
 
     def points(plan, prev) -> list[str]:
-        """What a card lists: for the first paid plan, its main limits and channels; for each
-        one after, only what it adds to the plan before ("Everything in Starter, plus:")."""
+        """What a card lists under its headline limits (``key_limits``, the same three rows on
+        every card, so cards line up and none looks unfinished): for the first paid plan, its
+        channels; for each one after, only what it adds to the plan before ("Everything in
+        Starter, plus:"), leaving out the headline limits it already shows."""
         mine = data[plan.pk]["keys"]
         if prev is None:
-            lines = [
-                _limit_line(limit_value(plan, k), labels[k]) for k in card_keys[:2]
-            ]
+            lines = []
             channels = [
                 n for k, n in feature_names.items() if k in channel_keys and k in mine
             ]
@@ -834,7 +834,7 @@ def pricing_table(offered, data=None) -> dict:
         lines = [
             _limit_line(limit_value(plan, k), labels[k])
             for k in candidates
-            if limit_value(plan, k) != limit_value(prev, k)
+            if k not in card_keys and limit_value(plan, k) != limit_value(prev, k)
         ]
         lines += [
             f"Adds {n}" if k in channel_keys else n

@@ -1,0 +1,70 @@
+{% load static %}
+{% comment %}
+  The site footer's contents, the same on the landing page and on every other public page
+  ({% templatetag openblock %} site_footer {% templatetag closeblock %} in apps/core/templatetags/ui.py). Each shell wraps it in its own <footer> and
+  grid and styles it: p is the class prefix ("lp" in assets/landing.css, "pub" in
+  public/_base.html), home is "" on the landing page (in-page anchors) and "/" elsewhere.
+
+  The company block (positioning line, contact, address, social profiles from Operator Console →
+  Settings), then Product, Use cases, Company and Trust. Only pages that exist are linked: there
+  is no About or Careers page yet, Status shows once STATUS_PAGE_URL is set. "Meta Tech Provider"
+  is plain text: Meta publishes no badge, and its marks may not suggest endorsement.
+{% endcomment %}
+<div class="{{ p }}-foot-about">
+  <a href="/" class="{{ p }}-brand"><img src="{% static 'img/brand/icon-color-on-dark.svg' %}" alt="" width="24" height="24">{{ app }}</a>
+  <p class="{{ p }}-foot-p {{ p }}-foot-mid">The customer conversation platform for teams that sell through chat.</p>
+  <p class="{{ p }}-foot-p {{ p }}-foot-lo">
+    {% if site.support_email %}<a href="mailto:{{ site.support_email }}">{{ site.support_email }}</a><br>{% endif %}
+    Lusaka, Zambia
+  </p>
+  {% if ch.whatsapp == "live" or ch.instagram == "live" or ch.facebook == "live" %}<p class="{{ p }}-foot-p {{ p }}-foot-lo" data-claim="meta-tech-provider">Meta Tech Provider</p>{% endif %}
+  {% if site.linkedin_url or site.x_url or site.instagram_url or site.facebook_url %}
+  <ul class="{{ p }}-social" aria-label="{{ app }} on social media">
+    {% if site.linkedin_url %}<li><a href="{{ site.linkedin_url }}" rel="noopener me">LinkedIn</a></li>{% endif %}
+    {% if site.x_url %}<li><a href="{{ site.x_url }}" rel="noopener me">X</a></li>{% endif %}
+    {% if site.instagram_url %}<li><a href="{{ site.instagram_url }}" rel="noopener me">Instagram</a></li>{% endif %}
+    {% if site.facebook_url %}<li><a href="{{ site.facebook_url }}" rel="noopener me">Facebook</a></li>{% endif %}
+  </ul>
+  {% endif %}
+</div>
+<nav aria-label="Product">
+  <h2>Product</h2>
+  <ul>
+    <li><a href="{{ home }}#channels">Channels</a></li>
+    <li><a href="{{ home }}#how-it-works">How it works</a></li>
+    <li><a href="{{ home }}#platform">Platform</a></li>
+    {% if ch.content %}<li><a href="{{ home }}#content-studio">Content Studio</a></li>{% endif %}
+    <li><a href="{{ home }}#pricing">Pricing</a></li>
+    <li><a href="{% url 'docs' %}">API documentation</a></li>
+  </ul>
+</nav>
+{% if ch.whatsapp == "live" or ch.content == "live" %}
+<nav aria-label="Use cases">
+  <h2>Use cases</h2>
+  <ul>
+    {% if ch.whatsapp == "live" %}<li><a href="{% url 'use-case' 'missed-enquiries' %}">Missed enquiries</a></li>
+    <li><a href="{% url 'use-case' 'shared-inbox' %}">Shared inbox</a></li>{% endif %}
+    {% if ch.content == "live" %}<li><a href="{% url 'use-case' 'content-studio' %}">Content Studio</a></li>{% endif %}
+  </ul>
+</nav>
+{% endif %}
+<nav aria-label="Company">
+  <h2>Company</h2>
+  <ul>
+    <li><a href="{% url 'demo' %}?topic=sales" data-cta="contact_sales" data-cta-location="footer">Contact sales</a></li>
+    <li><a href="{% url 'demo' %}" data-cta="book_demo" data-cta-location="footer">Book a demo</a></li>
+    <li><a href="{% url 'help' %}">Help centre</a></li>
+    {% if user.is_authenticated %}<li><a href="/dashboard/">Dashboard</a></li>{% else %}<li><a href="{% url 'login' %}">Sign in</a></li>{% endif %}
+  </ul>
+</nav>
+<nav aria-label="Trust">
+  <h2>Trust</h2>
+  <ul>
+    <li><a href="{% url 'security' %}">Security</a></li>
+    {% if STATUS_PAGE_URL %}<li><a href="{{ STATUS_PAGE_URL }}" rel="noopener">Status</a></li>{% endif %}
+    <li><a href="{% url 'privacy' %}">Privacy</a></li>
+    <li><a href="{% url 'terms' %}">Terms</a></li>
+    <li><a href="{% url 'cookies' %}">Cookie policy</a></li>
+    <li><a href="{% url 'data-deletion' %}">Data deletion</a></li>
+  </ul>
+</nav>
