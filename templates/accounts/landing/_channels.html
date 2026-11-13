@@ -16,6 +16,7 @@
         <h3 class="lp-h3">WhatsApp</h3>
         <p class="lp-small" data-claim="inbox auto-replies campaigns">Customer chats arrive in one shared inbox. Auto-replies, follow-ups, and campaigns to approved lists.</p>
         <p class="lp-channel-note" data-claim="own-number">Uses your own business number, connected through Meta's guided setup.</p>
+        {% if ch.whatsapp == "live" %}<p class="lp-small" data-claim-exempt><a href="/integrations/whatsapp/" class="lp-link">Learn more<span class="sr-only"> about WhatsApp</span> →</a></p>{% endif %}
       </article>
       {% endif %}
       {% if ch.instagram %}
@@ -26,6 +27,7 @@
         </div>
         <h3 class="lp-h3">Instagram</h3>
         <p class="lp-small" data-claim="instagram-dms instagram-comments instagram-publishing">DMs arrive in your shared inbox{% if ch.whatsapp == "live" %}, alongside WhatsApp{% endif %}. Comment rules can answer comments for you, and Content Studio publishes your posts.</p>
+        {% if ch.instagram == "live" %}<p class="lp-small" data-claim-exempt><a href="/integrations/instagram/" class="lp-link">Learn more<span class="sr-only"> about Instagram</span> →</a></p>{% endif %}
       </article>
       {% endif %}
       {% if ch.facebook %}
@@ -36,6 +38,7 @@
         </div>
         <h3 class="lp-h3">Facebook Page</h3>
         <p class="lp-small" data-claim="facebook-inbox facebook-comments facebook-publishing">Messages to your Page arrive in the same inbox. Comment rules can answer comments for you, and Content Studio publishes your posts.</p>
+        {% if ch.facebook == "live" %}<p class="lp-small" data-claim-exempt><a href="/integrations/facebook/" class="lp-link">Learn more<span class="sr-only"> about Facebook</span> →</a></p>{% endif %}
       </article>
       {% endif %}
       {% if ch.email %}

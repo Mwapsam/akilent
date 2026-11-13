@@ -37,6 +37,7 @@
             {% endif %}
             <li data-claim="ai ai-knowledge">AI answers from your own business information, only if you switch it on</li>
           </ul>
+          <p class="lp-small" data-claim-exempt><a href="/product/shared-inbox/" class="lp-link">Learn more<span class="sr-only"> about the shared inbox</span> →</a></p>
           {% else %}
           <h3 class="lp-h3">Customers</h3>
           <p class="lp-lead lp-muted" data-claim="customers">Customer details, tags and history kept together.</p>
@@ -72,6 +73,7 @@
             <li data-claim="post-metrics">Each post's reach and engagement from {% if ch.instagram == "live" and ch.facebook == "live" %}Instagram and Facebook{% elif ch.instagram == "live" %}Instagram{% else %}your Facebook Page{% endif %}</li>
             {% endif %}
           </ul>
+          <p class="lp-small" data-claim-exempt><a href="/product/content-studio/" class="lp-link">Learn more<span class="sr-only"> about Content Studio</span> →</a></p>
         </div>
         <div class="lp-panel-art lp-stage-panel light">{% include "accounts/landing/art/_composer.html" %}</div>
       </div>
@@ -90,6 +92,7 @@
             <li data-claim="followup-due">Your team is told when a follow-up is due</li>
             {% endif %}
           </ul>
+          {% if chat %}<p class="lp-small" data-claim-exempt><a href="/product/automations/" class="lp-link">Learn more<span class="sr-only"> about automations</span> →</a></p>{% endif %}
         </div>
         <div class="lp-panel-art lp-stage-panel light">{% include "accounts/landing/art/_flow.html" %}</div>
       </div>
@@ -107,11 +110,12 @@
             <li data-claim="insights">Business Health: what your conversations turned into, week by week</li>
             {% endif %}
           </ul>
+          {% if chat %}<p class="lp-small" data-claim-exempt><a href="/product/sales/" class="lp-link">Learn more<span class="sr-only"> about sales and orders</span> →</a></p>{% endif %}
         </div>
         <div class="lp-panel-art lp-stage-panel light">{% include "accounts/landing/art/_sales.html" %}</div>
       </div>
     </div>
-    <p class="lp-small lp-soft lp-plan-note" data-claim-exempt>Some features depend on your plan. <a href="#pricing" class="lp-link">See pricing</a>.</p>
+    <p class="lp-small lp-soft lp-plan-note" data-claim-exempt>Some features depend on your plan. <a href="{% url 'pricing' %}" class="lp-link">See pricing</a>.</p>
   </div>
 </section>
 {% endwith %}
