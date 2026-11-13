@@ -1,0 +1,5 @@
+{% comment %}The last question on every product and integration page (public/_marketing_layout.html).{% endcomment %}
+<details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="{% if trial_days %}trial cancel{% else %}demo{% endif %}">
+  <summary><span itemprop="name">Can I try it first?</span></summary>
+  <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">{% if trial_days %}Yes. Try {{ app }} free for {{ trial_days }} days, no card required, and cancel from the Billing page at any time. <a href="{% url 'pricing' %}">See plans and prices</a>.{% else %}Yes. <a href="{% url 'demo' %}">Book a demo</a> and we'll show it to you with your own questions.{% endif %}</span></p>
+</details>

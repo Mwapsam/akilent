@@ -147,6 +147,8 @@ Every claim a public page makes carries `data-claim="<id>"`. `apps/accounts/test
 
 **To add or change a claim:** add or update its row, with the code that proves it, in the same change.
 
+**Pages it checks:** the landing page, `/security/`, `/pricing/`, the use-case page (`/for/missed-enquiries/`), and the product and integration pages with their hubs (`/product/…`, `/integrations/…`, registered in `apps/accounts/marketing_pages.py`). On those pages every section whose id starts with `page-` is checked. A new marketing page goes in the registry, with its own title and meta description, and its URL goes in the test's list.
+
 Evidence is `path::text`: the file must exist and contain the text.
 
 | id | Type | Claim (as the page states it) | Evidence |

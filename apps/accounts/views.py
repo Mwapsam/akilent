@@ -937,21 +937,127 @@ def marketing_channels() -> dict:
     return out
 
 
-def use_case(request, slug):
-    """A public use-case page (templates/public/for/), only for channels that are on."""
+# Use-case pages that became product pages: one URL per topic, so they don't compete in search.
+_USE_CASE_MOVED = {
+    "shared-inbox": "shared-inbox",
+    "content-studio": "content-studio",
+}
+
+
+def _signup_query(ch: dict, picks: list[str]) -> str:
+    picks = [c for c in picks if ch.get(c) == "live"]
+    return f"?channels={','.join(picks)}" if picks else ""
+
+
+def marketing_hub(request, kind):
+    """/product/ and /integrations/: a card for each page that is open."""
     from django.http import Http404
 
+    from apps.accounts import marketing_pages as mp
+    from apps.billing import api as billing_api
+
+    request.public_page = True
+    ch = marketing_channels()
+    pages = mp.visible(kind, ch)
+    if not pages:
+        raise Http404
+    hub = mp.HUB[kind]
+    request.seo_page = {
+        "title": hub["title"],
+        "description": hub["description"],
+        "breadcrumbs": [(hub["title"], mp.PREFIX[kind])],
+    }
+    _, trial_days = billing_api.default_signup_trial()
+    return render(
+        request,
+        "public/marketing_hub.html",
+        {
+            "ch": ch,
+            "hub": hub,
+            "kind": kind,
+            "pages": pages,
+            "other_pages": [p for p in mp.visible(None, ch) if p.kind != kind],
+            **mp.chat_context(ch),
+            "trial_days": trial_days,
+            "signup_query": _signup_query(ch, ["whatsapp", "instagram", "facebook"]),
+        },
+    )
+
+
+def marketing_page(request, kind, slug):
+    """A product or integration page (apps/accounts/marketing_pages.py), only while it's on."""
+    from django.http import Http404
+
+    from apps.accounts import marketing_pages as mp
+    from apps.billing import api as billing_api
+
+    request.public_page = True
+    ch = marketing_channels()
+    page = mp.get(kind, slug, ch)
+    if page is None:
+        raise Http404
+    hub = mp.HUB[kind]
+    request.seo_page = {
+        "title": page.title,
+        "description": page.description,
+        "breadcrumbs": [(hub["title"], mp.PREFIX[kind]), (page.name, page.url)],
+    }
+    _, trial_days = billing_api.default_signup_trial()
+    if kind == mp.INTEGRATION:
+        picks = [slug]
+    elif slug == "content-studio":
+        picks = ["instagram", "facebook"]
+    else:
+        picks = ["whatsapp", "instagram", "facebook"]
+    return render(
+        request,
+        page.template,
+        {
+            "ch": ch,
+            "page": page,
+            "hub": hub,
+            "hub_url": mp.PREFIX[kind],
+            "related": mp.related(page, ch),
+            **mp.chat_context(ch),
+            "trial_days": trial_days,
+            "signup_query": _signup_query(ch, picks),
+        },
+    )
+
+
+def pricing(request):
+    """/pricing/: the landing page's pricing section and FAQ on a page of their own."""
+    request.public_page = True
+    request.seo_page = {
+        "title": "Pricing",
+        "description": "Akilent plans and prices: a free trial, monthly or annual billing, and what each plan includes. Cancel any time; nothing is deleted when a trial ends.",
+        "breadcrumbs": [("Pricing", "/pricing/")],
+    }
+    return render(request, "accounts/pricing.html", _pricing_context())
+
+
+def use_case(request, slug):
+    """A public use-case page (templates/public/for/), only for channels that are on."""
+    from django.http import Http404, HttpResponsePermanentRedirect
+
+    from apps.accounts import marketing_pages as mp
     from apps.billing import api as billing_api
 
     ch = marketing_channels()
-    if slug in ("missed-enquiries", "shared-inbox"):
+    if slug in _USE_CASE_MOVED:
+        target = mp.get(mp.PRODUCT, _USE_CASE_MOVED[slug], ch)
+        if target is None:
+            raise Http404
+        return HttpResponsePermanentRedirect(target.url)
+    request.public_page = True
+    request.seo_page = {
+        "title": "Stop losing enquiries",
+        "description": "Messages get missed, answered late or never followed up. Akilent keeps every enquiry in view until it's answered, followed up and paid.",
+    }
+    if slug == "missed-enquiries":
         if ch["whatsapp"] != "live":
             raise Http404
         picks = ["whatsapp"] + (["instagram"] if ch["instagram"] == "live" else [])
-    elif slug == "content-studio":
-        if not ch["content"]:
-            raise Http404
-        picks = [c for c in ("instagram", "facebook") if ch[c] == "live"]
     else:
         raise Http404
     _, trial_days = billing_api.default_signup_trial()
@@ -1154,15 +1260,11 @@ def demo(request):
 LANDING_EDGE_TTL = 600  # seconds Cloudflare may serve the logged-out landing page
 
 
-def landing(request):
-    """Public marketing landing page."""
+def _pricing_context() -> dict:
+    """What the pricing section needs, on the landing page and on /pricing/."""
     from apps.accounts.forms import signup_offer
     from apps.billing import api as billing_api
-    from apps.core.models import Testimonial
 
-    # The page needs nothing from the workspace but "Open dashboard": the nav and onboarding
-    # context processors skip it (accounts.context_processors._public_page).
-    request.public_page = True
     # Only plans signup can sell right now, so a "Choose" button never opens on nothing.
     offered, _ = signup_offer()
     plans = [p for p, _ in offered]
@@ -1179,6 +1281,23 @@ def landing(request):
     # "Start free trial" opens signup on the plan a plain /signup/ starts on, by name, so the
     # trial is chosen up front and the click is attributed to it (data-cta-plan).
     trial_plan, trial_days = billing_api.default_signup_trial()
+    return {
+        "plans": plans,
+        "cards": cards,
+        "pricing": pricing,
+        "trial_days": trial_days,
+        "trial_slug": trial_plan.slug if trial_plan else "",
+        "ch": marketing_channels(),
+    }
+
+
+def landing(request):
+    """Public marketing landing page."""
+    from apps.core.models import Testimonial
+
+    # The page needs nothing from the workspace but "Open dashboard": the nav and onboarding
+    # context processors skip it (accounts.context_processors._public_page).
+    request.public_page = True
     # len() counts pending messages without marking them read, so the page still shows them.
     personal = request.user.is_authenticated or len(messages.get_messages(request)) > 0
     testimonials = list(Testimonial.shown())
@@ -1186,12 +1305,7 @@ def landing(request):
         request,
         "accounts/landing.html",
         {
-            "plans": plans,
-            "cards": cards,
-            "pricing": pricing,
-            "trial_days": trial_days,
-            "trial_slug": trial_plan.slug if trial_plan else "",
-            "ch": marketing_channels(),
+            **_pricing_context(),
             "testimonials": testimonials,
             # Proof slots: logos and the case-study card come from the same permissioned
             # testimonials, so nothing shows until a real customer has agreed.

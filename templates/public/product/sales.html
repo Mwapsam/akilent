@@ -1,0 +1,74 @@
+{% extends "public/_marketing_layout.html" %}
+{% load static %}
+{% block headline %}From interested customer to paid order, with nothing lost in between{% endblock %}
+{% block lead %}<p data-claim="interested orders">Track who's interested, record the order in the chat and mark it paid when the customer pays you.</p>{% endblock %}
+
+{% block body %}
+<section id="page-problem" class="uc-section" aria-labelledby="uc-problem">
+  <h2 id="uc-problem">Sales that live in chat history</h2>
+  <p data-claim-exempt>When orders are agreed in chat, the only record is the chat. Who asked for a price last week? Which orders are still unpaid? What did this month's messages actually turn into? Scrolling back is not a sales report.</p>
+</section>
+
+<section id="page-how" class="uc-section uc-split" aria-labelledby="uc-how">
+  <div>
+    <h2 id="uc-how">See who still needs you</h2>
+    <ul class="uc-list">
+      <li data-claim="interested">Mark a customer as interested, and they join one list with where they came from and where they stand.</li>
+      <li data-claim="follow-ups">Set a follow-up, so nobody waits for an answer you promised.</li>
+      <li data-claim="orders">When they're ready, record the order, and mark it paid once they've paid you.</li>
+      <li data-claim="customers">Their details, tags and history stay together for the next order.</li>
+    </ul>
+    <p class="uc-note" data-claim-exempt>{{ app }} doesn't take payments: your customers pay you the way they do today, and you mark the order paid.</p>
+  </div>
+  <figure class="uc-shot">
+    <div><picture><source media="(max-width: 640px)" srcset="{% static 'img/marketing/interested-narrow.webp' %}" width="804" height="396"><img src="{% static 'img/marketing/interested.webp' %}" width="1184" height="396" loading="lazy" decoding="async"
+              alt="The Akilent list of interested customers with their source and status."></picture></div>
+    <figcaption>The list of interested customers, in a demo workspace with sample customers.</figcaption>
+  </figure>
+</section>
+
+<section id="page-features" class="uc-section" aria-labelledby="uc-features">
+  <h2 id="uc-features">Bring customers back</h2>
+  <div class="uc-grid">
+    {% if ch.whatsapp == "live" or ch.email == "live" %}
+    <div class="uc-card">
+      <h3>Campaigns</h3>
+      <p data-claim="campaigns">Send {% if ch.whatsapp == "live" %}an approved WhatsApp message{% if ch.email == "live" %} or an email{% endif %}{% else %}an email{% endif %} to a list of customers.</p>
+    </div>
+    {% endif %}
+    {% if ch.whatsapp == "live" %}
+    <div class="uc-card">
+      <h3>Segments that update themselves</h3>
+      <p data-claim="segments campaign-scheduling">Send a WhatsApp campaign to customers picked by rules, scheduled for the time you choose. Pause, cancel or resend failed messages.</p>
+    </div>
+    <div class="uc-card">
+      <h3>Orders from each campaign</h3>
+      <p data-claim="campaign-orders">See the orders from customers who replied to a campaign's message. A customer who just writes later isn't counted.</p>
+    </div>
+    {% endif %}
+    <div class="uc-card">
+      <h3>What your conversations turned into</h3>
+      <p data-claim="insights">Business Health shows replies, follow-ups and sales week by week.</p>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block faq %}
+<section id="page-faq" class="uc-section" aria-labelledby="uc-faq" itemscope itemtype="https://schema.org/FAQPage">
+  <h2 id="uc-faq">Questions about sales and orders</h2>
+  <div class="uc-faq">
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="orders">
+      <summary><span itemprop="name">Does {{ app }} collect payments from my customers?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">No. Your customers pay you the way they already do. You record the order in {{ app }} and mark it paid when the money arrives.</span></p>
+    </details>
+    {% if ch.whatsapp == "live" %}
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="meta-fees">
+      <summary><span itemprop="name">Who pays WhatsApp's message fees for campaigns?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">Meta bills them directly to your WhatsApp Business account, at Meta's rates for each country. They aren't part of your {{ app }} plan, and {{ app }} never adds a markup.</span></p>
+    </details>
+    {% endif %}
+    {% include "public/_faq_trial.html" %}
+  </div>
+</section>
+{% endblock %}

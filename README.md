@@ -670,3 +670,11 @@ not:
 The platform translates the first into the second.
 
 That separation is fundamental to Akilent's design.
+
+
+
+## Deploy
+`
+  tools/deploy/manual_deploy.sh --run-tests
+  tools/deploy/manual_deploy.sh --skip-ci-check
+`

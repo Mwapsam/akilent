@@ -1,0 +1,70 @@
+{% extends "public/_marketing_layout.html" %}
+{% block headline %}Auto-replies and follow-ups that don't depend on memory{% endblock %}
+{% block lead %}<p data-claim="auto-replies follow-ups workflows">Greet customers, reply when you're closed, remind your team to follow up and run the steps that keep every sale moving.</p>{% endblock %}
+
+{% block body %}
+<section id="page-problem" class="uc-section" aria-labelledby="uc-problem">
+  <h2 id="uc-problem">Good intentions don't follow up</h2>
+  <p data-claim-exempt>A customer asks a price at 9pm and hears nothing until morning. Someone promises to check back on Friday and forgets. A paid order waits for a thank-you that never goes out. None of it is anyone's fault: it just depends on people remembering.</p>
+</section>
+
+<section id="page-how" class="uc-section" aria-labelledby="uc-how">
+  <h2 id="uc-how">What runs for you</h2>
+  <div class="uc-grid">
+    <div class="uc-card">
+      <h3>Replies when you can't</h3>
+      <p data-claim="auto-replies business-hours">Greet new customers, and send a reply when you're closed that knows your opening hours, so nobody is left wondering.</p>
+    </div>
+    <div class="uc-card">
+      <h3>Answers by keyword</h3>
+      <p data-claim="keywords">When a message contains a word you choose, such as "price" or "delivery", send the answer you've set.</p>
+    </div>
+    <div class="uc-card">
+      <h3>Follow-up reminders</h3>
+      <p data-claim="follow-ups followup-due">Set a follow-up on a conversation, and your team is told when it's due.</p>
+    </div>
+    {% if ch.whatsapp == "live" %}
+    <div class="uc-card">
+      <h3>A nudge for unanswered chats</h3>
+      <p data-claim="missed">When a conversation goes unanswered, your team gets a reminder. It goes to your team, not the customer.</p>
+    </div>
+    {% endif %}
+    <div class="uc-card">
+      <h3>Workflows</h3>
+      <p data-claim="workflows">Run steps for you when something happens: a message arrives, a new lead appears or an order is paid.</p>
+    </div>
+    <div class="uc-card">
+      <h3>Forms in the chat</h3>
+      <p data-claim="forms">Collect order details in one go with a form inside the conversation: a native form on WhatsApp, questions one by one elsewhere.</p>
+    </div>
+  </div>
+</section>
+
+<section id="page-safe" class="uc-section" aria-labelledby="uc-safe">
+  <h2 id="uc-safe">Test it before customers see it</h2>
+  <p data-claim="workflow-testing">Try any automation with a pretend customer first. You see each step it would take, and nothing is sent.</p>
+  <p data-claim="workflow-history">Once it's live, see each customer's path through it, and retry a step that failed.</p>
+  {% if ch.whatsapp == "live" %}<p data-claim="events-api">Already have a shop or booking system? Send a business event such as order.paid to the <a href="{% url 'docs' %}">{{ app }} API</a>, and the workflows with that trigger start.</p>{% endif %}
+</section>
+{% endblock %}
+
+{% block faq %}
+<section id="page-faq" class="uc-section" aria-labelledby="uc-faq" itemscope itemtype="https://schema.org/FAQPage">
+  <h2 id="uc-faq">Questions about automations</h2>
+  <div class="uc-faq">
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="business-hours">
+      <summary><span itemprop="name">Can I send a different reply when we're closed?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">Yes. Set your opening hours, and the closed-hours reply goes out only outside them.</span></p>
+    </details>
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="workflow-testing">
+      <summary><span itemprop="name">How do I know an automation does what I expect?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">Test it first. You see every step it would take for a pretend customer, and nothing is sent or saved.</span></p>
+    </details>
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="missed follow-ups">
+      <summary><span itemprop="name">Does {{ app }} message customers to follow up for me?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">Follow-ups and nudges remind your team. {{ app }} only messages a customer through an automatic reply or workflow you set up.</span></p>
+    </details>
+    {% include "public/_faq_trial.html" %}
+  </div>
+</section>
+{% endblock %}

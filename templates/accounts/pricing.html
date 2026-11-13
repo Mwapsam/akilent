@@ -1,0 +1,14 @@
+{% extends "accounts/landing.html" %}
+{% comment %}
+  /pricing/ (accounts.views.pricing): the landing page's pricing section, with its heading as the
+  page's h1, then the same FAQ (FAQPage microdata) and closing call to action. One shell with the
+  landing page, so the cards, the Monthly / Annual switch and the comparison table look and
+  behave the same in both places.
+{% endcomment %}
+{% block main %}
+{% with pricing_page=True %}
+{% include "accounts/landing/_pricing.html" %}
+{% endwith %}
+{% include "accounts/landing/_faq.html" %}
+{% include "accounts/landing/_final.html" %}
+{% endblock %}

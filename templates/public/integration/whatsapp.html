@@ -1,0 +1,62 @@
+{% extends "public/_marketing_layout.html" %}
+{% load static %}
+{% block headline %}Your WhatsApp business number, shared by the whole team{% endblock %}
+{% block lead %}<p data-claim="own-number inbox assign">Connect the number your customers already message, and answer every WhatsApp chat from one shared inbox, each one assigned to a teammate.</p>{% endblock %}
+
+{% block body %}
+<section id="page-problem" class="uc-section" aria-labelledby="uc-problem">
+  <h2 id="uc-problem">WhatsApp on one phone doesn't scale</h2>
+  <p data-claim-exempt>Your customers prefer WhatsApp, so the business number gets busy. But the app runs on one phone, chats get buried, and nobody can tell who promised what to whom.</p>
+</section>
+
+<section id="page-how" class="uc-section uc-split" aria-labelledby="uc-how">
+  <div>
+    <h2 id="uc-how">What you get with WhatsApp in {{ app }}</h2>
+    <ul class="uc-list">
+      <li data-claim="own-number meta-tech-provider">Connect your own WhatsApp business number through Meta's guided setup. {{ app }} is a Meta Tech Provider.</li>
+      <li data-claim="inbox assign">Every WhatsApp conversation in one shared inbox, each one assigned to a teammate.</li>
+      <li data-claim="auto-replies business-hours keywords">Greetings, closed-hours replies and keyword answers.</li>
+      <li data-claim="forms">A native WhatsApp form to collect order details in one go.</li>
+      <li data-claim="missed">A nudge for your team when a chat goes unanswered.</li>
+      <li data-claim="campaigns segments">Campaigns from approved WhatsApp messages, to a list or a segment.</li>
+    </ul>
+  </div>
+  <figure class="uc-shot">
+    <div><picture><source media="(max-width: 640px)" srcset="{% static 'img/marketing/inbox-chat.webp' %}" width="752" height="374"><img src="{% static 'img/marketing/inbox.webp' %}" width="1184" height="900" loading="lazy" decoding="async"
+              alt="A WhatsApp conversation in the Akilent inbox: the customer asked a price, the team replied, and the customer is tracked as interested."></picture></div>
+    <figcaption>The real {{ app }} inbox, in a demo workspace with sample customers.</figcaption>
+  </figure>
+</section>
+
+<section id="page-features" class="uc-section" aria-labelledby="uc-features">
+  <h2 id="uc-features">For developers</h2>
+  <p data-claim="whatsapp-api">Start WhatsApp campaigns from approved templates through the REST API, to a list or a segment.</p>
+  <p data-claim="verification-codes">Send WhatsApp one-time login codes from your app.</p>
+  <p data-claim="webhooks">Get signed webhooks for message, contact, campaign and workflow events. <a href="{% url 'docs' %}">Read the API documentation</a>.</p>
+</section>
+{% endblock %}
+
+{% block faq %}
+<section id="page-faq" class="uc-section" aria-labelledby="uc-faq" itemscope itemtype="https://schema.org/FAQPage">
+  <h2 id="uc-faq">Questions about WhatsApp</h2>
+  <div class="uc-faq">
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="own-number">
+      <summary><span itemprop="name">Can I bring my existing WhatsApp number?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">Yes. You connect the number you already use through Meta's guided setup, and your customers keep messaging the same number. Once connected it works through {{ app }} instead of the WhatsApp Business app, so a number that's in the app today moves out of it.</span></p>
+    </details>
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="own-number">
+      <summary><span itemprop="name">Do I need to sign up for the WhatsApp Business API myself?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">No. During setup you connect your business number through Meta's guided sign-in, and {{ app }} handles the rest.</span></p>
+    </details>
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="meta-fees">
+      <summary><span itemprop="name">Who pays WhatsApp's message fees?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">Meta bills them directly to your WhatsApp Business account, at Meta's rates for each country. They aren't part of your {{ app }} plan, and {{ app }} never adds a markup. <a href="https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing" target="_blank" rel="noopener">See Meta's pricing<span class="sr-only"> (opens in a new tab)</span></a>.</span></p>
+    </details>
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="any-country">
+      <summary><span itemprop="name">Which countries can I use it in?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">You can sign up from any country; {{ app }} doesn't limit where your business is. WhatsApp's own rules still apply: Meta decides which businesses can use WhatsApp business messaging.</span></p>
+    </details>
+    {% include "public/_faq_trial.html" %}
+  </div>
+</section>
+{% endblock %}

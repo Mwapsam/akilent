@@ -1,0 +1,37 @@
+{% extends "public/_marketing_layout.html" %}
+{% comment %}
+  /product/ and /integrations/ (accounts.views.marketing_hub): a card for each page that is open
+  now, then the other kind's pages, so every marketing page is one click from either hub.
+{% endcomment %}
+{% block headline %}{{ hub.h1 }}{% endblock %}
+{% block lead %}{% if kind == "product" %}<p data-claim="promise">{{ app }} turns customer conversations and social media activity into sales, from one place. Each part works on its own and with the others.</p>{% else %}<p data-claim="{{ inbox_claims }}">{{ chat_names }} messages arrive in one shared inbox your team works from together.</p>{% endif %}{% endblock %}
+
+{% block body %}
+<section id="page-list" class="uc-section" aria-labelledby="uc-list-title">
+  <h2 id="uc-list-title">{% if kind == "product" %}What's in {{ app }}{% else %}Channels you can connect{% endif %}</h2>
+  <div class="uc-grid three">
+    {% for p in pages %}
+    <a href="{{ p.url }}" class="uc-card">
+      <h3>{{ p.name }}</h3>
+      <p data-claim="{{ p.claims }}">{{ p.blurb }}</p>
+      <span class="uc-go">Learn more<span class="sr-only"> about {{ p.name }}</span> →</span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+
+{% if other_pages %}
+<section id="page-other" class="uc-section" aria-labelledby="uc-other-title">
+  <h2 id="uc-other-title">{% if kind == "product" %}Channels you can connect{% else %}What you can do with them{% endif %}</h2>
+  <div class="uc-grid three">
+    {% for p in other_pages %}
+    <a href="{{ p.url }}" class="uc-card">
+      <h3>{{ p.name }}</h3>
+      <p data-claim="{{ p.claims }}">{{ p.blurb }}</p>
+      <span class="uc-go">Learn more<span class="sr-only"> about {{ p.name }}</span> →</span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}

@@ -89,9 +89,27 @@ def _default_structured_data(request, description=""):
         },
         organization,
     ]
-    if request.path == "/":
+    if request.path in ("/", "/pricing/"):
         items.append(_software_application(site_url, description))
     return items
+
+
+def _breadcrumb_list(crumbs):
+    """BreadcrumbList from [(name, path), ...], Home first; paths become absolute URLs."""
+    site_url = getattr(settings, "SITE_URL", "https://akilent.com").rstrip("/")
+    return {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {
+                "@type": "ListItem",
+                "position": i,
+                "name": name,
+                "item": f"{site_url}{path}",
+            }
+            for i, (name, path) in enumerate([("Home", "/"), *crumbs], start=1)
+        ],
+    }
 
 
 def _software_application(site_url, description):
@@ -154,8 +172,13 @@ def resolve_seo_context(request):
     else:
         index = follow = True
 
-    # A page's own words from settings.SEO_PAGES, under any DB override.
-    page_defaults = getattr(settings, "SEO_PAGES", {}).get(request.path, {})
+    # A page's own words: set by its view (request.seo_page), else settings.SEO_PAGES, both
+    # under any DB override.
+    view_page = getattr(request, "seo_page", None) or {}
+    page_defaults = {
+        **getattr(settings, "SEO_PAGES", {}).get(request.path, {}),
+        **{k: v for k, v in view_page.items() if v},
+    }
 
     # Merge title
     page_title = (db_override.title if db_override else "") or page_defaults.get(
@@ -184,6 +207,9 @@ def resolve_seo_context(request):
         og_image_size = (1200, 630)
 
     structured_data = _default_structured_data(request, description)
+    breadcrumbs = page_defaults.get("breadcrumbs")
+    if breadcrumbs:
+        structured_data.append(_breadcrumb_list(breadcrumbs))
 
     seo = {
         "title": title,

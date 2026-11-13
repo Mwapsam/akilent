@@ -1,4 +1,4 @@
-{% load static seo_tags %}<!DOCTYPE html>
+{% load static seo_tags ui %}<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -38,11 +38,8 @@
       </a>
 
       <nav class="lp-nav" aria-label="Primary">
-        <a href="#channels">Channels</a>
-        <a href="#how-it-works">How it works</a>
-        <a href="#platform">Platform</a>
-        <a href="#pricing">Pricing</a>
-        <a href="{% url 'help' %}">Help</a>
+        {% marketing_nav as nav %}{% for label, url, current in nav %}<a href="{{ url }}"{% if current %} aria-current="page"{% endif %}>{{ label }}</a>
+        {% endfor %}<a href="{% url 'help' %}">Help</a>
         <a href="{% url 'docs' %}">Developers</a>
       </nav>
 
@@ -66,11 +63,8 @@
     <nav id="mobile-nav" class="lp-mnav" aria-label="Mobile">
       <div>
         <div class="inner">
-          <a href="#channels" class="lp-mlink">Channels</a>
-          <a href="#how-it-works" class="lp-mlink">How it works</a>
-          <a href="#platform" class="lp-mlink">Platform</a>
-          <a href="#pricing" class="lp-mlink">Pricing</a>
-          <a href="{% url 'help' %}" class="lp-mlink">Help</a>
+          {% for label, url, current in nav %}<a href="{{ url }}" class="lp-mlink"{% if current %} aria-current="page"{% endif %}>{{ label }}</a>
+          {% endfor %}<a href="{% url 'help' %}" class="lp-mlink">Help</a>
           <a href="{% url 'docs' %}" class="lp-mlink">Developers</a>
           <a href="{% url 'demo' %}" class="lp-mlink" data-cta="book_demo" data-cta-location="menu">Book a demo</a>
           {% if user.is_authenticated %}
@@ -85,6 +79,7 @@
   </header>
 
   <main id="main">
+    {% block main %}
     {% include "accounts/landing/_hero.html" %}
     {% include "accounts/landing/_channels.html" %}
     {% include "accounts/landing/_journey.html" %}
@@ -95,6 +90,7 @@
     {% include "accounts/landing/_faq.html" %}
     {% include "accounts/landing/_developers.html" %}
     {% include "accounts/landing/_final.html" %}
+    {% endblock %}
   </main>
 
   {% include "accounts/landing/_footer.html" %}

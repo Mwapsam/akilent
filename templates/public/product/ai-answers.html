@@ -1,0 +1,60 @@
+{% extends "public/_marketing_layout.html" %}
+{% block headline %}Answer the same questions faster, in your own words{% endblock %}
+{% block lead %}<p data-claim="ai ai-knowledge">Teach AI your answers, and it suggests replies for your team from your own business information. It stays off until you switch it on.</p>{% endblock %}
+
+{% block body %}
+<section id="page-problem" class="uc-section" aria-labelledby="uc-problem">
+  <h2 id="uc-problem">The same ten questions, all day</h2>
+  <p data-claim-exempt>Prices, delivery, opening hours, where you are, whether something is in stock. Most messages ask something you've answered a hundred times, and each one still takes a person to type it out again.</p>
+</section>
+
+<section id="page-how" class="uc-section" aria-labelledby="uc-how">
+  <h2 id="uc-how">How it works</h2>
+  <div class="uc-grid">
+    <div class="uc-card">
+      <h3>1. Teach it your answers</h3>
+      <p data-claim="ai-knowledge">Add answers one by one, import a list, or have {{ app }} read them from your website. Imported and website answers wait for your review before AI uses them.</p>
+    </div>
+    <div class="uc-card">
+      <h3>2. It suggests, your team sends</h3>
+      <p data-claim="ai">In the inbox, AI suggests a reply from your answers. Your team reviews it, edits it if needed and sends it.</p>
+    </div>
+    <div class="uc-card">
+      <h3>3. Simple questions on its own, if you allow it</h3>
+      <p data-claim="ai">You can let AI answer a few simple questions, such as your opening hours, on its own. Every reply it sends is marked and logged.</p>
+    </div>
+    {% if ch.content %}
+    <div class="uc-card">
+      <h3>Captions too</h3>
+      <p data-claim="ai-captions">In Content Studio, AI drafts a caption for each channel from your notes. <a href="{% url 'product-page' 'content-studio' %}">See Content Studio</a>.</p>
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+<section id="page-control" class="uc-section" aria-labelledby="uc-control">
+  <h2 id="uc-control">You stay in control</h2>
+  <ul class="uc-list">
+    <li data-claim="ai">AI is off by default. Nothing changes for your customers until you switch it on.</li>
+    <li data-claim="ai-knowledge">It answers from the information you've given it, which you can change at any time.</li>
+    <li data-claim="ai">Replies it sends on its own are marked, so your team always knows who said what.</li>
+  </ul>
+</section>
+{% endblock %}
+
+{% block faq %}
+<section id="page-faq" class="uc-section" aria-labelledby="uc-faq" itemscope itemtype="https://schema.org/FAQPage">
+  <h2 id="uc-faq">Questions about AI answers</h2>
+  <div class="uc-faq">
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="ai">
+      <summary><span itemprop="name">Does AI send messages automatically?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">Not unless you allow it. AI is off until you switch it on, and then it suggests replies for your team to review and send. You can choose to let it answer a few simple questions, such as your opening hours, on its own. Every reply it sends is marked and logged.</span></p>
+    </details>
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="ai-knowledge">
+      <summary><span itemprop="name">Where does AI get its answers?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">From your business information: answers you add, a list you import or pages read from your website.</span></p>
+    </details>
+    {% include "public/_faq_trial.html" %}
+  </div>
+</section>
+{% endblock %}

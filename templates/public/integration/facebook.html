@@ -1,0 +1,51 @@
+{% extends "public/_marketing_layout.html" %}
+{% load static %}
+{% block headline %}Facebook Page messages and comments, answered from one inbox{% endblock %}
+{% block lead %}<p data-claim="facebook-inbox facebook-comments">Messages sent to your Facebook Page arrive in your team's shared inbox, and comments on your posts are answered, hidden or replied to privately, automatically or by hand.</p>{% endblock %}
+
+{% block body %}
+<section id="page-problem" class="uc-section" aria-labelledby="uc-problem">
+  <h2 id="uc-problem">Your Page is open all hours</h2>
+  <p data-claim-exempt>Customers message your Page and comment on your posts at any time. Checking yet another app means they wait, and a question left in the comments is a sale left on the table.</p>
+</section>
+
+<section id="page-how" class="uc-section uc-split" aria-labelledby="uc-how">
+  <div>
+    <h2 id="uc-how">What you get with Facebook in {{ app }}</h2>
+    <ul class="uc-list">
+      <li data-claim="facebook-inbox assign">Messages to your Facebook Page arrive in the same shared inbox{% if ch.whatsapp == "live" %} as WhatsApp{% endif %}, each one assigned to a teammate.</li>
+      <li data-claim="facebook-comments">Answer, moderate and reply privately to comments on your posts, automatically or by hand.</li>
+      <li data-claim="comments">Comment on your posts, reply to comments and hide or delete them, from one place.</li>
+      {% if ch.content %}<li data-claim="facebook-publishing">Publish and schedule posts to your Facebook Page with <a href="{% url 'product-page' 'content-studio' %}">Content Studio</a>.</li>
+      <li data-claim="post-metrics">See each post's reach and engagement.</li>{% endif %}
+      <li data-claim="customers">Each customer's details, tags and history beside the chat.</li>
+    </ul>
+  </div>
+  {% if ch.content %}
+  <figure class="uc-shot tall">
+    <div><img src="{% static 'img/marketing/post-channels.webp' %}" width="670" height="1082" loading="lazy" decoding="async"
+              alt="A post published to Facebook and Instagram from Akilent, with each channel's status and the post's image."></div>
+    <figcaption>A published post in the demo workspace.</figcaption>
+  </figure>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block faq %}
+<section id="page-faq" class="uc-section" aria-labelledby="uc-faq" itemscope itemtype="https://schema.org/FAQPage">
+  <h2 id="uc-faq">Questions about Facebook</h2>
+  <div class="uc-faq">
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="facebook-inbox facebook-comments">
+      <summary><span itemprop="name">Do Facebook messages come into the inbox?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">Yes. Messages sent to your Facebook Page arrive in your shared inbox, and comments on your Page's posts can be answered in public, replied to privately or hidden, automatically or by hand.</span></p>
+    </details>
+    {% if ch.content %}
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="facebook-publishing post-scheduling">
+      <summary><span itemprop="name">Can I schedule posts to my Page?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">Yes. Publish now or schedule a time with Content Studio{% if ch.instagram == "live" %}, with a separate version and time for Instagram{% endif %}.</span></p>
+    </details>
+    {% endif %}
+    {% include "public/_faq_trial.html" %}
+  </div>
+</section>
+{% endblock %}

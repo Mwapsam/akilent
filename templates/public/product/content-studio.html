@@ -1,0 +1,79 @@
+{% extends "public/_marketing_layout.html" %}
+{% load static %}
+{% block headline %}Plan, write and schedule your social media posts in one place{% endblock %}
+{% block lead %}<p data-claim="{% if ch.instagram == 'live' and ch.facebook == 'live' %}content-studio{% elif ch.instagram == 'live' %}instagram-publishing{% else %}facebook-publishing{% endif %} content-planning">Content Studio plans and publishes your posts to {% if ch.instagram == "live" and ch.facebook == "live" %}Instagram and your Facebook Page{% elif ch.instagram == "live" %}Instagram{% else %}your Facebook Page{% endif %}{% if ch.results %}, then shows which ones bring customers{% endif %}.</p>{% endblock %}
+
+{% block body %}
+<section id="page-problem" class="uc-section" aria-labelledby="uc-problem">
+  <h2 id="uc-problem">Posting takes too long, and nobody knows what it brings in</h2>
+  <p data-claim-exempt>Each app wants the post a little differently, so it's written several times, posted when someone remembers, and judged by likes rather than customers.</p>
+</section>
+
+<section id="page-how" class="uc-section uc-split" aria-labelledby="uc-how">
+  <div>
+    <h2 id="uc-how">What Content Studio does</h2>
+    <ul class="uc-list">
+      {% if ch.instagram == "live" and ch.facebook == "live" %}<li data-claim="content-studio">Write a post once, with its own version for Instagram and for your Facebook Page.</li>
+      {% elif ch.instagram == "live" %}<li data-claim="instagram-publishing">Publish and schedule your posts to Instagram.</li>
+      {% else %}<li data-claim="facebook-publishing">Publish and schedule your posts to your Facebook Page.</li>{% endif %}
+      <li data-claim="content-planning">Plan posts by content pillar and campaign on a calendar.</li>
+      <li data-claim="ai-captions">AI can draft a caption for each channel from your notes.</li>
+      <li data-claim="post-scheduling">Schedule each channel's version for its own time.</li>
+      <li data-claim="post-review">If you want, an owner or admin approves posts before they go out.</li>
+      <li data-claim="post-metrics">See each post's reach and engagement from {% if ch.instagram == "live" and ch.facebook == "live" %}Instagram and Facebook{% elif ch.instagram == "live" %}Instagram{% else %}your Facebook Page{% endif %}.</li>
+    </ul>
+  </div>
+  <figure class="uc-shot tall">
+    <div><img src="{% static 'img/marketing/post-channels.webp' %}" width="670" height="1082" loading="lazy" decoding="async"
+              alt="A post in Akilent Content Studio published to Facebook and Instagram, with each channel's status and the post's image."></div>
+    <figcaption>A published post in the demo workspace.</figcaption>
+  </figure>
+</section>
+
+<section id="page-features" class="uc-section" aria-labelledby="uc-features">
+  <h2 id="uc-features">Made for small teams</h2>
+  <div class="uc-grid">
+    <div class="uc-card">
+      <h3>A calendar you can see</h3>
+      <p data-claim="content-planning">Every planned and scheduled post on one calendar, grouped by content pillar and campaign, so the week ahead is clear.</p>
+    </div>
+    <div class="uc-card">
+      <h3>Approval when you want it</h3>
+      <p data-claim="post-review">Turn on review, and posts wait for an owner or admin before they publish. Leave it off when you post yourself.</p>
+    </div>
+    <div class="uc-card">
+      <h3>Comments answered</h3>
+      <p data-claim="comments">Reply to comments on your posts, and hide or delete them, from the same place as your messages.</p>
+    </div>
+    {% if ch.results %}
+    <div class="uc-card">
+      <h3>Customers, not just likes</h3>
+      <p data-claim="post-chat-link post-results">Add a WhatsApp chat link to a post, and see the chats, leads and paid orders it brought. <a href="{% url 'product-page' 'post-results' %}">See post results</a>.</p>
+    </div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
+
+{% block faq %}
+<section id="page-faq" class="uc-section" aria-labelledby="uc-faq" itemscope itemtype="https://schema.org/FAQPage">
+  <h2 id="uc-faq">Questions about Content Studio</h2>
+  <div class="uc-faq">
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="{% if ch.instagram == 'live' %}instagram-publishing{% endif %}{% if ch.facebook == 'live' %} facebook-publishing{% endif %}">
+      <summary><span itemprop="name">Where can I publish?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">To {% if ch.instagram == "live" and ch.facebook == "live" %}Instagram and your Facebook Page{% elif ch.instagram == "live" %}Instagram{% else %}your Facebook Page{% endif %}, now or at a time you schedule.</span></p>
+    </details>
+    {% if ch.instagram == "live" and ch.facebook == "live" %}
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="content-studio post-scheduling">
+      <summary><span itemprop="name">Can Instagram and Facebook get different versions of a post?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">Yes. You write the post once, and each channel gets its own version and its own time.</span></p>
+    </details>
+    {% endif %}
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="ai-captions">
+      <summary><span itemprop="name">Does AI write my posts?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">It can draft a caption for each channel from your notes. You edit it and decide what's published.</span></p>
+    </details>
+    {% include "public/_faq_trial.html" %}
+  </div>
+</section>
+{% endblock %}

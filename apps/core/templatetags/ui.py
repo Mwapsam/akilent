@@ -279,18 +279,41 @@ def row_menu(content, label="More actions"):
     )
 
 
+@register.simple_tag(takes_context=True)
+def marketing_nav(context):
+    """The public header's page links before Help and Developers: [(label, url, current)].
+    Product and Integrations show only while their hubs have an open page."""
+    from apps.accounts import marketing_pages as mp
+    from apps.accounts.views import marketing_channels
+
+    ch = context.get("ch") or marketing_channels()
+    request = context.get("request")
+    path = getattr(request, "path", "")
+    items = []
+    if mp.visible(mp.PRODUCT, ch):
+        items.append(("Product", mp.PREFIX[mp.PRODUCT]))
+    if mp.visible(mp.INTEGRATION, ch):
+        items.append(("Integrations", mp.PREFIX[mp.INTEGRATION]))
+    items.append(("Pricing", "/pricing/"))
+    return [(label, url, path.startswith(url)) for label, url in items]
+
+
 @register.inclusion_tag("public/_site_footer.html", takes_context=True)
 def site_footer(context, p="pub", home="/"):
     """The public site's footer contents (company block and link columns), the same on the
     landing page and on every other public page. ``p`` is the shell's class prefix ("lp" or
     "pub"); ``home`` is "" on the landing page, whose section links are in-page anchors."""
+    from apps.accounts import marketing_pages as mp
     from apps.accounts.views import marketing_channels
 
     site = context.get("site")
+    ch = context.get("ch") or marketing_channels()
     return {
         "p": p,
         "home": home,
-        "ch": context.get("ch") or marketing_channels(),
+        "ch": ch,
+        "product_pages": mp.visible(mp.PRODUCT, ch),
+        "integration_pages": mp.visible(mp.INTEGRATION, ch),
         "site": site,
         "app": getattr(site, "app_name", "") or "Akilent",
         "user": context.get("user"),

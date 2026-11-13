@@ -43,25 +43,34 @@ class DocsPagesSitemap(Sitemap):
         return f"/docs/{page.slug}/"
 
 
-class UseCaseSitemap(Sitemap):
-    """Use-case pages that are open right now (the view 404s the others)."""
+class MarketingPagesSitemap(Sitemap):
+    """Pricing, the product and integration pages and their hubs, and the use-case page: only
+    those open right now (their views 404 the others)."""
 
     changefreq = "monthly"
-    priority = 0.7
+    priority = 0.8
 
     def items(self):
+        from apps.accounts import marketing_pages as mp
         from apps.accounts.views import marketing_channels
 
         ch = marketing_channels()
-        slugs = []
+        pages = mp.visible(None, ch)
+        items = [("/pricing/", None)]
+        for kind in (mp.PRODUCT, mp.INTEGRATION):
+            kind_pages = [p for p in pages if p.kind == kind]
+            if kind_pages:
+                items.append((mp.PREFIX[kind], max(p.updated for p in kind_pages)))
+                items += [(p.url, p.updated) for p in kind_pages]
         if ch["whatsapp"] == "live":
-            slugs += ["missed-enquiries", "shared-inbox"]
-        if ch["content"]:
-            slugs.append("content-studio")
-        return slugs
+            items.append((reverse("use-case", args=["missed-enquiries"]), None))
+        return items
 
-    def location(self, slug):
-        return reverse("use-case", args=[slug])
+    def location(self, item):
+        return item[0]
+
+    def lastmod(self, item):
+        return item[1]
 
 
 class SEOPageSitemap(Sitemap):
@@ -87,6 +96,6 @@ SITEMAPS = {
     "static": StaticPagesSitemap,
     "help": HelpArticlesSitemap,
     "docs": DocsPagesSitemap,
-    "use-cases": UseCaseSitemap,
+    "marketing": MarketingPagesSitemap,
     "pages": SEOPageSitemap,
 }

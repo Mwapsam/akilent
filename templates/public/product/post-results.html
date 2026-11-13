@@ -1,0 +1,51 @@
+{% extends "public/_marketing_layout.html" %}
+{% load static %}
+{% block headline %}See which social media posts bring customers{% endblock %}
+{% block lead %}<p data-claim="social-results">Turn your social media activity into measurable results: the chats, leads, orders and paid revenue each post brought in.</p>{% endblock %}
+
+{% block body %}
+<section id="page-problem" class="uc-section" aria-labelledby="uc-problem">
+  <h2 id="uc-problem">Likes don't pay the bills</h2>
+  <p data-claim-exempt>Reach and likes tell you a post was seen. They don't tell you whether anyone bought. Without that, it's hard to know which posts to make more of, and which to stop.</p>
+</section>
+
+<section id="page-how" class="uc-section uc-split" aria-labelledby="uc-how">
+  <div>
+    <h2 id="uc-how">How a post earns its credit</h2>
+    <ul class="uc-list">
+      <li data-claim="post-chat-link">Each post can carry its own WhatsApp chat link.</li>
+      <li data-claim="attribution">When a customer comes through that link, or through a reply to a comment on the post, the chat is linked to the post.</li>
+      <li data-claim="attribution">The leads and orders that follow are credited to the same post, fixed when they're created.</li>
+      <li data-claim="post-results">The post shows its clicks, chats, leads, orders and paid revenue, per channel.</li>
+    </ul>
+    <p class="uc-note" data-claim="attribution">Only explicit evidence counts. Customers who found you another way aren't counted, so the real total can be higher.</p>
+  </div>
+  <figure class="uc-shot">
+    <div><img src="{% static 'img/marketing/post-results.webp' %}" width="670" height="484" loading="lazy" decoding="async"
+              alt="A post's results per channel in Akilent: link clicks, chats, leads, orders and paid revenue."></div>
+  </figure>
+</section>
+
+<section id="page-features" class="uc-section" aria-labelledby="uc-features">
+  <h2 id="uc-features">Next to what the platforms report</h2>
+  <p data-claim="post-metrics">Beside the sales numbers, see each post's reach and engagement from Instagram and Facebook, so you can compare what got attention with what got customers.</p>
+  <p data-claim="insights">For the business as a whole, Business Health shows what your conversations turned into: replies, follow-ups and sales.</p>
+</section>
+{% endblock %}
+
+{% block faq %}
+<section id="page-faq" class="uc-section" aria-labelledby="uc-faq" itemscope itemtype="https://schema.org/FAQPage">
+  <h2 id="uc-faq">Questions about post results</h2>
+  <div class="uc-faq">
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="post-results attribution">
+      <summary><span itemprop="name">How do you know which post brought a sale?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">Each post can carry its own WhatsApp chat link. When a customer comes through that link, or through a reply to a comment on the post, the chat is linked to the post, and so are the leads and orders that follow. Customers who found you another way aren't counted, so the real total can be higher.</span></p>
+    </details>
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="orders">
+      <summary><span itemprop="name">Where does the revenue figure come from?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">From the orders your team records and marks paid in {{ app }} when the customer pays you.</span></p>
+    </details>
+    {% include "public/_faq_trial.html" %}
+  </div>
+</section>
+{% endblock %}

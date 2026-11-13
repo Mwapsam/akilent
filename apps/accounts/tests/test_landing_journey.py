@@ -118,7 +118,11 @@ def test_no_coming_soon_strip_and_inactive_entries_never_show(client):
 def test_use_case_pages_follow_the_channels(client, settings):
     html = _html(client, "/for/missed-enquiries/")
     assert 'href="/signup/?channels=whatsapp,instagram"' in html
-    studio = _html(client, "/for/content-studio/")
+    # Content Studio and the shared inbox moved to product pages; the old addresses redirect.
+    moved = client.get("/for/content-studio/")
+    assert moved.status_code == 301 and moved["Location"] == "/product/content-studio/"
+    assert client.get("/for/shared-inbox/")["Location"] == "/product/shared-inbox/"
+    studio = _html(client, "/product/content-studio/")
     assert 'href="/signup/?channels=instagram,facebook"' in studio
     assert "Meta" not in studio.split("<main", 1)[-1].split("</main>", 1)[0]
 
@@ -130,7 +134,8 @@ def test_use_case_pages_follow_the_channels(client, settings):
 
 def test_sitemap_lists_open_use_case_pages(client):
     xml = client.get("/sitemap.xml").content.decode()
-    assert "/for/missed-enquiries/" in xml and "/for/content-studio/" in xml
+    assert "/for/missed-enquiries/" in xml and "/product/content-studio/" in xml
+    assert "/for/content-studio/" not in xml
 
 
 def test_publishing_a_testimonial_needs_a_permission_note(client):

@@ -25,7 +25,7 @@
   <div class="lp-wrap">
     <div class="lp-head section-head center lp-reveal">
       <p class="lp-eyebrow eyebrow">Pricing</p>
-      <h2 id="pricing-title" class="lp-h2">Plans that grow with your team</h2>
+      {% if pricing_page %}<h1 id="pricing-title" class="lp-h2">{{ app }} pricing: plans that grow with your team</h1>{% else %}<h2 id="pricing-title" class="lp-h2">Plans that grow with your team</h2>{% endif %}
       <p class="lp-body lp-muted">Choose a plan when you're ready, and change it any time.</p>
     </div>
 

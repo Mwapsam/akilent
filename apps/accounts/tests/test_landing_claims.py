@@ -34,12 +34,15 @@ CHECKED_SECTIONS = {
     "pricing",  # Enterprise and the Meta fees note; cards and the table come from the catalog
     "coming-soon",
     "developers",
-    # Use-case pages (templates/public/for/).
-    "use-case-hero",
+    # The use-case page (templates/public/for/). Product, integration and hub pages
+    # (public/_marketing_layout.html) use "page-*" ids, all checked (CHECKED_PREFIX).
     "use-case-problem",
     "use-case-how",
     "use-case-proof",
 }
+
+
+CHECKED_PREFIX = "page-"
 
 
 def _register() -> dict[str, tuple[str, str]]:
@@ -103,7 +106,8 @@ class _Claims(HTMLParser):
         return None
 
     def _in_checked_section(self):
-        return self._section() in CHECKED_SECTIONS
+        section = self._section() or ""
+        return section in CHECKED_SECTIONS or section.startswith(CHECKED_PREFIX)
 
     def _covered(self, attrs):
         chain = [attrs] + [a for _, a in reversed(self.stack)]
@@ -155,9 +159,19 @@ def _open_meta_channels():
     [
         "/",
         "/for/missed-enquiries/",
-        "/for/shared-inbox/",
-        "/for/content-studio/",
         "/security/",
+        "/pricing/",
+        "/product/",
+        "/product/shared-inbox/",
+        "/product/automations/",
+        "/product/ai-answers/",
+        "/product/content-studio/",
+        "/product/post-results/",
+        "/product/sales/",
+        "/integrations/",
+        "/integrations/whatsapp/",
+        "/integrations/instagram/",
+        "/integrations/facebook/",
     ],
 )
 @pytest.mark.parametrize("whatsapp", [True, False])

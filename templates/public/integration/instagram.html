@@ -1,0 +1,56 @@
+{% extends "public/_marketing_layout.html" %}
+{% load static %}
+{% block headline %}Instagram DMs and comments, answered from one inbox{% endblock %}
+{% block lead %}<p data-claim="instagram-dms instagram-comments">Instagram messages arrive in your team's shared inbox, and comments asking "price?" get an answer by keyword, privately or in public.</p>{% endblock %}
+
+{% block body %}
+<section id="page-problem" class="uc-section" aria-labelledby="uc-problem">
+  <h2 id="uc-problem">Interest that disappears in the comments</h2>
+  <p data-claim-exempt>A post does well, and the comments fill with "price?" and "DM me". By the time someone works through them, half those people have moved on, and the DMs that did come in sit in one person's phone.</p>
+</section>
+
+<section id="page-how" class="uc-section uc-split" aria-labelledby="uc-how">
+  <div>
+    <h2 id="uc-how">What you get with Instagram in {{ app }}</h2>
+    <ul class="uc-list">
+      <li data-claim="instagram-dms assign">Instagram DMs arrive in the same shared inbox{% if ch.whatsapp == "live" %} as WhatsApp{% endif %}, each one assigned to a teammate.</li>
+      <li data-claim="instagram-comments">Reply to comments automatically by keyword, with a private message or in public.</li>
+      <li data-claim="comments">Comment on your posts, reply to comments and hide or delete them, from one place.</li>
+      {% if ch.content %}<li data-claim="instagram-publishing">Publish and schedule posts to Instagram with <a href="{% url 'product-page' 'content-studio' %}">Content Studio</a>.</li>
+      <li data-claim="post-metrics">See each post's reach and engagement.</li>{% endif %}
+      <li data-claim="customers">Each customer's details, tags and history beside the chat.</li>
+    </ul>
+  </div>
+  {% if ch.content %}
+  <figure class="uc-shot tall">
+    <div><img src="{% static 'img/marketing/post-channels.webp' %}" width="670" height="1082" loading="lazy" decoding="async"
+              alt="A post published to Instagram and Facebook from Akilent, with each channel's status and the post's image."></div>
+    <figcaption>A published post in the demo workspace.</figcaption>
+  </figure>
+  {% endif %}
+</section>
+
+{% if ch.results %}
+<section id="page-features" class="uc-section" aria-labelledby="uc-features">
+  <h2 id="uc-features">From comment to customer</h2>
+  <p data-claim="attribution post-results">When a comment reply turns into a chat, the chat is linked to the post, and so are the leads and orders that follow. <a href="{% url 'product-page' 'post-results' %}">See post results</a>.</p>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block faq %}
+<section id="page-faq" class="uc-section" aria-labelledby="uc-faq" itemscope itemtype="https://schema.org/FAQPage">
+  <h2 id="uc-faq">Questions about Instagram</h2>
+  <div class="uc-faq">
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="instagram-dms">
+      <summary><span itemprop="name">Do Instagram DMs come into the inbox?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">Yes. Instagram messages arrive in the same shared inbox{% if ch.whatsapp == "live" %} as your WhatsApp chats{% endif %}, where your team answers them together.</span></p>
+    </details>
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="instagram-comments">
+      <summary><span itemprop="name">Can comments be answered automatically?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">Yes. Set a keyword, such as "price", and comments that contain it get the reply you choose, as a private message or in public.</span></p>
+    </details>
+    {% include "public/_faq_trial.html" %}
+  </div>
+</section>
+{% endblock %}

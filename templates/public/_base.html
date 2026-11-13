@@ -146,11 +146,8 @@ Help centre or Developers from the request path.
       {% comment %}The landing page's links in its order, then Developers (these pages include
       the docs, so their section is marked).{% endcomment %}
       <nav class="pub-nav" aria-label="Primary">
-        <a href="/#channels">Channels</a>
-        <a href="/#how-it-works">How it works</a>
-        <a href="/#platform">Platform</a>
-        <a href="/#pricing">Pricing</a>
-        <a href="{% url 'help' %}" {% if section == "/help/" %}aria-current="page"{% endif %}>Help</a>
+        {% marketing_nav as nav %}{% for label, url, current in nav %}<a href="{{ url }}"{% if current %} aria-current="page"{% endif %}>{{ label }}</a>
+        {% endfor %}<a href="{% url 'help' %}" {% if section == "/help/" %}aria-current="page"{% endif %}>Help</a>
         <a href="{% url 'docs' %}" {% if section == "/docs/" %}aria-current="page"{% endif %}>Developers</a>
       </nav>
 
@@ -170,11 +167,8 @@ Help centre or Developers from the request path.
     </div>
 
     <nav class="pub-mobile pub-wrap" aria-label="Mobile">
-      <a href="/#channels">Channels</a>
-      <a href="/#how-it-works">How it works</a>
-      <a href="/#platform">Platform</a>
-      <a href="/#pricing">Pricing</a>
-      <a href="{% url 'help' %}" {% if section == "/help/" %}aria-current="page"{% endif %}>Help</a>
+      {% for label, url, current in nav %}<a href="{{ url }}"{% if current %} aria-current="page"{% endif %}>{{ label }}</a>
+      {% endfor %}<a href="{% url 'help' %}" {% if section == "/help/" %}aria-current="page"{% endif %}>Help</a>
       <a href="{% url 'docs' %}" {% if section == "/docs/" %}aria-current="page"{% endif %}>Developers</a>
       <a href="{% url 'demo' %}" {% if section == "/demo/" %}aria-current="page"{% endif %}>Book a demo</a>
       {% if user.is_authenticated %}

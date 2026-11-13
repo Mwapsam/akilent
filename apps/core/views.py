@@ -164,6 +164,11 @@ def help_index(request):
                     lines.append(f"- [{a.title}](/help/{a.slug}/) — {a.summary}")
         return markdown_response("\n".join(lines))
 
+    request.seo_page = {
+        "title": "Help centre",
+        "description": "Guides to setting up and using Akilent: connecting your channels, the shared inbox, automations, AI answers, Content Studio, sales and billing.",
+        "breadcrumbs": [("Help centre", "/help/")],
+    }
     return render(
         request,
         "help/index.html",
@@ -209,6 +214,14 @@ def help_article(request, slug):
 
     from apps.core.htmx import overlay_or_page
 
+    request.seo_page = {
+        "title": article.title,
+        "description": article.summary,
+        "breadcrumbs": [
+            ("Help centre", "/help/"),
+            (article.title, f"/help/{article.slug}/"),
+        ],
+    }
     # Linked from inside the app ("How posts are credited"), it opens in a modal there.
     return overlay_or_page(
         request,
@@ -232,6 +245,14 @@ _LEGAL_PAGES = {
     "data-deletion": ("legal/data_deletion.html", "Data deletion"),
     "cookies": ("legal/cookies.html", "Cookie policy"),
     "security": ("legal/security.html", "Security"),
+}
+# Meta descriptions: each page's own, never the site-wide one.
+_LEGAL_DESCRIPTIONS = {
+    "privacy": "How Akilent collects, uses, stores and protects personal data, and the rights you have over it.",
+    "terms": "The terms that apply when your business uses Akilent: accounts, plans and billing, acceptable use and liability.",
+    "data-deletion": "How to ask Akilent to delete your data, including data received through Facebook, Instagram and WhatsApp.",
+    "cookies": "The cookies Akilent uses, what each one is for, and how to accept or refuse analytics cookies.",
+    "security": "How Akilent protects your data: hosting, encryption, backups, sign-in security, support access and the providers that process data for us.",
 }
 _LEGAL_UPDATED = "24 October 2026"  # change with the text
 # A page whose text changed on its own date (the cookie policy: analytics only after Accept).
@@ -280,6 +301,11 @@ def legal_page(request, slug):
         text = f"# {title}\n\n_Last updated {ctx['updated']}_\n\n{body_md}"
         return markdown_response(text)
 
+    request.seo_page = {
+        "title": title,
+        "description": _LEGAL_DESCRIPTIONS.get(slug, ""),
+        "breadcrumbs": [(title, request.path)],
+    }
     return render(request, template, ctx)
 
 
@@ -326,6 +352,14 @@ def docs_page(request, slug="index"):
         )
         return markdown_response(text)
 
+    crumbs = [("Developers", "/docs/")]
+    if page.slug != "index":
+        crumbs.append((page.title, f"/docs/{page.slug}/"))
+    request.seo_page = {
+        "title": page.title,
+        "description": page.summary,
+        "breadcrumbs": crumbs,
+    }
     return render(request, page.template, ctx)
 
 

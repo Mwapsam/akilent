@@ -1,0 +1,82 @@
+{% extends "public/_marketing_layout.html" %}
+{% load static %}
+{% block headline %}One shared inbox for every customer chat{% endblock %}
+{% block lead %}<p data-claim="{{ inbox_claims }} assign">{{ chat_names }} messages in one place your whole team can see, so every customer is answered once, by the right person.</p>{% endblock %}
+
+{% block body %}
+<section id="page-problem" class="uc-section" aria-labelledby="uc-problem">
+  <h2 id="uc-problem">One phone, many people, missed customers</h2>
+  <p data-claim-exempt>When the business number lives on one phone, only one person can answer. Pass the phone around and chats get answered twice, or not at all. Add Instagram and a Facebook Page, and messages are spread across three apps that nobody checks at the same time.</p>
+  <p data-claim-exempt>Customers who wait move on. A shared inbox puts every conversation where the team can see it, with a clear owner for each one.</p>
+</section>
+
+<section id="page-how" class="uc-section uc-split" aria-labelledby="uc-how">
+  <div>
+    <h2 id="uc-how">How your team shares it</h2>
+    <ul class="uc-list">
+      <li data-claim="{{ inbox_claims }}">{{ chat_names }} messages arrive in the same inbox.</li>
+      {% if ch.whatsapp == "live" %}<li data-claim="own-number">Connect your own WhatsApp business number through Meta's guided setup, so customers keep messaging the number they know.</li>{% endif %}
+      <li data-claim="roles">Invite teammates as Owner, Admin or Member.</li>
+      <li data-claim="assign">Assign each conversation to a teammate, so everyone knows who's handling it.</li>
+      <li data-claim="customers">Each customer's details, tags and message history sit beside the chat.</li>
+      <li data-claim="ai">AI can suggest replies from your business information, once you switch it on.</li>
+    </ul>
+  </div>
+  <figure class="uc-shot">
+    <div><picture><source media="(max-width: 640px)" srcset="{% static 'img/marketing/inbox-chat.webp' %}" width="752" height="374"><img src="{% static 'img/marketing/inbox.webp' %}" width="1184" height="900" loading="lazy" decoding="async"
+              alt="The Akilent shared inbox with a conversation open and the customer's details beside it."></picture></div>
+    <figcaption>The real {{ app }} inbox, in a demo workspace with sample customers.</figcaption>
+  </figure>
+</section>
+
+<section id="page-features" class="uc-section" aria-labelledby="uc-features">
+  <h2 id="uc-features">More than a shared login</h2>
+  <div class="uc-grid">
+    <div class="uc-card">
+      <h3>Nothing slips through</h3>
+      <p data-claim="missed follow-ups">When a conversation goes unanswered, your team gets a nudge. Set a follow-up on any chat and it comes back when it's due.</p>
+    </div>
+    <div class="uc-card">
+      <h3>Answers while you're busy</h3>
+      <p data-claim="auto-replies keywords business-hours">Greet new customers, reply when you're closed and answer common questions by keyword. <a href="{% url 'product-page' 'automations' %}">See automations</a>.</p>
+    </div>
+    {% if ch.instagram == "live" or ch.facebook == "live" %}
+    <div class="uc-card">
+      <h3>Comments in the same place</h3>
+      <p data-claim="comments{% if ch.instagram == 'live' %} instagram-comments{% endif %}{% if ch.facebook == 'live' %} facebook-comments{% endif %}">Reply to comments on your posts, hide or delete them, and answer by keyword, publicly or with a private message.</p>
+    </div>
+    {% endif %}
+    <div class="uc-card">
+      <h3>From chat to order</h3>
+      <p data-claim="interested orders">Mark a customer as interested, record the order in the chat and mark it paid when they pay you. <a href="{% url 'product-page' 'sales' %}">See sales and orders</a>.</p>
+    </div>
+    <div class="uc-card">
+      <h3>Details in one go</h3>
+      <p data-claim="forms">Collect what you need with a form inside the conversation: a native form on WhatsApp, questions one by one elsewhere.</p>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block faq %}
+<section id="page-faq" class="uc-section" aria-labelledby="uc-faq" itemscope itemtype="https://schema.org/FAQPage">
+  <h2 id="uc-faq">Questions about the shared inbox</h2>
+  <div class="uc-faq">
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="{{ inbox_claims }}">
+      <summary><span itemprop="name">Which channels arrive in the inbox?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">{{ chat_names }} messages arrive in one shared inbox.{% if ch.email == "live" %} Email is for sending messages and campaigns from your own domain; replies to those emails don't come into the inbox.{% endif %}</span></p>
+    </details>
+    {% if ch.whatsapp == "live" %}
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="inbox assign roles">
+      <summary><span itemprop="name">Can my team share one number?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">Yes. Everyone works from the same inbox, and you can assign each conversation to a teammate so customers aren't answered twice or missed. Teammates join as Owner, Admin or Member.</span></p>
+    </details>
+    {% endif %}
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="ai">
+      <summary><span itemprop="name">Does AI reply to customers on its own?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">Not unless you allow it. AI is off until you switch it on, and then it suggests replies for your team to review and send. You can choose to let it answer a few simple questions on its own. Every reply it sends is marked and logged.</span></p>
+    </details>
+    {% include "public/_faq_trial.html" %}
+  </div>
+</section>
+{% endblock %}
