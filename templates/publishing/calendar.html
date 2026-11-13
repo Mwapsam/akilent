@@ -157,7 +157,7 @@ to show (channel, status). The selects apply as soon as they change.{% endcommen
         {% endfor %}
         {% if not day_plan_items and not day_posts and day >= today %}
         <a href="{% url 'publishing:plan-new' %}?planned_date={{ day|date:'Y-m-d' }}&amp;next={{ request.get_full_path|urlencode }}" data-overlay-open="modal" class="cal-empty-add"
-           aria-label="Plan an idea for {{ day|date:'l, N j' }}">+ Plan an idea</a>
+           aria-label="Plan an idea for {{ day|date:'l, N j' }}">{% if day == today %}Nothing yet today · {% endif %}+ Plan an idea</a>
         {% endif %}
       </div>
     </li>

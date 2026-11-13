@@ -556,7 +556,11 @@
         return this.media.some(function (m) { return m.status === "uploading"; });
       },
 
-      mediaHint: function () {
+      mediaHint: function () { return this.formatHint(this.mediaType); },
+
+      // Every format's hint, also each format button's tooltip: the line under the row only
+      // describes the one picked, so "Text" and "Reel" were left unexplained.
+      formatHint: function (type) {
         return {
           image: "One image. Instagram takes anything from 4:5 portrait to 1.91:1 landscape.",
           carousel: "2 to 10 images, published in the order shown. Drag them, or use the arrows, to reorder.",
@@ -564,7 +568,7 @@
           reel: "One vertical video. 9:16 fills the screen.",
           story: "One image or video. 9:16 fills the screen.",
           text: "Text posts have no media (Facebook only).",
-        }[this.mediaType] || "";
+        }[type] || "";
       },
 
       announce: function (text) { this.mediaAnnouncement = text; },

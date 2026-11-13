@@ -1044,10 +1044,17 @@
   function saveBarForm(el) {
     return el && el.closest ? el.closest("form[data-save-bar]") : null;
   }
-  // A panel's Save (components/_panel_foot.html) is disabled until its form changes.
+  // A panel's Save (components/_panel_foot.html) is disabled until its form changes, and says
+  // so: a greyed-out Save with no reason read as broken. The hint sits on the button's
+  // wrapper too, since a disabled button gets no hover in every browser.
   function syncPanelSave(form) {
     const clean = !form.hasAttribute("data-dirty");
-    form.querySelectorAll("[data-panel-save]").forEach(function (b) { b.disabled = clean; });
+    const why = clean ? "Nothing to save yet: change something above first." : "";
+    form.querySelectorAll("[data-panel-save]").forEach(function (b) {
+      b.disabled = clean;
+      b.title = why;
+      if (b.parentElement) b.parentElement.title = why;
+    });
   }
   function markDirty(e) {
     const form = saveBarForm(e.target);

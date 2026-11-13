@@ -41,7 +41,7 @@
   <div id="panel-all" role="tabpanel" aria-labelledby="tab-all" x-show="captionTab === 'all'">
     <label for="caption-input" class="sr-only">Caption for all channels</label>
     <textarea id="caption-input" name="caption" rows="7" class="input w-full cmp-textarea" x-model="caption"
-              placeholder="Introduce your product, explain why it matters, and give people a clear next step…"></textarea>
+              placeholder="What is it, why it's worth it, and how to get it. E.g. New in: linen shirts in four colours. Tap the link to chat and order."></textarea>
     <p class="cmp-hint mt-2" x-show="customizedList().length" x-cloak>
       Edits here don't change <span x-text="customizedList().map(platformName).join(' or ')"></span>, which have their own version.
     </p>
@@ -101,6 +101,8 @@
           Suggest hashtags
         </button>
         <span class="text-xs text-ink-subtle" x-show="aiTool.busy" x-cloak role="status">Writing…</span>
+        {# Why both are greyed out, rather than leaving it to be guessed. #}
+        <span class="text-xs text-ink-subtle" x-show="!aiTool.busy && !captionText().trim()" x-cloak>Write a caption first, then AI can rewrite it or suggest hashtags.</span>
       </div>
       <p class="text-xs text-coral-700" x-show="aiTool.error" x-text="aiTool.error" x-cloak role="alert"></p>
 

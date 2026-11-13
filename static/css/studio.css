@@ -13,9 +13,8 @@
    stick just under the topbar (4rem + the notch inset, as in base.html), on the page's own
    ground so content scrolls under them, one layer below the topbar and its menus. */
 .cs-tabs { position: sticky; top: calc(4rem + var(--safe-top, 0px));
-  z-index: calc(var(--z-sticky, 1020) - 1); background: var(--color-canvas);
-  height: var(--cs-tabs-h); }
-/* Its height, so whatever else sticks on a studio page (the Library and Media filter row, a
+  z-index: calc(var(--z-sticky, 1020) - 1); background: var(--color-canvas); }
+/* Its height (a tab is 2.375rem, plus the row's 1px rule), so whatever else sticks on a studio page (the Library and Media filter row, a
    side column) stops under the tabs instead of sliding behind them. */
 :root { --cs-tabs-h: 2.5rem; }
 
@@ -126,6 +125,13 @@
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
 /* On a phone the bar wraps to three rows: it scrolls away rather than covering a third of the screen. */
 @media (max-width: 639px) { .ml-toolbar { position: static; } }
+/* Library's row (search, three selects, dates): from lg it stays one row and the search gives
+   way first, instead of wrapping its last filter ("Any time") onto a row of its own. */
+@media (min-width: 1024px) {
+  .ml-toolbar--one-row { flex-wrap: nowrap; }
+  .ml-toolbar--one-row .ml-search { flex-basis: 7rem; }
+  .ml-toolbar--one-row > select, .ml-toolbar--one-row > details { flex-shrink: 0; }
+}
 /* Tags + sort + view at the end of the one filter row. Below 1024px tags and sort fold
    behind "Filters" (a small panel under it) so the row never wraps into an empty band. */
 .ml-tools { position: relative; display: flex; align-items: center; gap: .5rem; margin-left: auto; }

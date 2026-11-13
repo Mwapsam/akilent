@@ -649,3 +649,9 @@ def test_an_avatar_over_2_mb_is_refused(bio_shop):
 
     with pytest.raises(bio.BioError, match="under 2 MB"):
         bio.save_avatar(page, big)
+
+
+def test_quiet_only_when_nothing_happened_in_either_period(shop):
+    assert shop.report()["quiet"] is True
+    shop.chat(shop.post("New sandals"))
+    assert shop.report()["quiet"] is False

@@ -10,7 +10,7 @@
   <fieldset id="media-type" tabindex="-1" class="seg seg-block mb-3" data-cols="3">
     <legend class="sr-only">Format</legend>
     {% for value, label in media_types %}
-    <label class="seg-item" title="{{ label }}"><input type="radio" name="media_type" value="{{ value }}" class="sr-only" data-label="{{ label }}" x-model="mediaType" @change="touched()"><span>{{ label|cut:" (Facebook only)" }}</span></label>
+    <label class="seg-item" title="{{ label }}" :title="'{{ label|escapejs }}: ' + formatHint('{{ value|escapejs }}')"><input type="radio" name="media_type" value="{{ value }}" class="sr-only" data-label="{{ label }}" x-model="mediaType" @change="touched()"><span>{{ label|cut:" (Facebook only)" }}</span></label>
     {% endfor %}
   </fieldset>
   <input type="hidden" name="media_urls_json" :value="JSON.stringify(mediaUrls())">

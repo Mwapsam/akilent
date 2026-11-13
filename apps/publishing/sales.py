@@ -292,6 +292,8 @@ def report(account, period, min_chats: int = MIN_CHATS) -> dict | None:
     return {
         "kpis": kpis,
         "revenue": revenue,
+        # Nothing in this period or the one before: the page says so once, not on every tile.
+        "quiet": not revenue and all(k["change"] is None for k in kpis),
         "days": period.days,
         "ranked": ranked,
         "too_early": too_early,

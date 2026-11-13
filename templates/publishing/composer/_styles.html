@@ -42,7 +42,9 @@
   .cmp-editor { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-surface); box-shadow: var(--shadow-card); min-width: 0; }
   .cmp-section { padding: 1.5rem 1.25rem; border-top: 1px solid var(--color-border); scroll-margin-top: 5rem; }
   .cmp-section:first-child { border-top: 0; }
-  @media (min-width: 640px) { .cmp-section { padding: 1.75rem 2rem; } }
+  /* Tighter than the 1.75rem/2rem it was: with six sections, the padding alone pushed Caption
+     below the fold on a laptop. */
+  @media (min-width: 640px) { .cmp-section { padding: 1.25rem 1.5rem; } }
   .cmp-section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .25rem 1rem; margin-bottom: 1rem; }
   .cmp-section-title { font-size: .9375rem; font-weight: 600; color: var(--color-ink); white-space: nowrap; }
   .cmp-hint { font-size: .75rem; color: var(--color-ink-subtle); }
@@ -50,7 +52,9 @@
 
   .cmp-preview { min-width: 0; }
   @media (min-width: 1024px) {
-    .cmp-preview { position: sticky; top: 1rem; max-height: calc(100dvh - 7.5rem); overflow-y: auto; overscroll-behavior: contain; padding-bottom: 1rem; }
+    /* Under the app's sticky top bar (4rem + the notch inset), not behind it, and no taller than
+       the room between that and the sticky action bar (about 5rem), so its own scroll is rarely needed. */
+    .cmp-preview { position: sticky; top: calc(4rem + var(--safe-top, 0px) + 1rem); max-height: calc(100dvh - 10rem - var(--safe-top, 0px)); overflow-y: auto; overscroll-behavior: contain; padding-bottom: 1rem; }
   }
 
   /* Destinations -------------------------------------------------------------- */

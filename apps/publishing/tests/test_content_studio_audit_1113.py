@@ -53,7 +53,8 @@ def test_only_past_days_say_nothing_posted(owner):
     html = client.get(reverse("publishing:calendar")).content.decode()
     # One agenda per page (the week view's narrow layout): one line per empty day.
     assert html.count("Nothing posted") == past_days
-    assert html.count("Nothing planned</span>") == 7 - past_days
+    assert html.count("Nothing planned</span>") == 6 - past_days
+    assert html.count("Nothing planned for today</span>") == 1
 
 
 def test_a_future_week_never_says_nothing_posted(owner):
@@ -120,3 +121,28 @@ def test_publish_button_carries_its_reason(owner):
     html = client.get(reverse("publishing:post-new")).content.decode()
     assert ':title="blockReason(\'publish_now\')"' in html
     assert '@click="readyClick()"' in html
+
+
+# --- Polish: Sales says "nothing yet" once; panels fill the width; Library stays one row ---
+
+
+def test_sales_with_no_activity_says_so_once(owner, settings):
+    from apps.core.releases import UNRELEASED_FEATURES
+
+    settings.RELEASED_FEATURES = frozenset(UNRELEASED_FEATURES)
+    _, _, client = owner
+    html = client.get(reverse("publishing:sales")).content.decode()
+    if "data-sales-unavailable" in html:
+        pytest.skip("no channel: the report isn't shown")
+    assert html.count("data-sales-quiet") == 1
+    assert "No activity in either period" not in html
+
+
+def test_studio_panels_and_library_row_classes(owner, settings):
+    from apps.core.releases import UNRELEASED_FEATURES
+
+    settings.RELEASED_FEATURES = frozenset(UNRELEASED_FEATURES)
+    _, _, client = owner
+    for name in ("publishing:channels", "publishing:ai-tools", "publishing:bio"):
+        assert "settings-main--panels cs-panels" in client.get(reverse(name)).content.decode()
+    assert "ml-toolbar--one-row" in client.get(reverse("publishing:library")).content.decode()

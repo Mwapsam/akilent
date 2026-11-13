@@ -23,7 +23,7 @@ data-live-filter): the search applies as you type, the rest on change, and only
 #library-results is replaced, so focus stays where it was. The hidden submit keeps it working
 without JavaScript. "Show" is one control for where a post stands and its status (?bucket=
 and ?status= links still work).{% endcomment %}
-<form method="get" action="{% url 'publishing:library' %}" class="ml-toolbar" data-live-filter="#library-results" role="search" aria-label="Filter posts">
+<form method="get" action="{% url 'publishing:library' %}" class="ml-toolbar ml-toolbar--one-row" data-live-filter="#library-results" role="search" aria-label="Filter posts">
   <label class="ml-search">
     {% include "components/icon.html" with name="search" class="w-4 h-4 shrink-0" %}
     <span class="sr-only">Search captions</span>

@@ -54,6 +54,7 @@
 
   {% comment %}The headline numbers: confirmed credits only (what ranks a post), each with its
   trend across the period and the change against the period before.{% endcomment %}
+  {% if report.quiet %}<p class="text-sm text-ink-subtle -mb-1" data-sales-quiet>No chats, leads or paid orders from posts in the last {{ report.days }} days, or the {{ report.days }} before.</p>{% endif %}
   <section aria-label="Totals for the last {{ report.days }} days" class="kpi-row">
     {% for k in report.kpis %}
     {% if k.key == "paid_orders" %}
@@ -63,7 +64,9 @@
       <p class="{% if forloop.first %}kpi-value{% else %}kpi-value-more{% endif %} tabular-nums" data-sales-revenue-total>{{ r.currency }} {{ r.total }}</p>
       {% if forloop.first %}{% include "publishing/_kpi_change.html" with change=r.change days=report.days %}{% endif %}
       {% empty %}
-      <p class="kpi-value tabular-nums">—</p>
+      {% comment %}No paid order: 0, like the other tiles, not a dash beside "0 paid orders".{% endcomment %}
+      <p class="kpi-value tabular-nums">0</p>
+      {% if not report.quiet %}{% include "publishing/_kpi_change.html" with change=None days=report.days %}{% endif %}
       {% endfor %}
       <p class="kpi-note">{{ k.value }} paid order{{ k.value|pluralize }}</p>
       {% include "publishing/_kpi_spark.html" with trend=k.trend label="Paid orders" %}
@@ -72,9 +75,10 @@
     <div class="kpi" data-kpi="{{ k.key }}">
       <p class="kpi-label">{{ k.label }}</p>
       <p class="kpi-value tabular-nums">{{ k.value }}</p>
-      {% include "publishing/_kpi_change.html" with change=k.change days=report.days %}
-      {% if k.key == "chats" %}{% comment %}The tile counts chats credited to a post; the
-      footnote's chats came without one, so say they're not in it.{% endcomment %}<p class="kpi-note" data-kpi-note="chats">From posts{% if report.not_credited.chats %} · {{ report.not_credited.chats }} more not from a post{% endif %}</p>{% endif %}
+      {% if not report.quiet %}{% include "publishing/_kpi_change.html" with change=k.change days=report.days %}{% endif %}
+      {% if k.key == "chats" and report.not_credited.chats %}{% comment %}The tile counts chats
+      credited to a post; say when more came without one, so they're not taken for missing.
+      Every tile counts posts' credits only, so "From posts" alone said nothing.{% endcomment %}<p class="kpi-note" data-kpi-note="chats">{{ report.not_credited.chats }} more not from a post</p>{% endif %}
       {% include "publishing/_kpi_spark.html" with trend=k.trend label=k.label %}
     </div>
     {% endif %}
