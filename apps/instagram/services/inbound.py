@@ -360,6 +360,11 @@ def _process_comment_entry(
 
         moderate_comment(comment_obj)
 
+        # Audience signals: measurement only, after moderation, never raises.
+        from apps.audience.services import record_safely
+
+        record_safely(comment_obj)
+
     # Evaluate CommentTriggers (Phase 3) — root comments only; triggers open a DM.
     if not parent_id and body:
         from apps.instagram.services.triggers import evaluate_triggers

@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     "apps.internal_debug",
     "apps.ai",
     "apps.insights",
+    "apps.audience",
     "apps.chatbot",
     "apps.support",
     "apps.instagram",
@@ -365,6 +366,17 @@ OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com")
 # Set "false" to stop. Unset *or empty* means on: the deploy writes every variable into .env, so
 # an unset secret arrives as "AI_AUTONOMY_ENABLED=" and must not switch autonomy off silently.
 AI_AUTONOMY_ENABLED = (os.getenv("AI_AUTONOMY_ENABLED") or "true").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)
+# Audience Intelligence (docs/plans/audience-intelligence-spec.md): rule-based signals on
+# inbound comments. Measurement only, no UI or AI. Set "false" to stop writing them.
+# Unset or empty means on (see AI_AUTONOMY_ENABLED for why).
+AUDIENCE_SIGNALS_ENABLED = (
+    os.getenv("AUDIENCE_SIGNALS_ENABLED") or "true"
+).strip().lower() in (
     "1",
     "true",
     "yes",

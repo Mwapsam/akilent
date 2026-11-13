@@ -204,9 +204,15 @@ def handle_comment(event: FacebookWebhookEventLog, conn) -> None:
         if verb == "add":
             _process_new_comment(conn, value)
         elif verb == "edited":
-            FacebookComment.objects.filter(
+            edited = FacebookComment.objects.filter(
                 thread__account_id=conn.account_id, comment_id=value.get("comment_id")
-            ).update(body=value.get("message", ""))
+            )
+            edited.update(body=value.get("message", ""))
+            # New text, new audience run (the old one stays as history).
+            from apps.audience.services import record_safely
+
+            for comment in edited.select_related("thread"):
+                record_safely(comment)
         elif verb in {"remove", "hide", "unhide"}:
             _apply_visibility(conn, value.get("comment_id", ""), verb)
 
@@ -272,6 +278,11 @@ def _process_new_comment(conn, value: dict) -> None:
     from apps.facebook.services.moderation import moderate_comment
 
     moderate_comment(comment, conn)
+
+    # Audience signals: measurement only, after moderation, never raises.
+    from apps.audience.services import record_safely
+
+    record_safely(comment)
 
     # Root comments only, as on Instagram: a trigger answers a comment, not a reply.
     if not parent_id and body:
