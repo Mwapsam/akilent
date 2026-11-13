@@ -322,17 +322,26 @@ def _send_email_message(
                         status=BulkEmailRecipient.Status.FAILED, error=str(exc)[:5000]
                     )
                     _maybe_complete_campaign(campaign)
-            # Retries are exhausted and the message is permanently failed —
-            # a spike of these is an infra problem, so page the operators.
+            # Retries are exhausted and the message is permanently failed — page the
+            # operators, at most once an hour per account: a campaign whose sends all
+            # fail is one problem, not one alert per recipient. (Platform-wide volume is
+            # alert_on_failure_spike's job.) The recipient address stays out of Slack.
             try:
                 from apps.billing.slack import post_message
 
                 post_message(
                     f":warning: Email send failed after {_MAX_RETRIES} retries — "
-                    f"EmailMessage {msg.pk} (account {msg.account_id}, to {msg.to_email}): {exc}"
+                    f"EmailMessage {msg.pk} (account {msg.account_id}): {exc}. "
+                    "Further failures for this account are muted for an hour.",
+                    dedupe_key=f"email-exhausted:{msg.account_id}",
                 )
             except Exception:
                 logger.exception("retry-exhaustion Slack alert failed for %s", msg.pk)
+            # Done: the message is failed and counted. Retrying here sent it round again
+            # forever (Celery only stops when retries exceed max_retries), re-counting
+            # the campaign failure and re-paging Slack on every pass.
+            cache.delete(cache_key)
+            return
         delay = _exponential_backoff_delay(attempts - 1)
         remaining = max(_MAX_RETRIES - attempts, 0)
         raise task.retry(

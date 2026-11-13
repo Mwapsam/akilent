@@ -172,7 +172,14 @@ def send_system_email(
         try:
             from apps.billing.slack import post_message
 
-            post_message(f":warning: System email failed to send: {exc}")
+            # One alert per 15 minutes: during a provider outage every signup and password
+            # reset fails, and each one would otherwise post.
+            post_message(
+                f":warning: System email failed to send: {exc}. "
+                "Further failures are muted for 15 minutes.",
+                dedupe_key="system-email-failed",
+                cooldown=900,
+            )
         except Exception:
             logger.exception("system email failure alert could not be posted")
         raise

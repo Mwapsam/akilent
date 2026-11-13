@@ -217,7 +217,9 @@ def test_retry_exhaustion_pages_operators(account, monkeypatch):
         )(),
     )
     alerts = []
-    monkeypatch.setattr("apps.billing.slack.post_message", lambda t: alerts.append(t))
+    monkeypatch.setattr(
+        "apps.billing.slack.post_message", lambda t, **kw: alerts.append((t, kw))
+    )
 
     from django.core.cache import cache
 
@@ -228,16 +230,20 @@ def test_retry_exhaustion_pages_operators(account, monkeypatch):
 
     class _Task:
         class request:
-            retries = 0
+            retries = 2
 
         def retry(self, exc=None, countdown=None, max_retries=None):
-            raise RuntimeError("retry")
+            raise AssertionError("an exhausted send must not be retried again")
 
-    with pytest.raises(RuntimeError):
-        _send_email_message(_Task(), msg, "t", "")
+    _send_email_message(_Task(), msg, "t", "")
 
+    msg.refresh_from_db()
+    assert msg.status == EmailMessage.Status.FAILED
     assert len(alerts) == 1
-    assert "after" in alerts[0].lower()
+    text, kw = alerts[0]
+    assert "after" in text.lower()
+    assert "r@x.com" not in text  # no recipient address in Slack
+    assert kw["dedupe_key"] == f"email-exhausted:{account.pk}"
 
 
 # --- Suppression enforcement is total ---------------------------------------
