@@ -1,0 +1,34 @@
+{% load publishing_filters %}{% comment %}Posts worth promoting (apps.publishing.promote, flag cs_promote_candidates).
+  {% include "publishing/_promote_list.html" with promote=promote %}
+  Organic evidence only: chats that came from a Meta ad are never in these numbers. The label is
+  the strongest floor the post clears; one order never makes "Already sold". Rule-based, no AI.{% endcomment %}
+<section class="card card-pad space-y-3" aria-labelledby="promote-head" data-promote>
+  <div class="flex items-baseline justify-between gap-2">
+    <h3 id="promote-head" class="font-semibold text-ink">Worth promoting</h3>
+    <p class="text-xs text-ink-subtle">Last {{ promote.days }} days · organic chats only</p>
+  </div>
+  {% if promote.enough %}
+  <ul class="divide-y divide-border">
+    {% for c in promote.candidates %}
+    <li class="py-3 flex items-start gap-3" data-promote-post="{{ c.post.pk }}" data-promote-label="{{ c.label }}">
+      {% include "publishing/_media_thumb.html" with url=c.post|first_media size="w-12 h-12" alt=c.post.caption|truncatechars:80 %}
+      <div class="flex-1 min-w-0 space-y-1">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="badge {% if c.label == 'sold' %}badge-success{% else %}badge-neutral{% endif %} shrink-0">{{ c.label_text }}</span>
+          <a href="{% url 'publishing:post-detail' c.post.pk %}" data-overlay-open="drawer" class="text-sm font-medium text-ink truncate hover:underline">{{ c.post.caption|truncatechars:70|default:"No caption" }}</a>
+        </div>
+        <p class="text-xs text-ink-subtle tabular-nums">
+          {{ c.chats }} chat{{ c.chats|pluralize }} · {{ c.leads }} lead{{ c.leads|pluralize }} · {{ c.paid_orders }} paid order{{ c.paid_orders|pluralize }}{% for r in c.revenue %}{% if forloop.first %} · {% endif %}{{ r.currency }} {{ r.total }}{% if not forloop.last %} · {% endif %}{% endfor %}{% if c.age_days is not None %} · posted {{ c.age_days }} day{{ c.age_days|pluralize }} ago{% endif %}
+        </p>
+        {% if c.boost_links %}
+        <p class="text-xs">{% for b in c.boost_links %}<a href="{{ b.url }}" target="_blank" rel="noopener" class="cs-link">Boost on {{ b.platform }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}</p>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="text-sm text-ink-subtle" data-promote-empty>No post has enough evidence yet. A post needs at least {{ promote.floors.chats }} chats, {{ promote.floors.leads }} leads or {{ promote.floors.sold }} paid orders from its own chat link or comments in the last {{ promote.days }} days.</p>
+  {% endif %}
+  <p class="text-xs text-ink-subtle">Past sales don't show a product is still in stock, and a post that did well on its own may do differently as an ad. Boosting happens on Facebook or Instagram; Akilent spends nothing.</p>
+</section>

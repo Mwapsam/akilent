@@ -16,6 +16,9 @@ from typing import Any
 from django.db.models import Count, Exists, OuterRef, Q, Sum
 
 from .links import short_url
+
+# ConversationEntryPoint.Kind.AD_REFERRAL, spelled here so this module stays import-light.
+AD_REFERRAL = "ad_referral"
 from .models import (
     BioPage,
     BioTile,
@@ -58,6 +61,8 @@ def results_for(post: ContentPost) -> list[dict]:
         )
         chats = (
             ConversationEntryPoint.objects.filter(variant=variant)
+            # A chat that came from a Meta ad is paid, never this post's organic chat.
+            .exclude(conversation__entry_points__kind=AD_REFERRAL)
             .values("conversation")
             .distinct()
             .count()
@@ -236,8 +241,14 @@ def journey(account, period) -> dict | None:
     # A post's entry points only: a WhatsApp campaign's are Campaigns' to report.
     entry_points = ConversationEntryPoint.objects.filter(
         account=account, post__isnull=False
+    ).exclude(conversation__entry_points__kind=AD_REFERRAL)
+    chats_tracked = (
+        has_links
+        or entry_points.exists()
+        or ConversationEntryPoint.objects.filter(
+            account=account, kind=AD_REFERRAL
+        ).exists()
     )
-    chats_tracked = has_links or entry_points.exists()
 
     out: dict[str, Any] = {
         "posts": published.values("post").distinct().count(),
@@ -253,6 +264,9 @@ def journey(account, period) -> dict | None:
         # What no post is credited with (see below); None, like the steps above, until
         # chats from posts can be tracked at all.
         "untracked_chats": None,
+        # Chats and paid revenue from Meta ads (paid, never a post's organic credit).
+        "ad_chats": None,
+        "ad_revenue": None,
         "guessed_revenue": None,
         "untracked_revenue": None,
         "top": [],
@@ -324,8 +338,10 @@ def journey(account, period) -> dict | None:
             account=account,
             pk__in=inbound.filter(**during("timestamp")).values("conversation"),
         )
-        # Never linked to a post (a chat a WhatsApp campaign started still counts here).
+        # Never linked to a post (a chat a WhatsApp campaign started still counts here),
+        # and not from a Meta ad: those are paid, counted in ``ad_chats``.
         .exclude(entry_points__post__isnull=False)
+        .exclude(entry_points__kind=AD_REFERRAL)
         .exclude(
             Exists(
                 inbound.filter(conversation=OuterRef("pk"), timestamp__lt=period.start)
@@ -333,12 +349,30 @@ def journey(account, period) -> dict | None:
         )
         .count()
     )
+    # Chats from Meta ads, started in the period (same "started" rule as above).
+    out["ad_chats"] = (
+        Conversation.objects.filter(
+            account=account,
+            entry_points__kind=AD_REFERRAL,
+            pk__in=inbound.filter(**during("timestamp")).values("conversation"),
+        )
+        .exclude(
+            Exists(
+                inbound.filter(conversation=OuterRef("pk"), timestamp__lt=period.start)
+            )
+        )
+        .distinct()
+        .count()
+    )
     guessed = Q(attribution__method=ConversationAttribution.Method.RECENT_CONVERSATION)
-    # Three disjoint buckets of paid revenue, each per currency: credited to a post
-    # (``revenue``), linked to a chat only by the recent-chat guess, and everything else.
+    from_ads = Q(attribution__entry_point__kind=AD_REFERRAL)
+    # Four disjoint buckets of paid revenue, each per currency: credited to a post
+    # (``revenue``), to a Meta ad, linked to a chat only by the recent-chat guess, and
+    # everything else.
+    out["ad_revenue"] = _per_currency(all_paid.filter(from_ads))
     out["guessed_revenue"] = _per_currency(all_paid.filter(guessed))
     out["untracked_revenue"] = _per_currency(
-        all_paid.exclude(from_posts).exclude(guessed)
+        all_paid.exclude(from_posts).exclude(from_ads).exclude(guessed)
     )
     # The posts behind the numbers, so each one opens its own results card.
     per_post = Counter(first_post.values())

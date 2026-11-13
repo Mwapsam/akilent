@@ -287,6 +287,8 @@ column in that order.{% endcomment %}
 
       {% if comment_reply %}{% include "publishing/_comment_reply_card.html" with cr=comment_reply %}{% endif %}
 
+      {% if promote_post or post_ads %}{% include "publishing/_promote_card.html" %}{% endif %}
+
       <details class="card pd-tech">
         <summary>Post history</summary>
         <dl class="pd-facts mt-3">

@@ -50,6 +50,14 @@ UNRELEASED_FEATURES: dict[str, tuple[str, ...]] = {
     # apps/publishing/comment_replies.py). Its URLs sit under each post, so the views and
     # the post page check the flag themselves.
     "cs_comment_dm_link": (),
+    # Posts worth promoting: "Already sold" / "Most leads" / "Most chats" from organic
+    # evidence (docs/strategy/akilent-ads.md Gate 2, apps/publishing/promote.py). Shown on
+    # the post page and in Which posts sold; no pages of its own.
+    "cs_promote_candidates": (),
+    # What happened to each Meta ad's chats (Gate 3, apps/conversations/ad_verdict.py):
+    # first-reply times, leads and paid orders per ad. Shown in Which posts sold, on the
+    # post page and in the inbox details panel; no pages of its own.
+    "ads_inbox_verdict": (),
 }
 
 

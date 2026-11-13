@@ -82,6 +82,8 @@ Comment-to-DM already works on both channels: `apps/instagram/models/trigger.Com
 
 This is the "store-only referral capture" option named in `docs/strategy/akilent-ads.md`, approved here on its own. It doesn't approve Gates 0–4, and it adds no ad reporting.
 
+**Done 2026-11-13** as part of the Akilent Ads build (strategy doc §10, "Decided on 13 November 2026"). As built, paid precedence works through the entry point itself: `ConversationEntryPoint.Kind.AD_REFERRAL` names no post and wins in `first_entry_point`. There is no `via_ad` flag.
+
 - **New model `AdReferral`** (in `apps/conversations`): account, conversation, channel, `source_type`, `source_id` (ad id), `source_url`, `headline`, `ctwa_clid`, `raw` (JSON), `received_at`. One record per conversation and ad.
 - **WhatsApp:** in the inbound handler (`apps/whatsapp/tasks.py` `_handle_inbound_message`), read `messages[].referral` from the event's raw payload, which `WebhookEventLog` already keeps.
 - **Instagram:** in `apps/instagram/services/inbound.py`, stop dropping `referral` entries silently and store them. Today they're skipped at "Only 'message' entries are messages".

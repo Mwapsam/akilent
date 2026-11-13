@@ -70,6 +70,29 @@
 <p>Chats count in the period they started, leads and orders in the period they were created, and revenue in the period it was paid.</p>
 {% endif %}
 
+<h2>Chats from Meta ads</h2>
+<p>When a customer taps a Click-to-WhatsApp ad or an Instagram ad that opens a DM, Meta tells Akilent which ad it was. That chat is counted as <strong>from a Meta ad</strong>, never as a post's own chat, even if the ad promotes one of your posts or the message carries the post's link code. Its sales are shown on their own line, "From Meta ads". Facebook Messenger ads aren't counted yet.</p>
+{% if released.ads_inbox_verdict %}
+<p><strong>Chats from Meta ads</strong> on the Sales page shows what happened to each ad's chats:</p>
+<ul>
+  <li><strong>Waited:</strong> chats that had no answer within an hour of your opening hours (set in Settings). A greeting or a "someone will get back to you" message doesn't count as an answer; an automation that actually answers does.</li>
+  <li>Who answered first (a person or an automation), how long the first answer took in opening hours and in total, and how many chats got a follow-up.</li>
+  <li>Leads and paid orders made from those chats, in each currency.</li>
+</ul>
+<p>Ad spend isn't shown yet. The chat itself shows "From a Meta ad" in its details.</p>
+{% endif %}
+{% if released.cs_promote_candidates %}
+
+<h2>Posts worth promoting</h2>
+<p>Before you spend on an ad, <strong>Worth promoting</strong> (on the Sales page and each post's page) shows which posts already brought in customers on their own over the last 90 days:</p>
+<ul>
+  <li><strong>Already sold:</strong> at least 3 paid orders from the post's own chat link or comments.</li>
+  <li><strong>Most leads:</strong> at least 3 leads.</li>
+  <li><strong>Most chats:</strong> at least 3 chats.</li>
+</ul>
+<p>Chats that came from an ad are never counted here. Akilent doesn't know whether the product is still in stock, and a post that did well on its own can do differently as an ad. "Boost" opens the post on Facebook or Instagram, where you set up and pay for the ad; Akilent spends nothing.</p>
+{% endif %}
+
 <h2>What isn't counted</h2>
 <p>Only chats with clear evidence are counted: the link's code, or a reply to a comment on the post. A customer who saw the post and then messaged you another way isn't counted, so your real results can be higher than the card shows. Akilent never guesses which post someone saw.</p>
 

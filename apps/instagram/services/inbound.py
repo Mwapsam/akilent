@@ -54,6 +54,16 @@ def _process_dm_entry(instagram_account: InstagramBusinessAccount, entry: dict) 
     # referrals and edits arrive in the same "messaging" array; treating them as
     # messages put blank customer messages in the inbox and triggered AI replies.
     message = entry.get("message")
+    if not message and entry.get("referral"):
+        # A customer reopened their chat from a Click-to-Instagram-Direct ad: keep the ad
+        # (docs/strategy/akilent-ads.md). Never raises; never makes a message.
+        try:
+            from apps.conversations.ad_referrals import capture_instagram_event
+
+            capture_instagram_event(instagram_account, igsid, entry)
+        except Exception:
+            logger.exception("_process_dm_entry: ad referral capture failed")
+        return
     if not message:
         logger.debug(
             "_process_dm_entry: ignoring non-message event keys=%s",

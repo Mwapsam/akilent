@@ -503,6 +503,18 @@ These are settled. Do not reopen them without a new owner decision.
 - **Commercial model:** a flat add-on price. No percentage of ad spend, and customers pay Meta directly (Appendix C).
 - **AI:** optional, and used only for copy (§2).
 
+### Decided on 13 November 2026: build what needs no new Meta permissions
+
+The owner authorised building, ahead of the Gate 1 demand test, everything that works with the permissions Akilent already holds:
+
+- **§10b store-only referral capture:** built and always on. `apps/conversations/ad_referrals.py` stores the WhatsApp and Instagram `referral` as an `AdReferral` and an `AD_REFERRAL` entry point. Backfill with `manage.py ad_referrals_backfill`. WhatsApp history comes from stored webhook payloads; Instagram's standalone "reopened from an ad" events before this date are lost.
+- **Paid takes precedence (§4):** built. An ad entry point never names a post, wins over any other entry point, and is excluded from every post's organic counts. Which posts sold shows a "From Meta ads" revenue line.
+- **Gate 0:** `manage.py ads_evidence_report` (read-only).
+- **Gate 2:** `apps/publishing/promote.py`, flag `cs_promote_candidates`, using the proposed floors (§10e).
+- **Gate 3:** `apps/conversations/ad_verdict.py`, flag `ads_inbox_verdict`, using the proposed 1-business-hour threshold (§10f) and the §3 clock.
+
+Both flags stay off until released, and releasing them is a separate owner decision. Gates 4 and 5 remain unauthorised. The demand test (Gate 1) still decides whether the Ads add-on is sold.
+
 ### Open decisions
 
 These decisions stay visible and open until the owner explicitly settles them.
@@ -533,7 +545,7 @@ Trade-off:
 
 This is a separate owner decision. This strategy does not authorise it.
 
-**Status:** Open. Blocks use of this option in Gate 1, and needs a separate decision before Gate 3.
+**Status:** Decided and built on 13 November 2026 (see above).
 
 ### 10c. Fewer than five qualifying businesses
 

@@ -349,6 +349,8 @@ def instagram_breakdown(variant: ContentPostVariant) -> dict | None:
         return None
     entries = ConversationEntryPoint.objects.filter(
         variant=variant, kind=ConversationEntryPoint.Kind.TRACKED_LINK
+    ).exclude(  # a chat from a Meta ad is paid, never this post's organic chat
+        conversation__entry_points__kind=ConversationEntryPoint.Kind.AD_REFERRAL
     ).select_related("variant", "link__variant")
     page = BioPage.objects.filter(account_id=variant.post.account_id).first()
     counts = {CONFIRMED: 0, BIO_UNCONFIRMED: 0, DIRECT_LINK: 0}

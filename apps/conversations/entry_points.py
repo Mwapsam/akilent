@@ -21,6 +21,13 @@ logger = logging.getLogger(__name__)
 def on_inbound_message(conversation, message) -> None:
     """Called for every new inbound message, on WhatsApp and Instagram."""
     try:
+        # First, so a chat from an ad is paid before any ref code in its text is read.
+        from apps.conversations import ad_referrals
+
+        ad_referrals.capture(conversation, message)
+    except Exception:
+        logger.exception("Ad-referral capture failed for message=%s", message.pk)
+    try:
         match_ref_code(conversation, message)
     except Exception:
         logger.exception("Ref-code match failed for message=%s", message.pk)
@@ -143,14 +150,15 @@ def record_comment_entry(thread) -> ConversationEntryPoint | None:
 
 
 def first_entry_point(conversation) -> ConversationEntryPoint | None:
-    """The earliest explicit touch, which gets the credit."""
+    """The touch that gets the credit: a Meta ad first (paid takes precedence, see
+    docs/strategy/akilent-ads.md §4), otherwise the earliest explicit touch."""
     if conversation is None:
         return None
-    return (
-        ConversationEntryPoint.objects.filter(conversation=conversation)
-        .select_related("post", "variant", "campaign", "whatsapp_campaign")
-        .first()
-    )
+    entries = ConversationEntryPoint.objects.filter(
+        conversation=conversation
+    ).select_related("post", "variant", "campaign", "whatsapp_campaign", "ad_referral")
+    ad = entries.filter(kind=ConversationEntryPoint.Kind.AD_REFERRAL).first()
+    return ad or entries.first()
 
 
 def record_dm_reply(conversation, message) -> None:

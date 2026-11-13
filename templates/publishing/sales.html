@@ -83,6 +83,7 @@
 
   <div class="sales-layout">
     <div class="sales-main space-y-4">
+      {% if promote %}{% include "publishing/_promote_list.html" with promote=promote %}{% endif %}
       <section class="card card-pad" aria-labelledby="sales-ranked">
         <div class="flex items-baseline justify-between gap-2">
           <h3 id="sales-ranked" class="font-semibold text-ink">Ranked</h3>
@@ -127,6 +128,8 @@
         </ul>
       </details>
       {% endif %}
+
+      {% if ad_rows is not None %}{% include "publishing/_ad_verdict.html" with ad_rows=ad_rows %}{% endif %}
     </div>
 
     <section class="card card-pad space-y-3" aria-labelledby="sales-totals">
@@ -142,6 +145,14 @@
           <dd class="font-medium text-ink tabular-nums">{% for r in u.revenue %}{{ r.currency }} {{ r.total }}{% if not forloop.last %} · {% endif %}{% endfor %}</dd>
         </div>
         {% endfor %}
+        {% with a=report.from_ads %}{% if a.chats or a.revenue %}
+        {% comment %}Paid: chats from a Meta ad are never any post's credit, so their revenue is
+        its own line rather than hidden in "not linked".{% endcomment %}
+        <div class="flex flex-wrap justify-between gap-2" data-sales-total="ads">
+          <dt class="text-ink-subtle">From Meta ads</dt>
+          <dd class="font-medium text-ink tabular-nums">{% for r in a.revenue %}{{ r.currency }} {{ r.total }}{% if not forloop.last %} · {% endif %}{% empty %}—{% endfor %}</dd>
+        </div>
+        {% endif %}{% endwith %}
         {% with n=report.not_credited %}
         <div class="flex flex-wrap justify-between gap-2" data-sales-total="guessed">
           <dt class="text-ink-subtle">Linked by a guess only</dt>
@@ -152,7 +163,7 @@
           <dd class="font-medium text-ink tabular-nums">{% for r in n.untracked_revenue %}{{ r.currency }} {{ r.total }}{% if not forloop.last %} · {% endif %}{% empty %}—{% endfor %}</dd>
         </div>
         {% if n.chats is not None %}
-        <p class="text-xs text-ink-subtle pt-1">{{ n.chats }} more chat{{ n.chats|pluralize }} started without naming a post, so {{ n.chats|pluralize:"it isn't,they aren't" }} in the totals above.</p>
+        <p class="text-xs text-ink-subtle pt-1">{{ n.chats }} more chat{{ n.chats|pluralize }} started without naming a post, so {{ n.chats|pluralize:"it isn't,they aren't" }} in the totals above.{% if report.from_ads.chats %} {{ report.from_ads.chats }} chat{{ report.from_ads.chats|pluralize }} came from a Meta ad.{% endif %}</p>
         {% endif %}
         {% endwith %}
       </dl>

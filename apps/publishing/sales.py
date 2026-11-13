@@ -30,7 +30,7 @@ from typing import Any, cast
 
 from . import bio
 from .models import BioPage, ContentPost
-from .results import journey, post_credit_q
+from .results import AD_REFERRAL, journey, post_credit_q
 
 FLAG = "cs_sales_report"
 MIN_CHATS = 5  # confirmed chats a post needs in the period before it is ranked
@@ -172,6 +172,8 @@ def report(account, period, min_chats: int = MIN_CHATS) -> dict | None:
         ConversationEntryPoint.objects.filter(
             account=account, post__isnull=False, **in_period("matched_at")
         )
+        # Paid takes precedence: a chat from a Meta ad is never a post's organic chat.
+        .exclude(conversation__entry_points__kind=AD_REFERRAL)
         .select_related(*entry_related)
         .order_by("matched_at", "pk")
     ):
@@ -301,6 +303,11 @@ def report(account, period, min_chats: int = MIN_CHATS) -> dict | None:
             for basis in UNCONFIRMED
             if totals[basis]
         ],
+        # Paid: chats and revenue from Meta ads, never any post's organic credit.
+        "from_ads": {
+            "chats": overall["ad_chats"],
+            "revenue": overall["ad_revenue"],
+        },
         "not_credited": {
             "chats": overall["untracked_chats"],
             "guessed_revenue": overall["guessed_revenue"],

@@ -1,0 +1,33 @@
+{% comment %}The post page's organic evidence for promoting it (apps.publishing.promote, flag
+  cs_promote_candidates) and the chats from Meta ads that promote it (apps.conversations.ad_verdict,
+  flag ads_inbox_verdict). The two are kept apart: ad chats are paid and never in the organic
+  numbers.{% endcomment %}
+<section class="card card-pad space-y-3" aria-labelledby="pd-promote" data-promote-card>
+  <h2 id="pd-promote" class="pd-section-title">Promoting this post</h2>
+  {% if promote_post %}
+  {% with p=promote_post %}
+  <div class="space-y-1" data-promote-label="{{ p.label|default:'none' }}">
+    {% if p.label %}
+    <p><span class="badge {% if p.label == 'sold' %}badge-success{% else %}badge-neutral{% endif %}">{{ p.label_text }}</span></p>
+    {% else %}
+    <p class="text-sm text-ink-subtle">Not enough evidence yet to suggest promoting it.</p>
+    {% endif %}
+    <p class="text-xs text-ink-subtle tabular-nums">Last {{ promote_days }} days, from its own chat link and comments: {{ p.chats }} chat{{ p.chats|pluralize }} · {{ p.leads }} lead{{ p.leads|pluralize }} · {{ p.paid_orders }} paid order{{ p.paid_orders|pluralize }}{% for r in p.revenue %}{% if forloop.first %} · {% endif %}{{ r.currency }} {{ r.total }}{% if not forloop.last %} · {% endif %}{% endfor %}{% if p.age_days is not None %} · posted {{ p.age_days }} day{{ p.age_days|pluralize }} ago{% endif %}</p>
+    {% if not p.label %}<p class="text-xs text-ink-subtle">Suggested from {{ promote_floors.chats }} chats, {{ promote_floors.leads }} leads or {{ promote_floors.sold }} paid orders.</p>{% endif %}
+    {% if p.boost_links %}
+    <p class="text-sm">{% for b in p.boost_links %}<a href="{{ b.url }}" target="_blank" rel="noopener" class="cs-link">Boost on {{ b.platform }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}</p>
+    {% endif %}
+    {% if p.label %}<p class="text-xs text-ink-subtle">Stock isn't checked, and a post that did well on its own may do differently as an ad.</p>{% endif %}
+  </div>
+  {% endwith %}
+  {% endif %}
+  {% if post_ads %}
+  {% with a=post_ads %}
+  <div class="pt-2 border-t border-border space-y-1" data-post-ads>
+    <p class="text-sm text-ink"><span class="badge badge-warning">Boosted</span> {{ a.chats }} chat{{ a.chats|pluralize }} from {{ a.ads }} ad{{ a.ads|pluralize }} · {{ a.paid_orders }} paid order{{ a.paid_orders|pluralize }}{% for r in a.revenue %}{% if forloop.first %} · {% endif %}{{ r.currency }} {{ r.total }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>
+    {% if a.waited_too_long %}<p class="text-xs text-ink-subtle">{{ a.waited_too_long }} of these chat{{ a.waited_too_long|pluralize }} waited too long for a first reply.</p>{% endif %}
+    <p class="text-xs text-ink-subtle">Paid chats, kept out of the organic numbers above.</p>
+  </div>
+  {% endwith %}
+  {% endif %}
+</section>

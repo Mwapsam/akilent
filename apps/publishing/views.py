@@ -2156,6 +2156,25 @@ def _comment_reply_state(post, account):
     return comment_replies.state(post, account)
 
 
+def _promotion_state(post) -> dict:
+    """The post page's "Worth promoting" evidence (Gate 2) and its Meta ad chats (Gate 3),
+    each behind its own release flag. Only for a published post."""
+    from apps.conversations import ad_verdict, reporting
+
+    from . import promote
+
+    out: dict = {"promote_post": None, "post_ads": None}
+    if post.status != ContentPost.Status.PUBLISHED:
+        return out
+    if promote.is_released():
+        out["promote_post"] = promote.for_post(post)
+        out["promote_floors"] = promote.FLOORS
+        out["promote_days"] = promote.DAYS
+    if ad_verdict.is_released():
+        out["post_ads"] = ad_verdict.for_post(post, reporting.last_days(promote.DAYS))
+    return out
+
+
 @login_required
 @module_required("content_studio")
 @_in_workspace_tz
@@ -2215,6 +2234,8 @@ def post_detail(request, pk):
             "channel_options": _channel_options_for_display(post),
             # The post's own comment auto-reply (outreach plan Phase C); None hides it.
             "comment_reply": _comment_reply_state(post, account),
+            # Akilent Ads Gates 2 and 3; None hides each.
+            **_promotion_state(post),
         },
         size="lg",
         title="Post",

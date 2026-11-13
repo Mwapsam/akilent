@@ -1289,7 +1289,17 @@ def _panel_context(request, account, conversation, *, page=False) -> dict:
         "published_forms": published_forms,
         "can_delete": _can_delete(request, account),
         "detail_url": reverse("conversations:detail", args=[conversation.public_id]),
+        "ad_referral": _ad_referral_for(conversation),
     }
+
+
+def _ad_referral_for(conversation):
+    """The Meta ad this chat came from, when the ad verdict is released (Akilent Ads Gate 3)."""
+    from apps.conversations import ad_verdict
+
+    if not ad_verdict.is_released():
+        return None
+    return conversation.ad_referrals.order_by("received_at", "pk").first()
 
 
 def _panel_response(request, account, conversation, *, after_action=False):

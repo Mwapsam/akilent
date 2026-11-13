@@ -17,6 +17,7 @@ the key, so one person's key can't stand for another's send or another conversat
 import re
 
 PREFIX = "inbox:"
+HOLDING_PREFIX = "ai-auto:hold:"  # apps.ai.tasks: the holding reply's key
 _CLIENT_KEY = re.compile(r"^[A-Za-z0-9-]{8,64}$")
 
 
@@ -32,11 +33,16 @@ def is_inbox_key(key: str | None) -> bool:
 
 
 def sender_metadata(key: str | None) -> dict:
-    """``{"sent_by_user": <user pk>, "client_key": "<key>"}`` for an inbox key, else ``{}``.
+    """``{"sent_by_user": <user pk>, "client_key": "<key>"}`` for an inbox key,
+    ``{"auto_kind": "holding"}`` for AI's holding reply, else ``{}``.
 
     Kept apart from ``sent_by``, whose absence is how the rest of the app recognises a
     person's reply (reports, follow-ups, AI context).
     """
+    if key and key.startswith(HOLDING_PREFIX):
+        # AI's "a person will reply" message: an acknowledgement, not an answer, so the
+        # ad inbox verdict (apps.conversations.ad_verdict) doesn't stop its clock on it.
+        return {"auto_kind": "holding"}
     if not is_inbox_key(key):
         return {}
     parts = key[len(PREFIX) :].split(":", 2)  # type: ignore[index]

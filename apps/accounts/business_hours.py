@@ -292,3 +292,35 @@ def open_in(hours, at: datetime | None = None) -> bool:
     if not window:
         return False
     return parse_time(window["open"]) <= local.time() < parse_time(window["close"])
+
+
+def open_seconds_between(hours, start: datetime, end: datetime) -> float:
+    """Seconds between ``start`` and ``end`` (aware) that fall inside opening hours.
+
+    For an already-loaded ``BusinessHours``; no query. With no hours set the business counts
+    as always open (the same rule as ``open_in``), so this is the plain elapsed time. A
+    window is ``open <= t < close`` on the local day, as in ``open_in``.
+    """
+    from datetime import timedelta
+
+    if end <= start:
+        return 0.0
+    if hours is None or not hours.schedule:
+        return (end - start).total_seconds()
+    try:
+        zone = ZoneInfo(hours.timezone)
+    except Exception:
+        zone = ZoneInfo(DEFAULT_TIMEZONE)
+    local_start, local_end = start.astimezone(zone), end.astimezone(zone)
+    total = 0.0
+    day = local_start.date()
+    while day <= local_end.date():
+        window = hours.schedule.get(DAYS[day.weekday()])
+        if window:
+            opens = datetime.combine(day, parse_time(window["open"]), tzinfo=zone)
+            closes = datetime.combine(day, parse_time(window["close"]), tzinfo=zone)
+            lo, hi = max(opens, local_start), min(closes, local_end)
+            if hi > lo:
+                total += (hi - lo).total_seconds()
+        day += timedelta(days=1)
+    return total

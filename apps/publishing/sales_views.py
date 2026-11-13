@@ -24,12 +24,30 @@ def sales_report(request):
     if account is None:
         return redirect("dashboard")
     period, days, period_locked = _period(request, account, timezone.now())
+    report = sales.report(account, period)
+    from apps.conversations import ad_verdict
+
+    from . import promote
+
     return render(
         request,
         "publishing/sales.html",
         {
             "account": account,
-            "report": sales.report(account, period),
+            "report": report,
+            # Gate 2: posts worth promoting, from organic evidence over promote.DAYS.
+            "promote": (
+                promote.candidates(account)
+                if report is not None and promote.is_released()
+                else None
+            ),
+            # Gate 3: what happened to each Meta ad's chats in the period.
+            "ad_rows": (
+                ad_verdict.report(account, period)
+                if report is not None and ad_verdict.is_released()
+                else None
+            ),
+            "unanswered_minutes": ad_verdict.UNANSWERED_SECONDS // 60,
             "days": days,
             "periods": reporting.PERIODS,
             "period_locked": period_locked,

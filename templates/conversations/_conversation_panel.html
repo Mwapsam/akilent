@@ -47,6 +47,10 @@ shows once asked for is a <details class="pop">: it works without scripts, and E
     </button>
   </div>
   <p class="cv-who-facts">Customer since {{ contact.first_seen|date:"M Y" }} · {{ conversation_count }} conversation{{ conversation_count|pluralize }} · <a href="{{ profile_url }}" class="cv-link">View profile</a></p>
+  {% if ad_referral %}{% comment %}Akilent Ads Gate 3 (flag ads_inbox_verdict): this chat came
+  from a Meta ad, so it's a paid chat, never a post's organic credit.{% endcomment %}
+  <p class="cv-who-facts" data-panel-ad><span class="badge badge-warning">From a Meta ad</span>{% if ad_referral.headline %} {{ ad_referral.headline|truncatechars:60 }}{% endif %}</p>
+  {% endif %}
 </div>
 
 {# Where it stands #}

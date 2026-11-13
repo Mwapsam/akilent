@@ -1116,6 +1116,10 @@ class ConversationEntryPoint(models.Model):
         IG_COMMENT = "ig_comment", "Instagram comment"
         FB_COMMENT = "fb_comment", "Facebook comment"
         CAMPAIGN_REPLY = "campaign_reply", "Reply to a WhatsApp campaign"
+        # The customer tapped a Meta ad (Click-to-WhatsApp / Click-to-Instagram-Direct).
+        # Paid: never names a post, even when the ad promotes one (the match lives on
+        # AdReferral.post), so an ad chat is never counted as organic credit.
+        AD_REFERRAL = "ad_referral", "Meta ad"
 
     account = models.ForeignKey(
         "accounts.Account", on_delete=models.CASCADE, related_name="entry_points"
@@ -1175,6 +1179,14 @@ class ConversationEntryPoint(models.Model):
         blank=True,
         related_name="entry_points",
     )
+    # AD_REFERRAL: the ad the customer came from.
+    ad_referral = models.ForeignKey(
+        "conversations.AdReferral",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="entry_points",
+    )
     matched_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -1189,17 +1201,87 @@ class ConversationEntryPoint(models.Model):
                 condition=models.Q(whatsapp_campaign__isnull=False),
                 name="one_entry_point_per_whatsapp_campaign",
             ),
+            models.UniqueConstraint(
+                fields=["conversation", "ad_referral"],
+                condition=models.Q(ad_referral__isnull=False),
+                name="one_entry_point_per_ad_referral",
+            ),
             models.CheckConstraint(
                 name="entry_point_names_a_post_or_campaign",
                 condition=models.Q(post__isnull=False)
-                | models.Q(whatsapp_campaign__isnull=False),
+                | models.Q(whatsapp_campaign__isnull=False)
+                | models.Q(ad_referral__isnull=False),
+            ),
+            # Paid takes precedence: an ad entry never names a post.
+            models.CheckConstraint(
+                name="ad_entry_point_names_no_post",
+                condition=~models.Q(kind="ad_referral")
+                | (models.Q(post__isnull=True) & models.Q(ad_referral__isnull=False)),
             ),
         ]
 
     def __str__(self) -> str:
-        return (
-            f"{self.conversation} ← {self.post or self.whatsapp_campaign} ({self.kind})"
-        )
+        source = self.post or self.whatsapp_campaign or self.ad_referral
+        return f"{self.conversation} ← {source} ({self.kind})"
+
+
+class AdReferral(models.Model):
+    """The Meta ad a customer tapped to start (or reopen) a chat. Stored as Meta sent it.
+
+    WhatsApp sends a ``referral`` object on the first message from a Click-to-WhatsApp ad;
+    Instagram sends one on a message from a Click-to-Instagram-Direct ad. Messenger is
+    excluded (docs/strategy/akilent-ads.md). ``post`` is set only when the ad promotes a post
+    Content Studio published (matched by Meta's own post id); it is context, never organic
+    credit. One row per conversation and ad.
+    """
+
+    class Channel(models.TextChoices):
+        WHATSAPP = "whatsapp", "WhatsApp"
+        INSTAGRAM = "instagram", "Instagram"
+
+    account = models.ForeignKey(
+        "accounts.Account", on_delete=models.CASCADE, related_name="ad_referrals"
+    )
+    conversation = models.ForeignKey(
+        Conversation, on_delete=models.CASCADE, related_name="ad_referrals"
+    )
+    message = models.ForeignKey(
+        Message,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ad_referrals",
+    )
+    channel = models.CharField(max_length=12, choices=Channel.choices)
+    source_type = models.CharField(max_length=20, blank=True, default="")  # ad | post
+    source_id = models.CharField(max_length=128)  # Meta's ad id (or post id)
+    source_url = models.URLField(max_length=1000, blank=True, default="")
+    headline = models.CharField(max_length=500, blank=True, default="")
+    body = models.TextField(blank=True, default="")
+    media_type = models.CharField(max_length=20, blank=True, default="")
+    ctwa_clid = models.CharField(max_length=255, blank=True, default="")
+    post = models.ForeignKey(
+        "publishing.ContentPost",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ad_referrals",
+    )
+    raw = models.JSONField(default=dict, blank=True)
+    received_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["received_at", "pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["conversation", "source_id"], name="one_ad_referral_per_ad"
+            )
+        ]
+        indexes = [models.Index(fields=["account", "source_id"])]
+
+    def __str__(self) -> str:
+        return f"ad {self.source_id} ({self.channel})"
 
 
 class ConversationAttribution(models.Model):
