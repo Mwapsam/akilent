@@ -72,3 +72,59 @@ def precedence_rank(category: str) -> int:
         return PRECEDENCE.index(category)
     except ValueError:
         return len(PRECEDENCE)
+
+
+# Owner-facing wording ("What people are saying"). Never "sentiment", never a score.
+LABELS: dict[str, str] = {
+    Category.BUYING_INTENT: "Wants to buy",
+    Category.PRODUCT_ENQUIRY: "Question",
+    Category.COMPLAINT: "Complaint",
+    Category.PRAISE: "Praise",
+    Category.CONTENT_FEEDBACK: "About the post",
+    Category.SPAM_ABUSE: "Spam or abuse",
+    Category.GENERAL: "Chat",
+}
+
+SUBCATEGORY_LABELS: dict[str, str] = {
+    "price": "price",
+    "purchase": "buying",
+    "availability": "availability",
+    "ordering": "ordering",
+    "dm_request": "asked for a message",
+    "size": "size",
+    "colour": "colour",
+    "specs": "details",
+    "stock": "stock",
+    "delivery": "delivery",
+    "location": "location",
+    "quality": "quality",
+    "delivery_delay": "late delivery",
+    "pricing": "price",
+    "service": "service",
+    "dissatisfaction": "unhappy",
+    "product": "product",
+    "brand": "your brand",
+    "satisfaction": "happy customer",
+    "appreciation": "liked the post",
+    "criticism": "post criticism",
+    "more_content": "wants more posts",
+    "spam": "spam",
+    "promo": "promotion",
+    "toxic": "abusive",
+    "greeting": "greeting",
+    "chit_chat": "chat",
+    "other": "other",
+}
+
+# The categories an owner can tick or filter by (general is "nothing specific").
+OWNER_CATEGORIES: tuple[str, ...] = tuple(
+    c for c in PRECEDENCE if c != Category.GENERAL
+)
+
+
+def label(category: str) -> str:
+    return LABELS.get(category, category)
+
+
+def sub_label(subcategory: str) -> str:
+    return SUBCATEGORY_LABELS.get(subcategory, subcategory)

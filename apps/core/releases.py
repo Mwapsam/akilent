@@ -58,6 +58,11 @@ UNRELEASED_FEATURES: dict[str, tuple[str, ...]] = {
     # first-reply times, leads and paid orders per ad. Shown in Which posts sold, on the
     # post page and in the inbox details panel; no pages of its own.
     "ads_inbox_verdict": (),
+    # Audience Intelligence, "What people are saying" (docs/plans/audience-intelligence-spec.md):
+    # topics on each comment, the topic filter and correction in Comments, and the post
+    # page's summary with comment-level outcomes. The signals themselves are written
+    # regardless (AUDIENCE_SIGNALS_ENABLED); this only shows them.
+    "audience_insights": (),
 }
 
 

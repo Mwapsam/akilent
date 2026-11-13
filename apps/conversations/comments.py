@@ -73,6 +73,8 @@ class ThreadItem:
     # Why the automatic reply to this comment didn't go (set by comment_feed): a reply
     # rule fired but Meta refused it, or the comment was past the 7-day window.
     auto_reply_error: str = ""
+    # What the root comment is about (apps.audience.reports.Topic), when shown.
+    topics: list = field(default_factory=list)
 
     @property
     def collapsed(self) -> bool:
@@ -674,6 +676,8 @@ def comment_feed(
     variant_id: int | None = None,
     before: datetime | None = None,
     limit: int = FEED_PAGE,
+    topic: str = "",
+    with_topics: bool = False,
 ) -> tuple[list[ThreadItem], datetime | None]:
     """Comment threads (a visitor's comment with its replies) across both channels, newest
     first, each with its post. Returns the page and the cursor for "Load more" (None at
@@ -682,14 +686,25 @@ def comment_feed(
 
     "Not answered" (the default): nobody replied, publicly or in private, and it isn't
     deleted. Posts without comments never appear; a post is reached through its comments.
+
+    ``topic`` (an audience category) keeps the comments about it; ``with_topics`` puts
+    each root comment's topics on its row (apps.audience, release ``audience_insights``).
     """
     if filter_by not in FEED_FILTERS:
         filter_by = "unanswered"
+    from apps.audience.taxonomy import OWNER_CATEGORIES
+
+    if topic not in OWNER_CATEGORIES:
+        topic = ""
     rows: list[ThreadItem] = []
     for ch in usable_channels(account):
         if channel and ch != channel:
             continue
         qs = _feed_queryset(account, ch, filter_by, post_id, variant_id)
+        if topic:
+            from apps.audience.reports import topic_exists
+
+            qs = qs.filter(topic_exists(ch, topic))
         if before is not None:
             qs = qs.filter(received_at__lt=before)
         rows += [
@@ -697,9 +712,25 @@ def comment_feed(
         ]
     rows.sort(key=lambda t: (t.received_at, t.pk), reverse=True)
     page, more = rows[:limit], len(rows) > limit
+    cursor = page[-1].received_at if more and page else None
+    if topic or with_topics:
+        _attach_topics(page)
+    if topic:
+        # The SQL filter is close; the exact resolution has the last word.
+        page = [t for t in page if any(x.category == topic for x in t.topics)]
     _attach_posts(account, page)
     _attach_auto_reply_errors(account, page)
-    return page, (page[-1].received_at if more and page else None)
+    return page, cursor
+
+
+def _attach_topics(threads: list[ThreadItem]) -> None:
+    """Each root comment's topics, for the whole page in a few queries."""
+    from apps.audience.reports import topics_for
+
+    roots = [t for t in threads if t.root is not None and not t.root.outbound]
+    found = topics_for((t.channel, t.root.pk, t.root.body) for t in roots)
+    for t in roots:
+        t.topics = found.get((t.channel, t.root.pk), [])
 
 
 def _attach_auto_reply_errors(account, threads: list[ThreadItem]) -> None:

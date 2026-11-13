@@ -223,10 +223,10 @@ The UI shows no scores and no confidence percentages.
 | # | Phase | Depends on | Estimate | Third party |
 |---|---|---|---|---|
 | 0 | Discovery and data validation | | done (2026-11-08) | none |
-| 1 | Signal foundation: classifier, models, ingest hooks, backfill. No UI, no AI | 0 | M | none |
-| 2 | Reporting and validation: inbox chips and filter, correction, post tile, internal diagnostics | 1 | M | none |
+| 1 | Signal foundation: classifier, models, ingest hooks, backfill. No UI, no AI | 0 | built 2026-11-13 | none |
+| 2 | Reporting and validation: inbox chips and filter, correction, post tile, internal diagnostics | 1 | built 2026-11-13, behind release `audience_insights` | none |
 | 3 | AI-assisted: batch classification, multilingual coverage, grounded themes | 2 and its data | M–L | AI provider |
-| 4 | Commercial outcomes: evidence levels, coverage | 2 | M | none (internal attribution) |
+| 4 | Commercial outcomes: evidence levels, coverage | 2 | comment-level outcomes and coverage on the post summary and in `audience_report`, built 2026-11-13. Aggregate comparisons wait for Phase 5's sample-size rules | none (internal attribution) |
 | 5 | Evidence-based optimisation: patterns across posts | 3, 4 and a validated measurement layer | L | optional AI |
 | 6 | Cross-channel: the taxonomy applied to DMs (WA/IG/FB) | 2 | M | none |
 

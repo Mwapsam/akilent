@@ -28,7 +28,7 @@ pages on. Select comments to hide (with Undo) or permanently delete them togethe
 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
   <nav class="flex flex-wrap gap-2 text-sm" aria-label="Show">
     {% for key, label in filters %}
-    <a href="?{% if channel %}channel={{ channel }}&{% endif %}filter={{ key }}{% if post_id %}&{% if post %}post={{ post.post_id|urlencode }}{% else %}variant={{ post_id }}{% endif %}{% endif %}"
+    <a href="?{% if channel %}channel={{ channel }}&{% endif %}filter={{ key }}{% if post_id %}&{% if post %}post={{ post.post_id|urlencode }}{% else %}variant={{ post_id }}{% endif %}{% endif %}{% if topic %}&topic={{ topic }}{% endif %}"
        class="badge {% if filter_by == key %}badge-info{% else %}badge-neutral{% endif %}" {% if filter_by == key %}aria-current="page"{% endif %}>{{ label }}</a>
     {% endfor %}
   </nav>
@@ -41,6 +41,20 @@ pages on. Select comments to hide (with Undo) or permanently delete them togethe
   </nav>
   {% endif %}
 </div>
+
+{% if topic_filters %}
+<nav class="mb-4 flex flex-wrap items-center gap-2 text-sm" aria-label="What it's about" data-topic-filter>
+  <span class="text-xs text-ink-subtle">About</span>
+  {% with base_q="filter="|add:filter_by %}
+  <a href="?{% if channel %}channel={{ channel }}&{% endif %}{{ base_q }}{% if post_id %}&{% if post %}post={{ post.post_id|urlencode }}{% else %}variant={{ post_id }}{% endif %}{% endif %}"
+     class="badge {% if not topic %}badge-info{% else %}badge-neutral{% endif %}" {% if not topic %}aria-current="page"{% endif %}>Anything</a>
+  {% for key, label in topic_filters %}
+  <a href="?{% if channel %}channel={{ channel }}&{% endif %}{{ base_q }}{% if post_id %}&{% if post %}post={{ post.post_id|urlencode }}{% else %}variant={{ post_id }}{% endif %}{% endif %}&topic={{ key }}"
+     class="badge {% if topic == key %}badge-info{% else %}badge-neutral{% endif %}" {% if topic == key %}aria-current="page"{% endif %}>{{ label }}</a>
+  {% endfor %}
+  {% endwith %}
+</nav>
+{% endif %}
 
 {% if post %}
 <section class="card mb-4" aria-label="This post" data-post-header>

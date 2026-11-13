@@ -2234,12 +2234,25 @@ def post_detail(request, pk):
             "channel_options": _channel_options_for_display(post),
             # The post's own comment auto-reply (outreach plan Phase C); None hides it.
             "comment_reply": _comment_reply_state(post, account),
+            # "What people are saying" (apps/audience); None hides it.
+            "audience": _audience_state(post),
             # Akilent Ads Gates 2 and 3; None hides each.
             **_promotion_state(post),
         },
         size="lg",
         title="Post",
     )
+
+
+def _audience_state(post):
+    """The post's "What people are saying" summary, once released and commented on."""
+    from apps.core.releases import is_released
+
+    if not is_released("audience_insights") or not post.published_at:
+        return None
+    from apps.audience.reports import post_audience
+
+    return post_audience(post)
 
 
 @login_required

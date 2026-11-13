@@ -24,6 +24,11 @@ urlpatterns = [
         name="comments_private_reply",
     ),
     path(
+        "comments/<str:channel>/<int:pk>/topics/",
+        comments_views.topics,
+        name="comments_topics",
+    ),
+    path(
         "comments/<str:channel>/<int:pk>/moderate/",
         comments_views.moderate,
         name="comments_moderate",

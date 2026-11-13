@@ -32,7 +32,23 @@ A row is [data-row], so J/K step through comments. The checkbox belongs to the b
           <div class="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-ink-subtle">
             {% include "components/channel_tag.html" with channel=thread.channel compact=True %}
             {% if p %}<span class="truncate max-w-[16rem]">on {% if p.url %}<a href="{{ p.url }}" target="_blank" rel="noopener" class="text-ink-muted hover:text-ink" title="Open the post on {% if thread.channel == 'instagram' %}Instagram{% else %}Facebook{% endif %}">{{ p.label }} <span aria-hidden="true">↗</span></a>{% else %}{{ p.label }}{% endif %}</span>{% endif %}
-            {% if thread.intent %}<span class="badge badge-success">Wants to buy</span>{% endif %}
+            {% if show_topics %}
+            {% for t in thread.topics %}<span class="badge {% if t.category == 'buying_intent' %}badge-success{% elif t.category == 'complaint' or t.category == 'spam_abuse' %}badge-warning{% else %}badge-neutral{% endif %}" data-topic="{{ t.category }}" title="{% if t.source == 'owner' %}Set by your team{% else %}Read from the words in the comment{% endif %}">{{ t.label }}{% if t.detail %} · {{ t.detail }}{% endif %}</span>{% endfor %}
+            {% if not read_only and c.state != 'deleted' and not c.outbound %}
+            <details class="relative inline-block" data-topic-edit>
+              <summary class="cursor-pointer underline text-ink-subtle hover:text-ink">{% if thread.topics %}Change{% else %}Add topic{% endif %}</summary>
+              <form method="post" action="{% url 'conversations:comments_topics' thread.channel c.pk %}" hx-boost="false"
+                    class="absolute z-20 mt-1 w-56 card shadow-pop p-3 space-y-1.5">
+                {% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}">
+                <p class="text-xs font-medium text-ink">What is this comment about?</p>
+                {% for key, label in topic_filters %}
+                <label class="flex items-center gap-2 text-sm text-ink"><input type="checkbox" class="checkbox" name="topics" value="{{ key }}"{% for t in thread.topics %}{% if t.category == key %} checked{% endif %}{% endfor %}>{{ label }}</label>
+                {% endfor %}
+                <button class="btn btn-secondary btn-sm mt-1">Save</button>
+              </form>
+            </details>
+            {% endif %}
+            {% elif thread.intent %}<span class="badge badge-success">Wants to buy</span>{% endif %}
             {% if c.state == 'flagged' %}<span class="badge badge-warning">Flagged</span>{% endif %}
             {% if c.state == 'hidden' %}<span class="badge badge-neutral">Hidden</span>{% endif %}
             {% if c.state == 'deleted' %}<span class="badge badge-neutral">Deleted</span>{% endif %}

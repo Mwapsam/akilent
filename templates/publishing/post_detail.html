@@ -134,6 +134,8 @@ column in that order.{% endcomment %}
       {% endif %}
       {% endwith %}
 
+      {% if audience %}{% include "audience/_post_audience.html" %}{% endif %}
+
       <section class="card card-pad space-y-4" aria-labelledby="pd-post">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <h2 id="pd-post" class="pd-section-title">The post</h2>

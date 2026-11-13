@@ -39,6 +39,14 @@ def comments_inbox(request):
     if filter_by not in comments.FEED_FILTERS:
         filter_by = default
     before = parse_datetime(request.GET.get("before", "") or "")
+    from apps.audience.reports import TOPIC_FILTERS
+    from apps.core.releases import is_released
+
+    # What each comment is about, and the topic filter (spec: audience-intelligence-spec).
+    show_topics = is_released("audience_insights")
+    topic = request.GET.get("topic", "") if show_topics else ""
+    if topic not in dict(TOPIC_FILTERS):
+        topic = ""
     threads, cursor = (
         comments.comment_feed(
             account,
@@ -47,6 +55,8 @@ def comments_inbox(request):
             post_id=post_id,
             variant_id=variant_id,
             before=before,
+            topic=topic,
+            with_topics=show_topics,
         )
         if channels
         else ([], None)
@@ -64,6 +74,9 @@ def comments_inbox(request):
         "channel": channel,
         "filter_by": filter_by,
         "filters": FILTER_LABELS,
+        "show_topics": show_topics,
+        "topic": topic,
+        "topic_filters": TOPIC_FILTERS if show_topics else (),
         "post_id": post_id or variant,
         "post": header[0] if header else None,
         "post_ref": header[1] if header else None,
@@ -254,4 +267,27 @@ def bulk(request):
             request, "comment_hide_many", 0, items=[f"{c}:{pk}" for c, pk in done]
         )
     flash(request, "warning" if failed else "success", words, undo=undo)
+    return _back(request)
+
+
+@login_required
+@require_POST
+def topics(request, channel: str, pk: int):
+    """The owner corrects what a comment is about (``topics``: the ticked categories).
+    The correction belongs to the comment and outlives reclassification (apps.audience)."""
+    from apps.audience.services import set_topics
+    from apps.core.releases import is_released
+
+    account, response = _guard(request)
+    if response:
+        return response
+    if not is_released("audience_insights"):
+        return _back(request)
+    try:
+        comment = comments._comment(account, channel, pk)
+    except comments.CommentError as exc:
+        messages.error(request, str(exc))
+        return _back(request)
+    set_topics(comment, request.POST.getlist("topics"), user=request.user)
+    messages.success(request, "Topics saved.")
     return _back(request)

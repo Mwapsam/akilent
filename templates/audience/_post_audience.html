@@ -1,0 +1,59 @@
+{% comment %}
+"What people are saying" on a post (apps/audience/reports.py post_audience; spec
+docs/plans/audience-intelligence-spec.md §7, §9). Expects ``audience``.
+
+Counts are people (distinct commenters), not comments. Outcomes are comment-level evidence
+only: a private reply to the comment opened a conversation, and the lead or paid order is
+credited to this post. Everything else stays a lower bound, and the footer says how many
+commenters have no linked conversation. No scores, no percentages of "positive".
+{% endcomment %}
+<section class="card card-pad space-y-4" aria-labelledby="pd-audience" data-post-audience>
+  <div class="flex flex-wrap items-start justify-between gap-2">
+    <div>
+      <h2 id="pd-audience" class="pd-section-title">What people are saying</h2>
+      <p class="mt-0.5 text-xs text-ink-subtle">{{ audience.commenters }} {% if audience.commenters == 1 %}person{% else %}people{% endif %} commented ({{ audience.comments }} comment{{ audience.comments|pluralize }}). Read from the words they used; counts are people, not comments.</p>
+    </div>
+    <a href="{{ audience.comments_url }}" class="btn btn-secondary btn-sm">Open comments</a>
+  </div>
+
+  {% if audience.rows %}
+  <ul class="divide-y divide-border" aria-label="Topics">
+    {% for row in audience.rows %}
+    <li class="py-3 space-y-1.5" data-audience-row="{{ row.category }}">
+      <div class="flex flex-wrap items-baseline justify-between gap-2">
+        <p class="text-sm text-ink">
+          <span class="font-medium">{{ row.label }}</span>
+          <span class="text-ink-subtle">· {{ row.commenters }} {% if row.commenters == 1 %}person{% else %}people{% endif %}{% if row.comments != row.commenters %} ({{ row.comments }} comments){% endif %}</span>
+        </p>
+        {% if row.action_url %}<a href="{{ row.action_url }}" class="text-xs font-medium text-accent hover:underline">{{ row.action_label }}</a>{% endif %}
+      </div>
+      {% if row.subs %}<p class="text-xs text-ink-subtle">{% for name, n in row.subs %}{{ name }} {{ n }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+      {% if row.unanswered %}<p class="text-xs text-coral-700" data-unanswered>{{ row.unanswered }} not answered yet</p>{% endif %}
+      {% if row.examples %}
+      <ul class="space-y-1">
+        {% for ex in row.examples %}
+        <li class="text-sm text-ink-muted break-words">“{{ ex.body|truncatechars:140 }}” <span class="text-xs text-ink-subtle">· {{ ex.author }}</span></li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      {% if row.category != "spam_abuse" %}
+      {% with o=row.outcome %}
+      <p class="text-xs text-ink-subtle" data-outcome>
+        {% if o.linked %}{{ o.linked }} of {{ row.commenters }} went on to a private conversation from their comment: {{ o.leads }} lead{{ o.leads|pluralize }}, {{ o.orders }} paid order{{ o.orders|pluralize }}{% for r in o.revenue %} ({{ r.currency }} {{ r.total }}){% endfor %}{% if o.in_progress %} · {{ o.in_progress }} still talking{% endif %}{% if o.no_outcome %} · {{ o.no_outcome }} with nothing recorded{% endif %}.
+        {% else %}No private conversation came from these comments yet.{% endif %}
+      </p>
+      {% endwith %}
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="text-sm text-ink-muted">Nothing specific yet: no questions, buying interest, complaints or praise in the comments so far.</p>
+  {% endif %}
+
+  <p class="text-xs text-ink-subtle border-t border-border pt-3" data-coverage>
+    Outcomes count only conversations that a private reply to a comment opened, with leads and paid orders credited to this post, so they're a lower bound.
+    {% if audience.unlinked %}{{ audience.unlinked }} of {{ audience.commenters }} {% if audience.commenters == 1 %}person has{% else %}people have{% endif %} no linked conversation.{% endif %}
+    Chats from the post's link are on the results card above.
+  </p>
+</section>

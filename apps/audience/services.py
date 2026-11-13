@@ -139,45 +139,36 @@ class CurrentSignal:
     is_primary: bool = False
 
 
-def _latest_run(ref: _Ref, source: str, digest: str, *, fallback: bool):
-    runs = AudienceSignalRun.objects.filter(**ref.fk, source=source).order_by(
-        "-created_at", "-pk"
-    )
-    run = runs.filter(text_hash=digest).first()
-    if run is None and fallback:
-        run = runs.first()
+def _pick(runs: list, source: str, digest: str, *, fallback: bool):
+    """The newest run of ``source`` for this text (``runs`` are newest first)."""
+    mine = [r for r in runs if r.source == source]
+    run = next((r for r in mine if r.text_hash == digest), None)
+    if run is None and fallback and mine:
+        run = mine[0]
     return run
 
 
-def current_signals(comment) -> list[CurrentSignal]:
-    """Resolve rules, AI and owner corrections into one list (spec §4).
-
-    1. Rule signals from the latest rule run for the current text (else the latest).
-    2. AI signals only where the rules found nothing specific (just "general"); where
-       the rules did, the rule result stands and AI is ignored.
-    3. Owner corrections for the current text: add inserts, reject removes. Always win.
-    4. Primary recomputed by precedence.
-    """
-    ref = _ref(comment)
-    digest = text_hash(comment.body)
-
+def _base(runs: list, digest: str) -> dict[tuple[str, str], str]:
+    """Rule signals, with AI filling in only where the rules found nothing specific."""
     signals: dict[tuple[str, str], str] = {}
-    rule_run = _latest_run(ref, Source.RULE, digest, fallback=True)
+    rule_run = _pick(runs, Source.RULE, digest, fallback=True)
     if rule_run:
         for s in rule_run.signals.all():
             signals[(s.category, s.subcategory)] = Source.RULE
-
-    ai_run = _latest_run(ref, Source.AI, digest, fallback=False)
-    rules_said_something = any(cat != "general" for (cat, _sub) in signals)
-    if ai_run and not rules_said_something:
-        # AI only fills in where the rules found nothing specific. Where they did, the
-        # rule result stands; the AI writer records any disagreement on its own run.
-        ai = {(s.category, s.subcategory) for s in ai_run.signals.all()}
+    ai_run = _pick(runs, Source.AI, digest, fallback=False)
+    if ai_run and not any(cat != "general" for (cat, _sub) in signals):
+        # Where the rules did find something, the rule result stands; the AI writer
+        # records any disagreement on its own run.
+        ai = [(s.category, s.subcategory) for s in ai_run.signals.all()]
         if any(cat != "general" for (cat, _sub) in ai):
             signals = {k: Source.AI for k in ai if k[0] != "general"}
+    return signals
 
-    corrections = AudienceSignalCorrection.objects.filter(**ref.fk, text_hash=digest)
-    for c in corrections:
+
+def _resolve(runs: list, corrections: list, digest: str) -> list[CurrentSignal]:
+    signals = _base(runs, digest)
+    mine = [c for c in corrections if c.text_hash == digest]
+    for c in mine:
         if c.action == AudienceSignalCorrection.Action.REJECT:
             signals = {
                 k: v
@@ -186,15 +177,73 @@ def current_signals(comment) -> list[CurrentSignal]:
                     k[0] == c.category and (not c.subcategory or k[1] == c.subcategory)
                 )
             }
-    for c in corrections:
+    for c in mine:
         if c.action == AudienceSignalCorrection.Action.ADD:
-            signals[(c.category, c.subcategory)] = "owner"
-
+            signals.setdefault((c.category, c.subcategory), "owner")
     ordered = sorted(signals.items(), key=lambda kv: precedence_rank(kv[0][0]))
     return [
         CurrentSignal(cat, sub, src, is_primary=(i == 0))
         for i, ((cat, sub), src) in enumerate(ordered)
     ]
+
+
+def current_signals(comment) -> list[CurrentSignal]:
+    """Resolve rules, AI and owner corrections into one list (spec §4).
+
+    1. Rule signals from the latest rule run for the current text (else the latest).
+    2. AI signals only where the rules found nothing specific (just "general"); where
+       the rules did, the rule result stands and AI is ignored.
+    3. Owner corrections for the current text: reject removes, add inserts. Always win.
+    4. Primary recomputed by precedence.
+    """
+    return current_signals_for([comment]).get(_key(comment), [])
+
+
+def _key(comment) -> tuple[str, int]:
+    from apps.facebook.models.comment import FacebookComment
+
+    channel = (
+        Channel.FACEBOOK if isinstance(comment, FacebookComment) else Channel.INSTAGRAM
+    )
+    return channel, comment.pk
+
+
+def current_signals_for(comments) -> dict[tuple[str, int], list[CurrentSignal]]:
+    """``current_signals`` for many comments (Instagram and Facebook mixed). Keyed by
+    ``(channel, comment pk)``."""
+    return signals_for_rows((*_key(c), c.body) for c in comments)
+
+
+def signals_for_rows(rows) -> dict[tuple[str, int], list[CurrentSignal]]:
+    """Current signals for ``(channel, comment pk, body)`` rows, in four queries."""
+    bodies: dict[str, dict[int, str]] = {Channel.INSTAGRAM: {}, Channel.FACEBOOK: {}}
+    for channel, pk, body in rows:
+        bodies[channel][pk] = body or ""
+    out: dict[tuple[str, int], list[CurrentSignal]] = {}
+    for channel, fk in (
+        (Channel.INSTAGRAM, "ig_comment"),
+        (Channel.FACEBOOK, "fb_comment"),
+    ):
+        found = bodies[channel]
+        if not found:
+            continue
+        runs: dict[int, list] = {}
+        for run in (
+            AudienceSignalRun.objects.filter(**{f"{fk}__in": list(found)})
+            .prefetch_related("signals")
+            .order_by("-created_at", "-pk")
+        ):
+            runs.setdefault(getattr(run, f"{fk}_id"), []).append(run)
+        corrections: dict[int, list] = {}
+        for corr in AudienceSignalCorrection.objects.filter(
+            **{f"{fk}__in": list(found)}
+        ):
+            corrections.setdefault(getattr(corr, f"{fk}_id"), []).append(corr)
+        for pk, body in found.items():
+            out[(channel, pk)] = _resolve(
+                runs.get(pk, []), corrections.get(pk, []), text_hash(body)
+            )
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -221,3 +270,35 @@ def set_correction(comment, category: str, subcategory: str, action: str, *, use
         },
     )
     return correction
+
+
+def set_topics(comment, chosen, *, user=None) -> list[CurrentSignal]:
+    """The owner ticked which categories a comment is about (whole categories).
+
+    A category the classifier found and the owner unticked gets a reject; one the owner
+    ticked that isn't there gets an add. Ticking a category back drops the reject
+    instead of piling up an add on top of it. Returns the comment's signals afterwards.
+    """
+    chosen = {c for c in chosen if is_valid(c)}
+    ref = _ref(comment)
+    digest = text_hash(comment.body)
+    runs = list(
+        AudienceSignalRun.objects.filter(**ref.fk)
+        .prefetch_related("signals")
+        .order_by("-created_at", "-pk")
+    )
+    found = {cat for (cat, _sub) in _base(runs, digest)} - {"general"}
+    current = {s.category for s in current_signals(comment)} - {"general"}
+    corrections = AudienceSignalCorrection.objects.filter(**ref.fk)
+    with transaction.atomic():
+        for cat in current - chosen:
+            # Drop any owner adds for it, then reject what the classifier found.
+            corrections.filter(category=cat, action="add").delete()
+            if cat in found:
+                set_correction(comment, cat, "", "reject", user=user)
+        for cat in chosen - current:
+            if cat in found:
+                corrections.filter(category=cat, action="reject").delete()
+            else:
+                set_correction(comment, cat, "", "add", user=user)
+    return current_signals(comment)
