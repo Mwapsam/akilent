@@ -200,6 +200,16 @@ def _engagement(platform: str, values: dict):
     return None if total is None else total / reach
 
 
+def _available(snap) -> dict:
+    """A read's values, without any its states say weren't read (no state: trusted)."""
+    states = snap.states or {}
+    return {
+        k: v
+        for k, v in (snap.values or {}).items()
+        if states.get(k, "available") == "available"
+    }
+
+
 def _sum(values: dict, keys) -> float | None:
     parts = [n for n in (_number(values, k) for k in keys) if n is not None]
     return sum(parts) if parts else None
@@ -208,7 +218,7 @@ def _sum(values: dict, keys) -> float | None:
 def best_times(account, platform: str, now=None) -> dict:
     """When this channel's posts have reached people best, by time of week.
 
-    Uses each published post's latest numbers (stories left out: they work
+    Uses each published post's newest read that has numbers (stories left out: they work
     differently), from posts out for at least ``BEST_SETTLED`` within ``BEST_WINDOW``.
     Engagement is interactions per person reached, so a post isn't favoured just for
     being seen by more people. Below ``BEST_MIN_POSTS`` measured posts nothing is
@@ -226,11 +236,16 @@ def best_times(account, platform: str, now=None) -> dict:
             published_at__lte=now - BEST_SETTLED,
         ).exclude(post__media_type=ContentPost.MediaType.STORY)
     }
+    # Each post's newest read that has the numbers: a failed latest read must not drop
+    # a post whose earlier read had them.
     latest: dict[int, dict] = {}
     for snap in VariantMetricSnapshot.objects.filter(
         variant_id__in=list(variants)
     ).order_by("variant_id", "-collected_at"):
-        latest.setdefault(snap.variant_id, snap.values or {})
+        if snap.variant_id in latest:
+            continue
+        if _engagement(platform, _available(snap)) is not None:
+            latest[snap.variant_id] = _available(snap)
 
     buckets: dict[tuple[int, int], list[float]] = defaultdict(list)
     rates = []

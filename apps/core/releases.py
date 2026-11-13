@@ -63,6 +63,11 @@ UNRELEASED_FEATURES: dict[str, tuple[str, ...]] = {
     # page's summary with comment-level outcomes. The signals themselves are written
     # regardless (AUDIENCE_SIGNALS_ENABLED); this only shows them.
     "audience_insights": (),
+    # Content Performance Recovery Phase 1, visibility diagnosis
+    # (docs/strategy/content-performance-recovery.md, apps/publishing/visibility.py): the
+    # post page's Visibility card. It reads stored numbers only and never acts; no pages
+    # of its own.
+    "cs_visibility": (),
 }
 
 

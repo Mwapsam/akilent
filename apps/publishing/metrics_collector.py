@@ -169,6 +169,8 @@ def collect_variant_metrics(variant: ContentPostVariant) -> VariantMetricSnapsho
         error=error,
     )
     variant.metrics_latest = {"values": values, "states": states, "error": error}
+    if stop:  # Meta says the post no longer exists (error 100/33)
+        variant.metrics_latest["post_missing"] = True
     variant.metrics_collected_at = now
     variant.metrics_next_at = (
         None

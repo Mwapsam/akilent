@@ -25,7 +25,9 @@ reason, never 0. Expects ``variant`` (a published ContentPostVariant).
         {{ row.label }}
         <span class="sr-only">: {{ row.definition }}</span>
       </dt>
-      {% if row.value is not None %}
+      {% if row.value is not None and row.as_of %}
+      <dd title="As of {{ row.as_of|date:'j M H:i' }}; the latest read failed">{{ row.value }}<span class="block text-xs font-normal text-ink-subtle">as of {{ row.as_of|date:"j M" }}</span></dd>
+      {% elif row.value is not None %}
       <dd>{{ row.value }}</dd>
       {% else %}
       <dd class="!text-ink-subtle" title="{{ row.reason }}">—<span class="sr-only"> ({{ row.reason }})</span></dd>
@@ -43,6 +45,10 @@ reason, never 0. Expects ``variant`` (a published ContentPostVariant).
     <a href="{% url 'publishing:channels' %}" class="cs-link">Reconnect your Facebook Page</a> and allow access to insights.
     {% endif %}
   </p>
+  {% endif %}
+
+  {% if perf.from_earlier %}
+  <p class="text-xs text-ink-subtle">The latest read from {{ perf.channel }} failed, so numbers marked "as of" are from the last read that worked.</p>
   {% endif %}
 
   {% if perf.collected_at and perf.notes %}

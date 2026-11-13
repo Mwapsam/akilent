@@ -297,6 +297,14 @@ class State:
     NEEDS_PERMISSION = "needs_permission"  # reconnect and grant the permission
     BELOW_THRESHOLD = "below_threshold"  # stories with under 5 viewers
     FAILED = "failed"
+    # Never stored: shown in place of PENDING once a read made after NOT_REPORTED_AFTER
+    # still had no number (see effective_state), so an old post doesn't say "wait".
+    NOT_REPORTED = "not_reported"
+
+
+# Meta says new numbers can take up to 48 hours. A read later than this that still has
+# no number means the channel isn't reporting it for this post, not that it's coming.
+NOT_REPORTED_AFTER = timedelta(hours=48)
 
 
 STATE_REASONS = {
@@ -305,7 +313,39 @@ STATE_REASONS = {
     State.NEEDS_PERMISSION: "Reconnect {channel} and allow access to insights.",
     State.BELOW_THRESHOLD: "{channel} shows story numbers once 5 people have viewed it.",
     State.FAILED: "Couldn't read this from {channel}. We'll try again.",
+    State.NOT_REPORTED: "{channel} hasn't returned this number for this post.",
 }
+
+
+def effective_state(state, published_at, collected_at) -> str:
+    """The state to show for a stored one. Every screen that presents a metric's state
+    goes through this, so they never disagree. A missing state is PENDING; PENDING on a
+    read made more than NOT_REPORTED_AFTER after publish is NOT_REPORTED."""
+    state = state or State.PENDING
+    if (
+        state == State.PENDING
+        and published_at
+        and collected_at
+        and collected_at - published_at > NOT_REPORTED_AFTER
+    ):
+        return State.NOT_REPORTED
+    return state
+
+
+def last_known(variant, key: str):
+    """``(value, collected_at)`` from the newest read that had a number for ``key``, or
+    ``(None, None)``. The latest read can fail; what was last observed stays a fact."""
+    from .models import VariantMetricSnapshot
+
+    for snap in VariantMetricSnapshot.objects.filter(variant=variant).only(
+        "values", "states", "collected_at"
+    ):  # newest first (Meta ordering)
+        value = (snap.values or {}).get(key)
+        if isinstance(value, int | float) and (snap.states or {}).get(
+            key, State.AVAILABLE
+        ) == State.AVAILABLE:
+            return value, snap.collected_at
+    return None, None
 
 
 def surface_for(platform: str, media_type: str) -> str:
@@ -378,12 +418,18 @@ def performance_for(variant) -> dict:
     latest = variant.metrics_latest or {}
     values = latest.get("values") or {}
     states = latest.get("states") or {}
+    collected = variant.metrics_collected_at
     rows = []
     for m in metrics_for(variant.platform, media_type):
         state = states.get(m.key, State.PENDING)
         value = values.get(m.key)
         if value is None and state == State.AVAILABLE:
             state = State.PENDING
+        state = effective_state(state, variant.published_at, collected)
+        # The latest read failed: keep showing what was last observed, dated.
+        as_of = None
+        if value is None and state in (State.FAILED, State.NEEDS_PERMISSION):
+            value, as_of = last_known(variant, m.key)
         rows.append(
             {
                 "key": m.key,
@@ -391,12 +437,12 @@ def performance_for(variant) -> dict:
                 "definition": m.definition,
                 "value": value,
                 "state": state,
+                "as_of": as_of,
                 "reason": ""
                 if value is not None
                 else STATE_REASONS.get(state, "").format(channel=channel),
             }
         )
-    collected = variant.metrics_collected_at
     # One line per reason ("Saves, Shares: …"); permission has its own reconnect prompt.
     notes: dict[str, list[str]] = {}
     for r in rows:
@@ -419,4 +465,6 @@ def performance_for(variant) -> dict:
         "needs_permission": any(r["state"] == State.NEEDS_PERMISSION for r in rows),
         "error": latest.get("error", ""),
         "finished": collected is not None and variant.metrics_next_at is None,
+        # Some numbers come from an earlier read because the latest one failed.
+        "from_earlier": any(r["as_of"] for r in rows),
     }

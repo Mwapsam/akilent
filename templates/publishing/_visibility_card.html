@@ -1,0 +1,52 @@
+{% comment %}
+Visibility card (Content Performance Recovery Phase 1, apps/publishing/visibility.py).
+Expects ``visibility``: one diagnosis per Facebook/Instagram channel.
+
+It states what was observed, never a cause. "Zero reported reach" is a number the channel
+returned. Missing numbers are never zero. 24 hours is Akilent's own check window, and
+account restrictions are always "unknown". The next steps are suggestions the owner
+carries out themselves; nothing here acts for them.
+{% endcomment %}
+<section class="card card-pad space-y-4" aria-labelledby="pd-visibility" data-visibility-card>
+  <div>
+    <h2 id="pd-visibility" class="pd-section-title">Visibility</h2>
+    <p class="mt-0.5 text-xs text-ink-subtle">Has anyone had a chance to see this post? Content can't be judged until people have seen it.</p>
+  </div>
+  <div class="divide-y divide-border">
+  {% for d in visibility %}
+    <div class="py-3 space-y-2" data-visibility-stage="{{ d.stage }}">
+      <div class="flex flex-wrap items-baseline gap-2">
+        {% include "components/channel_tag.html" with channel=d.platform compact=True %}
+        <p class="text-sm font-medium {% if d.attention %}tone-amber-fg{% else %}text-ink{% endif %}">{{ d.headline }}</p>
+      </div>
+      {% if d.detail %}<p class="text-sm text-ink-muted">{{ d.detail }}</p>{% endif %}
+      {% if d.from_earlier and d.read_at %}<p class="text-xs text-ink-subtle">From the read on {{ d.read_at|date:"j M H:i" }}; the latest read failed.</p>{% endif %}
+      {% if d.possible_factors %}<p class="text-xs text-ink-subtle">{{ d.possible_factors }}</p>{% endif %}
+      {% if d.stage == "too_early" and d.next_read_at %}<p class="text-xs text-ink-subtle">Next read around {{ d.next_read_at|date:"j M H:i" }}.</p>{% endif %}
+      {% if d.stage == "reached" and d.baseline %}<p class="text-xs text-ink-subtle">Your usual {{ d.baseline.age }} reach on {{ d.channel }} {{ d.baseline.kind }}: {{ d.baseline.median }} (from {{ d.baseline.posts }} posts).</p>{% endif %}
+
+      {% if d.attention %}
+      <details class="text-sm">
+        <summary class="cursor-pointer text-xs font-medium text-ink-muted">What Akilent checked</summary>
+        <ul class="mt-2 space-y-1">
+          {% for c in d.checks %}
+          <li class="flex gap-2 text-xs" data-check="{{ c.status }}">
+            <span class="shrink-0 w-16 {% if c.status == 'ok' %}tone-teal-fg{% elif c.status == 'problem' %}tone-coral-fg{% else %}text-ink-subtle{% endif %}">{% if c.status == 'ok' %}OK{% elif c.status == 'problem' %}Problem{% else %}Unknown{% endif %}</span>
+            <span class="text-ink-muted"><span class="font-medium text-ink">{{ c.label }}</span>{% if c.detail %}: {{ c.detail }}{% endif %}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </details>
+      {% if d.steps %}
+      <div>
+        <p class="text-xs font-medium text-ink-muted">You could</p>
+        <ul class="mt-1 list-disc pl-5 space-y-0.5 text-sm text-ink-muted">
+          {% for step in d.steps %}<li>{{ step }}</li>{% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+      {% endif %}
+    </div>
+  {% endfor %}
+  </div>
+</section>

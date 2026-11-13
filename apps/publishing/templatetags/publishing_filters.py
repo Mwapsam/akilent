@@ -4,6 +4,7 @@ import re
 
 from django import template
 from django.template.loader import render_to_string
+from django.utils import timezone
 
 register = template.Library()
 
@@ -211,29 +212,45 @@ def join_platforms(variants):
 @register.filter
 def reach_summary(post):
     """'Reach: Instagram 1,204 · Facebook 340' from each live channel's latest read; a
-    channel without a number says why ('not read yet', 'needs permission', '—') instead of
-    dropping out, so a post on both channels never looks Facebook-only. '' if none is live."""
-    from apps.publishing.metrics import State
+    channel without a number says why ('not read yet', 'read failed', 'not reported'...)
+    instead of dropping out, so a post on both channels never looks Facebook-only. When
+    the latest read failed, the last number read is shown, marked with its date. States
+    go through metrics.effective_state, as on the post page. '' if none is live."""
+    from apps.publishing.metrics import State, effective_state, last_known
 
     short = {
-        State.NEEDS_PERMISSION: "needs permission",
+        State.NEEDS_PERMISSION: "reconnect",
         State.PENDING: "not read yet",
         State.UNSUPPORTED: "not available",
         State.BELOW_THRESHOLD: "too few to show",
+        State.FAILED: "read failed",
+        State.NOT_REPORTED: "not reported",
     }
     parts = []
     for v in post.variants.all():
         if v.status != "published" or v.platform not in ("facebook", "instagram"):
             continue
+        name = v.get_platform_display()
         latest = v.metrics_latest or {}
         value = (latest.get("values") or {}).get("reach")
         if value is not None:
-            parts.append(f"{v.get_platform_display()} {value:,}")
-        elif not v.metrics_collected_at:
-            parts.append(f"{v.get_platform_display()} not read yet")
-        else:
-            state = (latest.get("states") or {}).get("reach")
-            parts.append(f"{v.get_platform_display()} {short.get(state or '', '—')}")
+            parts.append(f"{name} {value:,}")
+            continue
+        if not v.metrics_collected_at:
+            parts.append(f"{name} not read yet")
+            continue
+        state = effective_state(
+            (latest.get("states") or {}).get("reach"),
+            v.published_at,
+            v.metrics_collected_at,
+        )
+        if state in (State.FAILED, State.NEEDS_PERMISSION) and v.pk:
+            earlier, as_of = last_known(v, "reach")
+            if earlier is not None:
+                day = timezone.localtime(as_of)
+                parts.append(f"{name} {earlier:,} (as of {day.day} {day:%b})")
+                continue
+        parts.append(f"{name} {short.get(state, 'not read yet')}")
     return f"Reach: {' · '.join(parts)}" if parts else ""
 
 

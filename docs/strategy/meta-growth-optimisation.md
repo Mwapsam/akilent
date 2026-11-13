@@ -123,6 +123,8 @@ Every recommendation should be a small, auditable decision proposal, not a myste
 
 Recommendations should include their evidence, confidence, data limitations and expected trade-offs. Low-volume accounts should get conservative guidance, not false certainty.
 
+> Zero and low reach posts: see `docs/strategy/content-performance-recovery.md` (diagnose visibility before content; missing numbers are never zero).
+
 ### 7. Trust and platform integrity
 
 The strategy must improve legitimate distribution, not exploit or deceive the ranking systems. Akilent should:

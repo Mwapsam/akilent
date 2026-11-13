@@ -114,6 +114,7 @@ column in that order.{% endcomment %}
   <div class="pd-grid">
     {# ── Performance and the post itself ─────────────────────────────────── #}
     <div class="pd-main space-y-6 min-w-0">
+      {% if visibility %}{% include "publishing/_visibility_card.html" %}{% endif %}
       {% with published=post|published_channels %}
       {% if published %}
       <section class="card card-pad space-y-4" aria-labelledby="pd-performance">

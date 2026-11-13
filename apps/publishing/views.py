@@ -2238,10 +2238,20 @@ def post_detail(request, pk):
             "audience": _audience_state(post),
             # Akilent Ads Gates 2 and 3; None hides each.
             **_promotion_state(post),
+            # Content Performance Recovery Phase 1 (apps/publishing/visibility.py);
+            # None hides the Visibility card.
+            "visibility": _visibility_state(post, account, results),
         },
         size="lg",
         title="Post",
     )
+
+
+def _visibility_state(post, account, results):
+    """Has anyone had a chance to see this post? One block per channel; flag-gated."""
+    from . import visibility
+
+    return visibility.for_post(post, account, results)
 
 
 def _audience_state(post):
