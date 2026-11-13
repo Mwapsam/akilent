@@ -190,11 +190,16 @@ def full_page_load(view):
     """Always answer boosted navigations to this view with a real page load.
 
     For pages whose scripts can't yet cope with being swapped in (rich editors).
+
+    Only navigations (GET/HEAD) are redirected. A boosted form POST must reach the view:
+    redirecting it would turn it into a GET of the same page and drop the submission
+    without a word. Whatever the POST answers, ShellMiddleware already makes safe (it
+    follows a redirect, or refreshes instead of swapping in a page with its own scripts).
     """
 
     @wraps(view)
     def wrapper(request, *args, **kwargs):
-        if is_shell_swap(request):
+        if request.method in ("GET", "HEAD") and is_shell_swap(request):
             return _hx_redirect(request.get_full_path())
         return view(request, *args, **kwargs)
 

@@ -374,6 +374,33 @@ def test_several_pages_lead_to_a_choice_not_the_first_page(owner_client, setting
     )
 
 
+def test_boosted_page_choice_connects_the_page(owner_client, settings):
+    """The app boosts forms; the choice must not be swallowed by a full-page reload."""
+    settings.WHATSAPP_APP_ID = "app"
+    client, account = owner_client
+    conn = _pending_connection(account)
+    _callback(
+        client,
+        [
+            {"id": "p1", "name": "One", "access_token": "t1"},
+            {"id": "p2", "name": "Two", "access_token": "t2"},
+        ],
+    )
+
+    with patch("apps.publishing.views.get_page_token", return_value="page-two"):
+        response = client.post(
+            reverse("publishing:fb-select-page"),
+            {"page_id": "p2"},
+            HTTP_HX_REQUEST="true",
+            HTTP_HX_BOOSTED="true",
+            HTTP_X_AKILENT_SHELL="app",
+        )
+
+    assert response.status_code == 302 and not response.has_header("HX-Redirect")
+    conn.refresh_from_db()
+    assert (conn.page_id, conn.status) == ("p2", "active")
+
+
 def test_unlisted_page_cannot_be_selected(owner_client, settings):
     settings.WHATSAPP_APP_ID = "app"
     client, account = owner_client

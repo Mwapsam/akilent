@@ -209,6 +209,13 @@ def test_full_page_load_decorator():
     assert view(RequestFactory().get("/editor/")).content == b"editor"
 
 
+def test_full_page_load_lets_a_boosted_post_reach_the_view():
+    """Redirecting a boosted POST turned it into a GET and silently dropped the form."""
+    view = full_page_load(lambda request: HttpResponseRedirect("/done/"))
+    resp = view(RequestFactory().post("/editor/", {"x": "1"}, **BOOSTED))
+    assert resp.status_code == 302 and resp["Location"] == "/done/"
+
+
 # --- nav helpers ----------------------------------------------------------------------------
 
 
