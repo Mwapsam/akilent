@@ -13,7 +13,22 @@
    stick just under the topbar (4rem + the notch inset, as in base.html), on the page's own
    ground so content scrolls under them, one layer below the topbar and its menus. */
 .cs-tabs { position: sticky; top: calc(4rem + var(--safe-top, 0px));
-  z-index: calc(var(--z-sticky, 1020) - 1); background: var(--color-canvas); }
+  z-index: calc(var(--z-sticky, 1020) - 1); background: var(--color-canvas);
+  height: var(--cs-tabs-h); }
+/* Its height, so whatever else sticks on a studio page (the Library and Media filter row, a
+   side column) stops under the tabs instead of sliding behind them. */
+:root { --cs-tabs-h: 2.5rem; }
+
+/* Channels, AI and Bio page use the Settings panels (.settings-main--panels, capped at 45rem
+   for Settings' one column). Inside the studio every other tab fills the width, so these do
+   too: one column full width, and two panels a row once a wide screen would stretch a form
+   past reading width. A notice or a danger panel keeps the whole row. */
+.settings-main.cs-panels { max-width: none; }
+@media (min-width: 1440px) {
+  .settings-main.cs-panels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start; }
+  .cs-panels > .notice-strip, .cs-panels > .settings-section--danger { grid-column: 1 / -1; }
+}
 
 /* The title is the tab's name, under a small "Content Studio" crumb (_cs_title.html). */
 .cs-title { display: flex; flex-direction: column; justify-content: flex-end; min-width: 0; }
@@ -102,8 +117,9 @@
 .cal-m-plan:active { cursor: grabbing; }
 
 /* --- Media (templates/publishing/media_library.html): a gallery, pictures first. ---------- */
-/* Under the app's sticky top bar (base.html: 4rem plus the safe area), not behind it. */
-.ml-toolbar { position: sticky; top: calc(4rem + var(--safe-top, 0px)); z-index: 20; display: flex; flex-wrap: wrap; align-items: center;
+/* Under the app's sticky top bar (base.html: 4rem plus the safe area) and the studio tabs
+   (.cs-tabs), not behind them. */
+.ml-toolbar { position: sticky; top: calc(4rem + var(--safe-top, 0px) + var(--cs-tabs-h)); z-index: 20; display: flex; flex-wrap: wrap; align-items: center;
   gap: .5rem; margin: 0 -.5rem 1rem; padding: .5rem;
   border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--color-canvas) 82%, transparent);
@@ -358,4 +374,4 @@
 @media (min-width: 1024px) { .cs-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .cs-cols > * { min-width: 0; }
 .cs-stack { display: grid; gap: 1rem; }
-@media (min-width: 1024px) { .cs-side { position: sticky; top: calc(4rem + var(--safe-top, 0px) + 1rem); } }
+@media (min-width: 1024px) { .cs-side { position: sticky; top: calc(4rem + var(--safe-top, 0px) + var(--cs-tabs-h) + 1rem); } }
