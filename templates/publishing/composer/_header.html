@@ -27,6 +27,12 @@
     <button type="button" class="btn btn-ghost btn-sm" @click="discardRecovery()">Discard</button>
   </div>
 </div>
+<div class="cmp-banner" x-show="recoveryDiscarded" x-cloak role="status">
+  <span>Unsaved changes discarded.</span>
+  <div class="cmp-banner-actions">
+    <button type="button" class="btn btn-secondary btn-sm" @click="undoDiscardRecovery()">Undo</button>
+  </div>
+</div>
 
 {# Someone saved this post elsewhere since the page loaded. #}
 <div class="cmp-banner is-danger" x-show="saveState === 'conflict'" x-cloak role="alert">

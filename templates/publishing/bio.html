@@ -31,7 +31,7 @@ lists as hairline rows to the panel's edges, Save in the panel's footer.{% endco
       <div>
         <label for="bio-slug" class="block text-sm font-medium text-ink mb-1">Address</label>
         <div class="flex items-center gap-1 text-sm">
-          <span class="text-ink-subtle">/b/</span>
+          <span class="text-ink-subtle">{{ request.get_host }}/b/</span>
           <input id="bio-slug" name="slug" class="input flex-1" maxlength="40" required value="{{ suggested_slug }}" pattern="[a-z0-9][a-z0-9\-]{1,38}[a-z0-9]" aria-describedby="bio-slug-help">
         </div>
         <p id="bio-slug-help" class="text-xs text-ink-subtle mt-1">Lowercase letters, numbers and hyphens.</p>

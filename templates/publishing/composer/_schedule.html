@@ -54,10 +54,37 @@
     </div>
   </div>
 
-  <p class="cmp-hint mt-3">
-    Times are in {{ current_tz_name }}.
-    {% if tz_is_default %}<a href="{% url 'settings-hours' %}" class="cs-link">Set your business timezone</a> so times match your clock.{% endif %}
+  {% comment %}Until the business sets a timezone, times are read in UTC. Offer the device's
+  own zone in one click (settings-timezone keeps opening hours as they are); the link to
+  opening hours stays for anyone who wants another zone, or can't set it.{% endcomment %}
+  {% if tz_is_default %}
+  <p class="cmp-hint mt-3" x-data="{ device: '', saving: false, saved: '', error: '' }"
+     x-init="try { device = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {} if (device === 'UTC' || device === 'Etc/UTC') device = '';">
+    <span x-show="!saved">Times are in {{ current_tz_name }}.</span>
+    <span x-show="saved" x-cloak>Times are in <span x-text="saved"></span>.</span>
+    {% if can_set_timezone %}
+    <template x-if="device && !saved">
+      <span>
+        <button type="button" class="cs-link font-medium" :disabled="saving"
+                @click="saving = true; error = '';
+                  const fd = new FormData(); fd.append('timezone', device);
+                  fd.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+                  fetch('{% url 'settings-timezone' %}', { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then(r => r.json()).then(d => { if (d.ok) saved = d.timezone; else error = d.error || 'Couldn't save it.'; })
+                    .catch(() => { error = 'Couldn't save it. Try again.'; }).finally(() => { saving = false; });"
+                x-text="'Use ' + device + ' (this device)'"></button>
+        or <a href="{% url 'settings-hours' %}" class="cs-link">choose another</a>.
+      </span>
+    </template>
+    <span x-show="!device && !saved"><a href="{% url 'settings-hours' %}" class="cs-link">Set your business timezone</a> so times match your clock.</span>
+    {% else %}
+    Ask an owner or admin to set your business timezone so times match your clock.
+    {% endif %}
+    <span x-show="error" x-cloak class="tone-coral-fg" x-text="error"></span>
   </p>
+  {% else %}
+  <p class="cmp-hint mt-3">Times are in {{ current_tz_name }}.</p>
+  {% endif %}
   {% if approved_for_publish %}
   <p class="cmp-hint mt-2">Approved. Changing the caption, media or channels sends it back for review.</p>
   {% endif %}

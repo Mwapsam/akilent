@@ -69,6 +69,18 @@
   }
 
   // localStorage can be missing or throw (private mode, blocked storage): never rely on it.
+  // "today 15:47", "yesterday 09:10", "Wed 15:47" this past week, else "3 Nov 15:47"
+  // (a copy is kept for two weeks, so a weekday alone could mean either).
+  function recoveryWhen(d) {
+    var time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+    var start = new Date(); start.setHours(0, 0, 0, 0);
+    var day = 86400000;
+    if (d >= start) return "today " + time;
+    if (d >= new Date(start.getTime() - day)) return "yesterday " + time;
+    if (d >= new Date(start.getTime() - 6 * day)) return d.toLocaleDateString(undefined, { weekday: "short" }) + " " + time;
+    return d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + " " + time;
+  }
+
   function storeGet(key) {
     try { var v = window.localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch (e) { return null; }
   }
@@ -115,6 +127,7 @@
       _readinessSeq: 0,
       _mediaCheckTimer: null,
       _undoTimer: null,
+      _discardTimer: null,
       _genPoll: null,
       // ── Server state ──────────────────────────────────────────────────────
       d: d,
@@ -215,6 +228,7 @@
       saving: false,
       rev: 0,
       recovery: null,
+      recoveryDiscarded: null,
       issues: [],
       issuesLoaded: false,
       readinessFailed: false,
@@ -1046,10 +1060,29 @@
         if (!this.selectedPlatforms.length) return "Choose where to publish";
         if (this.readinessFailed) return "Couldn't check. We check again when you " + this.actionVerb(a) + ".";
         if (!this.issuesLoaded) return "Checking…";
-        var n = this.blocking(a).length;
-        if (n) return n + (n === 1 ? " thing" : " things") + " to fix";
+        var blockers = this.blocking(a);
+        // Name the problem, not just a count: one blocker is its own message ("Add an
+        // image"); several lead with the first and say how many more.
+        if (blockers.length === 1) return blockers[0].message;
+        if (blockers.length) return blockers[0].message + " · " + (blockers.length - 1) + " more to fix";
         var w = this.visibleIssues().length;
         return "Ready to " + this.actionVerb(a) + (w ? " · " + w + (w === 1 ? " note" : " notes") : "");
+      },
+
+      // The readiness button: one blocker goes straight to it; otherwise the list opens.
+      readyClick: function () {
+        var blockers = this.blocking(this.primaryAction());
+        if (blockers.length === 1) { this.goToIssue(blockers[0]); return; }
+        this.issuesOpen = !this.issuesOpen;
+      },
+
+      // Why the main button is greyed out, for its tooltip ("" when it isn't).
+      blockReason: function (action) {
+        if (this.submitting) return "";
+        if (!this.selectedPlatforms.length) return "Choose where to publish first.";
+        var blockers = this.blocking(action);
+        if (!blockers.length) return "";
+        return "Fix this first: " + blockers[0].message + (blockers.length > 1 ? " (and " + (blockers.length - 1) + " more)" : "");
       },
 
       checkReadiness: async function () {
@@ -1154,7 +1187,7 @@
         // save: the banner lingered for days over work that was already saved.
         var same = JSON.stringify(s.state) === JSON.stringify(this.snapshot());
         if (same || (this.version && s.version && s.version < this.version)) { this.clearLocal(); return; }
-        var when = new Date(s.t).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+        var when = recoveryWhen(new Date(s.t));
         this.recovery = { when: when, data: s };
       },
 
@@ -1187,9 +1220,23 @@
         this.touched();
       },
 
+      // Discard can't be confirmed after the fact, so it can be undone for 10 seconds.
       discardRecovery: function () {
+        var self = this, rec = this.recovery, key = this.localKey();
         this.recovery = null;
-        storeDel(this.localKey());
+        storeDel(key);
+        clearTimeout(this._discardTimer);
+        this.recoveryDiscarded = rec;
+        this._discardTimer = setTimeout(function () { self.recoveryDiscarded = null; }, 10000);
+      },
+
+      undoDiscardRecovery: function () {
+        var rec = this.recoveryDiscarded;
+        clearTimeout(this._discardTimer);
+        this.recoveryDiscarded = null;
+        if (!rec) return;
+        storeSet(this.localKey(), rec.data);
+        this.recovery = rec;
       },
 
       reloadServerCopy: function () {

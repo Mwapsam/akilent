@@ -125,6 +125,11 @@ urlpatterns = [
         name="settings-api-key-revoke",
     ),
     path("settings/hours/", settings_views.settings_hours, name="settings-hours"),
+    path(
+        "settings/hours/timezone/",
+        settings_views.settings_timezone,
+        name="settings-timezone",
+    ),
     path("settings/ai/", ai_views.settings_ai, name="settings-ai"),
     path(
         "settings/ai/autopilot/",

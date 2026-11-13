@@ -557,6 +557,34 @@ def settings_hours(request):
     )
 
 
+@login_required
+@require_POST
+def settings_timezone(request):
+    """Set only the business timezone, keeping its opening hours as they are.
+
+    The one-click "use my device's timezone" from the composer: scheduling is read in this
+    timezone, and until it is set that is UTC, hours off for most businesses.
+    """
+    from apps.accounts import business_hours as bh
+
+    account, membership = _account_and_membership(request)
+    if account is None or not _can_manage_team(membership):
+        return JsonResponse(
+            {"ok": False, "error": "Only an owner or admin can set the timezone."},
+            status=403,
+        )
+    hours = bh.get_hours(account)
+    try:
+        saved = bh.save_hours(
+            account,
+            tz=request.POST.get("timezone", ""),
+            schedule=hours.schedule if hours else None,
+        )
+    except bh.HoursError as exc:
+        return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+    return JsonResponse({"ok": True, "timezone": saved.timezone})
+
+
 # --- Team ---------------------------------------------------------------------
 
 

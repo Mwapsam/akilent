@@ -2119,6 +2119,7 @@ def post_new(request):
             "approved_for_publish": requires_review and approved,
             "current_tz_name": timezone.get_current_timezone_name(),
             "tz_is_default": workspace_timezone(account) == DEFAULT_TIMEZONE,
+            "can_set_timezone": is_account_admin(request.user, account),
             "wa_number_ready": bool(whatsapp_number_for(account)),
             "wa_links": wa_links,
         },

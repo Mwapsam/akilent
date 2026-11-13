@@ -9,8 +9,10 @@
   lands while a hover preload is in flight was dropped by htmx, and the tab never opened.
   It sits above the page's .cs-head, like every section's tabs (components/_section_tabs.html),
   so the tab row is at the same height on every page of the app.
+  .cs-tabs (static/css/studio.css) keeps it under the topbar as the page scrolls: on long
+  tabs (Sales, AI) it used to scroll away, leaving no way to switch tab without scrolling back.
 {% endcomment %}
-<nav class="flex items-center gap-1 mb-6 border-b border-surface-subtle pb-0 -mt-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Content Studio"
+<nav class="cs-tabs flex items-center gap-1 mb-6 border-b border-surface-subtle pb-0 -mt-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Content Studio"
      data-shortcut-new="{% url 'publishing:post-new' %}" data-instant-tabs data-active-class="border-highlight text-ink" data-inactive-class="border-transparent text-ink-subtle hover:text-ink hover:border-border-strong">
   <a href="{% url 'publishing:index' %}" data-skeleton="grid"
      {% if path == '/publishing/' %}aria-current="page"{% endif %}

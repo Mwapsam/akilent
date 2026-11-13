@@ -9,6 +9,12 @@
 @media (min-width: 640px) {
   .cs-head { flex-wrap: nowrap; height: 3.5rem; }
 }
+/* The Content Studio tabs (templates/publishing/_subnav.html) stay in reach on long pages: they
+   stick just under the topbar (4rem + the notch inset, as in base.html), on the page's own
+   ground so content scrolls under them, one layer below the topbar and its menus. */
+.cs-tabs { position: sticky; top: calc(4rem + var(--safe-top, 0px));
+  z-index: calc(var(--z-sticky, 1020) - 1); background: var(--color-canvas); }
+
 /* The title is the tab's name, under a small "Content Studio" crumb (_cs_title.html). */
 .cs-title { display: flex; flex-direction: column; justify-content: flex-end; min-width: 0; }
 .cs-crumb { font-size: .75rem; font-weight: 500; color: var(--color-ink-subtle); line-height: 1rem; }

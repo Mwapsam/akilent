@@ -3,7 +3,7 @@
     <div class="flex items-center gap-3 min-w-0">
       {# Readiness: what stops the main action, and what to know before it. #}
       <div class="relative" @click.outside="issuesOpen = false" @keydown.escape="issuesOpen = false">
-        <button type="button" class="cmp-ready" @click="issuesOpen = !issuesOpen" :aria-expanded="issuesOpen"
+        <button type="button" class="cmp-ready" @click="readyClick()" :aria-expanded="issuesOpen"
                 aria-controls="readiness-list" :disabled="!selectedPlatforms.length && !issues.length">
           <span class="cmp-ready-icon" :class="readyTone()" aria-hidden="true" x-text="readyIcon()"></span>
           <span x-text="readyText()" aria-live="polite"></span>
@@ -35,13 +35,21 @@
       saves and leaves for the post's page rather than offering a second way to save.{% endcomment %}
       <button type="submit" name="action" value="draft" class="btn btn-secondary" :disabled="submitting">Save and close</button>
       {% if review_gate %}
+      {% comment %}A disabled button says why on hover: the title sits on a wrapper because a
+      disabled button gets no hover in every browser.{% endcomment %}
+      <span class="inline-flex" :title="blockReason('submit_review')">
       <button type="submit" name="action" value="submit_review" class="btn btn-primary"
               :disabled="submitting || blockedFor('submit_review')">Submit for review</button>
+      </span>
       {% else %}
-      <button type="submit" name="action" value="publish_now" class="btn btn-primary" x-show="publishMode === 'now'"
+      <span class="inline-flex" x-show="publishMode === 'now'" :title="blockReason('publish_now')">
+      <button type="submit" name="action" value="publish_now" class="btn btn-primary"
               :disabled="submitting || blockedFor('publish_now')">Publish now</button>
-      <button type="submit" name="action" value="schedule" class="btn btn-primary" x-show="publishMode === 'schedule'" x-cloak
+      </span>
+      <span class="inline-flex" x-show="publishMode === 'schedule'" x-cloak :title="blockReason('schedule')">
+      <button type="submit" name="action" value="schedule" class="btn btn-primary"
               :disabled="submitting || blockedFor('schedule')">Schedule</button>
+      </span>
       {% endif %}
     </div>
   </div>
