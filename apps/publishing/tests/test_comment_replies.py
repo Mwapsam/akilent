@@ -295,3 +295,144 @@ def test_rules_page_names_the_post(account):
 
     post = _post(account, caption="Summer dresses are in.")
     assert "Summer dresses are in." in sentence(_rule(account, post=post))
+
+
+# --- Review answers (2026-11-12) ------------------------------------------------
+
+
+def test_keywords_match_whole_words_ignoring_case():
+    from apps.instagram.services.triggers import keyword_in
+
+    assert keyword_in("What's the COST?", "cost")
+    assert not keyword_in("Love this costume", "cost")
+    assert keyword_in("pp", "pp") and keyword_in("PP please", "pp")
+    assert not keyword_in("so happy", "pp")
+    assert keyword_in("hm for the blue one", "hm")
+    assert keyword_in("How much is it", "how much")
+    assert keyword_in("is it available?", "available")
+    assert not keyword_in("unavailable", "available")
+
+
+def test_the_card_suggests_how_buyers_really_ask():
+    for word in ("pp", "hm", "dm", "inbox", "available"):
+        assert word in comment_replies.DEFAULT_KEYWORDS.split(", ")
+
+
+@pytest.mark.django_db
+def test_general_rules_still_answer_when_the_posts_rule_misses(account):
+    post = _post(account)
+    _rule(account, post=post, keywords="price")
+    general = _rule(account, keywords="delivery")
+    on_post = post.variants.get(platform="instagram")
+    assert (
+        first_matching_trigger(account, "instagram", "delivery to Ndola?", on_post)
+        == general
+    )
+
+
+def _ig_setup():
+    from apps.instagram.tests.helpers import (
+        make_account,
+        make_instagram_account,
+        make_instagram_contact,
+    )
+
+    acc, _ = make_account()
+    ig_account = make_instagram_account(acc)
+    ig_contact, _ = make_instagram_contact(acc, ig_account)
+    return acc, ig_account, ig_contact
+
+
+def _provider(MockProvider):
+    instance = MockProvider.return_value
+    instance.can_send.return_value = MagicMock(eligible=True)
+    instance.private_reply.return_value = MagicMock(
+        success=True, provider_message_id="mid_1", error="", terminal=False
+    )
+    return instance
+
+
+@pytest.mark.django_db
+@patch("apps.instagram.providers.meta.MetaInstagramProvider")
+def test_one_dm_per_person_per_post(MockProvider):
+    from apps.instagram.services.triggers import evaluate_triggers
+    from apps.instagram.tests.test_phase3_acceptance import make_thread
+
+    instance = _provider(MockProvider)
+    acc, ig_account, ig_contact = _ig_setup()
+    _rule(acc, keywords="price", reply="Hi {username}")
+    first = make_thread(ig_account, ig_contact, "price?")
+    second = make_thread(ig_account, ig_contact, "price??")
+    second.post_id = first.post_id
+    second.save(update_fields=["post_id"])
+    elsewhere = make_thread(ig_account, ig_contact, "price on this one?")
+
+    assert evaluate_triggers(first, "price?")
+    assert not evaluate_triggers(second, "price??")  # same person, same post
+    assert evaluate_triggers(elsewhere, "price on this one?")  # another post
+    assert instance.private_reply.call_count == 2
+
+
+@pytest.mark.django_db
+@patch("apps.instagram.providers.meta.MetaInstagramProvider")
+def test_a_comment_past_the_window_isnt_sent_and_says_why(MockProvider):
+    import datetime
+
+    from django.utils import timezone
+
+    from apps.conversations.comments import (
+        CommentItem,
+        ThreadItem,
+        _attach_auto_reply_errors,
+    )
+    from apps.instagram.models.message import OutboundMessage
+    from apps.instagram.services.triggers import evaluate_triggers
+    from apps.instagram.tests.test_phase3_acceptance import make_thread
+
+    instance = _provider(MockProvider)
+    acc, ig_account, ig_contact = _ig_setup()
+    _rule(acc, keywords="price", reply="Hi {username}")
+    thread = make_thread(ig_account, ig_contact, "price?")
+    thread.received_at = timezone.now() - datetime.timedelta(days=8)
+    thread.save(update_fields=["received_at"])
+
+    evaluate_triggers(thread, "price?")
+    instance.private_reply.assert_not_called()
+    outbound = OutboundMessage.objects.get(instagram_account=ig_account)
+    assert outbound.status == OutboundMessage.Status.FAILED
+
+    root = CommentItem(
+        channel="instagram",
+        pk=1,
+        comment_id=thread.comment_id,
+        author="a",
+        body="price?",
+        timestamp=thread.received_at,
+        outbound=False,
+        state="",
+        hidden=False,
+    )
+    item = ThreadItem(
+        channel="instagram",
+        pk=thread.pk,
+        post_id=thread.post_id,
+        root=root,
+        replies=[],
+        intent="",
+        conversation_public_id="",
+        received_at=thread.received_at,
+        answered=False,
+        flagged=False,
+    )
+    _attach_auto_reply_errors(acc, [item])
+    assert "more than 7 days old" in item.auto_reply_error
+    assert not item.auto_reply_error.startswith("Not sent")
+
+
+@pytest.mark.django_db
+def test_short_reply_keywords_arent_flagged_as_matching_inside_words(account):
+    from apps.instagram.services.rule_lint import lint_rules
+
+    _rule(account, keywords="pp, dm, hm")
+    texts = " ".join(w.message for w in lint_rules(account).warnings)
+    assert "inside" not in texts

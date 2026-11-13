@@ -19,6 +19,8 @@ Invariants:
 from __future__ import annotations
 
 import logging
+import re
+from datetime import timedelta
 
 from django.utils import timezone
 
@@ -26,6 +28,50 @@ from apps.instagram.models.comment import CommentThread
 from apps.instagram.models.trigger import CommentTrigger
 
 logger = logging.getLogger(__name__)
+
+# Meta accepts a private reply to a comment for 7 days after it was made. Past that the
+# reply isn't sent at all: it's recorded as failed with this reason, which the Comments
+# view shows on the comment (apps.conversations.comments).
+PRIVATE_REPLY_WINDOW = timedelta(days=7)
+TOO_OLD = (
+    "Not sent: the comment is more than 7 days old, and Instagram and Facebook only "
+    "allow a private reply within 7 days."
+)
+
+
+def keyword_in(text: str, keyword: str) -> bool:
+    """Whether ``keyword`` is in ``text`` as a whole word or phrase, ignoring case:
+    "cost" matches "what's the cost?" but not "costume", "pp" doesn't match "happy"."""
+    keyword = (keyword or "").strip()
+    if not keyword:
+        return False
+    return (
+        re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", text or "", re.IGNORECASE)
+        is not None
+    )
+
+
+def too_old(thread) -> bool:
+    received = getattr(thread, "received_at", None)
+    return received is not None and timezone.now() - received > PRIVATE_REPLY_WINDOW
+
+
+def already_answered_on_post(thread, contact_field: str) -> bool:
+    """Whether this person already got an automatic reply to another comment on the same
+    post: one per person per post, however many times they comment."""
+    contact_id = getattr(thread, f"{contact_field}_id", None)
+    if not (contact_id and thread.post_id):
+        return False
+    return (
+        type(thread)
+        .objects.filter(
+            **{contact_field + "_id": contact_id},
+            post_id=thread.post_id,
+            trigger_fired_at__isnull=False,
+        )
+        .exclude(pk=thread.pk)
+        .exists()
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -50,6 +96,9 @@ def evaluate_triggers(thread: CommentThread, body: str) -> bool:
             thread.pk,
             thread.trigger_fired_at,
         )
+        return False
+
+    if already_answered_on_post(thread, "instagram_contact"):
         return False
 
     account = thread.instagram_account.account
@@ -131,8 +180,7 @@ def _trigger_matches(trigger: CommentTrigger, body: str) -> bool:
         return True
 
     if match_type == CommentTrigger.MatchType.KEYWORD:
-        body_lower = body.lower()
-        return any(kw in body_lower for kw in trigger.keyword_list())
+        return any(keyword_in(body, kw) for kw in trigger.keyword_list())
 
     if match_type == CommentTrigger.MatchType.BUYING_INTENT:
         from apps.conversations.intent import detect_buying_intent
@@ -197,6 +245,10 @@ def _fire_trigger(thread: CommentThread, trigger: CommentTrigger) -> None:
         )
         # Ensure the conversation exists even if we didn't send again.
         _ensure_conversation(thread, ig_contact)
+        return
+
+    if too_old(thread):
+        outbound.mark_failed(TOO_OLD, terminal=True)
         return
 
     # Call the provider synchronously (Celery handles retries via the outbox).

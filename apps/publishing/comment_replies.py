@@ -16,7 +16,9 @@ from dataclasses import dataclass, field
 
 FLAG = "cs_comment_dm_link"
 COMMENT_CHANNELS = ("instagram", "facebook")
-DEFAULT_KEYWORDS = "price, how much, cost, interested"
+# Whole words (triggers.keyword_in). "pp" (price please), "hm" (how much), "dm" and
+# "inbox" are how many buyers ask under a post.
+DEFAULT_KEYWORDS = "price, how much, cost, interested, pp, hm, dm, inbox, available"
 DEFAULT_REPLY = (
     "Hi {username}! Thanks for asking. Chat with us on WhatsApp and we'll send you "
     "the details: {whatsapp_link}"

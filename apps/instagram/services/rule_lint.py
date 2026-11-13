@@ -5,9 +5,10 @@ Both kinds of comment rule are **first-match**: for a comment, only the first ac
 ``triggers.first_matching_trigger``). So a rule whose matches are all caught by an
 earlier rule never acts at all, and two rules doing the same job are clutter at best.
 
-Keyword matching is a case-insensitive *substring* test, so a short keyword like "hi"
+Moderation keywords are a case-insensitive *substring* test, so a short keyword like "hi"
 also matches inside "this" and "which". That is the main way a rule ends up catching
-almost every comment.
+almost every comment. Reply rules match whole words only (``triggers.keyword_in``), since
+2026-11-12, so short keywords like "pp" or "dm" are safe there.
 
 Nothing here changes a rule: the page shows the warnings and the owner decides (turn one
 off, or merge it into another with a preview first).
@@ -133,9 +134,13 @@ def _patterns(rule) -> list:
 def _covered(keyword: str, earlier) -> bool:
     """Whether every comment containing ``keyword`` is also caught by ``earlier``:
     one of its keywords is inside ``keyword``, or its built-in patterns match it."""
-    return any(other in keyword for other in earlier.keyword_list()) or any(
-        p.search(keyword) for p in _patterns(earlier)
-    )
+    if isinstance(earlier, CommentTrigger):
+        from apps.instagram.services.triggers import keyword_in
+
+        inside = any(keyword_in(keyword, other) for other in earlier.keyword_list())
+    else:
+        inside = any(other in keyword for other in earlier.keyword_list())
+    return inside or any(p.search(keyword) for p in _patterns(earlier))
 
 
 def _has_patterns(rule) -> bool:
@@ -241,7 +246,12 @@ def _broad(rule, rule_kind: str) -> list[RuleWarning]:
     risky = _is_risky(rule)
     listed = BROAD_FOR_RISKY if risky else BROAD_FOR_ANY
     common = [k for k in rule.keyword_list() if k in listed]
-    short = [k for k in rule.keyword_list() if len(k) <= SHORT_KEYWORD]
+    # Reply rules match whole words, so a short keyword can't match inside another word.
+    short = (
+        []
+        if isinstance(rule, CommentTrigger)
+        else [k for k in rule.keyword_list() if len(k) <= SHORT_KEYWORD]
+    )
     if not common and not short:
         return []
     parts = []

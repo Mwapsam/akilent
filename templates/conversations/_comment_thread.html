@@ -37,6 +37,7 @@ A row is [data-row], so J/K step through comments. The checkbox belongs to the b
             {% if c.state == 'hidden' %}<span class="badge badge-neutral">Hidden</span>{% endif %}
             {% if c.state == 'deleted' %}<span class="badge badge-neutral">Deleted</span>{% endif %}
             {% if thread.conversation_public_id %}<a href="{% url 'conversations:detail' thread.conversation_public_id %}" class="badge badge-info">In the inbox</a>{% elif thread.answered %}<span class="badge badge-neutral">Answered</span>{% endif %}
+            {% if thread.auto_reply_error %}<span class="w-full text-coral-700" data-auto-reply-error>Auto-reply not sent: {{ thread.auto_reply_error }}</span>{% endif %}
           </div>
         </div>
         {% if not read_only and c.state != 'deleted' and not c.outbound %}

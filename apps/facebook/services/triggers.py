@@ -19,8 +19,11 @@ logger = logging.getLogger(__name__)
 def evaluate_triggers(thread: FacebookCommentThread, body: str, conn) -> bool:
     """Fire the first matching trigger for this root comment. True when one fired."""
     from apps.instagram.api import first_matching_trigger
+    from apps.instagram.services.triggers import already_answered_on_post
 
     if not body or thread.trigger_fired_at is not None:
+        return False
+    if already_answered_on_post(thread, "facebook_contact"):
         return False
     trigger = first_matching_trigger(
         conn.account, "facebook", body, variant=thread.content_variant
@@ -35,7 +38,7 @@ def _fire_trigger(thread: FacebookCommentThread, trigger, conn) -> None:
     from apps.facebook.models.message import FacebookOutboundMessage
     from apps.facebook.services.outbound import enqueue_reply, send_outbound
     from apps.instagram.api import CommentTrigger
-    from apps.instagram.services.triggers import reply_links
+    from apps.instagram.services.triggers import TOO_OLD, reply_links, too_old
 
     if not _claim_trigger(thread):
         return
@@ -60,6 +63,9 @@ def _fire_trigger(thread: FacebookCommentThread, trigger, conn) -> None:
         action_type=action_type,
         idempotency_key=key,
     )
+    if outbound is not None and too_old(thread):
+        outbound.mark_failed(TOO_OLD, terminal=True)
+        return
     if outbound is None:
         outbound = FacebookOutboundMessage.objects.get(idempotency_key=key)
         if outbound.status == FacebookOutboundMessage.Status.SENT:

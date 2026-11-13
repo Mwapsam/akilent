@@ -70,6 +70,9 @@ class ThreadItem:
     flagged: bool
     variant_id: int | None = None  # the Content Studio channel that published the post
     post: PostRef | None = None  # set by comment_feed
+    # Why the automatic reply to this comment didn't go (set by comment_feed): a reply
+    # rule fired but Meta refused it, or the comment was past the 7-day window.
+    auto_reply_error: str = ""
 
     @property
     def collapsed(self) -> bool:
@@ -695,7 +698,46 @@ def comment_feed(
     rows.sort(key=lambda t: (t.received_at, t.pk), reverse=True)
     page, more = rows[:limit], len(rows) > limit
     _attach_posts(account, page)
+    _attach_auto_reply_errors(account, page)
     return page, (page[-1].received_at if more and page else None)
+
+
+def _attach_auto_reply_errors(account, threads: list[ThreadItem]) -> None:
+    """Say on a comment when its automatic reply failed, instead of only in the logs.
+
+    A reply rule's message is keyed ``private_reply:…`` and addressed to the comment
+    (apps.instagram/facebook.services.triggers); one query per channel on the page."""
+    from apps.facebook.models.message import FacebookOutboundMessage
+    from apps.instagram.models.message import OutboundMessage
+
+    by_channel: dict[str, dict[str, ThreadItem]] = {INSTAGRAM: {}, FACEBOOK: {}}
+    for t in threads:
+        if t.root is not None and not t.conversation_public_id:
+            by_channel[t.channel][t.root.comment_id] = t
+    if by_channel[INSTAGRAM]:
+        for recipient, error in OutboundMessage.objects.filter(
+            instagram_account__account=account,
+            recipient_igsid__in=list(by_channel[INSTAGRAM]),
+            idempotency_key__startswith="private_reply:",
+            status=OutboundMessage.Status.FAILED,
+        ).values_list("recipient_igsid", "last_error"):
+            by_channel[INSTAGRAM][recipient].auto_reply_error = _reason(error)
+    if by_channel[FACEBOOK]:
+        for recipient, error in FacebookOutboundMessage.objects.filter(
+            account=account,
+            recipient_id__in=list(by_channel[FACEBOOK]),
+            idempotency_key__startswith="private_reply:",
+            status=FacebookOutboundMessage.Status.FAILED,
+        ).values_list("recipient_id", "last_error"):
+            by_channel[FACEBOOK][recipient].auto_reply_error = _reason(error)
+
+
+def _reason(error: str) -> str:
+    """The why, without a leading "Not sent:" (the page says that part)."""
+    error = (error or "").strip()
+    if error.lower().startswith("not sent:"):
+        error = error[len("not sent:") :].strip()
+    return error[:200] or "Meta didn't accept it."
 
 
 def _feed_queryset(account, channel, filter_by, post_id, variant_id):
