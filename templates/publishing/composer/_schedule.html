@@ -58,8 +58,11 @@
   own zone in one click (settings-timezone keeps opening hours as they are); the link to
   opening hours stays for anyone who wants another zone, or can't set it.{% endcomment %}
   {% if tz_is_default %}
-  <p class="cmp-hint mt-3" x-data="{ device: '', saving: false, saved: '', error: '' }"
-     x-init="try { device = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {} if (device === 'UTC' || device === 'Etc/UTC') device = '';">
+  {% comment %}The device's zone is read in x-data's init(): an x-init expression is assigned to
+  a result, so one starting with "try" is a syntax error and never ran.{% endcomment %}
+  <p class="cmp-hint mt-3" x-data="{ device: '', saving: false, saved: '', error: '',
+       init() { let z = ''; try { z = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+                this.device = /^(Etc\/)?UTC$/.test(z) ? '' : z; } }">
     <span x-show="!saved">Times are in {{ current_tz_name }}.</span>
     <span x-show="saved" x-cloak>Times are in <span x-text="saved"></span>.</span>
     {% if can_set_timezone %}

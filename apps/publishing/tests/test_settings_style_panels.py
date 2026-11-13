@@ -13,8 +13,9 @@ from apps.publishing.tests.test_studio_overlay import shop  # noqa: F401 - fixtu
 
 pytestmark = pytest.mark.django_db
 
-# The Settings panels; the studio's own pages add cs-panels (full width, static/css/studio.css).
-COLUMN = 'class="settings-main settings-main--panels cs-panels"'
+# The Settings panels. No closing quote: the studio's own pages add cs-panels after it
+# (full width, static/css/studio.css).
+COLUMN = 'class="settings-main settings-main--panels'
 
 
 def _main(html):

@@ -129,8 +129,11 @@
    way first, instead of wrapping its last filter ("Any time") onto a row of its own. */
 @media (min-width: 1024px) {
   .ml-toolbar--one-row { flex-wrap: nowrap; }
-  .ml-toolbar--one-row .ml-search { flex-basis: 7rem; }
-  .ml-toolbar--one-row > select, .ml-toolbar--one-row > details { flex-shrink: 0; }
+  .ml-toolbar--one-row .ml-search { flex-basis: 10rem; min-width: 9rem; }
+  /* A native select is as wide as its longest option ("Carousel (Instagram only)"): capped,
+     so the three of them don't squeeze the search to a stub. */
+  .ml-toolbar--one-row > select { flex: 0 1 auto; max-width: 9.5rem; min-width: 6.5rem; }
+  .ml-toolbar--one-row > details { flex-shrink: 0; }
 }
 /* Tags + sort + view at the end of the one filter row. Below 1024px tags and sort fold
    behind "Filters" (a small panel under it) so the row never wraps into an empty band. */

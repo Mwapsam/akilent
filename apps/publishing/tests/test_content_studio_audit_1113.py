@@ -146,3 +146,12 @@ def test_studio_panels_and_library_row_classes(owner, settings):
     for name in ("publishing:channels", "publishing:ai-tools", "publishing:bio"):
         assert "settings-main--panels cs-panels" in client.get(reverse(name)).content.decode()
     assert "ml-toolbar--one-row" in client.get(reverse("publishing:library")).content.decode()
+
+
+def test_device_timezone_is_read_in_init_not_x_init(owner):
+    """Alpine assigns an x-init expression to a result, so one starting with a statement
+    ("try") is a syntax error and never runs: the one-click timezone never appeared live."""
+    _, _, client = owner
+    html = client.get(reverse("publishing:post-new")).content.decode()
+    assert not re.search(r'x-init="\s*(try|for|while)\b', html)
+    assert "resolvedOptions().timeZone" in html.split("init() {", 1)[1][:200]
