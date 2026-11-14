@@ -41,8 +41,13 @@ def is_configured() -> bool:
     return backend_name().lower() != "none"
 
 
-def get_ai_provider(account=None, tier: str = "standard") -> AIProvider:
+def get_ai_provider(
+    account=None, tier: str = "standard", timeout: float = 0
+) -> AIProvider:
     """The configured provider at ``tier``. ``account`` is accepted so per-business providers can come later.
+
+    ``timeout`` (seconds) overrides ``AI_TIMEOUT_SECONDS`` for the primary provider, for jobs that
+    send far more text than a chat reply (reading a whole website).
 
     Raises:
         AIProviderError: if AI isn't configured or the backend can't be loaded.
@@ -61,7 +66,12 @@ def get_ai_provider(account=None, tier: str = "standard") -> AIProvider:
     if not (isinstance(cls, type) and issubclass(cls, AIProvider)):
         raise AIProviderError(f"AI backend {name!r} is not an AIProvider.")
     model = model_for(tier)
-    primary = cls(model=model) if model else cls()  # type: ignore[call-arg]
+    kwargs: dict = {}
+    if model:
+        kwargs["model"] = model
+    if timeout:
+        kwargs["timeout"] = timeout
+    primary = cls(**kwargs)  # type: ignore[call-arg]
     fallback = get_fallback_provider()
     if fallback is None:
         return primary

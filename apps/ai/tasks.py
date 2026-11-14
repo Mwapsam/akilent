@@ -20,6 +20,9 @@ from celery import shared_task
 logger = logging.getLogger(__name__)
 
 _MAX_RETRIES = 2
+# Drafts that send the model far more than a chat reply does. Reading a website sends up to 30,000
+# characters and asks for 30 answers back, which the usual 45 s cut off before the model finished.
+_LONG_DRAFT_TIMEOUTS = {"website": 180}
 _LOCK_SECONDS = 120
 
 
@@ -335,7 +338,12 @@ def build_draft(self, draft_id: int) -> str:
     if _over_daily_limit(draft.account_id, f"ai-draft:{draft.pk}"):
         return fail("The daily AI limit has been reached. Try again tomorrow.")
     try:
-        drafting.run(draft, get_ai_provider(draft.account))
+        drafting.run(
+            draft,
+            get_ai_provider(
+                draft.account, timeout=_LONG_DRAFT_TIMEOUTS.get(draft.kind, 0)
+            ),
+        )
     except AIProviderError as exc:
         if getattr(exc, "retryable", True) and self.request.retries < self.max_retries:
             raise self.retry(countdown=5 * (2**self.request.retries), exc=exc) from exc

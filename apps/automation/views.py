@@ -630,6 +630,8 @@ def workflow_editor(request, slug: str):
         {
             "account": account,
             "wf": wf,
+            # A website chatbot whose conversation this is (Chatbot Studio): links back to it.
+            "chatbot": _chatbot_for(wf),
             "definition_json": json.dumps(
                 automation_api.editable_definition(wf), indent=2
             ),
@@ -684,6 +686,14 @@ def workflow_editor(request, slug: str):
             "whatsapp_templates_json": json.dumps(whatsapp_templates),
         },
     )
+
+
+def _chatbot_for(wf):
+    from apps.core.releases import is_released
+
+    if not is_released("chatbot"):
+        return None
+    return wf.chatbots.filter(chatbot_type="customer").first()
 
 
 @login_required

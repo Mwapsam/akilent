@@ -1,7 +1,39 @@
 # Chatbot Studio — spec and phased plan
 
-Status (2026-11-14): **P0 and P1 committed; P2 and P3 built** (uncommitted). 155 chatbot tests
-pass. P4–P6 aren't built.
+Status (2026-11-14): **P0 and P1 committed; P2, P3 and P4 built** (uncommitted). 186 chatbot
+tests pass. P5 and P6 aren't built.
+
+P4 as built (an owner goes from "New chatbot" to a live bot without the automation editor):
+- **New chatbot** asks for a name, a starter and (optionally) the website. `apps/chatbot/starters.py`
+  has three starters: *Answer questions, hand over when stuck* (`ai_answer` on every message),
+  *Capture sales leads* (greets with buttons on open, `create_lead`, two lead questions, tells the
+  team) and *Help choose a product* (`lookup_product`, then AI, then the team). Each is saved as
+  the bot's own Workflow, **unpublished**, with the fields its questions need. All three pass the
+  publish checks as is (tested).
+- **Bot page:** a "Get it live" checklist (conversation chosen → turned on → website added → code
+  seen on the site), a Conversation card with *Turn it on* / *Put changes live* (owner/admin only,
+  `automation_api.publish`), and the Install card.
+- **Install check:** `init` stamps the allowed origin on `ChatbotConfig.seen_on` (migration 0008, at
+  most hourly; Akilent's own origin ignored). A refused origin is kept in the cache (5 per bot,
+  7 days) and shown as "tried to load on www.example.com" with *Add this website*
+  (`services/install.py`).
+- **Try it (live preview):** `/chatbot/<pk>/preview/`, a chat window in the bot's colour that
+  plays the saved draft through `apps.automation.simulate` (nothing sent or saved). Taps, typed
+  answers, a "behind the scenes" toggle, and a note where the real bot's AI would answer. The
+  automation editor links to it ("Try in chat") and back to the bot when the workflow belongs to
+  a released chatbot. It is a separate page, not beside the editor: the editor is already full,
+  and the preview uses saved changes.
+- **Settings:** a Conversation picker (any website-chat automation, or none = AI only) replaces
+  Purpose. The list shows websites, setup progress, and chats and leads in the last 7 days.
+- **Engine fix:** `lookup_product` with no `query_variable` (the editor never offers one) searched
+  for "" and never found anything. It now searches the customer's message.
+- **Simulator fix:** `{contact}` is filled in previews, as the engine does.
+- **Not done / noted:**
+  - The bot's workflow counts towards the plan's automation limit, and the editor needs the
+    `automations` feature; the plan feature placement is P6.
+  - Widget: Enter is ignored while the previous reply is loading (the text stays in the box). P6
+    widget polish, with the launcher's missing role/label.
+  - Templates use "Get a quote" wording; owners edit it in the automation editor.
 
 P3 as built:
 - **The bot's built-in AI is `apps.ai.api.grounded_answer`,** the checked answer the inbox's

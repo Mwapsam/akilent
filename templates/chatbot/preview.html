@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}Try {{ bot.name }}{% endblock %}
+
+{% block extra_head %}
+{% comment %} The preview plays the bot's saved conversation (unpublished changes included)
+through the automation simulator: nothing is sent, saved or charged. A bot that greets on open
+starts straight away; otherwise each visitor message starts the conversation, as on the site.
+After the conversation ends (or for a bot with no conversation), the real bot's AI would answer
+from Knowledge; the preview says so rather than spending AI. {% endcomment %}
+<script>
+  function chatPreview(cfg) {
+    return {
+      cfg,
+      done: [],        // finished runs' transcripts
+      run: null,       // {message, replies}
+      result: null,    // the current run's simulate() result
+      draft: "",
+      busy: false,
+      showSteps: false,
+      error: "",
+      init() {
+        if (cfg.has_flow && cfg.greets) this.start("");
+      },
+      get entries() {
+        const current = this.result ? this.result.transcript : [];
+        return [...this.done.flat(), ...current];
+      },
+      get options() {
+        // Taps for the latest question, while the conversation waits on it.
+        if (!this.result || !this.result.waiting) return [];
+        const bots = this.result.transcript.filter((e) => e.kind === "bot");
+        const last = bots[bots.length - 1];
+        return (last && last.options) || [];
+      },
+      visible(e) {
+        if (e.kind === "customer" || e.kind === "bot" || e.kind === "problem" || e.kind === "ai") return true;
+        return this.showSteps;
+      },
+      async start(message) {
+        this.run = { message, replies: [] };
+        await this.play();
+      },
+      async play() {
+        this.busy = true;
+        this.error = "";
+        try {
+          const resp = await fetch(cfg.url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-CSRFToken": cfg.csrf },
+            body: JSON.stringify(this.run),
+          });
+          if (!resp.ok) throw new Error(String(resp.status));
+          this.result = await resp.json();
+          if (!this.result.started) {
+            this.result.transcript.push({ kind: "ai", text: this.aiText() });
+            this.finish();
+          } else if (!this.result.waiting) {
+            this.finish();
+          }
+        } catch (e) {
+          this.error = "The preview couldn't run. Check your connection and try again.";
+        } finally {
+          this.busy = false;
+          this.$nextTick(() => {
+            const el = this.$refs.log; if (el) el.scrollTop = el.scrollHeight;
+            if (this.$refs.input && document.activeElement === document.body) this.$refs.input.focus();
+          });
+        }
+      },
+      finish() {
+        this.done.push(this.result.transcript);
+        this.result = null;
+        this.run = null;
+      },
+      aiText() {
+        return "Here your bot's AI answers from your Knowledge. If it can't answer safely, your team takes the chat.";
+      },
+      send(text) {
+        text = (text || this.draft).trim();
+        if (!text || this.busy) return;
+        this.draft = "";
+        if (this.run) {
+          this.run.replies.push(text);
+          this.play();
+        } else if (cfg.has_flow && !cfg.greets) {
+          this.start(text);
+        } else {
+          this.done.push([{ kind: "customer", text }, { kind: "ai", text: this.aiText() }]);
+          this.$nextTick(() => { const el = this.$refs.log; if (el) el.scrollTop = el.scrollHeight; });
+        }
+      },
+      restart() {
+        this.done = []; this.run = null; this.result = null; this.error = "";
+        if (cfg.has_flow && cfg.greets) this.start("");
+      },
+    };
+  }
+</script>
+{% endblock %}
+
+{% block content %}
+{{ preview_cfg|json_script:"preview-cfg" }}
+<div class="max-w-3xl mx-auto py-8 px-4 space-y-4">
+  <div class="flex flex-wrap items-center gap-3">
+    <a href="{% url 'chatbot:detail' bot.pk %}" class="btn-icon text-ink-subtle hover:text-ink" aria-label="Back">
+      {% include "components/icon.html" with name="arrow-left" class="w-5 h-5" %}
+    </a>
+    <h1 class="text-2xl font-semibold text-ink flex-1">Try {{ bot.name }}</h1>
+    {% if bot.workflow %}
+    <a href="{% url 'automation:editor' bot.workflow.slug %}" class="btn btn-ghost btn-sm">Edit messages and steps</a>
+    {% endif %}
+  </div>
+  <p class="text-sm text-ink-muted">Chat as a visitor would. This uses your latest saved changes, even ones that aren't live yet. Nothing is sent to anyone or saved.</p>
+
+  <div x-data="chatPreview(Object.assign(JSON.parse(document.getElementById('preview-cfg').textContent), {csrf: '{{ csrf_token }}'}))"
+       class="mx-auto max-w-sm rounded-2xl border border-border shadow-lg overflow-hidden flex flex-col bg-surface" style="height: 32rem">
+    <div class="px-4 py-3 text-white flex items-center justify-between" :style="'background:' + cfg.color">
+      <span class="font-semibold text-sm truncate" x-text="cfg.name"></span>
+      <button type="button" class="text-xs underline opacity-90" @click="restart()">Start again</button>
+    </div>
+
+    <div x-ref="log" class="flex-1 overflow-y-auto p-3 space-y-2" aria-live="polite">
+      <template x-if="cfg.welcome">
+        <div class="max-w-[85%] rounded-xl px-3 py-2 text-sm tone-surface text-ink border border-border" x-text="cfg.welcome"></div>
+      </template>
+      <template x-for="(e, i) in entries" :key="i">
+        <div x-show="visible(e)">
+          <div x-show="e.kind === 'customer'" class="flex justify-end">
+            <div class="max-w-[85%] rounded-xl px-3 py-2 text-sm text-white" :style="'background:' + cfg.color" x-text="e.text"></div>
+          </div>
+          <div x-show="e.kind === 'bot'" class="max-w-[85%] rounded-xl px-3 py-2 text-sm tone-surface text-ink border border-border whitespace-pre-line" x-text="e.text"></div>
+          <p x-show="e.kind === 'ai'" class="text-xs text-ink-muted italic px-1" x-text="e.text"></p>
+          <p x-show="e.kind === 'problem'" class="text-xs alert-warning px-2 py-1 rounded" x-text="e.text"></p>
+          <p x-show="['action', 'decision', 'note'].includes(e.kind)" class="text-xs text-ink-subtle px-1">
+            <span aria-hidden="true">↳ </span><span x-text="e.text"></span>
+          </p>
+        </div>
+      </template>
+      <p x-show="busy" class="text-xs text-ink-subtle px-1">…</p>
+      <p x-show="error" class="text-xs alert-warning px-2 py-1 rounded" x-text="error" role="alert"></p>
+    </div>
+
+    <div x-show="options.length" class="px-3 pb-2 flex flex-wrap gap-2">
+      <template x-for="opt in options" :key="opt">
+        <button type="button" class="btn btn-secondary btn-sm" @click="send(opt)" :disabled="busy" x-text="opt"></button>
+      </template>
+    </div>
+
+    {% comment %} Not a <form>: the page's boosted-form handling would submit it as a page load
+    and wipe the chat. Enter and the button both call send(). {% endcomment %}
+    <div class="border-t border-border p-2 flex gap-2">
+      <label for="preview-input" class="sr-only">Message</label>
+      <input id="preview-input" x-ref="input" class="input input-sm flex-1" x-model="draft" placeholder="Type a message…" autocomplete="off"
+             :disabled="busy" @keydown.enter.prevent="send()">
+      <button type="button" class="btn btn-primary btn-sm" :disabled="busy || !draft.trim()" @click="send()">Send</button>
+    </div>
+    <label class="px-3 pb-2 text-xs text-ink-muted flex items-center gap-2">
+      <input type="checkbox" x-model="showSteps"> Show what happens behind the scenes
+    </label>
+  </div>
+</div>
+{% endblock %}

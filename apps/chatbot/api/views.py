@@ -125,9 +125,14 @@ def init(request: HttpRequest) -> JsonResponse:
     if chatbot_obj is None:
         return auth.forbidden("Invalid or inactive chatbot key.")
 
+    from apps.chatbot.services import install
+
+    origin = request.META.get("HTTP_ORIGIN", "")
     if not auth.check_origin(chatbot_obj, request):
+        install.record_blocked(chatbot_obj, origin)  # shown to the owner on Install
         return auth.forbidden("Origin not authorized.")
     auth.allow_cors(request)
+    install.record_seen(chatbot_obj, origin)
 
     api_origin = getattr(settings, "SITE_URL", "").rstrip("/")
     if not api_origin:

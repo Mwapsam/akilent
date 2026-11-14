@@ -164,6 +164,7 @@ def settings_ai_knowledge(request):
             messages.success(request, "Added to the knowledge base.")
         return redirect("settings-ai-knowledge")
     entries = list(KnowledgeBaseEntry.objects.filter(account=account).order_by("title"))
+    website_import = _website_import(account)
     return render(
         request,
         "accounts/settings_ai_knowledge.html",
@@ -174,8 +175,57 @@ def settings_ai_knowledge(request):
             "entries": [e for e in entries if not e.needs_review],
             "review": [e for e in entries if e.needs_review],
             "source_types": KnowledgeBaseEntry.SourceType.choices,
+            "website_hint": _website_hint(account)
+            or (website_import or {}).get("url", ""),
+            "website_import": website_import,
         },
     )
+
+
+# A website import still pending after this long has been lost (worker restarted, queue down).
+WEBSITE_IMPORT_STUCK = 15 * 60
+
+
+def _website_import(account) -> dict | None:
+    """How the last website import went, from the past day, so a failure isn't silent."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from apps.ai.models import AIDraft
+
+    now = timezone.now()
+    draft = (
+        AIDraft.objects.filter(
+            account=account, kind="website", created_at__gte=now - timedelta(days=1)
+        )
+        .order_by("-created_at")
+        .first()
+    )
+    if draft is None:
+        return None
+    out = {"url": draft.context.get("url") or draft.prompt, "at": draft.created_at}
+    if draft.status == AIDraft.Status.PENDING:
+        if (now - draft.created_at).total_seconds() > WEBSITE_IMPORT_STUCK:
+            return {
+                **out,
+                "state": "error",
+                "error": "Reading your website didn't finish. Try again.",
+            }
+        return {**out, "state": "pending"}
+    if draft.status == AIDraft.Status.ERROR:
+        return {
+            **out,
+            "state": "error",
+            "error": draft.error or "Something went wrong. Try again.",
+        }
+    result = draft.result or {}
+    return {
+        **out,
+        "state": "done",
+        "added": int(result.get("added") or 0),
+        "pages": int(result.get("pages") or 0),
+    }
 
 
 @login_required
@@ -343,11 +393,7 @@ def knowledge_website(request):
     if draft is None:
         messages.error(request, "Turn AI on first (Settings, AI).")
     else:
-        messages.success(
-            request,
-            "Reading your website. What AI finds will appear under Needs review in a minute "
-            "or two; refresh to see it.",
-        )
+        messages.success(request, "Started reading your website.")
     return redirect("settings-ai-knowledge")
 
 

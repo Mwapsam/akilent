@@ -1,62 +1,56 @@
 {% extends "base.html" %}
-{% block title %}New Chatbot{% endblock %}
+{% block title %}New chatbot{% endblock %}
 
 {% block content %}
-<div class="max-w-xl mx-auto py-8 px-4">
+<div class="max-w-2xl mx-auto py-8 px-4">
   <div class="flex items-center gap-3 mb-6">
     <a href="{% url 'chatbot:list' %}" class="btn-icon text-ink-subtle hover:text-ink" aria-label="Back">
       {% include "components/icon.html" with name="arrow-left" class="w-5 h-5" %}
     </a>
-    <h1 class="text-2xl font-semibold text-ink">New Chatbot</h1>
+    <h1 class="text-2xl font-semibold text-ink">New chatbot</h1>
   </div>
 
   {% if error %}
   <div class="mb-4 alert alert-danger" role="alert">{{ error }}</div>
   {% endif %}
 
-  <form method="post" action="{% url 'chatbot:create' %}" class="space-y-5">
+  {% comment %} hx-boost off: an error re-render must keep what was typed. {% endcomment %}
+  <form method="post" action="{% url 'chatbot:create' %}" class="space-y-6" hx-boost="false">
     {% csrf_token %}
 
     <div>
       <label for="name" class="block text-sm font-medium text-ink mb-1">Name</label>
-      <input type="text" id="name" name="name" required
+      <input type="text" id="name" name="name" required maxlength="100"
              value="{{ post.name|default:'' }}"
-             placeholder="e.g. Acme Support Bot"
+             placeholder="e.g. Website assistant"
              class="input">
+      <p class="text-xs text-ink-muted mt-1">Visitors see this at the top of the chat window.</p>
     </div>
 
-    <div>
-      <label for="purpose" class="block text-sm font-medium text-ink mb-1">Purpose</label>
-      <select id="purpose" name="purpose"
-              class="select">
-        {% for val, label in purposes %}
-        <option value="{{ val }}" {% if post.purpose == val %}selected{% endif %}>{{ label }}</option>
+    <fieldset>
+      <legend class="block text-sm font-medium text-ink mb-1">How should it start?</legend>
+      <p class="text-xs text-ink-muted mb-3">You can change every message afterwards, and try it before visitors see it.</p>
+      <div class="space-y-2">
+        {% for s in starters %}
+        <label class="flex items-start gap-3 rounded-lg border border-border p-3 cursor-pointer hover:bg-surface has-[:checked]:border-accent has-[:checked]:bg-surface">
+          <input type="radio" name="starter" value="{{ s.key }}" class="mt-1"
+                 {% if post.starter == s.key or not post.starter and s.key == default_starter %}checked{% endif %}>
+          <span>
+            <span class="block text-sm font-medium text-ink">{{ s.name }}</span>
+            <span class="block text-xs text-ink-muted mt-0.5">{{ s.description }}</span>
+          </span>
+        </label>
         {% endfor %}
-      </select>
-    </div>
+      </div>
+    </fieldset>
 
     <div>
-      <label for="welcome_message" class="block text-sm font-medium text-ink mb-1">Welcome message</label>
-      <textarea id="welcome_message" name="welcome_message" rows="2"
-                placeholder="Hi! How can I help you today?"
-                class="textarea resize-none">{{ post.welcome_message|default:'' }}</textarea>
-    </div>
-
-    <div class="flex gap-4">
-      <div class="flex-1">
-        <label for="primary_color" class="block text-sm font-medium text-ink mb-1">Brand colour</label>
-        <input type="color" id="primary_color" name="primary_color"
-               value="{{ post.primary_color|default:'#1a56db' }}"
-               class="h-9 w-full rounded-lg border border-border bg-surface cursor-pointer">
-      </div>
-      <div class="flex-1">
-        <label for="position" class="block text-sm font-medium text-ink mb-1">Position</label>
-        <select id="position" name="position"
-                class="select">
-          <option value="bottom_right">Bottom right</option>
-          <option value="bottom_left" {% if post.position == "bottom_left" %}selected{% endif %}>Bottom left</option>
-        </select>
-      </div>
+      <label for="website" class="block text-sm font-medium text-ink mb-1">Your website <span class="text-ink-muted font-normal">(optional)</span></label>
+      <input type="text" id="website" name="website" inputmode="url"
+             value="{{ post.website|default:'' }}"
+             placeholder="https://www.example.com"
+             class="input">
+      <p class="text-xs text-ink-muted mt-1">The chat only appears on websites you list. You can add more later.</p>
     </div>
 
     <div class="flex justify-end gap-3 pt-2">

@@ -505,8 +505,13 @@ def read_site(url: str) -> list[tuple[str, str]]:
     robots = _robots(start)
     hosts = {urlsplit(start).hostname}
 
+    def key(link: str) -> str:
+        # "https://shop.example" and "https://shop.example/" are one page: don't read it twice.
+        parts = urlsplit(link)
+        return urlunsplit(parts._replace(path=parts.path or "/"))
+
     pages: list[tuple[str, str]] = []
-    queue, seen = [start], {start}
+    queue, seen = [start], {key(start)}
     while queue and len(pages) < MAX_PAGES:
         target = queue.pop(0)
         if not robots.can_fetch(USER_AGENT, target):
@@ -517,6 +522,7 @@ def read_site(url: str) -> list[tuple[str, str]]:
             if not pages and target == start:
                 raise
             continue
+        seen.add(key(final))  # where a redirect landed: its own links to it aren't a new page
         if target == start:
             # example.com often redirects to www.example.com: its links are on that host, and
             # its robots.txt is the one that applies.
@@ -533,12 +539,12 @@ def read_site(url: str) -> list[tuple[str, str]]:
             if (
                 parts.scheme in ("http", "https")
                 and parts.hostname in hosts
-                and link not in seen
+                and key(link) not in seen
                 and not re.search(
                     r"\.(?:pdf|jpe?g|png|gif|zip|mp4|webp|svg)$", parts.path, re.I
                 )
             ):
-                seen.add(link)
+                seen.add(key(link))
                 queue.append(link)
     if not pages:
         raise WebsiteError("Couldn't find any text on that website.")

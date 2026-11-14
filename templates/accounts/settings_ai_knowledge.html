@@ -101,8 +101,30 @@
   </div>
   {% endif %}
 
+  {% if website_import %}
+  {% with wi=website_import %}
+  {% if wi.state == "pending" %}
+  <div class="alert alert-info" role="status">
+    Reading {{ wi.url }}. What AI finds will appear under Needs review in a minute or two. <a class="underline" href="{% url 'settings-ai-knowledge' %}">Refresh</a>
+  </div>
+  {% elif wi.state == "error" %}
+  <div class="alert alert-danger" role="alert">
+    Couldn't import from {{ wi.url }}: {{ wi.error }}
+  </div>
+  {% elif wi.added %}
+  <div class="alert alert-success" role="status">
+    Found {{ wi.added }} question{{ wi.added|pluralize }} on {{ wi.pages }} page{{ wi.pages|pluralize }} of {{ wi.url }}. Check them under Needs review.
+  </div>
+  {% else %}
+  <div class="alert alert-info" role="status">
+    Read {{ wi.pages }} page{{ wi.pages|pluralize }} of {{ wi.url }} but found no new questions: your knowledge base already has them, or the site doesn't answer customer questions in its text.
+  </div>
+  {% endif %}
+  {% endwith %}
+  {% endif %}
+
   {% if can_edit %}
-  <section class="rounded-xl border border-border p-4 space-y-3" x-data="{ how: 'write' }" aria-labelledby="kb-add">
+  <section class="rounded-xl border border-border p-4 space-y-3" x-data="{ how: '{% if website_import and website_import.state == "error" %}website{% else %}write{% endif %}' }" aria-labelledby="kb-add">
     <h3 id="kb-add" class="font-semibold">Add knowledge</h3>
     <div class="flex flex-wrap gap-3 text-sm" role="radiogroup" aria-label="How to add knowledge">
       <label class="flex items-center gap-1.5"><input type="radio" value="write" x-model="how"> Write one</label>
@@ -153,7 +175,8 @@
     <form method="post" action="{% url 'settings-ai-knowledge-website' %}" class="space-y-2" x-show="how === 'website'" x-cloak>
       {% csrf_token %}
       <label class="label" for="kb-url">Your website</label>
-      <input id="kb-url" name="url" type="url" class="input" placeholder="https://yourbusiness.com" value="{{ website_hint }}" required>
+      {% comment %}type="text": the browser's url type refuses "yourbusiness.com" without https://, which the server adds anyway.{% endcomment %}
+      <input id="kb-url" name="url" type="text" inputmode="url" autocomplete="url" class="input" placeholder="yourbusiness.com" value="{{ website_hint }}" required>
       <p class="text-xs text-ink-subtle">AI reads up to 10 pages of your site and suggests questions and answers from them. Nothing is used until you approve it.</p>
       <button class="btn btn-primary btn-sm">Read my website</button>
     </form>

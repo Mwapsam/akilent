@@ -5,7 +5,8 @@
 <header class="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
   <div class="min-w-0">
     <nav class="mb-1 flex items-center gap-1.5 text-xs text-ink-subtle" aria-label="Breadcrumb">
-      <a href="/automations/" class="hover:text-ink">Automations</a>
+      {% if chatbot %}<a href="{% url 'chatbot:detail' chatbot.pk %}" class="hover:text-ink">{{ chatbot.name }}</a>
+      {% else %}<a href="/automations/" class="hover:text-ink">Automations</a>{% endif %}
       <span aria-hidden="true">/</span><span class="text-ink">{{ wf.name }}</span>
     </nav>
     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-ink">{{ wf.name }}</h1>
@@ -20,6 +21,8 @@
   </div>
   <div class="flex flex-wrap items-center gap-2">
     <a href="{% url 'help-article' 'automations' %}" class="btn btn-ghost btn-sm" title="How automations work">Help</a>
+    {% comment %} The conversation of a website chatbot: try it in the chat window (saved changes). {% endcomment %}
+    {% if chatbot %}<a href="{% url 'chatbot:preview' chatbot.pk %}" class="btn btn-secondary btn-sm" title="Save first: the preview uses your saved changes">Try in chat</a>{% endif %}
     <a href="/automations/{{ wf.slug }}/runs/" class="btn btn-secondary btn-sm">Customers</a>
     <a href="/automations/{{ wf.slug }}/stats/" class="btn btn-secondary btn-sm">Stats</a>
     {% if wf.status == "published" or wf.status == "paused" %}

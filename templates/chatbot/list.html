@@ -18,7 +18,14 @@
               style="background: {{ bot.primary_color }}"></span>
         <div class="flex-1 min-w-0">
           <p class="text-sm font-medium text-ink truncate">{{ bot.name }}</p>
-          <p class="text-xs text-ink-muted mt-0.5">{{ bot.get_purpose_display }} · {{ bot.public_key }}</p>
+          <p class="text-xs text-ink-muted mt-0.5 truncate">
+            {% if bot.allowed_domains %}{{ bot.allowed_domains|join:", " }}{% else %}No website yet{% endif %}
+            {% if not bot.setup.live %} · Setup {{ bot.setup.done_count }} of {{ bot.setup.steps|length }}{% endif %}
+          </p>
+        </div>
+        <div class="hidden sm:block text-right text-xs text-ink-muted shrink-0">
+          <p><span class="text-ink font-medium">{{ bot.chats_this_week }}</span> chat{{ bot.chats_this_week|pluralize }}</p>
+          <p><span class="text-ink font-medium">{{ bot.leads_this_week }}</span> lead{{ bot.leads_this_week|pluralize }} · 7 days</p>
         </div>
         {% include "chatbot/_status.html" %}
       </a>

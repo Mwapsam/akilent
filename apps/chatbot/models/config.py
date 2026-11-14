@@ -78,6 +78,9 @@ class ChatbotConfig(models.Model):
     # workflow). One public widget must not use up the business's whole AI allowance; once
     # it's reached, chats go to the team until tomorrow (UTC). 0 = no AI for this bot.
     ai_daily_limit = models.PositiveIntegerField(default=200)
+    # Where the widget has loaded: {origin: ISO time it was last seen}, for the Install check.
+    # Only allowed origins are stored, at most once an hour each (services/install.py).
+    seen_on = models.JSONField(default=dict, blank=True)
     chatbot_type = models.CharField(
         max_length=20,
         choices=ChatbotType.choices,

@@ -19,6 +19,7 @@ from apps.ai import api as ai_api
 from apps.ai import facts as business_facts
 from apps.ai import knowledge
 from apps.ai.models import AIDraft, AIProposal, AISettings, KnowledgeBaseEntry
+from apps.ai.providers import get_ai_provider as real_get_ai_provider
 from apps.ai.providers.base import AIProvider, CompletionResult
 from apps.ai.tasks import build_draft
 from apps.contacts.models import Contact
@@ -652,6 +653,100 @@ def test_an_unreachable_site_fails_the_draft_with_a_reason(monkeypatch, account)
     )
     run(draft)
     assert draft.status == "error" and "public website" in draft.error
+
+
+def test_a_page_and_its_trailing_slash_are_read_once(monkeypatch):
+    fetched = site(
+        monkeypatch,
+        {
+            "https://shop.example": ('<p>Home</p><a href="/">Home</a><a href="/faq">FAQ</a>',),
+            "https://shop.example/faq": ("<p>Answers</p>",),
+        },
+    )
+    pages = knowledge.read_site("https://shop.example")
+    assert [url for url, _text in pages] == [
+        "https://shop.example",
+        "https://shop.example/faq",
+    ]
+    assert "https://shop.example/" not in [u for u, _ip in fetched]
+
+
+@pytest.mark.django_db
+def test_a_website_draft_gets_a_longer_model_timeout(monkeypatch, account):
+    seen = {}
+
+    def provider(*a, timeout=0, **k):
+        seen["timeout"] = timeout
+        return Fake()
+
+    monkeypatch.setattr("apps.ai.providers.get_ai_provider", provider)
+    draft = AIDraft.objects.create(
+        account=account,
+        kind="website",
+        prompt="x",
+        context={"url": "https://x.example", "pages": [["https://x.example", "Hi"]]},
+    )
+    Fake.answer = '{"entries": []}'
+    run(draft)
+    assert draft.status == "ready", draft.error
+    assert seen["timeout"] >= 120
+
+
+def test_the_provider_factory_passes_a_timeout_through(settings):
+    settings.AI_FALLBACK_BACKEND = ""
+    assert real_get_ai_provider(timeout=180).timeout == 180
+    assert real_get_ai_provider().timeout == settings.AI_TIMEOUT_SECONDS
+
+
+@pytest.mark.django_db
+def test_the_knowledge_page_says_how_the_website_import_went(client, account):
+    login(client, account)
+    url = "/settings/ai/knowledge/"
+    draft = AIDraft.objects.create(
+        account=account, kind="website", prompt="https://shop.example",
+        context={"url": "https://shop.example"},
+    )
+    assert "Reading https://shop.example" in client.get(url).content.decode()
+
+    draft.status, draft.error = "error", "The website answered with an error (403)."
+    draft.save()
+    html = client.get(url).content.decode()
+    assert "Couldn't import from https://shop.example" in html
+    assert "error (403)" in html
+
+    draft.status, draft.result = "ready", {"added": 3, "pages": 2}
+    draft.save()
+    assert "Found 3 questions on 2 pages" in client.get(url).content.decode()
+
+    draft.result = {"added": 0, "pages": 4}
+    draft.save()
+    assert "found no new questions" in client.get(url).content.decode()
+
+
+@pytest.mark.django_db
+def test_a_lost_website_import_shows_as_failed(client, account):
+    from datetime import timedelta
+
+    login(client, account)
+    draft = AIDraft.objects.create(
+        account=account, kind="website", prompt="x", context={"url": "https://shop.example"}
+    )
+    AIDraft.objects.filter(pk=draft.pk).update(
+        created_at=timezone.now() - timedelta(minutes=30)
+    )
+    assert "didn&#x27;t finish" in client.get("/settings/ai/knowledge/").content.decode()
+
+
+@pytest.mark.django_db
+def test_the_website_box_is_filled_from_the_business_website(client, account, monkeypatch):
+    from apps.accounts import api as accounts_api
+
+    monkeypatch.setattr(
+        accounts_api, "business_facts", lambda a: {"website": "https://shop.example"}
+    )
+    login(client, account)
+    html = client.get("/settings/ai/knowledge/").content.decode()
+    assert 'value="https://shop.example"' in html
 
 
 @pytest.mark.django_db

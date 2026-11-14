@@ -1693,6 +1693,11 @@ def _run_lookup_product(run: WorkflowRun, step: dict) -> dict:
         query = str((run.context or {}).get(key, ""))
     else:
         query = raw_query
+    if not raw_query:
+        # No query set (the editor offers none): look up what the customer just wrote, as the
+        # editor promises ("finds the product the customer is asking about").
+        message = (run.context or {}).get("message")
+        query = str(message.get("body") or "") if isinstance(message, dict) else ""
 
     try:
         result = lookup_product(run.workflow.account, query)

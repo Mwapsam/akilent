@@ -19,14 +19,17 @@
              class="input">
     </div>
 
+    {% comment %} The conversation: any of the business's automations that start from website
+    chat, or none (AI answers alone). Purpose is no longer asked: the conversation says it. {% endcomment %}
     <div>
-      <label for="purpose" class="block text-sm font-medium text-ink mb-1">Purpose</label>
-      <select id="purpose" name="purpose"
-              class="select">
-        {% for val, label in purposes %}
-        <option value="{{ val }}" {% if bot.purpose == val %}selected{% endif %}>{{ label }}</option>
+      <label for="workflow" class="block text-sm font-medium text-ink mb-1">Conversation</label>
+      <select id="workflow" name="workflow" class="select">
+        <option value="">None: AI answers every question</option>
+        {% for wf in workflows %}
+        <option value="{{ wf.pk }}" {% if bot.workflow_id == wf.pk %}selected{% endif %}>{{ wf.name }} ({{ wf.get_status_display|lower }})</option>
         {% endfor %}
       </select>
+      <p class="text-xs text-ink-muted mt-1">Automations that start when a visitor opens or messages your website chat.</p>
     </div>
 
     <div>

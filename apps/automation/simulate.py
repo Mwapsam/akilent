@@ -137,9 +137,15 @@ def _trigger_phrase(trigger: dict) -> str:
 def _say(account, person, text: str) -> str:
     from apps.automation.variables import merge_business_facts, merge_first_name
 
-    return merge_business_facts(
-        merge_first_name(text or "", person.first_name), account
+    # {contact}: the customer's name, as notify_team / create_followup fill it in the engine.
+    who = (
+        " ".join(p for p in (person.first_name, person.last_name) if p)
+        or person.phone
+        or person.email
+        or "A customer"
     )
+    text = merge_first_name(text or "", person.first_name).replace("{contact}", who)
+    return merge_business_facts(text, account)
 
 
 def _take_reply(replies: list[str], transcript: list[dict]) -> str | None:
