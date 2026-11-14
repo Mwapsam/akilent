@@ -2,12 +2,12 @@
 
     python manage.py ad_referrals_backfill [--account <slug>] [--days 365] [--dry-run]
 
-Reads each inbound WhatsApp message's stored webhook payload and each Instagram message's
-stored webhook entry, and records the ad it came from (apps.conversations.ad_referrals).
+Reads each inbound WhatsApp message's stored webhook payload and each Instagram and
+Messenger message's stored webhook entry, and records the ad it came from (apps.conversations.ad_referrals).
 Idempotent: a second run changes nothing. Leads and orders already created keep the
 attribution they were given (attributions are immutable); only new ones see the ad.
-Instagram's standalone "reopened from an ad" events were never stored, so they can't be
-recovered.
+Instagram's and Messenger's standalone "reopened from an ad" events were never stored, so
+they can't be recovered.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from django.utils import timezone
 
 
 class Command(BaseCommand):
-    help = "Backfill Meta ad referrals from stored WhatsApp and Instagram webhooks"
+    help = "Backfill Meta ad referrals from stored WhatsApp, Instagram and Messenger webhooks"
 
     def add_arguments(self, parser):
         parser.add_argument("--account", help="Workspace slug (default: all)")
@@ -32,10 +32,14 @@ class Command(BaseCommand):
         from apps.conversations.models import AdReferral, Message
 
         messages = Message.objects.filter(
-            Q(whatsapp_message__isnull=False) | Q(instagram_message__isnull=False),
+            Q(whatsapp_message__isnull=False)
+            | Q(instagram_message__isnull=False)
+            | Q(facebook_message__isnull=False),
             direction=Message.Direction.INBOUND,
             timestamp__gte=timezone.now() - timedelta(days=opts["days"]),
-        ).select_related("conversation", "whatsapp_message", "instagram_message")
+        ).select_related(
+            "conversation", "whatsapp_message", "instagram_message", "facebook_message"
+        )
         if opts["account"]:
             messages = messages.filter(account__slug=opts["account"])
 

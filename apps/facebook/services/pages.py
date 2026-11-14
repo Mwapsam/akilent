@@ -12,9 +12,13 @@ from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
-# Messenger messages, button taps, messages sent from the Page inbox, and Page feed
-# (comments). Needs pages_manage_metadata (+ pages_messaging for the messaging fields).
-WEBHOOK_FIELDS = "messages,messaging_postbacks,message_echoes,feed"
+# Messenger messages, button taps, messages sent from the Page inbox, a thread reopened from
+# a Click-to-Messenger ad, and Page feed (comments). Needs pages_manage_metadata (+
+# pages_messaging for the messaging fields). Pages connected earlier pick up a new field with
+# ``manage.py facebook_resubscribe``.
+WEBHOOK_FIELDS = (
+    "messages,messaging_postbacks,message_echoes,messaging_referrals,feed"
+)
 
 
 def subscribe_page(conn) -> bool:

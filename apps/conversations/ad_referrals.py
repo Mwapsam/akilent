@@ -11,12 +11,13 @@ Instagram puts one on a message from a Click-to-Instagram-Direct ad (and sends a
     {"ref", "source": "ADS", "type": "OPEN_THREAD", "ad_id",
      "ads_context_data": {"ad_title", "photo_url", "video_url", "post_id", "product_id"}}
 
-Both are normalised to one shape, stored as an :class:`AdReferral` and recorded as the
+Messenger (Click-to-Messenger ads) sends Instagram's shape on the message's webhook entry,
+and a standalone ``messaging_referrals`` event when an existing thread is reopened.
+
+All three are normalised to one shape, stored as an :class:`AdReferral` and recorded as the
 conversation's ``AD_REFERRAL`` entry point. Paid takes precedence over everything else
 (docs/strategy/akilent-ads.md §4): the entry point names no post, even when the ad promotes
 a Content Studio post; that match is kept on ``AdReferral.post`` as context only.
-
-Messenger is out of scope. Facebook messages are never read here.
 """
 
 from __future__ import annotations
@@ -54,7 +55,8 @@ def from_whatsapp(referral: dict | None) -> dict | None:
 
 
 def from_instagram(referral: dict | None) -> dict | None:
-    """Normalise an Instagram ``referral`` object. Only ad referrals count (source ADS)."""
+    """Normalise an Instagram or Messenger ``referral`` object. Only ad referrals count
+    (source ADS): an m.me / ig.me link's ``ref`` or a shop referral is not an ad."""
     if not isinstance(referral, dict):
         return None
     if _s(referral.get("source"), 20).upper() not in ("ADS", ""):
@@ -90,11 +92,22 @@ def whatsapp_referral_for(message_log) -> dict | None:
     return None
 
 
+# Messenger's ad referral has Instagram's shape.
+from_messenger = from_instagram
+
+
 def instagram_referral_for(instagram_message) -> dict | None:
     """The referral of this Instagram message, from the webhook entry kept in its metadata."""
     entry = getattr(instagram_message, "metadata", None) or {}
     message = entry.get("message") or {}
     return from_instagram(message.get("referral") or entry.get("referral"))
+
+
+def facebook_referral_for(facebook_message) -> dict | None:
+    """The referral of this Messenger message, from the webhook entry kept in its metadata."""
+    entry = getattr(facebook_message, "metadata", None) or {}
+    message = entry.get("message") or {}
+    return from_messenger(message.get("referral") or entry.get("referral"))
 
 
 def referral_for_message(message) -> tuple[str, dict] | tuple[None, None]:
@@ -107,6 +120,9 @@ def referral_for_message(message) -> tuple[str, dict] | tuple[None, None]:
     if message.instagram_message_id:
         data = instagram_referral_for(message.instagram_message)
         return (AdReferral.Channel.INSTAGRAM, data) if data else (None, None)
+    if message.facebook_message_id:
+        data = facebook_referral_for(message.facebook_message)
+        return (AdReferral.Channel.FACEBOOK, data) if data else (None, None)
     return None, None
 
 
@@ -214,29 +230,36 @@ def capture(conversation, message):
     return record(conversation, message, channel, data)
 
 
-def capture_instagram_event(instagram_account, igsid: str, entry: dict):
-    """A standalone Instagram ``referral`` event (the customer reopened an existing thread
-    from an ad). Stored against that customer's existing Instagram chat; never creates a
-    chat, so a tap with no message never puts an empty conversation in the inbox."""
+def capture_standalone_event(channel: str, account, scoped_id: str, entry: dict):
+    """A standalone ``referral`` event: the customer reopened an existing Instagram or
+    Messenger thread from an ad, without sending a message yet. Stored against that
+    customer's existing chat on the channel; never creates a chat, so a tap with no message
+    never puts an empty conversation in the inbox."""
     from datetime import UTC, datetime
 
     from apps.conversations.models import AdReferral, Conversation
-    from apps.instagram.models.contact import InstagramContact
 
     data = from_instagram(entry.get("referral"))
     if not data:
         return None
-    ig_contact = InstagramContact.objects.filter(
-        account=instagram_account.account, instagram_scoped_id=igsid
-    ).first()
-    if ig_contact is None or not ig_contact.contact_id:
-        logger.info("ad_referral: no existing Instagram chat for a standalone referral")
+    if channel == AdReferral.Channel.FACEBOOK:
+        from apps.facebook.models.contact import FacebookContact
+
+        identity = FacebookContact.objects.filter(account=account, psid=scoped_id).first()
+        spine_channel = Conversation.Channel.FACEBOOK
+    else:
+        from apps.instagram.models.contact import InstagramContact
+
+        identity = InstagramContact.objects.filter(
+            account=account, instagram_scoped_id=scoped_id
+        ).first()
+        spine_channel = Conversation.Channel.INSTAGRAM
+    if identity is None or not identity.contact_id:
+        logger.info("ad_referral: no existing %s chat for a standalone referral", channel)
         return None
     conversation = (
         Conversation.objects.filter(
-            account=instagram_account.account,
-            channel=Conversation.Channel.INSTAGRAM,
-            contact_id=ig_contact.contact_id,
+            account=account, channel=spine_channel, contact_id=identity.contact_id
         )
         .order_by("-last_message_at", "-pk")
         .first()
@@ -245,10 +268,20 @@ def capture_instagram_event(instagram_account, igsid: str, entry: dict):
         return None
     ts_ms = entry.get("timestamp") or 0
     received_at = datetime.fromtimestamp(ts_ms / 1000, tz=UTC) if ts_ms else None
-    return record(
-        conversation,
-        None,
-        AdReferral.Channel.INSTAGRAM,
-        data,
-        received_at=received_at,
+    return record(conversation, None, channel, data, received_at=received_at)
+
+
+def capture_instagram_event(instagram_account, igsid: str, entry: dict):
+    """Instagram's standalone referral (see ``capture_standalone_event``)."""
+    from apps.conversations.models import AdReferral
+
+    return capture_standalone_event(
+        AdReferral.Channel.INSTAGRAM, instagram_account.account, igsid, entry
     )
+
+
+def capture_facebook_event(conn, psid: str, entry: dict):
+    """Messenger's standalone ``messaging_referrals`` event on the connected Page ``conn``."""
+    from apps.conversations.models import AdReferral
+
+    return capture_standalone_event(AdReferral.Channel.FACEBOOK, conn.account, psid, entry)

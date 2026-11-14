@@ -2,8 +2,8 @@
 
 **Status:** Strategy for validation  
 **Last updated:** 12 November 2026  
-**Scope:** Instagram and WhatsApp advertising  
-**Messenger:** Excluded unless separately authorised
+**Scope:** Instagram, WhatsApp and Messenger advertising  
+**Messenger:** Included since 14 November 2026 (owner decision, see section 10)
 
 > **This strategy authorises no implementation. The pilot feature freeze applies.** Each gate below needs its own owner approval before any work starts. The text is the owner's, written 2026-11-12, with a correction to the App Review status in Gate 4 and the review fixes made the same day.
 
@@ -499,7 +499,7 @@ These are settled. Do not reopen them without a new owner decision.
 - **Gate order:** as in §9. Data check, then demand test, then promotion candidates, then ad-chat attribution, then spend visibility, then execution. Each gate is approved separately.
 - **Demoted:** guided setup, AI copy and Conversions API buyer signals are supporting features, because competitors already offer them (§7).
 - **Buyer:** businesses that already have organic post history in Akilent, and that run or are willing to run boosts.
-- **Geography: resolved by Instagram parity.** Click-to-WhatsApp ads are strongest in India, Latin America, Southeast Asia and Africa. Small businesses in the USA and UK lean more on Instagram posts and DMs. The differentiator works for Instagram posts and DM ads as well as WhatsApp, so it fits the adopted USA/UK/EU-first positioning without depending on Click-to-WhatsApp adoption. Instagram gets equal weight to WhatsApp, and Messenger stays excluded.
+- **Geography: resolved by Instagram parity.** Click-to-WhatsApp ads are strongest in India, Latin America, Southeast Asia and Africa. Small businesses in the USA and UK lean more on Instagram posts and DMs. The differentiator works for Instagram posts and DM ads as well as WhatsApp, so it fits the adopted USA/UK/EU-first positioning without depending on Click-to-WhatsApp adoption. Instagram gets equal weight to WhatsApp. Messenger was excluded here and was added on 14 November 2026 (below).
 - **Commercial model:** a flat add-on price. No percentage of ad spend, and customers pay Meta directly (Appendix C).
 - **AI:** optional, and used only for copy (§2).
 
@@ -517,13 +517,19 @@ Both flags stay off until released, and releasing them is a separate owner decis
 
 ### Decided on 14 November 2026: ad chats that run smoothly
 
-The owner approved a phased plan for what a business running ads still needs before Gate 4, with no new Meta permissions. Phase 1 and Phase 3 are built. Phase 2 (Messenger ad referrals) waits for the owner to lift the Messenger exclusion.
+The owner approved a phased plan for what a business running ads still needs before Gate 4, with no new Meta permissions. Phase 1 and Phase 3 are built. The owner then lifted the Messenger exclusion the same day, and Phase 2 is built.
 
 - **Phase 1, ad-aware automations (flag `ads_automation`):**
   - A trigger filter `trigger.from_ad` (any ad, or listed ad ids) on "a customer messages you". It answers only the first message of a chat that came from an ad.
   - A one-click starter, "Answer ad chats straight away", that outranks the other message automations.
   - `{ad.headline}` in reply text.
   - An "ad chats waiting" alert (`apps/conversations/ad_alerts.py`, every 5 minutes): one email per workspace per sweep to owners and admins, once per chat. It uses the §3 clock and the §10f threshold, and it also shows in What needs you.
+- **Phase 2, Messenger ad referrals:**
+  - A Click-to-Messenger chat is stored, counted as paid and answered by the ad automations, exactly like WhatsApp and Instagram. `AdReferral.Channel.FACEBOOK`, migration conversations 0033.
+  - A standalone `messaging_referrals` event (an existing thread reopened from an ad) is stored against the customer's existing chat, and never creates one.
+  - The Page webhook now subscribes `messaging_referrals`. Pages connected earlier need `manage.py facebook_resubscribe` once.
+  - History backfills from stored Messenger messages (`ad_referrals_backfill`).
+  - No new permission: `pages_messaging` is already approved.
 - **Phase 3, ad-burst load test:** `apps/core/tests/test_ad_burst_load.py` (performance mark). 500 WhatsApp and 300 Instagram ad chats go through the real signed webhooks. The test checks they are stored once, answered once and safe to replay. The verdict and the sweep are checked on 2,000 ad chats.
 
 ### Open decisions
@@ -631,7 +637,6 @@ The existing pilot freeze stays in effect. Each gate needs its own approval befo
 
 Outside the current authorised scope:
 
-- Messenger advertising and inbound conversations.
 - Autonomous campaign or budget changes.
 - Automatic campaign publishing.
 - Unapproved Meta permission submissions.

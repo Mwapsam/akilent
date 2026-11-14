@@ -71,7 +71,7 @@
 {% endif %}
 
 <h2>Chats from Meta ads</h2>
-<p>When a customer taps a Click-to-WhatsApp ad or an Instagram ad that opens a DM, Meta tells Akilent which ad it was. That chat is counted as <strong>from a Meta ad</strong>, never as a post's own chat, even if the ad promotes one of your posts or the message carries the post's link code. Its sales are shown on their own line, "From Meta ads". Facebook Messenger ads aren't counted yet.</p>
+<p>When a customer taps a Click-to-WhatsApp ad, an Instagram ad that opens a DM, or a Click-to-Messenger ad, Meta tells Akilent which ad it was. That chat is counted as <strong>from a Meta ad</strong>, never as a post's own chat, even if the ad promotes one of your posts or the message carries the post's link code. Its sales are shown on their own line, "From Meta ads".</p>
 {% if released.ads_inbox_verdict %}
 <p><strong>Chats from Meta ads</strong> on the Sales page shows what happened to each ad's chats:</p>
 <ul>
@@ -83,7 +83,7 @@
 {% endif %}
 {% if released.ads_automation %}
 <h3>Answer ad chats straight away</h3>
-<p>Someone who taps your ad is ready to buy right now. In <strong>Automations</strong>, turn on <strong>Answer ad chats straight away</strong> and write the reply. It answers the first message of each chat from a Meta ad on WhatsApp or Instagram, before your other automations, so the customer gets one reply. Later messages in that chat go to your other automations and your team as usual.</p>
+<p>Someone who taps your ad is ready to buy right now. In <strong>Automations</strong>, turn on <strong>Answer ad chats straight away</strong> and write the reply. It answers the first message of each chat from a Meta ad on WhatsApp, Instagram or Messenger, before your other automations, so the customer gets one reply. Later messages in that chat go to your other automations and your team as usual.</p>
 <p>In any automation that starts when a customer messages you, tick <strong>Only chats that came from a Meta ad</strong>, and pick particular ads if you want. Write <code>{ad.headline}</code> in a reply to include the ad's headline.</p>
 <p>If a chat from an ad waits more than an hour of your opening hours without a real answer, your owners and admins get one email listing those chats, and it shows in <strong>What needs you</strong>. Akilent's "we'll be right with you" reply doesn't count as an answer. Each chat is only mentioned once.</p>
 {% endif %}

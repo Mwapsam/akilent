@@ -169,7 +169,7 @@ _REPLY_STARTERS.append(
         "name": "Answer ad chats straight away",
         "goal": "Someone who tapped your ad gets an answer while they still want what it showed.",
         "explain": (
-            "When someone messages you from one of your Meta ads on WhatsApp or Instagram, "
+            "When someone messages you from one of your Meta ads on WhatsApp, Instagram or Messenger, "
             "reply straight away. It answers before your other automations, so they get one reply."
         ),
         "stop_condition": "Answers the first message of each ad chat only.",

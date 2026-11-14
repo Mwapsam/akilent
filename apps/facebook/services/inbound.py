@@ -47,8 +47,18 @@ def _process_dm_entry(conn, entry: dict) -> None:
             "quick_reply": {"payload": postback.get("payload", "")},
             "_postback": True,
         }
+    if not message and entry.get("referral"):
+        # A standalone messaging_referrals event: the customer reopened the thread from a
+        # Click-to-Messenger ad. Stored against their existing chat (never creates one).
+        try:
+            from apps.conversations.ad_referrals import capture_facebook_event
+
+            capture_facebook_event(conn, sender_id, entry)
+        except Exception:
+            logger.exception("facebook _process_dm_entry: ad referral capture failed")
+        return
     if not message:
-        # Deliveries, reads, reactions, referrals: not messages.
+        # Deliveries, reads, reactions: not messages.
         logger.debug(
             "facebook _process_dm_entry: ignoring keys=%s",
             sorted(k for k in entry if k not in {"sender", "recipient", "timestamp"}),

@@ -1229,8 +1229,8 @@ class AdReferral(models.Model):
     """The Meta ad a customer tapped to start (or reopen) a chat. Stored as Meta sent it.
 
     WhatsApp sends a ``referral`` object on the first message from a Click-to-WhatsApp ad;
-    Instagram sends one on a message from a Click-to-Instagram-Direct ad. Messenger is
-    excluded (docs/strategy/akilent-ads.md). ``post`` is set only when the ad promotes a post
+    Instagram and Messenger send one on a message from a Click-to-Instagram-Direct or
+    Click-to-Messenger ad (docs/strategy/akilent-ads.md; Messenger since 14 November 2026). ``post`` is set only when the ad promotes a post
     Content Studio published (matched by Meta's own post id); it is context, never organic
     credit. One row per conversation and ad.
     """
@@ -1238,6 +1238,7 @@ class AdReferral(models.Model):
     class Channel(models.TextChoices):
         WHATSAPP = "whatsapp", "WhatsApp"
         INSTAGRAM = "instagram", "Instagram"
+        FACEBOOK = "facebook", "Messenger"
 
     account = models.ForeignKey(
         "accounts.Account", on_delete=models.CASCADE, related_name="ad_referrals"

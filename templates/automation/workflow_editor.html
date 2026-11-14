@@ -172,7 +172,7 @@
         <label class="flex items-start gap-3 text-sm">
           <input type="checkbox" class="mt-1" :checked="!!definition.trigger.from_ad" @change="setAdOnly($event.target.checked)" />
           <span class="text-ink">Only chats that came from a Meta ad
-            <span class="block text-ink-subtle">Answers the first message of a chat someone started by tapping your ad on WhatsApp or Instagram. Use {ad.headline} in a reply for the ad's headline.</span></span>
+            <span class="block text-ink-subtle">Answers the first message of a chat someone started by tapping your ad on WhatsApp, Instagram or Messenger. Use {ad.headline} in a reply for the ad's headline.</span></span>
         </label>
         <div class="pl-7 space-y-1" x-show="definition.trigger.from_ad && recentAds.length">
           <p class="text-xs text-ink-subtle">Which ads? Leave all unticked for every ad.</p>
