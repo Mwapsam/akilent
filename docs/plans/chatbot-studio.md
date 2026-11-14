@@ -1,7 +1,48 @@
 # Chatbot Studio — spec and phased plan
 
-Status (2026-11-14): **P0 and P1 committed; P2–P5 built** (uncommitted). 200 chatbot tests
-pass, including the release-gate journey (§11 item 1). P6 isn't built.
+Status (2026-11-14): **P0 and P1 committed; P2–P6 built** (uncommitted). 211 chatbot tests
+pass, including the release-gate journey (§11 item 1). **Not released:** releasing is the
+owner's step (checklist below).
+
+P6 as built (release preparation):
+- **Plan feature `website_chat`** (Channels group, `apps/billing/features.py`). The owner chose
+  "only plans I tick": it is not in `CHANNEL_FEATURE`, so new plans don't start with it, and no
+  migration adds it to existing plans. Tick it per plan in Operator Console → Plans → Features,
+  or grant it per business. Plan cards and pricing hide it until `chatbot` is released
+  (`channels.FEATURE_RELEASE_DEPS`). No cap on the number of bots (owner's choice); cost is
+  bounded by each bot's daily AI limit and the plan's AI allowance.
+- **Gate:** every chatbot page needs the feature (`module_required("website_chat")`, else the
+  locked page). A new widget chat needs it too (`init` refuses with the usual "Invalid or
+  inactive chatbot key."); a chat already under way carries on, so a plan change never cuts a
+  visitor off. System (platform) chatbots aren't gated.
+- **Public and help pages, all hidden until released:** help guide `/help/website-chat/`
+  (new "Website chat" category; `Article.release`), a Website chat section on
+  `/docs/channels/` (no REST endpoint; contacts come back with `source: website_chat`), and
+  `/integrations/website-chat/` (registered in `marketing_pages.py`, gated on
+  `marketing_channels()["website_chat"]`, checked by the claims test).
+- **Messaging guide:** §4 has a "Built, not released" row for the chatbot with the wording
+  rules, and §10 has five claim rows (`website-chat`, `-handoff`, `-starters`, `-results`,
+  `-install`) with evidence.
+- **Wording:** the "any channel" trigger now reads "When a customer messages you on WhatsApp,
+  Instagram or Facebook" (website chat has its own triggers), and the list step says "(not on
+  Instagram or Facebook)" instead of "(WhatsApp only)".
+- **Still deferred:** the `apps/core/channels.py` registry entry. The registry is for channels
+  with an env switch and a provider (Meta, SES); website chat is gated by the `chatbot` release
+  and the plan feature instead, so signup and onboarding don't offer it as a channel. Revisit
+  if website chat should appear in signup's channel picker. Also deferred: the widget ignores
+  Enter while the previous reply is loading (the text stays in the box), and the privacy page
+  doesn't mention website chat yet (a legal-text decision; the help guide says what's stored).
+
+**Release checklist (owner):**
+1. Commit and deploy. Migrations: chatbot 0006–0009 (0006 is in an earlier commit).
+2. Make sure `chat-widget/v1/chat.js` is on the static host (collectstatic/CloudFront) and
+   the beat schedule includes `purge_idle_chat_sessions`.
+3. Tick `website_chat` on the plans that should sell it (or grant it to the pilot business).
+4. Staging: check AI limits and fallbacks (§11 item 3), and the widget on a real third-party
+   site in desktop and mobile Safari and Chrome (§11 item 2).
+5. Add `chatbot` to `RELEASED_FEATURES` in the server's `.env`, restart, then change the §4 row
+   in `docs/marketing/messaging.md` to **Live, depending on the plan**.
+6. One pilot business runs it on its live site and gets at least one real lead (§11 item 4).
 
 P5 as built:
 - **Hand-off** (`services/handoff.py`, replaces the never-wired `perform_handoff` /

@@ -1,0 +1,87 @@
+{% comment %}Body for the "Website chatbot" guide (Chatbot Studio, apps/chatbot). Shown only once the
+chatbot feature is released.{% endcomment %}
+<p>A website chatbot puts a chat button on your website. It greets visitors, answers their questions from your Knowledge, captures leads, and hands the chat to your team when a person is needed. Every chat lands in your <a href="/inbox/">inbox</a> like your other conversations. Set it up from <a href="/chatbot/">Chatbots</a>.</p>
+
+<h2>Create a chatbot</h2>
+<ol>
+  <li>Click <strong>New chatbot</strong>, give it a name (visitors see it at the top of the chat) and add your website address.</li>
+  <li>Pick how it should start:
+    <ul>
+      <li><strong>Answer questions, hand over when stuck</strong>: AI answers each question from your Knowledge. When it isn't sure, it tells the visitor a person will reply and lets your team know.</li>
+      <li><strong>Capture sales leads</strong>: greets visitors with two buttons. Anyone who wants a quote is tracked as interested, asked what they need and how to reach them, and your team is told.</li>
+      <li><strong>Help choose a product</strong>: looks up the product a visitor asks about in your catalogue and gives its price. Anything else is answered by AI, or handed to your team.</li>
+    </ul>
+  </li>
+</ol>
+<p>The chatbot's page then shows a <strong>Get it live</strong> checklist. Nothing reaches visitors until you turn the conversation on.</p>
+
+<h2>Try it before visitors do</h2>
+<ul>
+  <li>Click <strong>Try it</strong> to chat as a visitor would. It uses your latest saved changes, even ones that aren't live yet, and nothing is sent to anyone or saved.</li>
+  <li>Tick <strong>Show what happens behind the scenes</strong> to see each decision: which button was chosen, that a lead would be created, who would be emailed.</li>
+  <li>Where the real chatbot's AI would answer, the preview says so instead of answering, so trying it never uses your AI allowance.</li>
+  <li>To change the wording or the steps, click <strong>Edit messages and steps</strong>. That opens the conversation in the automation editor, where it works like any other <a href="/help/automations/">automation</a>. Save, then try it again.</li>
+</ul>
+
+<h2>Turn it on</h2>
+<p>On the chatbot's page, click <strong>Turn it on</strong>. Only an owner or admin can. After you change it later, the button says <strong>Put changes live</strong>; visitors already in a chat finish the way they started.</p>
+<p>A chatbot can also run without a conversation of its own (in <strong>Settings</strong>, choose <em>None: AI answers every question</em>). It then answers every message from your Knowledge, and hands over when it can't.</p>
+
+<h2>Install it on your website</h2>
+<ol>
+  <li>Copy the code under <strong>Install on your website</strong>.</li>
+  <li>Paste it before the closing <code>&lt;/body&gt;</code> tag on every page that should show the chat. Website builders call this "custom code", "footer code" or "code injection".</li>
+  <li>Open your website. The chat button appears in the corner.</li>
+</ol>
+<p>The chat only loads on the websites in the chatbot's list. Each one shows <strong>Working</strong> once the chat has loaded there. If the chat tried to load on an address that isn't in the list (often <code>www.</code> versus no <code>www.</code>), the page names it and offers <strong>Add this website</strong>.</p>
+
+<h2>How it answers</h2>
+<ul>
+  <li>The chatbot's conversation runs first: its buttons, questions and steps.</li>
+  <li>When the conversation doesn't answer a message, AI answers from your <a href="/settings/ai/knowledge/">Knowledge</a> only, with the same checks as automatic replies on your other channels. If AI is off for your business, chats go straight to your team.</li>
+  <li>AI never takes actions on its own. Leads, notifications and assignments happen only through steps you put in the conversation.</li>
+  <li>Each chatbot has a daily AI limit (200 a day unless you change it in Settings). When it's reached, chats go to your team until the next day. Your plan's AI allowance applies as well.</li>
+</ul>
+
+<h2>When a visitor needs a person</h2>
+<ul>
+  <li>Visitors can tap <strong>Talk to a person</strong> at the top of the chat, or simply ask ("can I speak to someone?"). The chatbot stops answering in that chat, and the visitor is told a person will reply.</li>
+  <li>If the chatbot's AI can't answer a question, the visitor is told once that your team will reply, and the chatbot keeps answering what it can.</li>
+  <li>Either way, a note in the inbox conversation says why it was handed over, the conversation is marked unread, and the assigned teammate (or your owners) get one email.</li>
+  <li>Reply from the inbox. The visitor sees your reply in the chat within a few seconds while they're on your website.</li>
+  <li>If we have no way to reach the visitor, the chat asks for their name and email in case they leave.</li>
+  <li>When a person has taken over, the chatbot stays paused in that conversation. Turn automations back on from the conversation's details when you're done.</li>
+  <li>Closing the conversation shows the visitor that the chat has ended. If they write again, it reopens.</li>
+</ul>
+
+<h2>See what it brings in</h2>
+<p>A chatbot's <strong>Analytics</strong> page shows, for the last 7, 30 or 90 days:</p>
+<ul>
+  <li>How many chats loaded on a page, were opened, got a message, left an email or phone, became leads, were qualified and paid an order. Leads and orders count only when they came from the chat's own conversation; you mark orders paid yourself.</li>
+  <li>How many chats were handed to your team, why, how long the first reply from a person typically took, and what they became.</li>
+  <li>The latest questions its AI couldn't answer, so you can add the answers to your Knowledge.</li>
+</ul>
+
+<h2>What is stored</h2>
+<ul>
+  <li>A chat that the visitor never writes in keeps only a random key and times, and is deleted after 30 days.</li>
+  <li>Once a visitor writes, the chat becomes a contact and a conversation in your inbox, like a message on any other channel. Details a visitor types (name, email, phone) are saved on their own contact and are never merged into another customer automatically.</li>
+  <li>For the install check, the chatbot keeps which of your listed websites it loaded on and when. Nothing about the visitor's browsing is kept.</li>
+</ul>
+
+<h2>Common problems</h2>
+
+<h3>The chat button doesn't appear</h3>
+<ul>
+  <li>Check the website is in the chatbot's list exactly as visitors open it, including <code>www.</code> if they use it. The chatbot's page names any address it was refused on.</li>
+  <li>Check the chatbot is switched on in its Settings.</li>
+  <li>Check the code is on the page you opened, before <code>&lt;/body&gt;</code>.</li>
+</ul>
+
+<h3>It answers with "someone from the team will reply" to everything</h3>
+<p>AI isn't answering: it may be off for your business in <a href="/settings/ai/">Settings → AI</a>, the daily limit may be used up, or your Knowledge doesn't cover the question. The chatbot's page says which under <strong>How it answers</strong>.</p>
+
+<h3>"Fix this first" when turning it on</h3>
+<p>The conversation has a step that needs attention, for example an AI answer step with nowhere to go when it can't answer. Click <strong>Edit messages and steps</strong>; the editor marks the step.</p>
+
+<div class="note">Website chat depends on your plan. If Chatbots shows as locked, your plan doesn't include it.</div>

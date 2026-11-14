@@ -14,7 +14,7 @@ TRIGGER_LABELS = {
     "email.opened": "When a customer opens an email",
     "email.clicked": "When a customer clicks a link in an email",
     "whatsapp.received": "When a customer messages you on WhatsApp",
-    "conversation.message_received": "When a customer messages you (any channel)",
+    "conversation.message_received": "When a customer messages you on WhatsApp, Instagram or Facebook",
     "lead.created": "When someone becomes an interested customer",
     "lead.status_changed": "When an interested customer's status changes",
     "lead.qualified": "When an interested customer is marked qualified",

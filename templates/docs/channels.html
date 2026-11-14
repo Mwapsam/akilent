@@ -63,6 +63,20 @@ no endpoint rather than implying it does.
 </p>
 {% endif %}
 
+{% if released.chatbot %}
+<h2 id="website-chat">Website chat</h2>
+<p>
+  There's no website chat endpoint in the REST API. Chatbots, their conversations, the install
+  code and hand-offs to your team are set up in the app (Chatbots). The widget on your website
+  talks to its own endpoints under <code>/api/chat/</code>; they're for the widget only, only
+  answer the websites listed on the chatbot, and aren't a supported API.
+</p>
+<p>
+  Visitors who write in the chat become contacts. The Contacts API returns them with
+  <code>"source": "website_chat"</code>.
+</p>
+{% endif %}
+
 {% if WHATSAPP_ENABLED or "instagram" in enabled_channels %}
 <div class="callout callout--note">
   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 7.5v3.5"/><path d="M8 5h.01"/></svg>

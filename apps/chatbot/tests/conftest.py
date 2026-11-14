@@ -4,6 +4,22 @@ from apps.accounts.models import Account
 from apps.chatbot.models import ChatbotAction, ChatbotConfig, ChatSession
 
 
+@pytest.fixture(autouse=True)
+def _plan_includes_website_chat(request, monkeypatch):
+    """Test businesses have no plan; let them use website chat unless a test checks the gate
+    itself (mark it ``real_plan``)."""
+    if request.node.get_closest_marker("real_plan"):
+        return
+    from apps.billing import api as billing_api
+
+    real = billing_api.usable
+
+    def usable(account, key):
+        return True if key == "website_chat" else real(account, key)
+
+    monkeypatch.setattr(billing_api, "usable", usable)
+
+
 @pytest.fixture
 def account(db):
     return Account.objects.create(company_name="Acme Corp")

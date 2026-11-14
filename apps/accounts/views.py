@@ -934,6 +934,10 @@ def marketing_channels() -> dict:
     out["content"] = "live" if "live" in (out["instagram"], out["facebook"]) else ""
     # Post results need a chat link, which opens WhatsApp.
     out["results"] = out["content"] == "live" and out["whatsapp"] == "live"
+    # Website chat has no provider to switch on: it is live once the chatbot is released.
+    from apps.core.releases import is_released
+
+    out["website_chat"] = "live" if is_released("chatbot") else ""
     return out
 
 

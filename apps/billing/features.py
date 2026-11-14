@@ -125,6 +125,16 @@ FEATURES: tuple[Feature, ...] = (
         "Send email from your own domain, by API or SMTP.",
         "Channels",
     ),
+    # The website chatbot (apps.chatbot, docs/plans/chatbot-studio.md). Sold only on the plans
+    # an operator ticks: unlike the four channels above it isn't in CHANNEL_FEATURE, so new
+    # plans don't start with it. Hidden from plan cards until `chatbot` is released.
+    Feature(
+        "website_chat",
+        "Website chat",
+        "A chatbot on your website that answers, captures leads and hands chats to your team.",
+        "Channels",
+        nav_paths=("/chatbot/",),
+    ),
     Feature(
         "whatsapp_campaigns",
         "WhatsApp campaigns",
@@ -238,6 +248,7 @@ ISSUED_KEYS = frozenset(
         "instagram",
         "content_studio",
         "facebook",
+        "website_chat",
     }
 )
 

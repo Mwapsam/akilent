@@ -20,6 +20,7 @@ from apps.chatbot.models import ChatbotConfig
 from apps.chatbot.models.config import WEBSITE_CHAT_TRIGGERS
 from apps.chatbot.services import chatbot as chatbot_service
 from apps.core.htmx import full_page_load
+from apps.core.module_gate import module_required
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
@@ -45,6 +46,7 @@ def _is_admin(request: HttpRequest, account) -> bool:
 
 
 @login_required
+@module_required("website_chat")
 def chatbot_list(request: HttpRequest) -> HttpResponse:
     from apps.chatbot.models import ChatSession
     from apps.crm.models import Lead
@@ -73,6 +75,7 @@ def chatbot_list(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@module_required("website_chat")
 def chatbot_create(request: HttpRequest) -> HttpResponse:
     account = get_current_account(request)
     context = {
@@ -124,6 +127,7 @@ def chatbot_create(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@module_required("website_chat")
 def chatbot_detail(request: HttpRequest, pk: int) -> HttpResponse:
     from django.conf import settings
 
@@ -151,6 +155,7 @@ def chatbot_detail(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @login_required
+@module_required("website_chat")
 @require_POST
 def chatbot_publish(request: HttpRequest, pk: int) -> HttpResponse:
     """Turn the bot's conversation on (or put its saved changes live)."""
@@ -183,6 +188,7 @@ def chatbot_publish(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @login_required
+@module_required("website_chat")
 @full_page_load  # its own script drives the preview
 def chatbot_preview(request: HttpRequest, pk: int) -> HttpResponse:
     from apps.automation import api as automation_api
@@ -211,6 +217,7 @@ def chatbot_preview(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @login_required
+@module_required("website_chat")
 @require_POST
 def chatbot_preview_run(request: HttpRequest, pk: int) -> JsonResponse:
     """Play the bot's saved conversation (unpublished changes included) for the preview.
@@ -242,6 +249,7 @@ def chatbot_preview_run(request: HttpRequest, pk: int) -> JsonResponse:
 
 
 @login_required
+@module_required("website_chat")
 def chatbot_edit(request: HttpRequest, pk: int) -> HttpResponse:
     account = get_current_account(request)
     bot = _bot(request, pk)
@@ -307,6 +315,7 @@ def chatbot_edit(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @login_required
+@module_required("website_chat")
 @require_POST
 def chatbot_allow_site(request: HttpRequest, pk: int) -> HttpResponse:
     """Add a website the widget tried to load on (from the Install check) to the bot's list."""
@@ -330,6 +339,7 @@ def chatbot_allow_site(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @login_required
+@module_required("website_chat")
 def chatbot_analytics(request: HttpRequest, pk: int) -> HttpResponse:
     bot = _bot(request, pk)
 

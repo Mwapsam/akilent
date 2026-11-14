@@ -1,0 +1,47 @@
+{% extends "public/_marketing_layout.html" %}
+{% block headline %}A chatbot on your website that hands the chat to your team{% endblock %}
+{% block lead %}<p data-claim="website-chat website-chat-handoff">Visitors get answers on your website straight away. When they want a person, or the chatbot can't answer, the chat lands in your team's shared inbox.</p>{% endblock %}
+
+{% block body %}
+<section id="page-problem" class="uc-section" aria-labelledby="uc-problem">
+  <h2 id="uc-problem">Visitors with a question, and nobody there</h2>
+  <p data-claim-exempt>Someone is on your website with a question about price or delivery. The contact form means waiting a day for an answer, so they close the tab and ask a competitor instead.</p>
+</section>
+
+<section id="page-how" class="uc-section" aria-labelledby="uc-how">
+  <h2 id="uc-how">What you get with website chat in {{ app }}</h2>
+  <ul class="uc-list">
+    <li data-claim="website-chat ai-knowledge">The chatbot answers from your own information: the answers you've taught AI, your business details and your catalogue.</li>
+    <li data-claim="website-chat-starters workflow-testing">Start from a ready-made conversation (answer questions, capture leads, or help choose a product) and try it yourself before visitors see it.</li>
+    <li data-claim="website-chat interested">Buttons and questions in the chat, and visitors who want a quote are tracked as interested customers.</li>
+    <li data-claim="website-chat-handoff assign">Visitors can ask for a person at any time. Your team is told, and replies from the shared inbox appear in the visitor's chat.</li>
+    <li data-claim="website-chat-results">See how many chats each chatbot had, how many became leads and paid orders, and the questions it couldn't answer.</li>
+  </ul>
+</section>
+
+<section id="page-features" class="uc-section" aria-labelledby="uc-features">
+  <h2 id="uc-features">Set up in minutes</h2>
+  <p data-claim="website-chat-install">Copy one line of code onto your website. The chatbot only loads on the websites you list, and its page shows when it has loaded on each one.</p>
+</section>
+{% endblock %}
+
+{% block faq %}
+<section id="page-faq" class="uc-section" aria-labelledby="uc-faq" itemscope itemtype="https://schema.org/FAQPage">
+  <h2 id="uc-faq">Questions about website chat</h2>
+  <div class="uc-faq">
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="website-chat-handoff">
+      <summary><span itemprop="name">What happens when the chatbot can't answer?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">It tells the visitor that someone from your team will reply, and the chat goes to your shared inbox with a note saying why. Your team is emailed, and their reply appears in the visitor's chat.</span></p>
+    </details>
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim="website-chat">
+      <summary><span itemprop="name">Does it make things up?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">It answers only from your own information, with the same checks as AI replies on your other channels. When it isn't sure, it hands the chat to your team instead of guessing.</span></p>
+    </details>
+    <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question" data-claim-exempt>
+      <summary><span itemprop="name">Is website chat in every plan?</span></summary>
+      <p itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><span itemprop="text">It depends on your plan. Ask us if yours doesn't show Chatbots.</span></p>
+    </details>
+    {% include "public/_faq_trial.html" %}
+  </div>
+</section>
+{% endblock %}

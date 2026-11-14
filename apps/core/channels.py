@@ -127,6 +127,12 @@ FEATURE_ANY_CHANNEL_DEPS: dict[str, tuple[str, ...]] = {
     "content_studio": ("instagram", "facebook"),
 }
 
+# Billing feature keys shown to customers (plan cards, pricing) only once their feature is
+# released (apps.core.releases). An operator can put them on plans before that.
+FEATURE_RELEASE_DEPS: dict[str, str] = {
+    "website_chat": "chatbot",
+}
+
 # Billing limit keys -> the channel they belong to. Conversations count on every channel.
 LIMIT_CHANNEL_DEPS: dict[str, str] = {
     "whatsapp_numbers": "whatsapp",
@@ -401,6 +407,12 @@ def set_channel_public(key: str, public: bool, *, request) -> bool:
 
 
 def feature_visible(key: str, channels: frozenset[str] | set[str]) -> bool:
+    release = FEATURE_RELEASE_DEPS.get(key)
+    if release is not None:
+        from apps.core.releases import is_released
+
+        if not is_released(release):
+            return False
     dep = FEATURE_CHANNEL_DEPS.get(key)
     any_of = FEATURE_ANY_CHANNEL_DEPS.get(key)
     if any_of is not None and not set(any_of) & set(channels):

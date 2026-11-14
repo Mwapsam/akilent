@@ -177,6 +177,18 @@ PAGES: tuple[MarketingPage, ...] = (
         _UPDATED,
         ("product:shared-inbox", "product:content-studio"),
     ),
+    MarketingPage(
+        INTEGRATION,
+        "website-chat",
+        "Website chat",
+        "Website chatbot that hands chats to your team",
+        "Put a chatbot on your website: it answers from your own information, captures leads and hands chats to your team's shared inbox when a person is needed.",
+        "A chatbot on your site that answers, captures leads and hands over.",
+        "website-chat website-chat-handoff",
+        _live("website_chat"),
+        date(2026, 11, 14),
+        ("product:shared-inbox", "product:automations", "product:ai-answers"),
+    ),
 )
 
 _BY_KEY = {p.key: p for p in PAGES}

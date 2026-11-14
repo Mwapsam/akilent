@@ -20,6 +20,8 @@ class Article:
     related: tuple = ()
     # Channel key this article belongs to, or None for channel-agnostic articles.
     channel: str | None = None
+    # Release key (apps.core.releases) the article waits for, or None.
+    release: str | None = None
 
     @property
     def template(self) -> str:
@@ -38,6 +40,7 @@ CATEGORIES = [
     "WhatsApp",
     "Instagram",
     "Facebook",
+    "Website chat",
     "Content Studio",
     "Automate",
     "Account & team",
@@ -257,6 +260,33 @@ ARTICLES = [
         channel="instagram",
     ),
     Article(
+        "website-chat",
+        "Website chatbot: set up, install and hand over",
+        "Put a chatbot on your website that answers from your Knowledge, captures leads and hands "
+        "chats to your team in the inbox.",
+        "Website chat",
+        icon="message-circle",
+        keywords=(
+            "chatbot",
+            "website",
+            "widget",
+            "live chat",
+            "chat",
+            "install",
+            "embed",
+            "snippet",
+            "script",
+            "domain",
+            "handoff",
+            "hand over",
+            "talk to a person",
+            "lead",
+            "ai",
+        ),
+        related=("automations", "getting-started"),
+        release="chatbot",
+    ),
+    Article(
         "team",
         "Invite & manage your team",
         "Invite teammates by email, assign roles, and remove members.",
@@ -386,7 +416,10 @@ _BY_SLUG = {a.slug: a for a in ARTICLES}
 
 def _is_visible(article: "Article") -> bool:
     from apps.core.channels import is_enabled
+    from apps.core.releases import is_released
 
+    if article.release is not None and not is_released(article.release):
+        return False
     return article.channel is None or is_enabled(article.channel)
 
 

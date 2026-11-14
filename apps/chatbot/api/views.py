@@ -149,6 +149,14 @@ def init(request: HttpRequest) -> JsonResponse:
     chatbot: ChatbotConfig = chatbot_obj  # type: ignore[assignment]
     session = _resumable_session(chatbot, data.get("session_key"))
     if session is None:
+        from apps.chatbot.services.chatbot import website_chat_usable
+
+        # A new chat needs the plan to include website chat (a chat under way carries on).
+        if (
+            chatbot.chatbot_type == chatbot.ChatbotType.CUSTOMER
+            and not website_chat_usable(chatbot.account)
+        ):
+            return auth.forbidden("Invalid or inactive chatbot key.")
         session = ChatSession.objects.create(chatbot=chatbot)
         messages: list[dict] = []
         cursor = 0

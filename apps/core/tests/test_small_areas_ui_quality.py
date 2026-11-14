@@ -198,8 +198,13 @@ def test_starter_packs_ask_before_changing_live_automations():
 @pytest.mark.django_db
 class TestChatbots:
     def _bot(self, account, domains):
+        from apps.billing.models import AccountFeatureOverride
         from apps.chatbot.models import ChatbotConfig
 
+        # Website chat is sold only on plans that include it (plan feature website_chat).
+        AccountFeatureOverride.objects.get_or_create(
+            account=account, key="website_chat", defaults={"grant": True, "note": "test"}
+        )
         return ChatbotConfig.objects.create(
             account=account, name="Help bot", allowed_domains=domains
         )

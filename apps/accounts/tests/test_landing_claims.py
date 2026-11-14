@@ -172,6 +172,7 @@ def _open_meta_channels():
         "/integrations/whatsapp/",
         "/integrations/instagram/",
         "/integrations/facebook/",
+        "/integrations/website-chat/",
     ],
 )
 @pytest.mark.parametrize("whatsapp", [True, False])

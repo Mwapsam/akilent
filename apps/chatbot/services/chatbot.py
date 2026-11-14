@@ -182,3 +182,14 @@ def update_chatbot(
     bot.full_clean()
     bot.save()
     return bot
+
+
+def website_chat_usable(account) -> bool:
+    """Does this business's plan (or an operator grant) include the website chatbot?
+
+    Checked when a visitor starts a new chat. Chats already under way carry on, so a plan
+    change never cuts a visitor off mid-conversation.
+    """
+    from apps.billing import api as billing_api
+
+    return account is not None and billing_api.usable(account, "website_chat")

@@ -24,7 +24,7 @@ _STEP_GROUPS: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
         "Ask",
         (
             ("send_buttons", "Up to 3 tap-to-answer buttons."),
-            ("send_list", "A menu of up to 10 choices (WhatsApp only)."),
+            ("send_list", "A menu of up to 10 choices (not on Instagram or Facebook)."),
             ("wait_for_reply", "Wait for their choice and go the matching way."),
             (
                 "ask_question",
