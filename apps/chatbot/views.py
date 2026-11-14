@@ -343,9 +343,6 @@ def chatbot_analytics(request: HttpRequest, pk: int) -> HttpResponse:
         days = 30
 
     start, end = analytics.period_range(days)
-    summary = analytics.session_summary(bot, start, end)
-    actions = analytics.action_summary(bot, start, end)
-    ticket_count = analytics.tickets_from_chat(bot, start, end)
 
     return render(
         request,
@@ -358,9 +355,13 @@ def chatbot_analytics(request: HttpRequest, pk: int) -> HttpResponse:
                 {"days": 30, "label": "30d"},
                 {"days": 90, "label": "90d"},
             ],
-            "summary": summary,
-            "actions": actions,
-            "ticket_count": ticket_count,
+            # Outcomes (P5): the funnel, revenue from paid orders, hand-offs, and the
+            # questions the bot's AI couldn't answer. The old action/ticket counts are gone
+            # with the actions they counted.
+            "funnel": analytics.funnel(bot, start, end),
+            "revenue": analytics.revenue(bot, start, end),
+            "handoffs": analytics.handoffs(bot, start, end),
+            "unanswered": analytics.unanswered(bot, start, end),
         },
     )
 

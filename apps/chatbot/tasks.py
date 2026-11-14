@@ -32,3 +32,19 @@ def purge_idle_chat_sessions(days: int = 30) -> int:
     if deleted:
         logger.info("purged %d idle website chat sessions", deleted)
     return deleted
+
+
+@shared_task(queue="celery")
+def notify_handoff(session_id: int) -> int:
+    """Email the team that a website chat was handed to them (services/handoff.py)."""
+    from apps.chatbot.models import ChatSession
+    from apps.chatbot.services.handoff import tell_the_team
+
+    session = (
+        ChatSession.objects.select_related("chatbot", "conversation__contact")
+        .filter(pk=session_id)
+        .first()
+    )
+    if session is None:
+        return 0
+    return tell_the_team(session)

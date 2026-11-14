@@ -150,7 +150,12 @@ def messages_after(
         return [], 0
     from apps.conversations.models import Message
 
-    qs = Message.objects.filter(conversation_id=session.conversation_id).order_by("pk")
+    # System lines ("handed to your team", payments) are for the inbox, never the visitor.
+    qs = (
+        Message.objects.filter(conversation_id=session.conversation_id)
+        .exclude(direction=Message.Direction.SYSTEM)
+        .order_by("pk")
+    )
     total = qs.count()
     fields = ("direction", "body", "metadata")
     if after_message_id is not None:
@@ -164,6 +169,52 @@ def messages_after(
 
 
 _ATTRIBUTE_INPUTS = {"number": "number", "date": "date"}
+
+
+def chat_state(session: ChatSession, *, expect: bool = True) -> dict:
+    """What the widget shows besides messages, sent with every response:
+
+    - ``expect``: the bot's open question (``current_prompt``);
+    - ``handoff``: ``{"asks_details": bool}`` while the chat waits for a person after a hand-off
+      (no teammate has replied since), else None. ``asks_details``: we have no way to reach the
+      visitor if they leave, so the widget offers the details form;
+    - ``ended``: the team closed the conversation. Writing again re-opens it.
+    """
+    from apps.conversations.models import Conversation, Message
+
+    state: dict = {
+        "expect": current_prompt(session) if expect else None,
+        "handoff": None,
+        "ended": False,
+    }
+    # Fresh, not session.conversation: this request may have just re-opened or paused it.
+    conversation = (
+        Conversation.objects.select_related("contact")
+        .filter(pk=session.conversation_id)
+        .first()
+    )
+    if conversation is None:
+        return state
+    state["ended"] = conversation.status == Conversation.Status.CLOSED
+    if session.handoff_at and not state["ended"]:
+        replies = Message.objects.filter(
+            conversation=conversation,
+            direction=Message.Direction.OUTBOUND,
+            timestamp__gte=session.handoff_at,
+        ).values_list("metadata", flat=True)
+        answered = any(
+            _who({"direction": "outbound", "metadata": m}) == "team" for m in replies
+        )
+        if not answered:
+            contact = conversation.contact
+            reachable = bool(
+                session.visitor_email
+                or session.visitor_phone
+                or getattr(contact, "email", "")
+                or getattr(contact, "phone", "")
+            )
+            state["handoff"] = {"asks_details": not reachable}
+    return state
 
 
 def current_prompt(session: ChatSession) -> dict | None:
@@ -183,7 +234,13 @@ def current_prompt(session: ChatSession) -> dict | None:
     if not session.conversation_id:
         return None
     from apps.automation.models import WorkflowInteraction, WorkflowRun
+    from apps.conversations.models import Conversation
 
+    paused = Conversation.objects.filter(
+        pk=session.conversation_id, automation_paused_until__gt=timezone.now()
+    ).exists()
+    if paused:
+        return None  # the team has the chat: the bot's question is no longer on offer
     interaction = (
         WorkflowInteraction.objects.filter(
             conversation_id=session.conversation_id,

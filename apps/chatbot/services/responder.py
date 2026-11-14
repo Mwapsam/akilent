@@ -48,13 +48,14 @@ def asks_for_a_person(text: str) -> bool:
 
 def ai_reply(
     session: ChatSession, user_message: str, *, message_id: int | None = None
-) -> tuple[str | None, bool]:
-    """The bot's AI answer to the visitor's latest message, and whether to offer a person.
+) -> tuple[str | None, str]:
+    """The bot's AI answer to the visitor's latest message: ``(text, "")``, or ``(None, why)``.
 
-    ``(None, True)`` means AI doesn't answer and the chat goes to the team: the visitor asked
-    for a person; AI is off for the business (provider, plan or owner: ``is_available``);
-    automatic AI replies are switched off site-wide (``AI_AUTONOMY_ENABLED``); this chat or this
-    bot has used its AI for today; or the answer didn't pass the checks.
+    ``why`` is a hand-off reason (``services.handoff.REASONS``) and the chat goes to the team:
+    the visitor asked for a person (``asked``); AI is off for the business (provider, plan or
+    owner: ``is_available``) or automatic AI replies are switched off site-wide
+    (``AI_AUTONOMY_ENABLED``) (``ai_off``); this chat used its AI turns (``turns``); this bot
+    used its AI for today (``ai_limit``); or the answer didn't pass the checks (``ai_unsure``).
     """
     from django.conf import settings
 
@@ -64,22 +65,22 @@ def ai_reply(
     account = session.chatbot.account
     why = ""
     if asks_for_a_person(user_message):
-        why = "asked for a person"
-    elif not ai_api.is_available(account):
-        why = "AI is off for the business"
-    elif not getattr(settings, "AI_AUTONOMY_ENABLED", True):
-        why = "automatic AI replies are switched off"
+        why = "asked"
+    elif not ai_api.is_available(account) or not getattr(
+        settings, "AI_AUTONOMY_ENABLED", True
+    ):
+        why = "ai_off"
     elif session.conversation_id is None:
-        why = "no conversation"
+        why = "ai_unsure"
     elif _increment_ai_turns(session.session_key) > _MAX_AI_TURNS_PER_SESSION:
-        why = "this chat's AI turns are used up"
+        why = "turns"
     elif not take_ai_turn(session.chatbot_id):
-        why = "the bot's daily AI limit was reached"
+        why = "ai_limit"
     if why:
         logger.info(
             "chatbot AI not answering in session=%s: %s", session.session_key, why
         )
-        return None, True
+        return None, why
 
     out = ai_api.grounded_answer(
         session.conversation,
@@ -89,8 +90,8 @@ def ai_reply(
         logger.info(
             "chatbot AI declined in session=%s: %s", session.session_key, out["failed"]
         )
-        return None, True
-    return out["text"], False
+        return None, "ai_unsure"
+    return out["text"], ""
 
 
 def _increment_ai_turns(session_key: str) -> int:

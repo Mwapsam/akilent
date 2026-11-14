@@ -12,7 +12,6 @@ from django.test import RequestFactory
 from apps.chatbot.api import auth, serializers
 from apps.chatbot.models import ChatActionExecution, ChatbotAction, ChatSession
 from apps.chatbot.services.actions import _REGISTRY, invoke
-from apps.chatbot.services.handoff import perform_handoff, should_handoff
 
 factory = RequestFactory()
 
@@ -177,48 +176,9 @@ class TestActionRegistry:
             del _REGISTRY[slug]
 
 
-# ── Handoff two-step ──────────────────────────────────────────────────────────
-
-
-@pytest.mark.django_db
-class TestHandoffTwoStep:
-    def test_should_handoff_on_phrase(self, session):
-        assert (
-            should_handoff(
-                session,
-                user_message="I want to speak to a human",
-                turn_count=1,
-                last_reply="Sure.",
-            )
-            is True
-        )
-
-    def test_should_handoff_false_for_normal_message(self, session):
-        assert (
-            should_handoff(
-                session,
-                user_message="What is your refund policy?",
-                turn_count=1,
-                last_reply="Here it is…",
-            )
-            is False
-        )
-
-    def test_perform_handoff_without_action_returns_not_performed(self, session):
-        # chatbot.handoff_action is None by default
-        result = perform_handoff(session, reason="customer asked")
-        assert result == {"performed": False, "ticket_number": None}
-
-    def test_should_handoff_does_not_create_anything(self, session):
-        from apps.chatbot.models import ChatActionExecution
-
-        should_handoff(
-            session,
-            user_message="real person please",
-            turn_count=1,
-            last_reply="…",
-        )
-        assert ChatActionExecution.objects.filter(session=session).count() == 0
+# ── Handoff ───────────────────────────────────────────────────────────────────
+# The old two-step perform_handoff / handoff_action design was never wired up and is replaced
+# by services/handoff.hand_to_team (tests in test_handoff.py).
 
 
 # ── Account isolation ─────────────────────────────────────────────────────────

@@ -1,7 +1,40 @@
 # Chatbot Studio — spec and phased plan
 
-Status (2026-11-14): **P0 and P1 committed; P2, P3 and P4 built** (uncommitted). 186 chatbot
-tests pass. P5 and P6 aren't built.
+Status (2026-11-14): **P0 and P1 committed; P2–P5 built** (uncommitted). 200 chatbot tests
+pass, including the release-gate journey (§11 item 1). P6 isn't built.
+
+P5 as built:
+- **Hand-off** (`services/handoff.py`, replaces the never-wired `perform_handoff` /
+  `handoff_action`; the field and `ChatbotAction` table stay, unused):
+  - The visitor asks: the widget's **"Talk to a person"** header button (`/api/chat/handoff/`)
+    or a message like "can I talk to a human". The conversation's automations pause until a
+    teammate resumes them, so neither the bot nor its AI answers over the team. The bot's open
+    question is withdrawn. The visitor gets "I've asked the team to join…" once.
+  - The bot can't answer (AI unsure, off, daily limit, chat's AI turns used): the one-time
+    holding reply as before. The bot keeps answering what it can.
+  - Either way, the chat's first hand-off adds an inbox note ("Website chat handed to your team:
+    <reason>", a SYSTEM message never shown to the visitor), marks it unread and emails the
+    assigned teammate or the owners (Celery `notify_handoff`, once per chat). A later visitor
+    request after a bot hand-off adds a second note but no second email.
+    `ChatSession.handoff_at` / `handoff_reason` (migration 0009). Visitor messages the AI
+    couldn't answer get `metadata.chatbot_unanswered`.
+- **Widget state with every response** (`conversation.chat_state`): `expect`, `handoff`
+  (`{"asks_details"}` while no teammate has replied since the hand-off) and `ended`. The widget
+  shows the "a person will reply here" card, with the name/email form when we can't reach the
+  visitor, and "The team closed this chat…" when the conversation is closed (writing re-opens
+  it). The launcher is now a keyboard-reachable button with a label.
+- **Analytics** (`/chatbot/<pk>/analytics/`): the funnel (loaded → opened → wrote → left
+  details → lead → qualified → paid), paid revenue by currency from orders linked to the chat's
+  conversation, hand-offs (count, reasons, typical first reply from a person, how many became
+  leads or paid) and the latest questions the AI couldn't answer, with links to the chat and
+  to Knowledge. "Step by step" links to the automation's stats for drop-off per step. The old
+  action and ticket counts are gone from the page (the functions stay for their tests).
+- **Not changed, noted:** the inbox's "Replied" badge counts any outbound message, including
+  the bot's holding or hand-off message (the same on every channel today). A handed-over chat
+  is still unread, paused, noted and emailed, but the badge can read "Replied". Changing it
+  touches shared reply metrics, so it needs its own decision.
+- **Confirmation card:** the hand-off card above. A general "card" message type for flows was
+  not built; `reply_text` covers confirmations for now.
 
 P4 as built (an owner goes from "New chatbot" to a live bot without the automation editor):
 - **New chatbot** asks for a name, a starter and (optionally) the website. `apps/chatbot/starters.py`

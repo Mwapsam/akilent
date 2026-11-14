@@ -41,6 +41,10 @@ class ChatSession(models.Model):
     # When the visitor first opened the chat window: the "visitor opens the chat" trigger fires
     # once per session, not on every page they open it from.
     opened_at = models.DateTimeField(null=True, blank=True)
+    # When the chat was first handed to the team, and why (services/handoff.REASONS): the
+    # visitor asked, or the bot's AI couldn't answer. For the inbox note and Analytics.
+    handoff_at = models.DateTimeField(null=True, blank=True)
+    handoff_reason = models.CharField(max_length=20, blank=True)
     started_at = models.DateTimeField(auto_now_add=True)
     last_activity_at = models.DateTimeField(auto_now=True)
 

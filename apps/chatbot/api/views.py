@@ -144,7 +144,7 @@ def init(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"error": "Service misconfiguration."}, status=503)
 
     from apps.chatbot.models import ChatSession
-    from apps.chatbot.services.conversation import current_prompt, messages_after
+    from apps.chatbot.services.conversation import chat_state, messages_after
 
     chatbot: ChatbotConfig = chatbot_obj  # type: ignore[assignment]
     session = _resumable_session(chatbot, data.get("session_key"))
@@ -162,7 +162,7 @@ def init(request: HttpRequest) -> JsonResponse:
             "config": serializers.public_config(chatbot),
             "messages": messages,
             "cursor": cursor,
-            "expect": current_prompt(session) if messages else None,
+            **chat_state(session, expect=bool(messages)),
         }
     )
 
@@ -243,6 +243,30 @@ def open_chat(request: HttpRequest) -> JsonResponse:
 @csrf_exempt
 @auth.with_cors
 @require_POST
+def handoff(request: HttpRequest) -> JsonResponse:
+    """POST {session_key} → {messages, cursor, expect, handoff, ended}: "Talk to a person".
+
+    The bot steps back, the team is told (once) and the visitor is told a person will reply.
+    Uses the message rate limit, so the button can't be used to flood the team.
+    """
+    data = _parse_body(request)
+    if data is None:
+        return JsonResponse({"error": "Invalid request."}, status=400)
+    session_key = data.get("session_key", "")
+    if not isinstance(session_key, str) or not session_key:
+        return JsonResponse({"error": "session_key is required."}, status=400)
+    session, error = _session_for(request, session_key)
+    if error is not None:
+        return error
+
+    from apps.chatbot.services.inbound import handle_handoff_request
+
+    return JsonResponse(handle_handoff_request(session))
+
+
+@csrf_exempt
+@auth.with_cors
+@require_POST
 def poll(request: HttpRequest) -> JsonResponse:
     """POST {session_key, cursor} → {messages, cursor}: anything said since ``cursor``.
 
@@ -262,16 +286,16 @@ def poll(request: HttpRequest) -> JsonResponse:
     if error is not None:
         return error
 
-    from apps.chatbot.services.conversation import current_prompt, messages_after
+    from apps.chatbot.services.conversation import chat_state, messages_after
 
     if not session.conversation_id:
-        return JsonResponse({"messages": [], "cursor": 0, "expect": None})
+        return JsonResponse({"messages": [], "cursor": 0, **chat_state(session)})
     messages, new_cursor = messages_after(session, cursor) if cursor else ([], None)
     if new_cursor is None:
         # A widget with no cursor yet starts from now rather than replaying the chat.
         messages, new_cursor = messages_after(session, None)
     return JsonResponse(
-        {"messages": messages, "cursor": new_cursor, "expect": current_prompt(session)}
+        {"messages": messages, "cursor": new_cursor, **chat_state(session)}
     )
 
 

@@ -182,7 +182,13 @@ class TestOpened:
     def test_open_without_opened_workflow_stores_nothing(self, chatbot):
         client, key = _start(chatbot)
         data = _post(client, "/api/chat/open/", {"session_key": key}).json()
-        assert data == {"messages": [], "cursor": 0, "expect": None}
+        assert data == {
+            "messages": [],
+            "cursor": 0,
+            "expect": None,
+            "handoff": None,
+            "ended": False,
+        }
         session = ChatSession.objects.get(session_key=key)
         assert session.conversation_id is None and session.contact_id is None
         assert session.opened_at is not None
@@ -314,6 +320,8 @@ class TestPoll:
             "messages": [],
             "cursor": 0,
             "expect": None,
+            "handoff": None,
+            "ended": False,
         }
 
     def test_poll_has_its_own_rate_limit(self, chatbot, provider, monkeypatch):

@@ -118,6 +118,13 @@ def _holding_already_sent(conversation) -> bool:
     return bool(last) and (last or {}).get("auto_kind") == "holding"
 
 
+def _mark_unanswered(message, why: str) -> None:
+    """Remember on the visitor's message that the bot didn't answer it, and why (Analytics:
+    "questions the bot couldn't answer")."""
+    message.metadata = {**(message.metadata or {}), "chatbot_unanswered": why}
+    message.save(update_fields=["metadata"])
+
+
 def handle_visitor_message(
     session: ChatSession, body: str, *, choice: str = ""
 ) -> dict:
@@ -135,7 +142,7 @@ def handle_visitor_message(
 
     from apps.automation.workflow_engine import resume_on_reply
     from apps.chatbot.services.conversation import (
-        current_prompt,
+        chat_state,
         get_or_create_for_website_chat,
         messages_after,
         resolve_choice,
@@ -170,14 +177,23 @@ def handle_visitor_message(
         ):
             return conversation_services.HANDLED_AUTOMATION
 
-        text, handoff = ai_reply(session, message.body, message_id=message.pk)
-        outcome["handoff"] = handoff
+        text, why = ai_reply(session, message.body, message_id=message.pk)
         if text is None:
-            # AI is off for this business: tell the visitor once, then it's the team's.
-            outcome["handoff"] = True
-            if not _holding_already_sent(conversation):
-                from apps.conversations.inbox_keys import HOLDING_PREFIX
+            # The team takes it: the visitor asked, or AI can't answer. Note why (inbox +
+            # Analytics), tell the visitor once, and leave the message for the team.
+            from apps.chatbot.services import handoff as handoff_service
+            from apps.conversations.inbox_keys import HOLDING_PREFIX
 
+            outcome["handoff"] = True
+            _mark_unanswered(message, why)
+            handoff_service.hand_to_team(session, reason=why)
+            if why == handoff_service.ASKED:
+                _send(
+                    conversation,
+                    handoff_service.HANDOFF_REPLY,
+                    f"{HOLDING_PREFIX}handoff:{session.pk}",
+                )
+            elif not _holding_already_sent(conversation):
                 _send(conversation, HOLDING_REPLY, f"{HOLDING_PREFIX}chat:{message.pk}")
             return ""
         _send(conversation, text, f"ai-auto:chatbot:{message.pk}")
@@ -196,7 +212,7 @@ def handle_visitor_message(
         "handoff_suggested": outcome["handoff"],
         "ticket_number": None,
         "cursor": cursor,
-        "expect": current_prompt(session),
+        **chat_state(session),
     }
 
 
@@ -210,7 +226,7 @@ def handle_opened(session: ChatSession) -> dict:
 
     from apps.chatbot.models import ChatSession as Session
     from apps.chatbot.services.conversation import (
-        current_prompt,
+        chat_state,
         get_or_create_for_website_chat,
         messages_after,
     )
@@ -228,4 +244,32 @@ def handle_opened(session: ChatSession) -> dict:
                 "chatbot opened workflow failed for session=%s", session.session_key
             )
     new, cursor = messages_after(session, 0)
-    return {"messages": new, "cursor": cursor, "expect": current_prompt(session)}
+    return {"messages": new, "cursor": cursor, **chat_state(session)}
+
+
+def handle_handoff_request(session: ChatSession) -> dict:
+    """The visitor tapped "Talk to a person": hand the chat to the team and say so.
+
+    Returns what the widget shows, like ``handle_opened``. A second tap changes nothing.
+    """
+    from apps.chatbot.services import handoff as handoff_service
+    from apps.chatbot.services.conversation import (
+        chat_state,
+        get_or_create_for_website_chat,
+        messages_after,
+    )
+    from apps.conversations.inbox_keys import HOLDING_PREFIX
+
+    conversation = get_or_create_for_website_chat(session)
+    before = messages_after(session, None)[1]
+    handoff_service.hand_to_team(session, reason=handoff_service.ASKED)
+    # One confirmation per chat (the key): a second tap doesn't repeat it.
+    _send(
+        conversation,
+        handoff_service.HANDOFF_REPLY,
+        f"{HOLDING_PREFIX}handoff:{session.pk}",
+    )
+    new, cursor = (
+        messages_after(session, before) if before else messages_after(session, None)
+    )
+    return {"messages": new, "cursor": cursor, **chat_state(session)}

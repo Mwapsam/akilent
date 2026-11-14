@@ -72,7 +72,7 @@
     startSession(savedSessionKey, function (data) {
       render();
       showMessages(data.messages);
-      applyExpect(data.expect);
+      applyState(data);
       schedulePoll();
     });
   }
@@ -105,7 +105,7 @@
       if (!err && data && epoch === state.epoch) {
         if (data.messages && data.messages.length && !state.open) markUnread();
         showMessages(data.messages);
-        if ("expect" in data) applyExpect(data.expect);
+        applyState(data);
         takeCursor(data);
       }
       schedulePoll();
@@ -170,6 +170,7 @@
   // ── DOM ────────────────────────────────────────────────────────────────────
 
   var widget, panel, log, input, sendBtn, identifyForm, promptBox;
+  var talkBtn, statusBox, handoffCard, handoffText, endedNote;
 
   function render() {
     var cfg = state.config || {};
@@ -189,7 +190,13 @@
       ].join(";"),
     });
     widget.innerHTML = svgIcon();
+    widget.setAttribute("role", "button");
+    widget.setAttribute("tabindex", "0");
+    widget.setAttribute("aria-label", "Open chat");
     widget.addEventListener("click", toggle);
+    widget.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+    });
 
     // Chat panel
     panel = el("div", {
@@ -208,9 +215,18 @@
 
     // Header
     var header = el("div", {
-      style: "background:" + color + ";color:#fff;padding:14px 16px;font-weight:600;font-size:15px",
+      style: "background:" + color + ";color:#fff;padding:12px 14px 12px 16px;font-weight:600;font-size:15px;display:flex;align-items:center;gap:8px",
     });
-    header.textContent = cfg.name || "Chat";
+    var title = el("span", { style: "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" });
+    title.textContent = cfg.name || "Chat";
+    talkBtn = el("button", {
+      type: "button",
+      style: "background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:999px;padding:3px 10px;font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap",
+    });
+    talkBtn.textContent = "Talk to a person";
+    talkBtn.addEventListener("click", askForPerson);
+    header.appendChild(title);
+    header.appendChild(talkBtn);
 
     // Message log
     log = el("div", {
@@ -245,8 +261,22 @@
     inputRow.appendChild(input);
     inputRow.appendChild(sendBtn);
 
-    // Identify form (shown after handoff suggestion or can be triggered by visitor)
+    // After a hand-off: "a person will reply here", with the details form when we have no way
+    // to reach the visitor. And a note when the team has closed the chat.
+    statusBox = el("div", { "aria-live": "polite" });
+    handoffCard = el("div", {
+      style: "display:none;padding:10px 14px;border-top:1px solid #eee;background:#f9fafb;color:#333;font-size:13px",
+    });
+    handoffText = el("div", {});
+    handoffCard.appendChild(handoffText);
     identifyForm = buildIdentifyForm(color);
+    handoffCard.appendChild(identifyForm);
+    endedNote = el("div", {
+      style: "display:none;padding:8px 14px;border-top:1px solid #eee;background:#f9fafb;color:#555;font-size:12px",
+    });
+    endedNote.textContent = "The team closed this chat. Need anything else? Just write below.";
+    statusBox.appendChild(handoffCard);
+    statusBox.appendChild(endedNote);
     // The bot's open question: tap-to-answer buttons or a list (see applyExpect).
     promptBox = el("div", {
       role: "group",
@@ -257,7 +287,7 @@
     panel.appendChild(header);
     panel.appendChild(log);
     panel.appendChild(promptBox);
-    panel.appendChild(identifyForm);
+    panel.appendChild(statusBox);
     panel.appendChild(inputRow);
 
     document.body.appendChild(widget);
@@ -278,7 +308,7 @@
         post("/api/chat/open/", { session_key: state.sessionKey }, function (err, data) {
           if (err || !data) return;
           if (state.cursor === 0) showMessages(data.messages);
-          applyExpect(data.expect);
+          applyState(data);
           takeCursor(data);
         });
       }
@@ -331,43 +361,72 @@
       state.turnCount++;
       if (data.messages) showMessages(data.messages);
       else if (data.reply) appendBotMsg(data.reply);
-      applyExpect(data.expect);
+      applyState(data);
       takeCursor(data);
-      if (data.handoff_suggested && !state.identifyFormShown) {
-        showHandoffPrompt();
-      }
     });
   }
 
-  function showHandoffPrompt() {
-    state.identifyFormShown = true;
-    var prompt = el("div", {
-      style: "padding:10px 14px;background:#f9f9f9;border-top:1px solid #eee;font-size:13px;color:#555",
+  // -- Talking to a person ----------------------------------------------------
+
+  function askForPerson() {
+    if (!state.sessionKey || state.busy) return;
+    state.busy = true;
+    state.epoch++;
+    talkBtn.disabled = true;
+    post("/api/chat/handoff/", { session_key: state.sessionKey }, function (err, data) {
+      state.busy = false;
+      state.epoch++;
+      talkBtn.disabled = false;
+      if (err) {
+        appendBotMsg(err.status === 429
+          ? "You're sending messages very quickly. Please wait a moment and try again."
+          : "We couldn't reach the team just now. Please try again.");
+        return;
+      }
+      showMessages(data.messages);
+      applyState(data);
+      takeCursor(data);
     });
-    prompt.textContent = "Would you like to be connected with a team member?";
-    var btn = el("button", {
-      style: "margin-top:6px;background:#1a56db;color:#fff;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:12px",
-    });
-    btn.textContent = "Connect me";
-    btn.addEventListener("click", function () {
-      prompt.remove();
-      identifyForm.style.display = "block";
-    });
-    prompt.appendChild(btn);
-    log.appendChild(prompt);
-    log.scrollTop = log.scrollHeight;
+  }
+
+  // Everything the server says about the chat besides messages: the bot's open question,
+  // waiting for a person after a hand-off, and whether the team closed the chat.
+  function applyState(data) {
+    if (!data) return;
+    if ("expect" in data) applyExpect(data.expect);
+    if ("handoff" in data) applyHandoff(data.handoff);
+    if ("ended" in data) applyEnded(data.ended);
+  }
+
+  function applyHandoff(handoff) {
+    if (!statusBox) return;
+    talkBtn.style.display = handoff ? "none" : "";
+    if (!handoff) {
+      handoffCard.style.display = "none";
+      identifyForm.style.display = "none";
+      return;
+    }
+    handoffText.textContent = state.identified
+      ? "Thanks. We'll reply here, or by email if you've left."
+      : (handoff.asks_details
+        ? "A person will reply here. In case you leave the page, how can we reach you?"
+        : "A person will reply here as soon as they can.");
+    handoffCard.style.display = "block";
+    identifyForm.style.display = handoff.asks_details && !state.identified ? "block" : "none";
+  }
+
+  function applyEnded(ended) {
+    if (endedNote) endedNote.style.display = ended ? "block" : "none";
   }
 
   function buildIdentifyForm(color) {
-    var form = el("div", {
-      style: "display:none;padding:10px 14px;border-top:1px solid #eee;background:#f9fafb",
-    });
+    var form = el("div", { style: "display:none;margin-top:8px" });
     var nameInput = el("input", { type: "text", placeholder: "Your name", style: inputStyle() });
     var emailInput = el("input", { type: "email", placeholder: "Your email", style: inputStyle() });
     var btn = el("button", {
       style: "margin-top:6px;background:" + color + ";color:#fff;border:none;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:13px;width:100%",
     });
-    btn.textContent = "Submit";
+    btn.textContent = "Send my details";
     btn.addEventListener("click", function () {
       var name = nameInput.value.trim();
       var email = emailInput.value.trim();
@@ -376,7 +435,7 @@
         if (!err && data.identified) {
           state.identified = true;
           form.style.display = "none";
-          appendBotMsg("Thanks! A team member will follow up with you shortly.");
+          handoffText.textContent = "Thanks. We'll reply here, or by email if you've left.";
         }
       });
     });
