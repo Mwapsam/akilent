@@ -45,9 +45,13 @@ class TestInboxSendKeys(InstagramCase):
             first = self.reply()
             second = self.reply()
         self.assertEqual(send.call_count, 1)
-        self.assertEqual(first["outbound_message_id"], second["outbound_message_id"])
+        self.assertEqual(first["message_id"], second["message_id"])
+        self.assertEqual(
+            first["ig_outbound_message_id"], second["ig_outbound_message_id"]
+        )
+        self.assertNotIn("outbound_message_id", first)
 
-        message = Message.objects.get(pk=first["outbound_message_id"])
+        message = Message.objects.get(pk=first["message_id"])
         self.assertEqual(message.metadata["sent_by_user"], self.user.pk)
         self.assertEqual(message.metadata["client_key"], KEY)
         self.assertNotIn("sent_by", message.metadata)

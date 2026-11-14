@@ -270,7 +270,7 @@ class TestReplyAction(InstagramCase):
                 body="Hi!",
             )
 
-        msg = Message.objects.get(pk=result["outbound_message_id"])
+        msg = Message.objects.get(pk=result["message_id"])
         self.assertEqual(msg.direction, "outbound")
         self.assertEqual(msg.instagram_message.message_id, "mid.out1")
         self.assertEqual(

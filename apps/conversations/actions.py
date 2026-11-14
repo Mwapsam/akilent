@@ -147,6 +147,21 @@ def _repeat_inbox_send(conversation, key: str | None) -> dict | None:
     return {"outbound_message_id": first.id}
 
 
+def _instagram_result(outbound, spine_msg=None, **flags) -> dict:
+    """What an Instagram send reports: the inbox message (``message_id``, once sent) and the
+    Instagram outbound row (``ig_outbound_message_id``).
+
+    Never ``outbound_message_id``: the workflow engine stores that as the foreign key to
+    *WhatsApp's* outbound record, and WhatsApp's failure hook finds steps by it. The Instagram
+    row goes under its own key, which the engine links and Instagram's failure hook reads.
+    """
+    return {
+        "message_id": spine_msg.id if spine_msg else None,
+        "ig_outbound_message_id": outbound.pk,
+        **flags,
+    }
+
+
 def _instagram_repeat(outbound) -> dict:
     """The answer to an inbox send repeated with the same key (apps.conversations.inbox_keys).
 
@@ -159,13 +174,12 @@ def _instagram_repeat(outbound) -> dict:
     from apps.instagram.services.outbound import record_sent_message
 
     if outbound.status == OutboundMessage.Status.SENT:
-        spine_msg = record_sent_message(outbound)
-        return {"outbound_message_id": spine_msg.id if spine_msg else None}
+        return _instagram_result(outbound, record_sent_message(outbound))
     if outbound.status == OutboundMessage.Status.FAILED:
         raise ActionError(f"Instagram send failed: {outbound.last_error}")
     if outbound.status == OutboundMessage.Status.UNCONFIRMED:
-        return {"outbound_message_id": None, "unconfirmed": True}
-    return {"outbound_message_id": None, "queued": True}
+        return _instagram_result(outbound, unconfirmed=True)
+    return _instagram_result(outbound, queued=True)
 
 
 class ReplyAction(Action):
@@ -254,11 +268,10 @@ class ReplyAction(Action):
                     # A transient failure: the outbox drain retries it with backoff. Raising
                     # here would invite the user to send it again, and the customer would
                     # then get it twice. Same as WhatsApp, where a reply is always queued.
-                    return {"outbound_message_id": None, "queued": True}
+                    return _instagram_result(outbound, queued=True)
                 raise ActionError(f"Instagram send failed: {outbound.last_error}")
             # send_outbound already recorded it; this returns that same Message.
-            spine_msg = record_sent_message(outbound)
-            return {"outbound_message_id": spine_msg.id if spine_msg else None}
+            return _instagram_result(outbound, record_sent_message(outbound))
 
         if conversation.channel == conversation.Channel.FACEBOOK:
             from apps.facebook.services import inbox as facebook_inbox
@@ -457,8 +470,8 @@ class ReplyMediaAction(Action):
                     idempotency_key=f"{key}:caption",
                 )
             if queued:
-                return {"outbound_message_id": None, "queued": True}
-            return {"outbound_message_id": spine_msg.id if spine_msg else None}
+                return _instagram_result(outbound, queued=True)
+            return _instagram_result(outbound, spine_msg)
 
         if conversation.channel == conversation.Channel.FACEBOOK:
             from apps.facebook.services import inbox as facebook_inbox

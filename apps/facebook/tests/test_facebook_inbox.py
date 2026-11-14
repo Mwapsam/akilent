@@ -158,7 +158,8 @@ def test_a_reply_inside_24_hours_is_a_response(graph):
     _account, user, conn = make_page()
     _c, _convo, spine = make_messenger_contact(conn)
     result = run_action("reply", {}, conversation=spine, body="On its way")
-    assert result["outbound_message_id"]
+    assert result["message_id"] and result["fb_outbound_message_id"]
+    assert "outbound_message_id" not in result
     _m, path, body, _p = graph.sent()[0]
     assert (
         body["messaging_type"] == "RESPONSE" and body["message"]["text"] == "On its way"

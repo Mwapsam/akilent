@@ -42,19 +42,32 @@ def check_window(fb_convo, *, human: bool) -> None:
     raise ActionError(HUMAN_WINDOW_CLOSED_ERROR if human else WINDOW_CLOSED_ERROR)
 
 
+def _result(outbound, spine_msg=None, **flags) -> dict:
+    """What a Messenger send reports: the inbox message (``message_id``, once sent) and the
+    Facebook outbound row (``fb_outbound_message_id``).
+
+    Never ``outbound_message_id``: the workflow engine stores that as the foreign key to
+    *WhatsApp's* outbound record (see apps.conversations.actions._instagram_result).
+    """
+    return {
+        "message_id": spine_msg.id if spine_msg else None,
+        "fb_outbound_message_id": outbound.pk,
+        **flags,
+    }
+
+
 def repeat(outbound) -> dict:
     """The answer to an inbox send repeated with the same key (never a second send)."""
     from apps.facebook.models.message import FacebookOutboundMessage
     from apps.facebook.services.outbound import record_sent_message
 
     if outbound.status == FacebookOutboundMessage.Status.SENT:
-        spine_msg = record_sent_message(outbound)
-        return {"outbound_message_id": spine_msg.id if spine_msg else None}
+        return _result(outbound, record_sent_message(outbound))
     if outbound.status == FacebookOutboundMessage.Status.FAILED:
         raise ActionError(f"Facebook send failed: {outbound.last_error}")
     if outbound.status == FacebookOutboundMessage.Status.UNCONFIRMED:
-        return {"outbound_message_id": None, "unconfirmed": True}
-    return {"outbound_message_id": None, "queued": True}
+        return _result(outbound, unconfirmed=True)
+    return _result(outbound, queued=True)
 
 
 def send(conversation, body: str, key: str | None, *, media=None) -> dict:
@@ -88,7 +101,6 @@ def send(conversation, body: str, key: str | None, *, media=None) -> dict:
         outbound.refresh_from_db()
         if outbound.status != FacebookOutboundMessage.Status.FAILED:
             # Transient: the outbox drain retries it with backoff (see ReplyAction).
-            return {"outbound_message_id": None, "queued": True}
+            return _result(outbound, queued=True)
         raise ActionError(f"Facebook send failed: {outbound.last_error}")
-    spine_msg = record_sent_message(outbound)
-    return {"outbound_message_id": spine_msg.id if spine_msg else None}
+    return _result(outbound, record_sent_message(outbound))
