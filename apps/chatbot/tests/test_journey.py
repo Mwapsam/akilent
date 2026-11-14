@@ -8,7 +8,6 @@ normalisation, the install snippet and the idle-session purge.
 
 import json
 from datetime import timedelta
-from types import SimpleNamespace
 
 import pytest
 from django.core.cache import cache

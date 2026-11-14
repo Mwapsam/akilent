@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('chatbot', '0006_chatbot_workflow_opened_at'),
+        ("chatbot", "0006_chatbot_workflow_opened_at"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='chatbotconfig',
-            name='ai_daily_limit',
+            model_name="chatbotconfig",
+            name="ai_daily_limit",
             field=models.PositiveIntegerField(default=200),
         ),
     ]

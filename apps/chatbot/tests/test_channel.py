@@ -6,7 +6,6 @@ account's WhatsApp/Instagram/Facebook message automations never answer a website
 """
 
 import json
-from types import SimpleNamespace
 
 import pytest
 from django.contrib.auth import get_user_model

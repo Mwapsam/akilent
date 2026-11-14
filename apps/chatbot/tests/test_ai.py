@@ -92,13 +92,19 @@ class TestBuiltInAI:
     def test_answers_with_the_checked_answer(self, chatbot, ai):
         client, key = _start(chatbot)
         data = _say(client, key, "Do you ship to Leeds?").json()
-        assert data["messages"] == [{"from": "bot", "text": "We ship to Leeds in 2 days."}]
+        assert data["messages"] == [
+            {"from": "bot", "text": "We ship to Leeds in 2 days."}
+        ]
         assert data["handoff_suggested"] is False
         [(body, meta)] = _outbound(key)
         assert meta["sent_by"] == "ai"
 
     def test_declined_answer_goes_to_the_team_once(self, chatbot, ai):
-        ai.answer = {"ok": False, "text": "", "failed": "It mentions a price not in your notes."}
+        ai.answer = {
+            "ok": False,
+            "text": "",
+            "failed": "It mentions a price not in your notes.",
+        }
         client, key = _start(chatbot)
         first = _say(client, key, "How much is the X200?").json()
         second = _say(client, key, "And the X300?").json()
@@ -114,7 +120,8 @@ class TestBuiltInAI:
         assert data["handoff_suggested"] is True
 
     @pytest.mark.parametrize(
-        "text", ["what agency do you use?", "humanitarian shipping?", "I need an agenda"]
+        "text",
+        ["what agency do you use?", "humanitarian shipping?", "I need an agenda"],
     )
     def test_ordinary_words_are_not_a_request_for_a_person(self, chatbot, ai, text):
         client, key = _start(chatbot)
@@ -129,7 +136,11 @@ class TestBuiltInAI:
         assert data["handoff_suggested"] is True
 
     def test_never_takes_actions(self, chatbot, ai, action):
-        ai.answer = {"ok": True, "text": "Sure [ACTION:check_payment_status]", "failed": ""}
+        ai.answer = {
+            "ok": True,
+            "text": "Sure [ACTION:check_payment_status]",
+            "failed": "",
+        }
         client, key = _start(chatbot)
         _say(client, key, "where's my payment?")
         assert not ChatActionExecution.objects.exists()
@@ -172,14 +183,22 @@ def _bot_flow(chatbot, account, steps):
         name="AI flow",
         slug="ai-flow",
         status=Workflow.Status.PUBLISHED,
-        definition={"trigger": {"type": "website_chat.message_received"}, "steps": steps},
+        definition={
+            "trigger": {"type": "website_chat.message_received"},
+            "steps": steps,
+        },
     )
     chatbot.save()
 
 
 ANSWER_STEPS = [
     {"id": "a", "type": "ai_answer", "on_handoff": "hold", "next": "stop"},
-    {"id": "hold", "type": "reply_text", "text": "A teammate will reply soon.", "next": "stop"},
+    {
+        "id": "hold",
+        "type": "reply_text",
+        "text": "A teammate will reply soon.",
+        "next": "stop",
+    },
     {"id": "stop", "type": "stop"},
 ]
 
@@ -194,9 +213,24 @@ CLASSIFY_STEPS = [
         "routes": {"Price": "price", "Delivery": "delivery"},
         "on_unsure": "unsure",
     },
-    {"id": "price", "type": "reply_text", "text": "Prices are on our site.", "next": "stop"},
-    {"id": "delivery", "type": "reply_text", "text": "We deliver in 2 days.", "next": "stop"},
-    {"id": "unsure", "type": "reply_text", "text": "Let me get a teammate.", "next": "stop"},
+    {
+        "id": "price",
+        "type": "reply_text",
+        "text": "Prices are on our site.",
+        "next": "stop",
+    },
+    {
+        "id": "delivery",
+        "type": "reply_text",
+        "text": "We deliver in 2 days.",
+        "next": "stop",
+    },
+    {
+        "id": "unsure",
+        "type": "reply_text",
+        "text": "Let me get a teammate.",
+        "next": "stop",
+    },
     {"id": "stop", "type": "stop"},
 ]
 
@@ -206,23 +240,31 @@ class TestWorkflowAISteps:
         _bot_flow(chatbot, account, ANSWER_STEPS)
         client, key = _start(chatbot)
         data = _say(client, key, "Do you ship to Leeds?").json()
-        assert data["messages"] == [{"from": "bot", "text": "We ship to Leeds in 2 days."}]
+        assert data["messages"] == [
+            {"from": "bot", "text": "We ship to Leeds in 2 days."}
+        ]
         [(_, meta)] = _outbound(key)
         assert meta["sent_by"] == "automation"
         assert WorkflowRun.objects.get().context["chatbot_id"] == chatbot.pk
 
-    def test_ai_answer_step_over_the_limit_takes_its_fallback(self, chatbot, account, ai):
+    def test_ai_answer_step_over_the_limit_takes_its_fallback(
+        self, chatbot, account, ai
+    ):
         chatbot.ai_daily_limit = 0
         chatbot.save()
         _bot_flow(chatbot, account, ANSWER_STEPS)
         client, key = _start(chatbot)
         data = _say(client, key, "Do you ship to Leeds?").json()
-        assert data["messages"] == [{"from": "bot", "text": "A teammate will reply soon."}]
+        assert data["messages"] == [
+            {"from": "bot", "text": "A teammate will reply soon."}
+        ]
         assert ai.answers == 0
         step = WorkflowStepRun.objects.get(step_id="a")
         assert step.result["why"] == "This chat's daily AI limit has been reached."
 
-    def test_keyword_sorting_needs_no_ai_even_over_the_limit(self, chatbot, account, ai):
+    def test_keyword_sorting_needs_no_ai_even_over_the_limit(
+        self, chatbot, account, ai
+    ):
         chatbot.ai_daily_limit = 0
         chatbot.save()
         _bot_flow(chatbot, account, CLASSIFY_STEPS)
@@ -246,7 +288,9 @@ class TestWorkflowAISteps:
         data = _say(client, key, "what would the X200 cost me").json()
         assert data["messages"] == [{"from": "bot", "text": "Let me get a teammate."}]
         assert ai.classified == 0
-        assert WorkflowStepRun.objects.get(step_id="sort").result["method"] == "ai_limit"
+        assert (
+            WorkflowStepRun.objects.get(step_id="sort").result["method"] == "ai_limit"
+        )
 
     def test_ai_extract_over_the_limit_goes_the_missing_way(self, chatbot, account, ai):
         chatbot.ai_daily_limit = 0
@@ -262,7 +306,12 @@ class TestWorkflowAISteps:
                     "on_missing": "ask",
                     "next": "ok",
                 },
-                {"id": "ask", "type": "reply_text", "text": "What's your email?", "next": "stop"},
+                {
+                    "id": "ask",
+                    "type": "reply_text",
+                    "text": "What's your email?",
+                    "next": "stop",
+                },
                 {"id": "ok", "type": "reply_text", "text": "Got it.", "next": "stop"},
                 {"id": "stop", "type": "stop"},
             ],

@@ -76,7 +76,9 @@ def ai_reply(
     elif not take_ai_turn(session.chatbot_id):
         why = "the bot's daily AI limit was reached"
     if why:
-        logger.info("chatbot AI not answering in session=%s: %s", session.session_key, why)
+        logger.info(
+            "chatbot AI not answering in session=%s: %s", session.session_key, why
+        )
         return None, True
 
     out = ai_api.grounded_answer(

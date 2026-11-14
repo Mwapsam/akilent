@@ -67,7 +67,10 @@ def describe_verdict(verdict: dict) -> dict:
         detail, tone = "", NOT_REPLIED
     elif code == "other_ad":
         headline = "Didn't reply. This chat came from a different Meta ad than the ones it answers."
-        detail, tone = "You can change which ads it answers when you set it up.", NOT_REPLIED
+        detail, tone = (
+            "You can change which ads it answers when you set it up.",
+            NOT_REPLIED,
+        )
     elif code == "reply_mismatch":
         headline = "Didn't reply. It only follows one particular button the customer didn't tap."
         detail, tone = "", NOT_REPLIED
@@ -240,7 +243,11 @@ def _when(trigger: dict) -> str:
         how = {"starts_with": "starts with", "exact": "is exactly"}.get(
             match.get("mode") or "", "mentions"
         )
-        said = f"a customer's message {how} {words}" if match else "a customer messages you"
+        said = (
+            f"a customer's message {how} {words}"
+            if match
+            else "a customer messages you"
+        )
         return f"{said} from one of your Meta ads" if trigger.get("from_ad") else said
     if kind == "contact.created":
         return "someone messages you for the first time"
