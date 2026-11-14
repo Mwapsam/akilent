@@ -45,6 +45,21 @@ def _message(run) -> str:
     return str(((run.context or {}).get("message") or {}).get("body") or "").strip()
 
 
+BUDGET_REACHED = "This chat's daily AI limit has been reached."
+
+
+def _within_budget(run) -> bool:
+    """Whether this run may use AI now. A website chatbot's run (``chatbot_id`` in its context)
+    takes one of the bot's daily AI turns; any other run only has the business's own limits,
+    which ``apps.ai`` checks."""
+    chatbot_id = (run.context or {}).get("chatbot_id")
+    if not chatbot_id:
+        return True
+    from apps.chatbot.api import take_ai_turn
+
+    return take_ai_turn(chatbot_id)
+
+
 def _operation(run, step) -> str:
     digest = hashlib.sha1(_message(run).encode(), usedforsecurity=False).hexdigest()[
         :12
@@ -107,6 +122,8 @@ def run_classify(run, step) -> dict:
             "method": "keywords",
             "message": text[:300],
         }
+    if not _within_budget(run):
+        return {**unsure, "method": "ai_limit"}
     verdict = ai_api.classify(
         run.workflow.account,
         text,
@@ -141,7 +158,7 @@ def run_extract(run, step) -> dict:
         ai_api.extract(
             run.workflow.account, text, fields, operation_id=_operation(run, step)
         )
-        if text
+        if text and _within_budget(run)
         else {}
     )
     saved, missing = {}, []
@@ -179,7 +196,10 @@ def run_answer(run, step) -> dict:
 
     conversation = _conversation_for_run(run, step)
     _require_open_window(run, step, conversation)
-    out = ai_api.grounded_answer(conversation, operation_id=_operation(run, step))
+    if _within_budget(run):
+        out = ai_api.grounded_answer(conversation, operation_id=_operation(run, step))
+    else:
+        out = {"ok": False, "text": "", "failed": BUDGET_REACHED}
     if not out["ok"]:
         return {
             "_routed_to": step.get("on_handoff") or "",

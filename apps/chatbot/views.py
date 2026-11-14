@@ -9,9 +9,8 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
 
 from apps.accounts.utils import get_current_account
-from apps.chatbot.models import ChatbotAction, ChatbotConfig, ChatbotKnowledgeSource
+from apps.chatbot.models import ChatbotConfig
 from apps.chatbot.services import chatbot as chatbot_service
-from apps.chatbot.services import knowledge as knowledge_service
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
@@ -79,26 +78,21 @@ def chatbot_detail(request: HttpRequest, pk: int) -> HttpResponse:
         account=account,
         chatbot_type=ChatbotConfig.ChatbotType.CUSTOMER,
     )
-    from apps.ai.models import KnowledgeBaseEntry
+    from django.conf import settings
 
-    knowledge_entries = KnowledgeBaseEntry.objects.filter(
-        account=account, is_active=True
-    )
-    linked_ids = set(
-        ChatbotKnowledgeSource.objects.filter(chatbot=bot).values_list(
-            "knowledge_entry_id", flat=True
-        )
-    )
-    actions = bot.actions.order_by("slug")
+    from apps.ai import api as ai_api
+    from apps.chatbot.services.ai_budget import used_today
+
     return render(
         request,
         "chatbot/detail.html",
         {
             "bot": bot,
-            "knowledge_entries": knowledge_entries,
-            "linked_ids": linked_ids,
-            "actions": actions,
             "embed_snippet": _embed_snippet(bot),
+            # How it answers: AI from the business's Knowledge, within the bot's daily limit.
+            "ai_unavailable": ai_api.unavailable_reason(account),
+            "ai_autonomy": getattr(settings, "AI_AUTONOMY_ENABLED", True),
+            "ai_used_today": min(used_today(bot.pk), bot.ai_daily_limit),
         },
     )
 
@@ -128,6 +122,9 @@ def chatbot_edit(request: HttpRequest, pk: int) -> HttpResponse:
             "is_active": "is_active" in request.POST,
         }
         try:
+            fields["ai_daily_limit"] = _parse_ai_limit(
+                request.POST.get("ai_daily_limit", ""), bot.ai_daily_limit
+            )
             chatbot_service.update_chatbot(
                 bot,
                 actor_account=account,
@@ -146,6 +143,7 @@ def chatbot_edit(request: HttpRequest, pk: int) -> HttpResponse:
                     "purposes": ChatbotConfig.Purpose.choices,
                     # What they typed, so a mistyped domain can be corrected in place.
                     "domains_display": request.POST.get("allowed_domains", ""),
+                    "ai_daily_limit_display": request.POST.get("ai_daily_limit", ""),
                 },
             )
         messages.success(request, "Chatbot updated.")
@@ -158,88 +156,6 @@ def chatbot_edit(request: HttpRequest, pk: int) -> HttpResponse:
             "bot": bot,
             "purposes": ChatbotConfig.Purpose.choices,
             "domains_display": "\n".join(bot.allowed_domains),
-        },
-    )
-
-
-@login_required
-def chatbot_knowledge(request: HttpRequest, pk: int) -> HttpResponse:
-    """Toggle a knowledge entry on/off for this chatbot."""
-    account = get_current_account(request)
-    bot = get_object_or_404(
-        ChatbotConfig,
-        pk=pk,
-        account=account,
-        chatbot_type=ChatbotConfig.ChatbotType.CUSTOMER,
-    )
-
-    if request.method == "POST":
-        from apps.ai.models import KnowledgeBaseEntry
-
-        entry_id = request.POST.get("entry_id", "")
-        action = request.POST.get("action", "")
-        if entry_id.isdigit():
-            entry = get_object_or_404(
-                KnowledgeBaseEntry, pk=int(entry_id), account=account
-            )
-            if action == "add":
-                try:
-                    knowledge_service.link_knowledge(bot, entry)
-                except ValueError as exc:
-                    messages.error(request, str(exc))
-            elif action == "remove":
-                knowledge_service.unlink_knowledge(bot, entry)
-
-    return redirect("chatbot:detail", pk=bot.pk)
-
-
-@login_required
-def chatbot_action_edit(
-    request: HttpRequest, pk: int, action_pk: int | None = None
-) -> HttpResponse:
-    """Create or edit a ChatbotAction for this chatbot."""
-    account = get_current_account(request)
-    bot = get_object_or_404(
-        ChatbotConfig,
-        pk=pk,
-        account=account,
-        chatbot_type=ChatbotConfig.ChatbotType.CUSTOMER,
-    )
-    action_obj = None
-    if action_pk:
-        action_obj = get_object_or_404(ChatbotAction, pk=action_pk, chatbot=bot)
-
-    if request.method == "POST":
-        slug = request.POST.get("slug", "").strip()
-        label = request.POST.get("label", "").strip()
-        description = request.POST.get("description", "").strip()
-        is_enabled = "is_enabled" in request.POST
-
-        if not slug or not label:
-            messages.error(request, "Slug and label are required.")
-        elif action_obj:
-            action_obj.label = label
-            action_obj.description = description
-            action_obj.is_enabled = is_enabled
-            action_obj.save()
-            messages.success(request, "Action updated.")
-        else:
-            ChatbotAction.objects.create(
-                chatbot=bot,
-                slug=slug,
-                label=label,
-                description=description,
-                is_enabled=is_enabled,
-            )
-            messages.success(request, "Action added.")
-        return redirect("chatbot:detail", pk=bot.pk)
-
-    return render(
-        request,
-        "chatbot/action_edit.html",
-        {
-            "bot": bot,
-            "action": action_obj,
         },
     )
 
@@ -287,6 +203,21 @@ def chatbot_analytics(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
+
+_MAX_AI_DAILY_LIMIT = 10_000
+
+
+def _parse_ai_limit(raw: str, current: int) -> int:
+    """The owner's "AI answers per day": a whole number from 0 to 10,000 (blank keeps it)."""
+    raw = (raw or "").strip()
+    if not raw:
+        return current
+    if not raw.isdigit() or int(raw) > _MAX_AI_DAILY_LIMIT:
+        raise ValidationError(
+            f"AI answers per day must be a whole number from 0 to {_MAX_AI_DAILY_LIMIT:,}."
+        )
+    return int(raw)
 
 
 def _parse_domains(raw: str) -> list[str]:

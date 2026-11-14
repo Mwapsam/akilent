@@ -72,6 +72,7 @@
     startSession(savedSessionKey, function (data) {
       render();
       showMessages(data.messages);
+      applyExpect(data.expect);
       schedulePoll();
     });
   }
@@ -104,6 +105,7 @@
       if (!err && data && epoch === state.epoch) {
         if (data.messages && data.messages.length && !state.open) markUnread();
         showMessages(data.messages);
+        if ("expect" in data) applyExpect(data.expect);
         takeCursor(data);
       }
       schedulePoll();
@@ -151,12 +153,10 @@
     xhr.send(JSON.stringify(body));
   }
 
-  function sendMessage(text, cb) {
-    post(
-      "/api/chat/message/",
-      { session_key: state.sessionKey, message: text },
-      cb
-    );
+  function sendMessage(text, choice, cb) {
+    var body = { session_key: state.sessionKey, message: text };
+    if (choice) body.choice = choice;
+    post("/api/chat/message/", body, cb);
   }
 
   function identify(fields, cb) {
@@ -169,7 +169,7 @@
 
   // ── DOM ────────────────────────────────────────────────────────────────────
 
-  var widget, panel, log, input, sendBtn, identifyForm;
+  var widget, panel, log, input, sendBtn, identifyForm, promptBox;
 
   function render() {
     var cfg = state.config || {};
@@ -247,9 +247,16 @@
 
     // Identify form (shown after handoff suggestion or can be triggered by visitor)
     identifyForm = buildIdentifyForm(color);
+    // The bot's open question: tap-to-answer buttons or a list (see applyExpect).
+    promptBox = el("div", {
+      role: "group",
+      "aria-label": "Choose an answer",
+      style: "display:none;padding:8px 12px;border-top:1px solid #eee;background:#fff;color:#111",
+    });
 
     panel.appendChild(header);
     panel.appendChild(log);
+    panel.appendChild(promptBox);
     panel.appendChild(identifyForm);
     panel.appendChild(inputRow);
 
@@ -271,6 +278,7 @@
         post("/api/chat/open/", { session_key: state.sessionKey }, function (err, data) {
           if (err || !data) return;
           if (state.cursor === 0) showMessages(data.messages);
+          applyExpect(data.expect);
           takeCursor(data);
         });
       }
@@ -287,14 +295,18 @@
   }
 
   function onSend() {
-    var text = input.value.trim();
-    if (!text || !state.sessionKey) return;
+    sendText(input.value.trim(), "");
+  }
+
+  function sendText(text, choice) {
+    if (!text || !state.sessionKey || state.busy) return;
     input.value = "";
+    applyExpect(null);
     appendVisitorMsg(text);
     setLoading(true);
     state.busy = true;
     state.epoch++;
-    sendMessage(text, function (err, data) {
+    sendMessage(text, choice, function (err, data) {
       setLoading(false);
       state.busy = false;
       state.epoch++;
@@ -319,6 +331,7 @@
       state.turnCount++;
       if (data.messages) showMessages(data.messages);
       else if (data.reply) appendBotMsg(data.reply);
+      applyExpect(data.expect);
       takeCursor(data);
       if (data.handoff_suggested && !state.identifyFormShown) {
         showHandoffPrompt();
@@ -396,6 +409,71 @@
     msg.textContent = text;
     log.appendChild(msg);
     log.scrollTop = log.scrollHeight;
+  }
+
+  // ── The bot's open question ───────────────────────────────────────────────
+  //
+  // expect = null | {kind: "choice", style: "buttons"|"list", button, options: [{title,
+  // description, choice}]} | {kind: "text", input: "text"|"email"|"tel"|"number"|"date",
+  // options?}. Only the latest unanswered question is offered; answering clears it.
+
+  var INPUT_HINTS = {
+    email: "Your email address",
+    tel: "Your phone number",
+    number: "Type a number",
+    date: "",
+  };
+
+  var shownExpect = "null";
+
+  function applyExpect(expect) {
+    if (!promptBox || !input) return;
+    // Every poll repeats the open question. Rebuild only when it changed: replacing the rows
+    // under the pointer can land a click on the wrong one, and a keyboard user who tabbed
+    // onto an option would lose their place every few seconds.
+    var signature = JSON.stringify(expect || null);
+    if (signature === shownExpect) return;
+    shownExpect = signature;
+    while (promptBox.firstChild) promptBox.removeChild(promptBox.firstChild);
+    var kind = expect && expect.input ? expect.input : "text";
+    input.type = kind === "date" ? "date" : (kind in INPUT_HINTS ? kind : "text");
+    input.setAttribute("inputmode", kind === "number" ? "decimal" : (kind === "tel" ? "tel" : (kind === "email" ? "email" : "text")));
+    input.placeholder = INPUT_HINTS[kind] || "Type a message…";
+    var options = (expect && expect.options) || [];
+    if (!options.length) { promptBox.style.display = "none"; return; }
+
+    var color = (state.config || {}).primary_color || "#1a56db";
+    var isList = expect.style === "list";
+    if (isList && expect.button) {
+      var heading = el("div", { style: "font-size:12px;color:#555;margin-bottom:6px;font-weight:600" });
+      heading.textContent = expect.button;
+      promptBox.appendChild(heading);
+    }
+    var wrap = el("div", {
+      style: isList
+        ? "display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto"
+        : "display:flex;flex-wrap:wrap;gap:6px",
+    });
+    options.forEach(function (option) {
+      var btn = el("button", {
+        type: "button",
+        style: isList
+          ? "text-align:left;background:#fff;border:1px solid #ddd;border-radius:8px;padding:7px 10px;cursor:pointer;font-size:13px;color:#111"
+          : "background:#fff;border:1px solid " + color + ";color:" + color + ";border-radius:999px;padding:5px 12px;cursor:pointer;font-size:13px",
+      });
+      var title = el("span", {});
+      title.textContent = option.title;
+      btn.appendChild(title);
+      if (isList && option.description) {
+        var desc = el("span", { style: "display:block;font-size:11px;color:#666;margin-top:2px" });
+        desc.textContent = option.description;
+        btn.appendChild(desc);
+      }
+      btn.addEventListener("click", function () { sendText(option.title, option.choice || ""); });
+      wrap.appendChild(btn);
+    });
+    promptBox.appendChild(wrap);
+    promptBox.style.display = "block";
   }
 
   function setLoading(on) {

@@ -33,22 +33,22 @@ def _clean_cache():
 
 
 class FakeProvider:
-    """Stands in for the AI provider and records what each call was given."""
+    """Stands in for the checked AI answer (``apps.ai.api.grounded_answer``) and records the
+    conversation it was given each time, so tests can see what the AI knew."""
 
     def __init__(self):
         self.calls = []
 
-    def chat(self, *, system, messages, max_tokens, temperature):
-        self.calls.append([dict(m) for m in messages])
-        return SimpleNamespace(error=None, text=f"Reply {len(self.calls)}")
+    def grounded_answer(self, conversation, *, operation_id):
+        bodies = conversation.messages.order_by("pk").values_list("body", flat=True)
+        self.calls.append([{"content": b} for b in bodies])
+        return {"ok": True, "text": f"Reply {len(self.calls)}", "failed": ""}
 
 
 @pytest.fixture
 def provider(monkeypatch):
     fake = FakeProvider()
-    monkeypatch.setattr(
-        "apps.ai.providers.get_ai_provider", lambda account=None, tier="": fake
-    )
+    monkeypatch.setattr("apps.ai.api.grounded_answer", fake.grounded_answer)
     # AI is on for the business (provider, plan and the owner's switch).
     monkeypatch.setattr("apps.ai.api.is_available", lambda account: True)
     return fake

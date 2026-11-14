@@ -192,7 +192,11 @@ def describe_step(
             f"Sorted it as “{result.get('corrected') or result.get('label')}”"
             + (" (by keyword)" if result.get("method") == "keywords" else " (AI)")
             if result.get("label") or result.get("corrected")
-            else "Wasn't sure, so it went your fallback way"
+            else (
+                "This chat's daily AI limit was reached, so it went your fallback way"
+                if result.get("method") == "ai_limit"
+                else "Wasn't sure, so it went your fallback way"
+            )
         ),
         "ai_extract": lambda: (
             (

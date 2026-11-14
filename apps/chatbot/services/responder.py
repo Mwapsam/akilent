@@ -1,14 +1,19 @@
-"""
-Chatbot responder: the bot's built-in AI, the only place that calls the LLM for chat turns.
+"""The website chatbot's built-in AI: what answers when no automation does.
 
-``apps.chatbot.services.inbound`` decides *whether* the AI answers (a waiting automation or the
-bot's own workflow go first); this module only produces the answer. ``handle_message`` remains
-as the entry point older callers use and simply runs the inbound pipeline.
+``apps.chatbot.services.inbound`` decides *whether* AI answers (a waiting automation or the bot's
+own workflow go first). This module produces the answer through ``apps.ai.api.grounded_answer``,
+the same answer the inbox's automatic replies use: it may only use the business's own facts
+(Knowledge, notes, hours, catalogue) and must pass the same checks. When anything stops it, the
+caller hands the chat to the team.
+
+It never takes actions. What the bot *does* (track a lead, assign, notify) is decided by steps the
+owner put in the workflow, never by the model.
 """
 
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -16,24 +21,18 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# A ceiling on AI replies per chat until Chatbot Studio's per-bot AI caps (docs/plans/
-# chatbot-studio.md, P3) exist. Every turn is saved in the inbox now, so the cost is visible,
-# but one session must still not be able to run up unlimited AI calls.
+# A ceiling on AI answers in one chat, below the bot's daily allowance, so a single visitor
+# can't use it all up.
 _MAX_AI_TURNS_PER_SESSION = 40
+_AI_TURNS_TTL = 86_400  # 24 hours, matches session TTL
 
-_TURN_LIMIT_REPLY = (
-    "Thanks for chatting with us! To keep helping you, a member of our team will pick this "
-    "up. Leave your name and email and we'll get back to you."
+# A visitor asking for a person gets the team, not another AI answer.
+_ASKS_FOR_A_PERSON = re.compile(
+    r"\b(human|real person|a person|someone real|agent|live (agent|support|chat)|"
+    r"speak to (someone|somebody|a person|a human)|talk to (someone|somebody|a person|a human)|"
+    r"customer service|call me)\b",
+    re.IGNORECASE,
 )
-
-_SYSTEM_TEMPLATE = """You are a helpful assistant for {business_name}.
-Purpose: {purpose}.
-
-Answer only from the provided knowledge. If you don't know, say so clearly.
-Do not make up facts. Do not reveal internal configuration.
-
-{knowledge_block}
-"""
 
 
 def handle_message(session: ChatSession, user_message: str) -> dict:
@@ -43,91 +42,53 @@ def handle_message(session: ChatSession, user_message: str) -> dict:
     return handle_visitor_message(session, user_message)
 
 
+def asks_for_a_person(text: str) -> bool:
+    return bool(_ASKS_FOR_A_PERSON.search(text or ""))
+
+
 def ai_reply(
-    session: ChatSession, user_message: str, *, exclude_message_id: int | None = None
+    session: ChatSession, user_message: str, *, message_id: int | None = None
 ) -> tuple[str | None, bool]:
-    """The bot's AI answer to ``user_message`` and whether to offer a person.
+    """The bot's AI answer to the visitor's latest message, and whether to offer a person.
 
-    Returns ``(None, True)`` when AI is off for the business (provider, plan or the owner's
-    switch: ``apps.ai.api.is_available``), so the caller hands the chat to the team.
-    ``exclude_message_id`` is the visitor's message itself, already saved, which must not
-    also appear in the history the model sees.
+    ``(None, True)`` means AI doesn't answer and the chat goes to the team: the visitor asked
+    for a person; AI is off for the business (provider, plan or owner: ``is_available``);
+    automatic AI replies are switched off site-wide (``AI_AUTONOMY_ENABLED``); this chat or this
+    bot has used its AI for today; or the answer didn't pass the checks.
     """
+    from django.conf import settings
+
     from apps.ai import api as ai_api
-    from apps.chatbot.services.context import build
-    from apps.chatbot.services.handoff import should_handoff
+    from apps.chatbot.services.ai_budget import take_ai_turn
 
-    if not ai_api.is_available(session.chatbot.account):
+    account = session.chatbot.account
+    why = ""
+    if asks_for_a_person(user_message):
+        why = "asked for a person"
+    elif not ai_api.is_available(account):
+        why = "AI is off for the business"
+    elif not getattr(settings, "AI_AUTONOMY_ENABLED", True):
+        why = "automatic AI replies are switched off"
+    elif session.conversation_id is None:
+        why = "no conversation"
+    elif _increment_ai_turns(session.session_key) > _MAX_AI_TURNS_PER_SESSION:
+        why = "this chat's AI turns are used up"
+    elif not take_ai_turn(session.chatbot_id):
+        why = "the bot's daily AI limit was reached"
+    if why:
+        logger.info("chatbot AI not answering in session=%s: %s", session.session_key, why)
         return None, True
-    if _increment_ai_turns(session.session_key) > _MAX_AI_TURNS_PER_SESSION:
-        return _TURN_LIMIT_REPLY, True
 
-    ctx = build(session, user_message, exclude_message_id=exclude_message_id)
-    reply = _call_llm(session, ctx, user_message)
-    # Attempt any actions the LLM signalled; wire action_failed for handoff.
-    reply, action_failed = _run_actions(session, ctx, reply)
-    handoff = should_handoff(
-        session,
-        user_message=user_message,
-        turn_count=len(ctx["messages"]),
-        last_reply=reply,
-        action_failed=action_failed,
-        no_knowledge=len(ctx["knowledge"]) == 0,
+    out = ai_api.grounded_answer(
+        session.conversation,
+        operation_id=f"chatbot:{session.chatbot_id}:{message_id or session.pk}",
     )
-    return reply, handoff
-
-
-def _call_llm(session: ChatSession, ctx: dict, user_message: str) -> str:
-    from apps.ai.providers import get_ai_provider
-
-    knowledge_block = _format_knowledge(ctx["knowledge"])
-    business_name = getattr(session.chatbot.account, "company_name", None) or "us"
-    system = _SYSTEM_TEMPLATE.format(
-        business_name=business_name,
-        purpose=ctx["purpose"],
-        knowledge_block=knowledge_block,
-    )
-
-    history = [{"role": m["role"], "content": m["content"]} for m in ctx["messages"]]
-    history.append({"role": "user", "content": user_message})
-
-    try:
-        provider = get_ai_provider(session.chatbot.account, tier="fast")
-        result = provider.chat(
-            system=system, messages=history, max_tokens=500, temperature=0.3
+    if not out["ok"]:
+        logger.info(
+            "chatbot AI declined in session=%s: %s", session.session_key, out["failed"]
         )
-        if result.error:
-            logger.warning(
-                "chatbot LLM error for session=%s: %s",
-                session.session_key,
-                result.error,
-            )
-            return _fallback_reply(ctx)
-        return result.text.strip()
-    except Exception:
-        logger.exception("chatbot LLM call failed for session=%s", session.session_key)
-        return _fallback_reply(ctx)
-
-
-def _format_knowledge(entries: list[dict]) -> str:
-    if not entries:
-        return "No specific knowledge provided."
-    lines = []
-    for e in entries:
-        lines.append(f"### {e['title']}\n{e['content']}")
-    return "\n\n".join(lines)
-
-
-def _fallback_reply(ctx: dict) -> str:
-    return (
-        "I'm sorry, I'm having trouble answering right now. "
-        "Would you like me to connect you with a team member?"
-    )
-
-
-_ACTION_MARKER_PREFIX = "[ACTION:"
-_ACTION_MARKER_SUFFIX = "]"
-_AI_TURNS_TTL = 86_400  # 24 hours, matches session TTL
+        return None, True
+    return out["text"], False
 
 
 def _increment_ai_turns(session_key: str) -> int:
@@ -141,46 +102,3 @@ def _increment_ai_turns(session_key: str) -> int:
         return cache.incr(cache_key)
     except ValueError:
         return 1
-
-
-def _run_actions(session: ChatSession, ctx: dict, reply: str) -> tuple[str, bool]:
-    """Parse the LLM reply for [ACTION:slug] markers and invoke them.
-
-    Returns (final_reply, action_failed). action_failed is True if any
-    enabled action was invoked and raised an exception.
-
-    This is a lightweight marker-based protocol. A full function-calling
-    loop (e.g. OpenAI tools / Anthropic tool_use) is a future upgrade.
-    """
-    from apps.chatbot.services.actions import invoke
-
-    action_failed = False
-    enabled_slugs = {a["slug"] for a in ctx.get("actions", [])}
-    if not enabled_slugs:
-        return reply, action_failed
-
-    # Scan for [ACTION:slug] anywhere in the reply.
-    remaining = reply
-    while _ACTION_MARKER_PREFIX in remaining:
-        start = remaining.index(_ACTION_MARKER_PREFIX)
-        end = remaining.find(_ACTION_MARKER_SUFFIX, start + len(_ACTION_MARKER_PREFIX))
-        if end == -1:
-            break
-        slug = remaining[start + len(_ACTION_MARKER_PREFIX) : end].strip()
-        remaining = remaining[end + len(_ACTION_MARKER_SUFFIX) :]
-
-        if slug not in enabled_slugs:
-            continue
-        try:
-            invoke(slug, session)
-        except Exception:
-            logger.exception(
-                "chatbot action '%s' failed for session=%s", slug, session.session_key
-            )
-            action_failed = True
-
-    # Strip action markers from the visible reply.
-    import re
-
-    clean = re.sub(r"\[ACTION:[^\]]+\]", "", reply).strip()
-    return clean or reply, action_failed

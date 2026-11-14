@@ -74,6 +74,10 @@ class ChatbotConfig(models.Model):
         on_delete=models.SET_NULL,
         related_name="chatbots",
     )
+    # How many times a day this bot may use AI (its own answers and AI steps in its
+    # workflow). One public widget must not use up the business's whole AI allowance; once
+    # it's reached, chats go to the team until tomorrow (UTC). 0 = no AI for this bot.
+    ai_daily_limit = models.PositiveIntegerField(default=200)
     chatbot_type = models.CharField(
         max_length=20,
         choices=ChatbotType.choices,

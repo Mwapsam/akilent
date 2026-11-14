@@ -35,17 +35,15 @@ class FakeProvider:
     def __init__(self):
         self.calls = 0
 
-    def chat(self, **kwargs):
+    def grounded_answer(self, conversation, *, operation_id):
         self.calls += 1
-        return SimpleNamespace(error=None, text=f"AI answer {self.calls}")
+        return {"ok": True, "text": f"AI answer {self.calls}", "failed": ""}
 
 
 @pytest.fixture
 def provider(monkeypatch):
     fake = FakeProvider()
-    monkeypatch.setattr(
-        "apps.ai.providers.get_ai_provider", lambda account=None, tier="": fake
-    )
+    monkeypatch.setattr("apps.ai.api.grounded_answer", fake.grounded_answer)
     monkeypatch.setattr("apps.ai.api.is_available", lambda account: True)
     return fake
 
@@ -185,7 +183,7 @@ class TestOpened:
     def test_open_without_opened_workflow_stores_nothing(self, chatbot):
         client, key = _start(chatbot)
         data = _post(client, "/api/chat/open/", {"session_key": key}).json()
-        assert data == {"messages": [], "cursor": 0}
+        assert data == {"messages": [], "cursor": 0, "expect": None}
         session = ChatSession.objects.get(session_key=key)
         assert session.conversation_id is None and session.contact_id is None
         assert session.opened_at is not None
@@ -313,7 +311,11 @@ class TestTeamReplies:
 class TestPoll:
     def test_poll_before_any_message(self, chatbot):
         client, key = _start(chatbot)
-        assert _poll(client, key, 0).json() == {"messages": [], "cursor": 0}
+        assert _poll(client, key, 0).json() == {
+            "messages": [],
+            "cursor": 0,
+            "expect": None,
+        }
 
     def test_poll_has_its_own_rate_limit(self, chatbot, provider, monkeypatch):
         monkeypatch.setattr("apps.chatbot.api.auth._RATE_LIMIT", 2)

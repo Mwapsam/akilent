@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 _MAX_BODY_BYTES = 8_192  # 8 KB — rejects oversized payloads before parsing
 _MAX_MESSAGE_CHARS = 2_000  # single visitor message length cap
 SESSION_TTL_HOURS = 24  # sessions idle longer than this are rejected
+_MAX_CHOICE_CHARS = 300  # a tapped option's value: "<interaction token>:<option id>"
 
 
 def _parse_body(request: HttpRequest) -> dict | None:
@@ -138,7 +139,7 @@ def init(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"error": "Service misconfiguration."}, status=503)
 
     from apps.chatbot.models import ChatSession
-    from apps.chatbot.services.conversation import messages_after
+    from apps.chatbot.services.conversation import current_prompt, messages_after
 
     chatbot: ChatbotConfig = chatbot_obj  # type: ignore[assignment]
     session = _resumable_session(chatbot, data.get("session_key"))
@@ -156,6 +157,7 @@ def init(request: HttpRequest) -> JsonResponse:
             "config": serializers.public_config(chatbot),
             "messages": messages,
             "cursor": cursor,
+            "expect": current_prompt(session) if messages else None,
         }
     )
 
@@ -177,7 +179,11 @@ def _resumable_session(chatbot: ChatbotConfig, session_key) -> ChatSession | Non
 @auth.with_cors
 @require_POST
 def message(request: HttpRequest) -> JsonResponse:
-    """POST {session_key, message} → {reply, handoff_suggested, ticket_number}"""
+    """POST {session_key, message, choice?} → {reply, messages, handoff_suggested, cursor, expect}
+
+    ``choice`` is the value of a tapped option (see ``current_prompt``), sent with its title as
+    ``message``.
+    """
     data = _parse_body(request)
     if data is None:
         return JsonResponse({"error": "Invalid request."}, status=400)
@@ -197,9 +203,13 @@ def message(request: HttpRequest) -> JsonResponse:
     if error is not None:
         return error
 
+    choice = data.get("choice") or ""
+    if not isinstance(choice, str) or len(choice) > _MAX_CHOICE_CHARS:
+        return JsonResponse({"error": "Invalid request."}, status=400)
+
     from apps.chatbot.services.inbound import handle_visitor_message
 
-    return JsonResponse(handle_visitor_message(session, body))
+    return JsonResponse(handle_visitor_message(session, body, choice=choice))
 
 
 @csrf_exempt
@@ -247,15 +257,17 @@ def poll(request: HttpRequest) -> JsonResponse:
     if error is not None:
         return error
 
-    from apps.chatbot.services.conversation import messages_after
+    from apps.chatbot.services.conversation import current_prompt, messages_after
 
     if not session.conversation_id:
-        return JsonResponse({"messages": [], "cursor": 0})
+        return JsonResponse({"messages": [], "cursor": 0, "expect": None})
     messages, new_cursor = messages_after(session, cursor) if cursor else ([], None)
     if new_cursor is None:
         # A widget with no cursor yet starts from now rather than replaying the chat.
         messages, new_cursor = messages_after(session, None)
-    return JsonResponse({"messages": messages, "cursor": new_cursor})
+    return JsonResponse(
+        {"messages": messages, "cursor": new_cursor, "expect": current_prompt(session)}
+    )
 
 
 @csrf_exempt

@@ -185,10 +185,32 @@ def _reasons(account) -> dict[str, str]:
         reasons["send_whatsapp"] = "You need a message WhatsApp has approved first."
     if "email" not in channels:
         reasons["send_email"] = "Email isn't switched on for your business."
-    if not ({"whatsapp", "instagram", "facebook"} & set(channels)):
+    website_chat_on = _website_chat_on(account)
+    if website_chat_on:
+        # Website chat shows lists as well as buttons (Chatbot Studio).
+        reasons.pop("send_list", None)
+    if (
+        not ({"whatsapp", "instagram", "facebook"} & set(channels))
+        and not website_chat_on
+    ):
         for t in ("reply_text", "send_buttons", "wait_for_reply", "ask_question"):
             reasons[t] = "Connect WhatsApp, Instagram or Facebook first."
     return reasons
+
+
+def _website_chat_on(account) -> bool:
+    """The business has a live website chatbot (and the chatbot is released)."""
+    from apps.core.releases import is_released
+
+    if account is None or not is_released("chatbot"):
+        return False
+    from apps.chatbot.api import ChatbotConfig
+
+    return ChatbotConfig.objects.filter(
+        account=account,
+        is_active=True,
+        chatbot_type=ChatbotConfig.ChatbotType.CUSTOMER,
+    ).exists()
 
 
 def step_catalog(account) -> list[dict]:

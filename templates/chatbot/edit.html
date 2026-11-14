@@ -64,6 +64,15 @@
       </p>
     </div>
 
+    <div>
+      <label for="ai_daily_limit" class="block text-sm font-medium text-ink mb-1">AI answers per day</label>
+      <input type="number" id="ai_daily_limit" name="ai_daily_limit" min="0" max="10000" step="1"
+             value="{{ ai_daily_limit_display|default:bot.ai_daily_limit }}" class="input w-32" inputmode="numeric">
+      <p class="mt-1 text-xs text-ink-muted">
+        After this many AI uses in a day, chats go to your team until tomorrow. 0 turns AI off for this chatbot. Your plan's AI limit still applies.
+      </p>
+    </div>
+
     <div class="flex items-center gap-2">
       <input type="checkbox" id="is_active" name="is_active" {% if bot.is_active %}checked{% endif %}
              class="rounded border-border">

@@ -525,8 +525,11 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
                     field="type",
                 )
             # send_list fails at runtime on IG conversations; reject at publish time
-            # only when the account actually has an active IG channel.
-            if step["type"] == "send_list":
+            # only when the account actually has an active IG channel. A website chat
+            # workflow only ever runs in website chat, which shows lists.
+            if step["type"] == "send_list" and not str(_trig_type or "").startswith(
+                "website_chat."
+            ):
                 try:
                     from apps.facebook.models.page import active_page
                     from apps.instagram.models.account import InstagramBusinessAccount
@@ -1208,6 +1211,8 @@ def _run_interactive(run: WorkflowRun, step: dict) -> dict:
     if conversation.channel == Conversation.Channel.FACEBOOK:
         # Messenger quick replies work exactly like Instagram's.
         return _run_interactive_instagram(run, step, conversation, channel="facebook")
+    if conversation.channel == Conversation.Channel.WEBSITE_CHAT:
+        return _run_interactive_website(run, step, conversation)
 
     raise ValueError(
         f"{step['type']} step {step.get('id')!r}: channel {conversation.channel!r} "
@@ -1249,6 +1254,96 @@ _IG_MAX_QUICK_REPLIES = 13
 _IG_MAX_TITLE = 20
 _IG_MAX_PAYLOAD = 1000
 _IG_DEFAULT_TIMEOUT = 86400  # 24 h
+
+
+def _run_interactive_website(run: WorkflowRun, step: dict, conversation) -> dict:
+    """Website chat send_buttons / send_list: the same interaction model as Instagram.
+
+    One transaction opens a ``WorkflowInteraction`` (whose token the widget sends back as
+    ``reply_id`` = ``"<token>:<option id>"``), saves the question in the conversation through
+    the ``reply`` action, and parks the run. ``claim_reply`` resumes it exactly as it does for a
+    tapped Instagram quick reply; a typed answer that matches a choice's title works too.
+
+    The widget learns the choices from the open interaction itself (apps.chatbot
+    ``current_prompt``), so only the latest unanswered question is ever tappable. Labels and
+    ids come from the WhatsApp builders, so routes written for WhatsApp work unchanged.
+    """
+    from datetime import timedelta
+
+    from django.db import transaction
+    from django.utils import timezone
+
+    from apps.automation.models import WorkflowInteraction
+    from apps.core.actions import ActionError, run_action
+    from apps.whatsapp import interactive as wa_interactive
+
+    step_id = step.get("id") or ""
+    text = _first_name_merge(run, step.get("text") or "")
+    try:
+        if step.get("type") == "send_list":
+            built = wa_interactive.build_list(
+                text, step.get("button"), step.get("rows")
+            )
+            options = built["action"]["sections"][0]["rows"]
+            kind, button = "list", built["action"]["button"]
+        else:
+            built = wa_interactive.build_buttons(text, step.get("buttons"))
+            options = [b["reply"] for b in built["action"]["buttons"]]
+            kind, button = "buttons", ""
+    except wa_interactive.InteractiveError as exc:
+        raise ValueError(f"step {step_id!r}: {exc}") from exc
+
+    # As on Instagram: a following wait_for_reply step can carry the timeout and say that
+    # any typed answer is accepted (its ``default`` route).
+    next_step = _run_steps(run).get(step.get("next") or "") or {}
+    next_is_wait = next_step.get("type") == "wait_for_reply"
+    timeout_src = (
+        step if "timeout_seconds" in step else (next_step if next_is_wait else step)
+    )
+    deadline = timezone.now() + timedelta(
+        seconds=int(timeout_src.get("timeout_seconds", _IG_DEFAULT_TIMEOUT))
+    )
+    free_text = bool(
+        next_is_wait and (next_step.get("free_text") or next_step.get("default"))
+    )
+
+    with transaction.atomic():
+        interaction, _ = WorkflowInteraction.objects.get_or_create(
+            run=run,
+            step_id=step_id,
+            status=WorkflowInteraction.Status.OPEN,
+            defaults={
+                "conversation": conversation,
+                "expected": {
+                    "option_ids": [o["id"] for o in options],
+                    "option_titles": [o["title"] for o in options],
+                    "option_descriptions": [o.get("description", "") for o in options],
+                    "free_text": free_text,
+                    "style": kind,
+                    "button": button,
+                },
+                "deadline_at": deadline,
+            },
+        )
+        try:
+            sent = run_action(
+                "reply",
+                {"account": run.workflow.account},
+                conversation=conversation,
+                body=text,
+                idempotency_key=send_key(run, step_id),
+            )
+        except ActionError as exc:
+            raise ValueError(f"{step.get('type')} step {step_id!r}: {exc}") from exc
+        run.status = WorkflowRun.Status.WAITING
+        run.next_due_at = deadline
+        run.save(update_fields=["status", "next_due_at"])
+
+    return {
+        "_parked": True,
+        "interaction_token": interaction.token,
+        "message_id": (sent or {}).get("message_id"),
+    }
 
 
 def _run_interactive_instagram(

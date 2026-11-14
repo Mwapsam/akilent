@@ -163,6 +163,116 @@ def messages_after(
     return [{"from": _who(r), "text": r["body"]} for r in rows if r["body"]], total
 
 
+_ATTRIBUTE_INPUTS = {"number": "number", "date": "date"}
+
+
+def current_prompt(session: ChatSession) -> dict | None:
+    """What answer the bot is waiting for right now, so the widget can offer it, or None.
+
+    Read from the automation's open question (``WorkflowInteraction``) on this chat, never from
+    old messages, so only the latest unanswered question is ever tappable:
+
+    - ``{"kind": "choice", "style": "buttons"|"list", "button", "options": [{"title",
+      "description", "choice"}], "free_text"}`` for buttons or a list.
+    - ``{"kind": "text", "input": "text"|"email"|"tel"|"number"|"date"}`` for a question
+      (``ask_question``), with tap ``options`` as well for a yes/no or choice field.
+
+    ``choice`` is an opaque value the widget sends back with the tapped option's title; the
+    server accepts it only if it is one of the open question's own (``resolve_choice``).
+    """
+    if not session.conversation_id:
+        return None
+    from apps.automation.models import WorkflowInteraction, WorkflowRun
+
+    interaction = (
+        WorkflowInteraction.objects.filter(
+            conversation_id=session.conversation_id,
+            status=WorkflowInteraction.Status.OPEN,
+            run__status=WorkflowRun.Status.WAITING,
+        )
+        .select_related("run")
+        .order_by("-created_at", "-pk")
+        .first()
+    )
+    if interaction is None or interaction.run.current_step != interaction.step_id:
+        return None
+    expected = interaction.expected or {}
+    option_ids = expected.get("option_ids") or []
+    if option_ids:
+        titles = expected.get("option_titles") or []
+        descriptions = expected.get("option_descriptions") or []
+        return {
+            "kind": "choice",
+            "style": "list" if expected.get("style") == "list" else "buttons",
+            "button": expected.get("button") or "",
+            "free_text": bool(expected.get("free_text")),
+            "options": [
+                {
+                    "title": titles[i] if i < len(titles) else oid,
+                    "description": descriptions[i] if i < len(descriptions) else "",
+                    "choice": f"{interaction.token}:{oid}",
+                }
+                for i, oid in enumerate(option_ids)
+            ],
+        }
+    if expected.get("free_text"):
+        return _question_prompt(session, expected)
+    return None
+
+
+def _question_prompt(session: ChatSession, expected: dict) -> dict:
+    """The input for an ``ask_question``: the keyboard its field needs, and tap options for a
+    yes/no or choice field (the visitor's tap is sent as the typed answer)."""
+    from apps.contacts.models import CustomAttributeDef
+
+    key = expected.get("attribute") or ""
+    prompt: dict = {"kind": "text", "input": "text"}
+    defn = CustomAttributeDef.objects.filter(
+        account_id=session.chatbot.account_id,
+        entity=expected.get("target") or "contact",
+        key=key,
+        archived_at__isnull=True,
+    ).first()
+    if defn is not None:
+        prompt["input"] = _ATTRIBUTE_INPUTS.get(defn.type, "text")
+        if defn.type == CustomAttributeDef.Type.BOOLEAN:
+            prompt["options"] = [
+                {"title": "Yes", "choice": "yes"},
+                {"title": "No", "choice": "no"},
+            ]
+        elif defn.type == CustomAttributeDef.Type.CHOICE:
+            prompt["options"] = [
+                {
+                    "title": str(o.get("label") or o["key"]),
+                    "choice": str(o["key"]),
+                }
+                for o in (defn.options or [])
+                if isinstance(o, dict) and o.get("key")
+            ]
+    if prompt["input"] == "text":
+        lowered = key.lower()
+        if "email" in lowered:
+            prompt["input"] = "email"
+        elif "phone" in lowered or "mobile" in lowered or "whatsapp" in lowered:
+            prompt["input"] = "tel"
+    return prompt
+
+
+def resolve_choice(session: ChatSession, choice: str) -> dict:
+    """What a tapped option means, checked against the open question: ``{"reply_id": ...}``
+    for a button or list choice, ``{"answer": ...}`` for a question's yes/no or choice field,
+    or ``{}`` when it isn't one of the current options (then the text is a typed message)."""
+    if not choice:
+        return {}
+    prompt = current_prompt(session) or {}
+    for option in prompt.get("options") or []:
+        if option.get("choice") == choice:
+            if prompt.get("kind") == "choice":
+                return {"reply_id": choice}
+            return {"answer": choice}
+    return {}
+
+
 def history(session: ChatSession, *, limit: int = _HISTORY_LIMIT) -> list[dict]:
     """The chat so far for a resumed widget, oldest first."""
     return messages_after(session, None, limit=limit)[0]

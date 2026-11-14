@@ -1,9 +1,66 @@
 # Chatbot Studio — spec and phased plan
 
-Status (2026-11-14): **P0 committed; P1 built** (uncommitted): 112 chatbot tests pass, and 3,538
-across automation/conversations/ai/core/accounts/chatbot with no failures. A browser check from a
-second origin passed: greeting on open, holding reply, a team reply arriving by poll, and a reload
-with no duplicates. P2–P6 aren't built.
+Status (2026-11-14): **P0 and P1 committed; P2 and P3 built** (uncommitted). 155 chatbot tests
+pass. P4–P6 aren't built.
+
+P3 as built:
+- **The bot's built-in AI is `apps.ai.api.grounded_answer`,** the checked answer the inbox's
+  automatic replies use. It answers only from the business's own facts and runs the same checks
+  as automatic replies; when a check fails, the chat goes to the team with a one-time holding
+  reply. The custom prompt and per-bot knowledge retrieval are gone (`services/context.py`
+  deleted). `services/knowledge.py` stays only because an AI ranking test compares against it.
+- **It never takes actions.** The `[ACTION:slug]` marker protocol is removed, and so are the
+  owner pages for free-typed action slugs and the per-bot knowledge toggles (views, URLs,
+  `action_edit.html`). The `ChatbotAction` and `ChatbotKnowledgeSource` models and tables remain,
+  unused at runtime; P5 decides what `handoff_action` becomes.
+- **When the bot's AI doesn't answer:** the visitor asks for a person (whole words, so "agency"
+  doesn't count); AI is off for the business (`is_available`); the site-wide
+  `AI_AUTONOMY_ENABLED` is off; the chat has used its 40 turns; or the bot's daily limit is
+  reached.
+- **Per-bot daily AI limit:** `ChatbotConfig.ai_daily_limit` (default 200, 0 = no AI; migration
+  0007), counted per UTC day in `services/ai_budget.py`. The bot's own AI and every AI step in its
+  workflow take a turn (runs carry `chatbot_id` in their context). Keyword matches in
+  `ai_classify` cost nothing. Over the limit, `ai_answer` goes its `on_handoff` way,
+  `ai_classify` its `on_unsure` way (`method: "ai_limit"`, explained in run history) and
+  `ai_extract` its `on_missing` way. The plan's `ai_actions_day` still applies on top.
+- **Bot page:** a "How it answers" card (which automation, whether AI is on and why not, today's
+  AI use against the limit), and an "AI answers per day" field (0–10,000) on the edit page.
+- **Kept as is:** AI steps in an owner's workflow don't check `AI_AUTONOMY_ENABLED`, the same as
+  on every other channel (the step is the owner's opt-in).
+
+P2 status: 4,591 tests across automation, conversations, instagram, facebook, ai, chatbot,
+whatsapp, contacts, core and accounts passed with no failures. A browser check with real clicks
+passed: buttons on open → list with descriptions → route → reply; the open question comes back
+after a reload.
+
+P2 as built:
+- **Engine:** `_run_interactive_website` (`workflow_engine.py`) runs `send_buttons` / `send_list`
+  in website chat. It uses the same `WorkflowInteraction` + `claim_reply` model as Instagram quick
+  replies, with ids and labels from the WhatsApp builders, so WhatsApp-style `wait_for_reply`
+  routes work unchanged. `send_list` is allowed in website-only workflows even when Instagram is
+  connected. `ask_question` already worked through the `reply` action.
+- **Telling the widget what to show:** `apps/chatbot/services/conversation.current_prompt` reads
+  the open interaction and returns `expect` with every response (init, message, open, poll):
+  buttons, or a list with a heading and descriptions, or a question's input. A question gets a
+  number pad or date picker from its field type, Yes/No or choice taps for yes/no and choice
+  fields, and an email or phone keyboard when the field key says email/phone/mobile/whatsapp.
+- **Sending a tap back:** each option has an opaque `choice`. `resolve_choice` accepts it only if
+  it belongs to the open question. A button routes by its `token:option`; a choice field saves its
+  key while the visitor and the inbox see the label.
+- **Palette:** conversation steps (reply, buttons, list, wait, question) count as usable when the
+  chatbot is released and the business has a live bot.
+- **Fixed while testing:**
+  - (P1 bug) When the visitor typed off-script while a question was open, the existing run
+    counted as having answered, so nobody replied. The AI now answers and the question stays open.
+  - (widget) The options were rebuilt on every poll. That lost keyboard focus every 4 seconds and
+    could land a click on the wrong row. In the first browser run, X200 was sent when X300 was
+    clicked; I couldn't reproduce it after this fix.
+- **Not done:**
+  - `ask_question` saves only to custom fields. An "ask for email/phone" step that writes the
+    contact's own email/phone fields would need a new step type (P5 candidate).
+  - The chat button is a `div` with no role or label, so it isn't keyboard or screen-reader
+    reachable (P6 widget polish).
+  - The `send_list` palette text still says "(WhatsApp only)" until release (P6).
 
 P1 as built, and where it departed from the plan below:
 - Triggers `website_chat.opened` and `website_chat.message_received` (`CONVERSATION_TRIGGERS` in

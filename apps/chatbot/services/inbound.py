@@ -45,8 +45,14 @@ def _bot_workflow(session: ChatSession, trigger_type: str) -> Workflow | None:
     return workflow if trigger.get("type") == trigger_type else None
 
 
-def _message_context(conversation: Conversation, message: Message | None) -> dict:
-    context: dict = {"conversation_id": conversation.public_id}
+def _message_context(
+    session: ChatSession, conversation: Conversation, message: Message | None
+) -> dict:
+    # ``chatbot_id``: AI steps in this run use the bot's daily AI turns (ai_budget).
+    context: dict = {
+        "conversation_id": conversation.public_id,
+        "chatbot_id": session.chatbot_id,
+    }
     if message is not None:
         context["message"] = {"body": message.body, "type": "text"}
     return context
@@ -64,12 +70,15 @@ def _start_workflow(
     from apps.conversations.models import Message as SpineMessage
 
     contact = session.contact
-    context = _message_context(conversation, message)
+    context = _message_context(session, conversation, message)
     trigger = (workflow.definition or {}).get("trigger") or {}
     if trigger_verdict(workflow, trigger, contact, context) is not None:
         return False  # a keyword it doesn't match, or its cooldown
     run = enroll(workflow, contact, context=context)
-    if run is None:
+    if run is None or run.started_at < since:
+        # Nothing started, or enroll handed back the run already in flight (one per visitor):
+        # that run was waiting on its own question before this message, so it hasn't answered
+        # *this* one. A message it could take was offered to it by resume_on_reply already.
         return False
     run.refresh_from_db()
     if waiting_on_customer(run):
@@ -109,19 +118,27 @@ def _holding_already_sent(conversation) -> bool:
     return bool(last) and (last or {}).get("auto_kind") == "holding"
 
 
-def handle_visitor_message(session: ChatSession, body: str) -> dict:
+def handle_visitor_message(
+    session: ChatSession, body: str, *, choice: str = ""
+) -> dict:
     """Record one visitor message, let the right party answer, and return what the widget shows.
 
-    Returns ``{"reply", "messages", "handoff_suggested", "ticket_number", "cursor"}``: the new
-    messages since the visitor's (bot or team), their text joined as ``reply`` for older widgets,
-    and the cursor for ``/api/chat/poll/``.
+    ``choice`` is the value of an option the visitor tapped (``current_prompt``); the message
+    text is the option's title, which is what the visitor and the inbox see. A choice that
+    isn't one of the open question's options is ignored and the text counts as typed.
+
+    Returns ``{"reply", "messages", "handoff_suggested", "ticket_number", "cursor", "expect"}``:
+    the new messages since the visitor's (bot or team), their text joined as ``reply`` for older
+    widgets, the cursor for ``/api/chat/poll/`` and what answer the bot now waits for.
     """
     from django.utils import timezone
 
     from apps.automation.workflow_engine import resume_on_reply
     from apps.chatbot.services.conversation import (
+        current_prompt,
         get_or_create_for_website_chat,
         messages_after,
+        resolve_choice,
     )
     from apps.chatbot.services.responder import ai_reply
     from apps.conversations import services as conversation_services
@@ -129,17 +146,21 @@ def handle_visitor_message(session: ChatSession, body: str) -> dict:
     conversation = get_or_create_for_website_chat(session)
     contact = session.contact
     outcome = {"handoff": False}
+    tapped = resolve_choice(session, choice)
 
     def decide(conversation, message) -> str:
         if conversation.automation_paused:
             return ""  # a teammate has it; announced as "paused" by conversations
         since = timezone.now()
         reply_message = {
-            "body": message.body,
-            "type": "text",
+            # A tapped yes/no or choice answers with its key; the title is what was shown.
+            "body": tapped.get("answer") or message.body,
+            "type": "interactive" if tapped else "text",
             "_conversation": conversation,
             "_message_key": f"website_chat:{message.pk}",
         }
+        if tapped.get("reply_id"):
+            reply_message["reply_id"] = tapped["reply_id"]
         if resume_on_reply(conversation.account_id, contact, reply_message):
             return conversation_services.HANDLED_REPLY
 
@@ -149,7 +170,7 @@ def handle_visitor_message(session: ChatSession, body: str) -> dict:
         ):
             return conversation_services.HANDLED_AUTOMATION
 
-        text, handoff = ai_reply(session, message.body, exclude_message_id=message.pk)
+        text, handoff = ai_reply(session, message.body, message_id=message.pk)
         outcome["handoff"] = handoff
         if text is None:
             # AI is off for this business: tell the visitor once, then it's the team's.
@@ -175,6 +196,7 @@ def handle_visitor_message(session: ChatSession, body: str) -> dict:
         "handoff_suggested": outcome["handoff"],
         "ticket_number": None,
         "cursor": cursor,
+        "expect": current_prompt(session),
     }
 
 
@@ -188,6 +210,7 @@ def handle_opened(session: ChatSession) -> dict:
 
     from apps.chatbot.models import ChatSession as Session
     from apps.chatbot.services.conversation import (
+        current_prompt,
         get_or_create_for_website_chat,
         messages_after,
     )
@@ -205,4 +228,4 @@ def handle_opened(session: ChatSession) -> dict:
                 "chatbot opened workflow failed for session=%s", session.session_key
             )
     new, cursor = messages_after(session, 0)
-    return {"messages": new, "cursor": cursor}
+    return {"messages": new, "cursor": cursor, "expect": current_prompt(session)}
