@@ -172,7 +172,8 @@ starting point is one muted line until there's a comparison to show.
 </div>
 
 {% if first_active_bot %}
-<script src="{% static 'chat-widget/v1/chat.js' %}"
+<script src="{{ chatbot_widget_src }}"
         data-chatbot="{{ first_active_bot.public_key }}"
+        data-api="{{ chatbot_api_base }}"
         async></script>
 {% endif %}

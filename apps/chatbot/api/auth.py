@@ -97,14 +97,17 @@ def check_origin(chatbot: object, request: HttpRequest) -> bool:
     """
     from django.conf import settings
 
+    from apps.chatbot.domains import normalise_origin
+
     origin = request.META.get("HTTP_ORIGIN", "")
+    normalised = normalise_origin(origin) if origin else None
 
     # Always allow the platform's own origin so the dashboard preview works
     # without requiring operators to add their own domain to allowed_domains.
     # This check runs before the allowed_domains guard so it works even when
     # the operator hasn't configured any allowed domains yet.
-    site_url = getattr(settings, "SITE_URL", "").rstrip("/")
-    if site_url and origin.rstrip("/") == site_url:
+    site_url = normalise_origin(getattr(settings, "SITE_URL", ""))
+    if site_url and normalised == site_url:
         return True
 
     allowed: list[str] = chatbot.allowed_domains  # type: ignore[attr-defined]
@@ -118,7 +121,80 @@ def check_origin(chatbot: object, request: HttpRequest) -> bool:
         require_origin: bool = getattr(settings, "CHATBOT_REQUIRE_ORIGIN", True)
         return not require_origin
 
-    return any(origin.rstrip("/") == d.rstrip("/") for d in allowed)
+    # Both sides normalised: a stored "acme.com" matches the browser's "https://acme.com".
+    return normalised is not None and any(
+        normalise_origin(d) == normalised for d in allowed
+    )
+
+
+# ── CORS ─────────────────────────────────────────────────────────────────────
+#
+# The widget runs on the business's website and calls this API cross-origin, with a JSON body, so
+# the browser sends an OPTIONS preflight first and then only lets the page read a response that
+# carries Access-Control-Allow-Origin. The preflight is answered for any origin (it carries no
+# chatbot key and grants nothing by itself); the real response only gets the header once
+# check_origin has passed for that chatbot, so an unlisted site can never read a reply.
+# No cookies are involved, so Allow-Credentials is never sent.
+
+_CORS_ALLOWED_ORIGIN_ATTR = "_chatbot_cors_origin"
+
+
+def allow_cors(request: HttpRequest) -> None:
+    """Mark this request's Origin as allowed to read the response (call after check_origin)."""
+    origin = request.META.get("HTTP_ORIGIN", "")
+    if origin:
+        setattr(request, _CORS_ALLOWED_ORIGIN_ATTR, origin)
+
+
+def preflight(request: HttpRequest):
+    from django.http import HttpResponse
+
+    response = HttpResponse(status=204)
+    origin = request.META.get("HTTP_ORIGIN", "")
+    if origin:
+        response["Access-Control-Allow-Origin"] = origin
+        response["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type"
+        response["Access-Control-Max-Age"] = "600"
+    response["Vary"] = "Origin"
+    return response
+
+
+def with_cors(view):
+    """Answer the OPTIONS preflight, and add CORS headers once ``allow_cors`` was called."""
+    from functools import wraps
+
+    @wraps(view)
+    def wrapped(request: HttpRequest, *args, **kwargs):
+        if request.method == "OPTIONS":
+            return preflight(request)
+        response = view(request, *args, **kwargs)
+        origin = getattr(request, _CORS_ALLOWED_ORIGIN_ATTR, "")
+        if origin:
+            response["Access-Control-Allow-Origin"] = origin
+        response["Vary"] = "Origin"
+        return response
+
+    return wrapped
+
+
+def client_ip(request: HttpRequest) -> str:
+    """The visitor's IP, as nginx saw it.
+
+    nginx resolves the real client address (``real_ip_header CF-Connecting-IP`` from Cloudflare's
+    ranges) and then sends ``X-Forwarded-For: $proxy_add_x_forwarded_for``, which is whatever the
+    client sent with nginx's own ``$remote_addr`` added at the end. Only that **last** entry is
+    trustworthy: the first one is whatever the visitor typed, which would let anyone reset the
+    init rate limit on every request. Without a proxy (local dev) REMOTE_ADDR is used.
+    """
+    from django.conf import settings
+
+    if getattr(settings, "CHATBOT_TRUST_PROXY_HEADERS", True):
+        forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
+        hops = [h.strip() for h in forwarded.split(",") if h.strip()]
+        if hops:
+            return hops[-1]
+    return request.META.get("REMOTE_ADDR", "")
 
 
 _INIT_RATE_LIMIT = 10  # init calls per window per IP

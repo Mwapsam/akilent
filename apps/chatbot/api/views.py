@@ -1,12 +1,14 @@
 """
-Public chatbot API — three JSON endpoints consumed by the CDN widget.
+Public chatbot API — JSON endpoints consumed by the website widget.
 
 All endpoints are unauthenticated (no Django session/cookie required) and
 secured via public_key + Origin + rate limiting instead. They must never
 expose internal IDs or tenant data beyond PublicChatbotConfig fields.
 
-The widget uses absolute URLs: it reads api_origin from the init response
-and calls all subsequent endpoints relative to that origin.
+The widget runs on the business's own website, so every endpoint answers the
+CORS preflight and only lets an allowed origin read its response (see
+``auth.with_cors``). The widget derives the API origin from its own script URL
+and then uses the ``api_origin`` the init response returns.
 """
 
 from __future__ import annotations
@@ -24,13 +26,13 @@ from django.views.decorators.http import require_POST
 from apps.chatbot.api import auth, serializers
 
 if TYPE_CHECKING:
-    from apps.chatbot.models import ChatSession
+    from apps.chatbot.models import ChatbotConfig, ChatSession
 
 logger = logging.getLogger(__name__)
 
 _MAX_BODY_BYTES = 8_192  # 8 KB — rejects oversized payloads before parsing
 _MAX_MESSAGE_CHARS = 2_000  # single visitor message length cap
-SESSION_TTL_HOURS = 24  # sessions older than this are rejected
+SESSION_TTL_HOURS = 24  # sessions idle longer than this are rejected
 
 
 def _parse_body(request: HttpRequest) -> dict | None:
@@ -66,17 +68,51 @@ def _sanitise_error(msg: str) -> str:
     return msg if msg in _SAFE_ERRORS else "An error occurred."
 
 
+def _session_for(request: HttpRequest, session_key: str):
+    """(session, None) for a usable session, else (None, error response).
+
+    Order matters: the Origin is checked (and CORS allowed) before the rate limit and the
+    expiry, so the widget on an allowed site can read a 429 or 410 and say what happened, while
+    an unlisted site learns nothing. A made-up key stops at the indexed lookup and never creates
+    a rate-limit entry.
+    """
+    from apps.chatbot.models import ChatSession
+
+    session = (
+        ChatSession.objects.select_related("chatbot", "chatbot__account")
+        .filter(session_key=session_key)
+        .first()
+    )
+    if session is None:
+        return None, JsonResponse({"error": "Session not found."}, status=404)
+    if not session.chatbot.is_active:
+        return None, auth.forbidden("Invalid or inactive chatbot key.")
+    if not auth.check_origin(session.chatbot, request):
+        return None, auth.forbidden("Origin not authorized.")
+    auth.allow_cors(request)
+    if not auth.check_rate_limit(session_key):
+        return None, auth.rate_limited()
+    if _is_session_expired(session):
+        return None, JsonResponse({"error": "Session expired."}, status=410)
+    return session, None
+
+
 @csrf_exempt
+@auth.with_cors
 @require_POST
 def init(request: HttpRequest) -> JsonResponse:
-    """POST {public_key} → {session_key, api_origin, config}"""
+    """POST {public_key, session_key?} → {session_key, api_origin, config, messages}
+
+    A ``session_key`` the widget kept from earlier (same chatbot, not expired) is resumed, with
+    the chat so far in ``messages``, so a page reload or the next page keeps the conversation.
+    Anything else starts a new session.
+    """
     data = _parse_body(request)
     if data is None:
         return JsonResponse({"error": "Invalid request."}, status=400)
     public_key = data.get("public_key", "")
 
-    ip = _client_ip(request)
-    if not auth.check_init_rate_limit(ip):
+    if not auth.check_init_rate_limit(auth.client_ip(request)):
         return auth.rate_limited()
 
     chatbot_obj = auth.resolve_chatbot(public_key)
@@ -85,9 +121,7 @@ def init(request: HttpRequest) -> JsonResponse:
 
     if not auth.check_origin(chatbot_obj, request):
         return auth.forbidden("Origin not authorized.")
-
-    from apps.chatbot.models import ChatbotConfig as _ChatbotConfig
-    from apps.chatbot.models import ChatSession
+    auth.allow_cors(request)
 
     api_origin = getattr(settings, "SITE_URL", "").rstrip("/")
     if not api_origin:
@@ -98,19 +132,42 @@ def init(request: HttpRequest) -> JsonResponse:
         )
         return JsonResponse({"error": "Service misconfiguration."}, status=503)
 
-    chatbot: _ChatbotConfig = chatbot_obj  # type: ignore[assignment]
-    session = ChatSession.objects.create(chatbot=chatbot)
+    from apps.chatbot.models import ChatSession
+    from apps.chatbot.services.conversation import history
+
+    chatbot: ChatbotConfig = chatbot_obj  # type: ignore[assignment]
+    session = _resumable_session(chatbot, data.get("session_key"))
+    if session is None:
+        session = ChatSession.objects.create(chatbot=chatbot)
+        messages: list[dict] = []
+    else:
+        messages = history(session)
 
     return JsonResponse(
         {
             "session_key": session.session_key,
             "api_origin": api_origin,
             "config": serializers.public_config(chatbot),
+            "messages": messages,
         }
     )
 
 
+def _resumable_session(chatbot: ChatbotConfig, session_key) -> ChatSession | None:
+    from apps.chatbot.models import ChatSession
+
+    if not isinstance(session_key, str) or not session_key:
+        return None
+    session = ChatSession.objects.filter(
+        session_key=session_key, chatbot=chatbot
+    ).first()
+    if session is None or _is_session_expired(session):
+        return None
+    return session
+
+
 @csrf_exempt
+@auth.with_cors
 @require_POST
 def message(request: HttpRequest) -> JsonResponse:
     """POST {session_key, message} → {reply, handoff_suggested, ticket_number}"""
@@ -119,9 +176,9 @@ def message(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"error": "Invalid request."}, status=400)
 
     session_key = data.get("session_key", "")
-    body = (data.get("message") or "").strip()
+    body = str(data.get("message") or "").strip()
 
-    if not session_key or not body:
+    if not isinstance(session_key, str) or not session_key or not body:
         return JsonResponse(
             {"error": "session_key and message are required."}, status=400
         )
@@ -129,26 +186,9 @@ def message(request: HttpRequest) -> JsonResponse:
     if len(body) > _MAX_MESSAGE_CHARS:
         return JsonResponse({"error": "Message too long."}, status=400)
 
-    if not auth.check_rate_limit(session_key):
-        return auth.rate_limited()
-
-    from apps.chatbot.models import ChatSession
-
-    try:
-        session = ChatSession.objects.select_related("chatbot", "chatbot__account").get(
-            session_key=session_key
-        )
-    except ChatSession.DoesNotExist:
-        return JsonResponse({"error": "Session not found."}, status=404)
-
-    if not session.chatbot.is_active:
-        return auth.forbidden("Invalid or inactive chatbot key.")
-
-    if _is_session_expired(session):
-        return JsonResponse({"error": "Session expired."}, status=410)
-
-    if not auth.check_origin(session.chatbot, request):
-        return auth.forbidden("Origin not authorized.")
+    session, error = _session_for(request, session_key)
+    if error is not None:
+        return error
 
     from apps.chatbot.services.responder import handle_message
 
@@ -157,6 +197,7 @@ def message(request: HttpRequest) -> JsonResponse:
 
 
 @csrf_exempt
+@auth.with_cors
 @require_POST
 def identify(request: HttpRequest) -> JsonResponse:
     """POST {session_key, email?, phone?, name?} → {identified: bool}"""
@@ -165,33 +206,16 @@ def identify(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"error": "Invalid request."}, status=400)
     session_key = data.get("session_key", "")
 
-    if not session_key:
+    if not isinstance(session_key, str) or not session_key:
         return JsonResponse({"error": "session_key is required."}, status=400)
 
-    if not auth.check_rate_limit(session_key):
-        return auth.rate_limited()
+    session, error = _session_for(request, session_key)
+    if error is not None:
+        return error
 
-    from apps.chatbot.models import ChatSession
-
-    try:
-        session = ChatSession.objects.select_related("chatbot").get(
-            session_key=session_key
-        )
-    except ChatSession.DoesNotExist:
-        return JsonResponse({"error": "Session not found."}, status=404)
-
-    if not session.chatbot.is_active:
-        return auth.forbidden("Invalid or inactive chatbot key.")
-
-    if _is_session_expired(session):
-        return JsonResponse({"error": "Session expired."}, status=410)
-
-    if not auth.check_origin(session.chatbot, request):
-        return auth.forbidden("Origin not authorized.")
-
-    email = (data.get("email") or "").strip()
-    name = (data.get("name") or "").strip()
-    phone = (data.get("phone") or "").strip()
+    email = str(data.get("email") or "").strip()
+    name = str(data.get("name") or "").strip()
+    phone = str(data.get("phone") or "").strip()
 
     # Validate email format before persisting — raw save() bypasses EmailField
     # validation, so we call the validator explicitly.
@@ -204,50 +228,10 @@ def identify(request: HttpRequest) -> JsonResponse:
         except DjangoValidationError:
             return JsonResponse({"error": "Invalid email address."}, status=400)
 
-    # Store visitor-supplied fields for display context only — never auto-link to
-    # an existing Contact record based on self-reported email/phone, as there is
-    # no proof of identity. Contact attribution requires a verifiable server-side
-    # signal (e.g., a registered action that checks an order token).
-    update_fields: list[str] = ["last_activity_at"]
-    if name:
-        session.visitor_name = name[:200]
-        update_fields.append("visitor_name")
-    if email:
-        session.visitor_email = email[:254]
-        update_fields.append("visitor_email")
-    if phone:
-        session.visitor_phone = phone[:30]
-        update_fields.append("visitor_phone")
+    from apps.chatbot.services.conversation import identify_visitor
 
-    identified = bool(name or email)
-    if identified and session.identified_at is None:
-        from django.utils import timezone as _tz
-
-        session.identified_at = _tz.now()
-        update_fields.append("identified_at")
-
-    session.save(update_fields=update_fields)
+    identified = identify_visitor(session, name=name, email=email, phone=phone)
     return JsonResponse({"identified": identified})
-
-
-def _client_ip(request: HttpRequest) -> str:
-    """Return the real client IP.
-
-    Only trusts X-Forwarded-For when CHATBOT_TRUST_PROXY_HEADERS=True is set
-    in settings (i.e. the deployment sits behind a known reverse proxy). Without
-    that flag, REMOTE_ADDR is used so the header cannot be spoofed to bypass
-    the init rate limit.
-    """
-    # Default True: this service always runs behind nginx which sets
-    # X-Forwarded-For from $remote_addr (not from the client), so the header
-    # is trustworthy. Set CHATBOT_TRUST_PROXY_HEADERS=False only when running
-    # without a reverse proxy (e.g. direct internet exposure in dev/staging).
-    trust_proxy = getattr(settings, "CHATBOT_TRUST_PROXY_HEADERS", True)
-    if trust_proxy:
-        forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-    return request.META.get("REMOTE_ADDR", "")
 
 
 def _is_session_expired(session: ChatSession) -> bool:

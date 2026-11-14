@@ -1,0 +1,269 @@
+# Chatbot Studio — spec and phased plan
+
+Status (2026-11-14): **P0 built** (uncommitted): 84 chatbot tests pass, and a browser check from a
+second origin passed. P1–P6 aren't built. The website chatbot is still an unreleased feature
+(`chatbot` in `apps/core/releases.py`). Each phase below needs its own go-ahead.
+
+P0 as built:
+- `apps/chatbot/domains.py`: origin normalisation.
+- `api/auth.py`: CORS via `with_cors` / `allow_cors`, and `client_ip` using the last
+  X-Forwarded-For hop.
+- `api/views.py`: origin checked before the rate limit; `init` resumes a saved session and returns
+  its history.
+- `services/conversation.py`: visitor contact + conversation from the first message, routing, inbox
+  unread, `identify_visitor` that never merges.
+- `responder.py`: no identify wall; a ceiling of 40 AI turns per session until P3.
+- `embed.py`: an absolute snippet with `data-api`.
+- `tasks.purge_idle_chat_sessions` (daily beat).
+- Widget: API origin from `data-api` / the script URL, resume with history, 410/429/offline states.
+- Tests: `tests/test_journey.py`.
+
+## 1. Vision
+
+Chatbot Studio lets a business build its own website chatbot **without code**. The owner lays out
+the conversation with steps, AI handles the natural-language parts, and every conversation ends up
+in Akilent as a contact, a lead and an inbox thread the team can take over.
+
+Akilent doesn't win on having more nodes or a nicer canvas. It wins by tying each chatbot to
+**business outcomes**:
+
+- Which bot, journey or answer produced qualified leads and paid orders?
+- Where do visitors drop off?
+- Which questions did the knowledge base fail to answer?
+- Which handoffs did the team turn into sales?
+
+Public copy follows `docs/marketing/messaging.md`. Until release, the chatbot may only be described as
+"Coming soon".
+
+## 2. Decisions
+
+| Decision | Choice |
+|---|---|
+| Control model | **Hybrid**: steps laid out visually decide the journey; AI steps handle open questions inside it |
+| First channel | **Website chat**. Reusing the same bot on WhatsApp/Instagram/Facebook comes later and needs evidence first |
+| Audience | **Non-technical business owners**. Advanced settings can come later |
+| Engine | **Extend `apps/automation`**. No second workflow engine. `apps/chatbot` owns the widget, deployment, domains, branding and chatbot analytics |
+| Editor | **Reuse the existing workflow editor** (`templates/automation/workflow_editor.html`), plus a live widget preview. A node-canvas view only if pilots show owners need it. No React |
+| AI | Reuse the Akilent AI and Knowledge stack (`apps/ai`), counted against `ai_actions_day` |
+| Actions | A fixed list of built-in steps; the owner switches each on per bot. An AI step can only use actions the owner explicitly allowed on it |
+| Custom code nodes | None |
+| Integrations shown | Only what Akilent can actually run. A step it can't run is greyed out with a reason, never shown as if it works |
+| Publishing | Immutable published versions (the existing `WorkflowVersion`); drafts never affect visitors who are mid-chat |
+| Payments | Akilent never takes payment for a business. Orders are recorded, and marked paid by hand |
+
+## 3. What already exists and is reused
+
+| Need | Already in the codebase |
+|---|---|
+| Workflow definition, draft vs published | `automation.Workflow` (`definition`, `draft_definition`, statuses, `priority`) |
+| Immutable versions | `automation.WorkflowVersion`; each run stays pinned to the version it started on |
+| Per-visitor progress that resumes when they reply | `WorkflowRun`, `WorkflowStepRun`, `WorkflowInteraction`, `InteractionAnswer` |
+| Steps | `_STEP_TYPES` in `apps/automation/workflow_engine.py`: `reply_text`, `send_buttons`, `send_list`, `wait_for_reply`, `ask_question`, `start_form`, `wait`, `branch`, `add_tag`/`remove_tag`, `set_attribute`, `create_lead`, `update_lead_status`, `assign_conversation`, `notify_team`, `create_followup`, `lookup_product`, `action` (through `apps/core/actions.py`), `ai_classify`, `ai_extract`, `ai_answer`, `stop`/`exit` |
+| Palette with reasons for unavailable steps | `apps/automation/builder.py` `step_catalog()` |
+| Simulator, run history | `apps/automation/simulate.py`, the run views |
+| Starter templates | `apps/automation/workflow_templates.py` |
+| Engine limits | `_MAX_STEPS_PER_CALL` and the existing loop and deadline handling |
+| Message triggers and enrolment | `conversation.message_received`, `apps/conversations/services.py` `_enroll_workflows()` |
+| Chatbot identity and deployment | `chatbot.ChatbotConfig` (public key, domains, branding), `ChatSession`, `static/chat-widget/v1/chat.js` |
+
+## 4. Architecture
+
+```
+Website visitor ──► widget (chat.js) ──► /api/chat/* (apps/chatbot/api)
+                                              │
+                         record_inbound_website_message (apps/conversations)
+                                              │
+                         Conversation(channel=website_chat) + Message
+                                              │
+                         _enroll_workflows → WorkflowRun on the bot's Workflow
+                                              │
+               steps: reply_text / send_buttons / ask_question / ai_answer / create_lead / …
+                                              │
+                         outbound Message saved ──► widget fetches it via poll
+                                              │
+                         inbox: the team sees the thread and can reply → widget gets it
+```
+
+Changes:
+
+- **`website_chat` becomes a first-class channel.**
+  - Register it in `apps/core/channels.py`: setting `WEBSITE_CHAT_ENABLED`, paths, help/docs tag,
+    billing dependencies.
+  - Add `record_inbound_website_message()` next to the other `record_inbound_*_message` functions.
+    It publishes the same event and calls `_enroll_workflows()`.
+  - Outbound: add a `website_chat` branch wherever the engine dispatches by channel (reply,
+    interactive steps around `workflow_engine.py` line 1185, and the inbox send). It only **saves**
+    the message; the widget fetches it by polling. There's no 24-hour window on this channel.
+- **New trigger `website_chat.opened`** (the visitor opens the widget), so a bot can greet them before
+  they type anything. Later messages use the existing `conversation.message_received`.
+- **`ChatbotConfig.workflow`** is a new FK to `automation.Workflow`: the conversation this bot runs.
+  The bot keeps its domains, branding, public key and on/off state. Matching rule: a website
+  conversation from bot X only enrols bot X's workflow, never the account's other message workflows.
+- **Visitor identity:**
+  - From the first message, `ChatSession` gets an anonymous **visitor contact** scoped to the
+    account (source `website_chat`, marked unverified) and a Conversation. The bot then remembers
+    the chat, and the inbox sees every chat.
+  - `identify` / `ask_question` fill in that contact. A self-reported email or phone is **never
+    merged** into an existing contact. Instead the inbox suggests a possible match (open question
+    §12).
+- **Retired:** `apps/chatbot/services/responder.py`, the `[ACTION:slug]` marker protocol and
+  owner-typed `ChatbotAction` slugs. AI runs through `ai_answer` / `ai_classify` / `ai_extract`.
+  Existing `ChatbotAction` rows are migrated to steps or dropped; the feature was never released.
+- **Knowledge:** the bot uses the account's Knowledge through `apps/ai`, the same as AI answers in
+  the inbox. `ChatbotKnowledgeSource` becomes an optional per-bot filter, or is dropped (decide in P3).
+
+## 5. Component map
+
+The owner-facing categories, mapped onto engine steps. ✅ exists · 🔧 exists, needs website-chat
+support · ➕ new · ⏸ later, needs evidence first.
+
+| Category | Component | Engine step | State |
+|---|---|---|---|
+| Conversation | Welcome message | `website_chat.opened` trigger + `reply_text` | ➕ trigger, 🔧 reply |
+| | Text / image / video message | `reply_text` (with media) | 🔧 |
+| | Quick-reply buttons, multiple choice | `send_buttons`, `send_list` + `wait_for_reply` | 🔧 |
+| | Free-text question saved to the customer | `ask_question` | 🔧 |
+| | Email / phone input with validation | `ask_question` with a typed attribute + widget input types | 🔧 + ➕ input types |
+| Logic | If/else, branching on variables | `branch` | ✅ |
+| | Delay | `wait` | ✅ (short delays only on web chat; the visitor may leave) |
+| | Random split for experiments | — | ⏸ |
+| AI | AI answer from business knowledge | `ai_answer` | 🔧 |
+| | Intent detection / routing | `ai_classify` | 🔧 |
+| | Information extraction | `ai_extract` | 🔧 |
+| | Product questions | `lookup_product` | 🔧 |
+| Business actions | Create / update contact | visitor contact + `set_attribute` | ➕ visitor contact |
+| | Create lead, qualify lead | `create_lead`, `update_lead_status` | ✅ |
+| | Assign conversation, notify team | `assign_conversation`, `notify_team` | ✅ |
+| | Follow-up for the team | `create_followup` | ✅ |
+| | Create order | — | ⏸ (needs pilot evidence; record only, never take payment) |
+| Integrations | Website chat | the channel itself | ➕ |
+| | WhatsApp / Messenger / Instagram | same bot on other channels | ⏸ |
+| | Webhooks / external APIs | `webhook` exists but stays hidden from Studio | ⏸ |
+| Outcomes | Hand over to a person | `assign_conversation` + handoff endpoint | 🔧 |
+| | Record intent / mark qualified | `set_attribute`, `update_lead_status` | ✅ |
+| | Show a confirmation card | `reply_text` with a card payload | ➕ |
+| | End conversation | `stop` + widget "chat ended" state | 🔧 |
+
+The Studio palette is `step_catalog()` filtered for website chat. A step that can't run there is
+greyed out with a reason, never hidden without explanation.
+
+## 6. Widget protocol (`static/chat-widget/v1/chat.js`, `apps/chatbot/api`)
+
+- The **API origin comes from the script's own `src`**, never from `window.location`.
+- **CORS:** `OPTIONS` preflight and `Access-Control-Allow-Origin` are sent only for the matched
+  allowed origin, via a small decorator in `apps/chatbot/api/auth.py`. No wildcard.
+- Endpoints:
+  - `init` — session + config + a published-version check
+  - `open` — fires `website_chat.opened`
+  - `message`
+  - `poll?after=<id>` — bot and agent messages, interactive payloads, typing state
+  - `identify`
+  - `handoff`
+- Interactive payloads: buttons, list choices, input type (text/email/phone), confirmation card,
+  "chat ended".
+- The session survives a reload (sessionStorage), and the widget shows earlier messages again from
+  `poll?after=0`.
+- Specific error states: 410 means start a new chat, 429 means "slow down", plus offline and
+  retry.
+- Accessibility: roles and labels, focus kept in the panel, Esc closes it, keyboard reachable.
+  Design tokens include dark mode. Consent text appears on the details form.
+- The snippet always uses an absolute URL and a versioned path (`/chat-widget/v1/`).
+
+## 7. Safety and cost
+
+- **Client IP:** `_client_ip` must stop trusting the first `X-Forwarded-For` entry, which a client can
+  fake because nginx adds to it with `$proxy_add_x_forwarded_for`. Use `X-Real-IP` set by nginx from
+  `$remote_addr`, or the Cloudflare header only if Cloudflare is confirmed in front.
+- **Domains:** normalised and validated on save (scheme + host only). The Install page shows whether
+  the widget has been seen on each domain.
+- **AI cost:**
+  - Every AI step reserves `ai_actions_day` like `apps/ai/tasks.py` does.
+  - New per-bot daily AI cap.
+  - `AI_AUTONOMY_ENABLED` and the account's AI switch are respected.
+  - When a limit is hit, the step takes its declared fallback (holding reply + offer a person).
+- **Abuse:** the existing init limit per IP and message limit per session stay. Add a cap on new
+  sessions per bot per hour. A message for an unknown session doesn't create cache entries.
+- **Engine limits:** reuse `_MAX_STEPS_PER_CALL` and the existing loop and deadline protections.
+  Publishing a bot with no path to a reply, or with an AI step that has no fallback, is blocked by
+  validation.
+- **Access:** the management pages need the owner/admin role. The feature sits behind a `chatbot`
+  plan feature in the entitlement catalogue.
+- **Retention:** a scheduled task deletes anonymous sessions (no details given, no lead) after 30
+  days. The privacy page and help guide say what is stored.
+
+## 8. Studio UX (non-technical owners)
+
+The Chatbots list shows status, domains, chats this week and leads this week. Each bot has these pages:
+
+1. **Builder:** the existing workflow editor, with the palette filtered for website chat and the
+   **live widget preview** beside it, running the *draft* through the simulator.
+2. **AI & Knowledge:** tone, what the bot may and may not do, which actions AI steps may use, and
+   links to the account's Knowledge. Nothing is duplicated.
+3. **Appearance:** name, avatar, colour, position, welcome text.
+4. **Install:** the snippet, the domain list and a check showing where the widget was last seen.
+5. **Publish:** shows the draft vs live difference, then publishes a new version. Visitors already
+   in a chat finish on the version they started.
+6. **Analytics:** §9.
+
+Starter templates, using the `workflow_templates.py` pattern: **Capture sales leads**,
+**Answer questions, hand over when stuck**, **Help choose a product** (`lookup_product`). A new bot
+starts from a template and never from an empty page.
+
+## 9. Analytics
+
+- **Funnel per bot and per version:** opened → sent a message → gave details → lead → qualified →
+  order paid.
+- **Drop-off per step**, from the existing `WorkflowStepRun` data.
+- **Questions the knowledge base couldn't answer**: `ai_answer` fallbacks, linking to "add to
+  Knowledge".
+- **Handoffs:** how many, first-reply time, and how many became leads or orders.
+- Orders and revenue come only from the existing lead/order attribution, never from estimates.
+
+## 10. Phases
+
+Every phase sits behind the `chatbot` release gate, ships with tests, and needs a go-ahead.
+
+| Phase | Scope | Done when |
+|---|---|---|
+| **P0 Foundation fixes** | Widget origin from `script.src`; CORS + OPTIONS; domain normalisation; `_client_ip` fix; visitor contact + conversation from the first message; chat memory; retention task | A plain HTML page on another origin can chat; the thread appears in the inbox; the bot remembers turn 1 at turn 5 |
+| **P1 Website chat channel** | Registry entry; `record_inbound_website_message` + `_enroll_workflows`; outbound saved + `poll`; `website_chat.opened`; inbox replies reach the widget | A `reply_text` workflow answers on the website, and an agent reply from the inbox shows up in the widget |
+| **P2 Interactive steps** | Buttons, lists, `wait_for_reply`, `ask_question` and input types on website chat; palette reasons in `builder.py` | A button → question → lead journey runs in the widget and in the simulator |
+| **P3 AI** | Retire the responder; `ai_answer`/`ai_classify`/`ai_extract`/`lookup_product` on website chat with fallbacks; per-step action permissions; per-bot AI cap | AI answers from Knowledge; at the cap the fallback runs; AI can't trigger actions that weren't allowed |
+| **P4 Studio UX** | `ChatbotConfig.workflow`; bot pages; live preview of the draft; starter templates; install check | An owner goes from "New chatbot" to a live bot from a template without help |
+| **P5 Handoff and outcomes** | `handoff` endpoint → assign + notify; confirmation card; end state; analytics funnel | Handoff shows in the inbox with the reason; the funnel matches the lead/order data |
+| **P6 Release** | Channel docs (`templates/docs`), help article, `templates/public/integration` page; `messaging.md` §4; plan feature + pricing (needs approval); add `chatbot` to `RELEASED_FEATURES` | Release gate §11 passed |
+| **Later** | Node-canvas view; the same bot on WhatsApp/Instagram/Facebook; random splits; webhooks in Studio; create order | Each needs pilot evidence first |
+
+## 11. Release gate
+
+1. A journey test passes: open → welcome → button choice → AI answer → details → lead →
+   handoff → agent reply in the widget → lead in the funnel.
+2. It works from a real third-party origin, with no console errors, on desktop and mobile Safari and
+   Chrome.
+3. AI cost limits and fallbacks are checked on staging.
+4. **One pilot business runs it on its live site** and produces at least one real lead.
+
+## 12. Open questions
+
+1. Plan placement and pricing: which plans include Chatbot Studio, and the cap on bots/chats.
+2. Visitor matching: suggest a possible existing contact in the inbox, or verify the email (a
+   one-time code) before linking?
+3. Orders from chat: stay out of scope until a pilot asks for it?
+4. `ChatbotKnowledgeSource`: keep it as a per-bot filter, or always use all of the account's Knowledge?
+
+## Appendix — review findings this spec addresses (2026-11-14)
+
+Found by reading the current `apps/chatbot` (53 tests pass, but none run a visitor journey end to end):
+
+1. `chat.js` `init()` posts to `window.location.origin`, the customer's site → 404 → fixed in P0.
+2. No CORS headers; `require_POST` answers the `OPTIONS` preflight with 405 → P0.
+3. `ChatSession.contact` is never set anywhere, so there is no Conversation, no memory between turns,
+   and `_IDENTIFY_PROMPT` comes back forever after 3 turns, even after the visitor identifies → P0.
+4. `perform_handoff()` is never called, and no action handler is registered → P5.
+5. No delivery path for `website_chat`, so agent replies go nowhere → P1.
+6. A faked `X-Forwarded-For` gets around the init rate limit → P0.
+7. Chatbot AI calls don't count against `ai_actions_day` and ignore `AI_AUTONOMY_ENABLED` → P3.
+8. Saved domains without a scheme never match the browser's Origin → P0.
+9. The system prompt never describes the actions, so `[ACTION:]` markers can't happen; owners type
+   free slugs; a duplicate slug gives a 500 → retired in P3.
+10. No plan feature or role check; no retention; no channel docs → P0/P6.

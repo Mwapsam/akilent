@@ -839,6 +839,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.conversations.tasks.purge_deleted_saved_replies",
         "schedule": 86400.0,  # a deleted saved reply's Undo lasts seconds; keep it 30 days
     },
+    "purge-idle-chat-sessions": {
+        "task": "apps.chatbot.tasks.purge_idle_chat_sessions",
+        "schedule": 86400.0,  # website chat sessions where the visitor never wrote; 30 days
+    },
     "prune-webhook-logs": {
         "task": "apps.core.webhook_replay.prune_webhook_logs",
         "schedule": 86400.0,  # raw webhook bodies are customer data; keep them 30/90 days

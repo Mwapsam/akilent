@@ -7,7 +7,6 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
-from django.templatetags.static import static
 
 from apps.accounts.utils import get_current_account
 from apps.chatbot.models import ChatbotAction, ChatbotConfig, ChatbotKnowledgeSource
@@ -136,14 +135,17 @@ def chatbot_edit(request: HttpRequest, pk: int) -> HttpResponse:
                 **fields,
             )
         except (PermissionDenied, ValidationError) as exc:
-            messages.error(request, str(exc))
+            detail = "; ".join(getattr(exc, "messages", None) or [str(exc)])
+            messages.error(request, detail)
+            bot.refresh_from_db()
             return render(
                 request,
                 "chatbot/edit.html",
                 {
                     "bot": bot,
                     "purposes": ChatbotConfig.Purpose.choices,
-                    "domains_display": "\n".join(bot.allowed_domains),
+                    # What they typed, so a mistyped domain can be corrected in place.
+                    "domains_display": request.POST.get("allowed_domains", ""),
                 },
             )
         messages.success(request, "Chatbot updated.")
@@ -292,5 +294,6 @@ def _parse_domains(raw: str) -> list[str]:
 
 
 def _embed_snippet(bot: ChatbotConfig) -> str:
-    widget_url = static("chat-widget/v1/chat.js")
-    return f'<script src="{widget_url}"\n        data-chatbot="{bot.public_key}"\n        async></script>'
+    from apps.chatbot.embed import snippet
+
+    return snippet(bot.public_key)

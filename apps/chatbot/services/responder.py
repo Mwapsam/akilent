@@ -15,13 +15,14 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Unidentified sessions are allowed this many turns before we stop calling the
-# LLM and ask the visitor to identify. Prevents unbounded cost with no audit trail.
-_MAX_UNIDENTIFIED_TURNS = 3
+# A ceiling on AI replies per chat until Chatbot Studio's per-bot AI caps (docs/plans/
+# chatbot-studio.md, P3) exist. Every turn is saved in the inbox now, so the cost is visible,
+# but one session must still not be able to run up unlimited AI calls.
+_MAX_AI_TURNS_PER_SESSION = 40
 
-_IDENTIFY_PROMPT = (
-    "To continue, could you share your name and email? "
-    "That lets me give you a more personalised answer and keeps a record of our chat."
+_TURN_LIMIT_REPLY = (
+    "Thanks for chatting with us! To keep helping you, a member of our team will pick this "
+    "up. Leave your name and email and we'll get back to you."
 )
 
 _SYSTEM_TEMPLATE = """\
@@ -44,10 +45,7 @@ def handle_message(session: ChatSession, user_message: str) -> dict:
     }
     """
     from apps.chatbot.services.context import build
-    from apps.chatbot.services.conversation import (
-        record_inbound_chatbot_message,
-        record_outbound_chatbot_message,
-    )
+    from apps.chatbot.services.conversation import record_inbound_chatbot_message
     from apps.chatbot.services.handoff import should_handoff
 
     # Build context BEFORE persisting the inbound message so _recent_messages
@@ -55,30 +53,21 @@ def handle_message(session: ChatSession, user_message: str) -> dict:
     ctx = build(session, user_message)
 
     persisted = False
-    _UNIDENTIFIED_MSG = "Cannot create a conversation for an unidentified session"
     try:
         record_inbound_chatbot_message(session, user_message)
         persisted = True
-    except ValueError as exc:
-        if _UNIDENTIFIED_MSG in str(exc):
-            # Expected: session has no identified contact yet.
-            pass
-        else:
-            logger.exception(
-                "unexpected ValueError persisting inbound message for session=%s",
-                session.session_key,
-            )
+    except Exception:
+        # The visitor still gets an answer; the inbox copy is what's lost, so it's an error.
+        logger.exception(
+            "failed to persist inbound chatbot message for session=%s",
+            session.session_key,
+        )
 
-    if not persisted:
-        # Guard: cap LLM calls for unidentified sessions so they don't run up
-        # cost with zero audit trail.
-        turns_so_far = _increment_unidentified_turns(session.session_key)
-        if turns_so_far > _MAX_UNIDENTIFIED_TURNS:
-            return {
-                "reply": _IDENTIFY_PROMPT,
-                "handoff_suggested": False,
-                "ticket_number": None,
-            }
+    if _increment_ai_turns(session.session_key) > _MAX_AI_TURNS_PER_SESSION:
+        reply = _TURN_LIMIT_REPLY
+        if persisted:
+            _record_outbound(session, reply)
+        return {"reply": reply, "handoff_suggested": True, "ticket_number": None}
 
     no_knowledge = len(ctx["knowledge"]) == 0
     turn_count = len(ctx["messages"])
@@ -97,21 +86,7 @@ def handle_message(session: ChatSession, user_message: str) -> dict:
         no_knowledge=no_knowledge,
     )
 
-    outbound_failed = False
-    if persisted:
-        # Only persist the outbound reply when there is a conversation to attach it to.
-        # Unidentified sessions (persisted=False) have no conversation yet, so
-        # record_outbound_chatbot_message would raise ValueError and pollute the error log.
-        try:
-            record_outbound_chatbot_message(session, reply)
-        except Exception:
-            outbound_failed = True
-            logger.error(
-                "failed to persist chatbot reply for session=%s — "
-                "conversation thread is now out of sync (inbound saved, outbound lost)",
-                session.session_key,
-                exc_info=True,
-            )
+    outbound_failed = bool(persisted and not _record_outbound(session, reply))
 
     return {
         "reply": reply,
@@ -173,15 +148,32 @@ def _fallback_reply(ctx: dict) -> str:
 
 _ACTION_MARKER_PREFIX = "[ACTION:"
 _ACTION_MARKER_SUFFIX = "]"
-_UNIDENTIFIED_TURNS_TTL = 86_400  # 24 hours, matches session TTL
+_AI_TURNS_TTL = 86_400  # 24 hours, matches session TTL
 
 
-def _increment_unidentified_turns(session_key: str) -> int:
-    """Atomically increment and return the turn count for an unidentified session."""
+def _record_outbound(session: ChatSession, reply: str) -> bool:
+    """Save the bot's reply in the conversation; False (and logged) when that fails."""
+    from apps.chatbot.services.conversation import record_outbound_chatbot_message
+
+    try:
+        record_outbound_chatbot_message(session, reply)
+        return True
+    except Exception:
+        logger.error(
+            "failed to persist chatbot reply for session=%s — "
+            "conversation thread is now out of sync (inbound saved, outbound lost)",
+            session.session_key,
+            exc_info=True,
+        )
+        return False
+
+
+def _increment_ai_turns(session_key: str) -> int:
+    """Atomically increment and return the number of AI turns this session has had."""
     from django.core.cache import cache
 
-    cache_key = f"chatbot_unid_turns:{session_key}"
-    if cache.add(cache_key, 1, timeout=_UNIDENTIFIED_TURNS_TTL):
+    cache_key = f"chatbot_ai_turns:{session_key}"
+    if cache.add(cache_key, 1, timeout=_AI_TURNS_TTL):
         return 1
     try:
         return cache.incr(cache_key)

@@ -1,9 +1,12 @@
 /*!
  * Akilent Chat Widget v1
- * Usage: <script src="https://cdn.akilent.com/chat/v1/chat.js" data-chatbot="pk_chat_xxx" async></script>
+ * Usage: copy the snippet from Chatbots → your bot → Install. It looks like
+ *   <script src="https://<akilent static host>/chat-widget/v1/chat.js" data-chatbot="pk_chat_xxx" async></script>
  *
- * Zero framework dependencies. Reads api_origin from the init response —
- * never uses hardcoded or relative URLs for API calls.
+ * Zero framework dependencies. The widget runs on the business's own website,
+ * so it never calls its page's origin: init goes to Akilent's site (SITE_URL is
+ * read from the script's data-api attribute, else derived from the script URL),
+ * and later calls use the api_origin the init response returns.
  */
 (function () {
   "use strict";
@@ -18,6 +21,19 @@
   var PUBLIC_KEY = script.getAttribute("data-chatbot");
   if (!PUBLIC_KEY) return;
 
+  // Where Akilent's API lives. The snippet names it in data-api (the script itself may be
+  // served from a static/CDN host); otherwise the script's own origin is used.
+  var API_BASE = (function () {
+    var explicit = script.getAttribute("data-api");
+    try {
+      return new URL(explicit || script.src, window.location.href).origin;
+    } catch (_) {
+      return null;
+    }
+  })();
+  if (!API_BASE) return;
+  var STORAGE_KEY = "ak_chat_" + PUBLIC_KEY;
+
   // ── State ──────────────────────────────────────────────────────────────────
 
   var state = {
@@ -29,55 +45,59 @@
     identified: false,
   };
 
-  // Restore session from sessionStorage so a page reload doesn't lose context.
+  // The session kept from an earlier page of this visit. init() offers it back to the server,
+  // which resumes it (with the chat so far) or starts a new one.
+  var savedSessionKey = null;
   try {
-    var saved = sessionStorage.getItem("ak_chat_" + PUBLIC_KEY);
-    if (saved) {
-      var parsed = JSON.parse(saved);
-      state.sessionKey = parsed.sessionKey || null;
-      state.apiOrigin = parsed.apiOrigin || null;
-    }
+    var saved = sessionStorage.getItem(STORAGE_KEY);
+    if (saved) savedSessionKey = JSON.parse(saved).sessionKey || null;
   } catch (_) {}
 
   // ── Init ───────────────────────────────────────────────────────────────────
 
   function init() {
-    post("/api/chat/init/", { public_key: PUBLIC_KEY }, function (err, data) {
-      if (err || !data.session_key) return;
+    startSession(savedSessionKey, function (data) {
+      render();
+      var past = data.messages || [];
+      for (var i = 0; i < past.length; i++) {
+        if (past[i].from === "visitor") appendVisitorMsg(past[i].text);
+        else appendBotMsg(past[i].text);
+      }
+    });
+  }
+
+  function startSession(resumeKey, done) {
+    var body = { public_key: PUBLIC_KEY };
+    if (resumeKey) body.session_key = resumeKey;
+    post("/api/chat/init/", body, function (err, data) {
+      if (err || !data || !data.session_key) return;
       state.sessionKey = data.session_key;
-      state.apiOrigin = data.api_origin;
+      state.apiOrigin = data.api_origin || API_BASE;
       state.config = data.config;
       try {
-        sessionStorage.setItem(
-          "ak_chat_" + PUBLIC_KEY,
-          JSON.stringify({ sessionKey: state.sessionKey, apiOrigin: state.apiOrigin })
-        );
+        sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ sessionKey: state.sessionKey }));
       } catch (_) {}
-      render();
-    }, true /* use script origin for init */);
+      done(data);
+    }, true /* init always goes to API_BASE */);
   }
 
   // ── API helpers ────────────────────────────────────────────────────────────
 
   function post(path, body, cb, useScriptOrigin) {
-    var origin = useScriptOrigin
-      ? window.location.origin
-      : state.apiOrigin;
+    var origin = useScriptOrigin ? API_BASE : (state.apiOrigin || API_BASE);
     var url = origin + path;
 
     var xhr = new XMLHttpRequest();
     xhr.open("POST", url);
     xhr.setRequestHeader("Content-Type", "application/json");
     xhr.onload = function () {
-      try {
-        var data = JSON.parse(xhr.responseText);
-        if (xhr.status >= 400) cb(data, null);
-        else cb(null, data);
-      } catch (_) {
-        cb({ error: "parse error" }, null);
-      }
+      var data = null;
+      try { data = JSON.parse(xhr.responseText); } catch (_) {}
+      if (xhr.status >= 400 || !data) cb({ status: xhr.status, error: (data && data.error) || "error" }, null);
+      else cb(null, data);
     };
-    xhr.onerror = function () { cb({ error: "network error" }, null); };
+    // Status 0: offline, blocked, or this site isn't on the chatbot's domain list.
+    xhr.onerror = function () { cb({ status: 0, error: "network error" }, null); };
     xhr.send(JSON.stringify(body));
   }
 
@@ -202,7 +222,21 @@
     sendMessage(text, function (err, data) {
       setLoading(false);
       if (err) {
-        appendBotMsg("Something went wrong. Please try again.");
+        if (err.status === 410) {
+          // The chat went quiet for a day and expired: start a fresh one and resend.
+          startSession(null, function () {
+            appendBotMsg("Let's pick this up again.");
+            input.value = text;
+          });
+        } else if (err.status === 429) {
+          appendBotMsg("You're sending messages very quickly. Please wait a moment and try again.");
+          input.value = text;
+        } else if (err.status === 0) {
+          appendBotMsg("We couldn't reach the chat. Check your connection and try again.");
+          input.value = text;
+        } else {
+          appendBotMsg("Something went wrong. Please try again.");
+        }
         return;
       }
       state.turnCount++;

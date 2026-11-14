@@ -1844,6 +1844,7 @@ def _chatbot_summary(account) -> dict:
 
     from django.utils import timezone
 
+    from apps.chatbot import api as chatbot_api
     from apps.chatbot.models import ChatbotConfig
     from apps.chatbot.models.session import ChatSession
 
@@ -1861,6 +1862,8 @@ def _chatbot_summary(account) -> dict:
         "chatbots": bots,
         "chatbot_sessions_month": sessions_month,
         "first_active_bot": active_bots[0] if active_bots else None,
+        "chatbot_widget_src": chatbot_api.widget_src(),
+        "chatbot_api_base": chatbot_api.widget_api_base(),
     }
 
 

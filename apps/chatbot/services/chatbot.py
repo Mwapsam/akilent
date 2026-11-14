@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 
+from apps.chatbot.domains import clean_domains, normalise_origin
+
 if TYPE_CHECKING:
     from apps.accounts.models import Account
     from apps.chatbot.models import ChatbotConfig
@@ -33,14 +35,13 @@ def _get_platform_account() -> Account:
 
 def _validate_system_domains(domains: list[str]) -> None:
     """Ensure all domains for a system chatbot are Akilent-controlled."""
-    allowed_origins: list[str] = getattr(settings, "PLATFORM_ALLOWED_ORIGINS", [])
-    site_url = getattr(settings, "SITE_URL", "").rstrip("/")
-    if site_url and site_url not in allowed_origins:
-        allowed_origins = [*allowed_origins, site_url]
-
-    normalised_allowed = {o.rstrip("/") for o in allowed_origins}
+    allowed_origins: list[str] = [
+        *getattr(settings, "PLATFORM_ALLOWED_ORIGINS", []),
+        getattr(settings, "SITE_URL", ""),
+    ]
+    normalised_allowed = {normalise_origin(o) for o in allowed_origins} - {None}
     for domain in domains:
-        if domain.rstrip("/") not in normalised_allowed:
+        if normalise_origin(domain) not in normalised_allowed:
             raise ValidationError(
                 f"System chatbot domain '{domain}' is not in PLATFORM_ALLOWED_ORIGINS. "
                 "System chatbots may only be deployed on Akilent-controlled origins."
@@ -73,7 +74,7 @@ def create_customer_chatbot(
         welcome_message=welcome_message,
         primary_color=primary_color,
         position=position,
-        allowed_domains=allowed_domains or [],
+        allowed_domains=clean_domains(allowed_domains or []),
         **extra,
     )
     bot.save()
@@ -94,7 +95,7 @@ def create_system_chatbot(
     from apps.chatbot.models import ChatbotConfig
 
     platform_account = _get_platform_account()
-    domains = allowed_domains or []
+    domains = clean_domains(allowed_domains or [])
     _validate_system_domains(domains)
 
     bot = ChatbotConfig(
@@ -139,6 +140,10 @@ def update_chatbot(
             raise PermissionDenied("You do not own this chatbot.")
         if bot.chatbot_type != ChatbotConfig.ChatbotType.CUSTOMER:
             raise PermissionDenied("Customers cannot modify system chatbots.")
+
+    # Domains are stored the way browsers send Origin (scheme://host[:port]).
+    if "allowed_domains" in fields:
+        fields["allowed_domains"] = clean_domains(fields["allowed_domains"] or [])
 
     # Strip protected fields from the generic update dict regardless of actor.
     fields.pop("chatbot_type", None)
