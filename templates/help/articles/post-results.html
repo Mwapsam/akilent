@@ -81,6 +81,12 @@
 </ul>
 <p>Ad spend isn't shown yet. The chat itself shows "From a Meta ad" in its details.</p>
 {% endif %}
+{% if released.ads_automation %}
+<h3>Answer ad chats straight away</h3>
+<p>Someone who taps your ad is ready to buy right now. In <strong>Automations</strong>, turn on <strong>Answer ad chats straight away</strong> and write the reply. It answers the first message of each chat from a Meta ad on WhatsApp or Instagram, before your other automations, so the customer gets one reply. Later messages in that chat go to your other automations and your team as usual.</p>
+<p>In any automation that starts when a customer messages you, tick <strong>Only chats that came from a Meta ad</strong>, and pick particular ads if you want. Write <code>{ad.headline}</code> in a reply to include the ad's headline.</p>
+<p>If a chat from an ad waits more than an hour of your opening hours without a real answer, your owners and admins get one email listing those chats, and it shows in <strong>What needs you</strong>. Akilent's "we'll be right with you" reply doesn't count as an answer. Each chat is only mentioned once.</p>
+{% endif %}
 {% if released.cs_promote_candidates %}
 
 <h2>Posts worth promoting</h2>

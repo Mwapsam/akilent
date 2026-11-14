@@ -51,6 +51,7 @@ SETUP = frozenset({"hours", "automations", "ai"})
 _RANK = {
     "missed": 0,
     "waiting": 1,
+    "ad_waiting": 1,
     "urgent": 2,
     "followups_due": 3,
     "warning": 4,
@@ -153,7 +154,12 @@ def _live_who(account, now, keys) -> dict[str, tuple[str, str]]:
 
 def _from_at_risk(account, at_risk, now, *, name_people=False) -> list[Item]:
     since = _live_since(account, now) if at_risk["actions"] else {}
-    tone = {"missed": "coral", "waiting": "highlight", "followups_due": "highlight"}
+    tone = {
+        "missed": "coral",
+        "ad_waiting": "coral",  # paid for, and waiting
+        "waiting": "highlight",
+        "followups_due": "highlight",
+    }
     single = {
         a["key"] for a in at_risk["actions"] if a["count"] == 1 and a["key"] in _ONE
     }

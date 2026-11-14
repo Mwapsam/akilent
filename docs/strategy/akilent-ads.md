@@ -515,6 +515,17 @@ The owner authorised building, ahead of the Gate 1 demand test, everything that 
 
 Both flags stay off until released, and releasing them is a separate owner decision. Gates 4 and 5 remain unauthorised. The demand test (Gate 1) still decides whether the Ads add-on is sold.
 
+### Decided on 14 November 2026: ad chats that run smoothly
+
+The owner approved a phased plan for what a business running ads still needs before Gate 4, with no new Meta permissions. Phase 1 and Phase 3 are built. Phase 2 (Messenger ad referrals) waits for the owner to lift the Messenger exclusion.
+
+- **Phase 1, ad-aware automations (flag `ads_automation`):**
+  - A trigger filter `trigger.from_ad` (any ad, or listed ad ids) on "a customer messages you". It answers only the first message of a chat that came from an ad.
+  - A one-click starter, "Answer ad chats straight away", that outranks the other message automations.
+  - `{ad.headline}` in reply text.
+  - An "ad chats waiting" alert (`apps/conversations/ad_alerts.py`, every 5 minutes): one email per workspace per sweep to owners and admins, once per chat. It uses the §3 clock and the §10f threshold, and it also shows in What needs you.
+- **Phase 3, ad-burst load test:** `apps/core/tests/test_ad_burst_load.py` (performance mark). 500 WhatsApp and 300 Instagram ad chats go through the real signed webhooks. The test checks they are stored once, answered once and safe to replay. The verdict and the sweep are checked on 2,000 ad chats.
+
 ### Open decisions
 
 These decisions stay visible and open until the owner explicitly settles them.

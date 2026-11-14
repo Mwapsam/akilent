@@ -173,7 +173,11 @@ def _engagement_starters(account, workflows):
     fail at send time: WhatsApp only delivers templates Meta has approved, so
     with no approved message there is nothing to send.
     """
-    from apps.automation.engagement_starters import ENGAGEMENT_STARTERS, GOAL_GROUPS
+    from apps.automation.engagement_starters import (
+        ENGAGEMENT_STARTERS,
+        GOAL_GROUPS,
+        available,
+    )
     from apps.whatsapp.models import MessageTemplate
 
     approved = list(
@@ -202,6 +206,7 @@ def _engagement_starters(account, workflows):
             "paused": paused.get(starter["key"]),
         }
         for starter in ENGAGEMENT_STARTERS
+        if available(starter)
     }
     from apps.automation import readiness
 
@@ -210,7 +215,7 @@ def _engagement_starters(account, workflows):
             account, card, approved_template_count=len(approved)
         )
     groups = [
-        {"title": title, "cards": [cards[key] for key in keys]}
+        {"title": title, "cards": [cards[key] for key in keys if key in cards]}
         for title, keys in GOAL_GROUPS
     ]
     return groups, list(cards.values()), approved
@@ -235,8 +240,10 @@ def starter_install(request):
     if account is None:
         return redirect("dashboard")
 
+    from apps.automation.engagement_starters import available
+
     starter = STARTERS_BY_KEY.get(request.POST.get("starter") or "")
-    if starter is None:
+    if starter is None or not available(starter):
         messages.error(request, "That follow-up isn't available.")
         return redirect("automation:list")
 
@@ -416,7 +423,7 @@ def _install_reply_starter(request, account, starter):
     from_recipe = request.POST.get("then_present") == "1"
     if (stop := _no_room_redirect(request, account, starter["key"])) is not None:
         return stop
-    automation_api.upsert_published_workflow(
+    workflow = automation_api.upsert_published_workflow(
         account,
         slug=starter["key"],
         name=starter["name"],
@@ -428,6 +435,10 @@ def _install_reply_starter(request, account, starter):
             notify=request.POST.get("tell_team") == "on",
         ),
     )
+    if starter.get("ad"):
+        from apps.automation.engagement_starters import AD_REPLY_PRIORITY
+
+        Workflow.objects.filter(pk=workflow.pk).update(priority=AD_REPLY_PRIORITY)
     messages.success(request, f"{starter['name']} is on. {starter['stop_condition']}")
     return redirect("automation:list")
 
@@ -550,6 +561,33 @@ def _followup_owners(account) -> list:
     ]
 
 
+def _recent_ads(account, limit: int = 20) -> list[dict]:
+    """Meta ads that brought this workspace chats lately, for the "which ads" picker.
+
+    Empty unless ``ads_automation`` is released."""
+    from apps.core.releases import is_released
+
+    if not is_released("ads_automation"):
+        return []
+    from apps.conversations.models import AdReferral
+
+    seen: dict[str, dict] = {}
+    for ref in (
+        AdReferral.objects.filter(account=account)
+        .order_by("-received_at")
+        .values("source_id", "headline", "channel")[:500]
+    ):
+        if ref["source_id"] not in seen:
+            seen[ref["source_id"]] = {
+                "id": ref["source_id"],
+                "headline": ref["headline"] or "Untitled ad",
+                "channel": ref["channel"],
+            }
+        if len(seen) >= limit:
+            break
+    return list(seen.values())
+
+
 @login_required
 @module_required("automations")
 @full_page_load  # rich editor: its scripts expect a fresh page
@@ -627,6 +665,8 @@ def workflow_editor(request, slug: str):
                     )
                 ]
             ),
+            # Ad headlines come from Meta: escape "<" so one can't close the script tag.
+            "recent_ads_json": json.dumps(_recent_ads(account)).replace("<", "\\u003c"),
             "followup_owners": (owners := _followup_owners(account)),
             "followup_owner_emails_json": json.dumps([email for email, _ in owners]),
             "test_contacts": [
@@ -1214,12 +1254,15 @@ def why_not(request):
         earlier = inbound.filter(
             conversation__contact=contact, timestamp__lt=latest.timestamp
         ).exists()
+        from apps.conversations.services import ad_for_automations
+
         verdicts = explain_enrollment(
             account.id,
             contact,
             message=message,
             message_at=latest.timestamp,
             is_first_message=not earlier,
+            ad=ad_for_automations(conversation),
         )
         notes = []
         from apps.billing import api as billing_api

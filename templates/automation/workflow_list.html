@@ -130,6 +130,8 @@
       <label class="label" for="words-{{ starter.key }}">A customer's message {% if starter.mode == "starts_with" %}starts with{% else %}mentions{% endif %}</label>
       <input id="words-{{ starter.key }}" name="keywords" class="input" x-model="words" maxlength="400" />
       <p class="text-xs text-ink-subtle mt-1">Separate words with commas. It answers the same customer at most once an hour.</p>
+      {% elif starter.ad %}
+      <p class="text-sm text-gray-700">Someone messages you from one of your Meta ads on WhatsApp or Instagram. Later messages in the same chat go to your other automations and your team as usual.</p>
       {% elif starter.needs_hours %}
       <p class="text-sm text-gray-700">A message arrives while you're closed, using your <a href="{% url 'settings-hours' %}" class="text-accent underline">opening hours</a>.</p>
       {% endif %}

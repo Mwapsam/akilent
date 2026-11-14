@@ -491,12 +491,29 @@ def _enroll_workflows(
     # (a welcome for someone already welcomed) must not silence AI for good.
     # Strip routing-only keys (prefixed with "_") before storing the message in the run context.
     stored_message = {k: v for k, v in message.items() if not k.startswith("_")}
-    answered = answer_message(
-        conversation.account_id,
-        contact,
-        context={"conversation_id": conversation.public_id, "message": stored_message},
-    )
+    context = {"conversation_id": conversation.public_id, "message": stored_message}
+    ad = ad_for_automations(conversation)
+    if ad:
+        context["ad"] = ad
+    answered = answer_message(conversation.account_id, contact, context=context)
     return HANDLED_AUTOMATION if answered else ""
+
+
+def ad_for_automations(conversation: Conversation) -> dict | None:
+    """The Meta ad this message came from, for "only chats from a Meta ad" automations.
+
+    Behind ``ads_automation``; never raises (a lookup failure means "not from an ad")."""
+    from apps.core.releases import is_released
+
+    if not is_released("ads_automation"):
+        return None
+    try:
+        from apps.conversations import ad_referrals
+
+        return ad_referrals.fresh_for(conversation)
+    except Exception:
+        logger.exception("ad lookup failed for conversation=%s", conversation.pk)
+        return None
 
 
 # Who took a customer's message, in the fixed order every inbound message goes through

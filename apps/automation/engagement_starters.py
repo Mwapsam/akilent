@@ -163,6 +163,25 @@ _REPLY_STARTERS.append(
         "needs_hours": True,
     }
 )
+_REPLY_STARTERS.append(
+    {
+        "key": "answer-ad-chats",
+        "name": "Answer ad chats straight away",
+        "goal": "Someone who tapped your ad gets an answer while they still want what it showed.",
+        "explain": (
+            "When someone messages you from one of your Meta ads on WhatsApp or Instagram, "
+            "reply straight away. It answers before your other automations, so they get one reply."
+        ),
+        "stop_condition": "Answers the first message of each ad chat only.",
+        "ad": True,
+        # docs/strategy/akilent-ads.md: hidden until the ad-aware automations are released.
+        "flag": "ads_automation",
+        "reply_hint": (
+            "Hi {first_name}, thanks for messaging us about our ad. Tell us which item and "
+            "size you'd like and we'll confirm the price and delivery."
+        ),
+    }
+)
 for _starter in _REPLY_STARTERS:
     _starter.setdefault("trigger", "conversation.message_received")
     _starter.update({"reply": True, "suggested_template": ""})
@@ -196,6 +215,7 @@ GOAL_GROUPS = (
             "welcome-new-enquiry",
             "greet-hello",
             "offer-a-menu",
+            "answer-ad-chats",
         ),
     ),
     (
@@ -234,6 +254,26 @@ def build_reply_definition(
     names a tag (so the owner can later see who asked about prices). The after-hours starter
     answers only while the business is closed, and at most once per customer per 8 hours.
     """
+    if starter.get("ad"):
+        # The first message of a chat from a Meta ad, whatever it says.
+        trigger: dict[str, Any] = {"type": starter["trigger"], "from_ad": True}
+        steps: list[dict[str, Any]] = [
+            {"id": "reply", "type": "reply_text", "text": text, "next": "stop"}
+        ]
+        if notify:
+            steps[0]["next"] = "tell"
+            steps.append(
+                {
+                    "id": "tell",
+                    "type": "notify_team",
+                    "to": "assignee",
+                    "text": "{contact} messaged you from one of your Meta ads. "
+                    "Akilent replied; follow up while they're interested.",
+                    "next": "stop",
+                }
+            )
+        steps.append({"id": "stop", "type": "stop"})
+        return {"trigger": trigger, "steps": steps}
     if starter.get("after_hours"):
         return {
             "trigger": {"type": starter["trigger"], "cooldown_minutes": 480},
@@ -556,3 +596,18 @@ def _welcome_definition(
             {"id": "stop", "type": "stop"},
         ],
     }
+
+
+# Ad replies outrank every other message automation (lower runs first), so a chat from an ad
+# gets the ad's answer rather than the general greeting.
+AD_REPLY_PRIORITY = 10
+
+
+def available(starter: dict) -> bool:
+    """False for a starter whose feature isn't released yet."""
+    flag = starter.get("flag")
+    if not flag:
+        return True
+    from apps.core.releases import is_released
+
+    return is_released(flag)

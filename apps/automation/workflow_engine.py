@@ -223,6 +223,23 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
                 "trigger.reply_id must be a button name or a list of them",
                 field="trigger.reply_id",
             )
+    if "from_ad" in trig:
+        wanted_ads = trig["from_ad"]
+        if trig.get("type") != "conversation.message_received":
+            # "whatsapp.received" starts before Akilent has read the ad off the message.
+            _error(
+                "trigger.from_ad only works on the 'a customer messages you' trigger",
+                field="trigger.from_ad",
+            )
+        elif wanted_ads is not True and not (
+            isinstance(wanted_ads, list)
+            and wanted_ads
+            and all(isinstance(a, str) and a.strip() for a in wanted_ads)
+        ):
+            _error(
+                "trigger.from_ad must be true (any Meta ad) or a list of ad ids",
+                field="trigger.from_ad",
+            )
     cooldown = trig.get("cooldown_minutes")
     if cooldown is not None and (
         not isinstance(cooldown, int) or isinstance(cooldown, bool) or cooldown < 0
@@ -1996,6 +2013,8 @@ def _run_reply_text(run: WorkflowRun, step: dict) -> dict:
             "product.price": ctx.get("product_price", ""),
             "product.currency": ctx.get("product_currency", ""),
             "business.name": getattr(account, "company_name", "") or "",
+            # The Meta ad the chat came from (``trigger.from_ad`` workflows).
+            "ad.headline": (ctx.get("ad") or {}).get("headline", "") or "",
             # Answers from a form this run sent (start_form): {form_answers.budget}.
             **{
                 f"form_answers.{key}": str(value)
@@ -2981,6 +3000,18 @@ def trigger_verdict(
     message = (context or {}).get("message") or {}
     if trigger.get("form") and (context or {}).get("form") != trigger["form"]:
         return {"code": "other_form", "details": {"expected": trigger["form"]}}
+    wanted_ads = trigger.get("from_ad")
+    if wanted_ads:
+        # The conversations app puts the ad in the context (``ads_automation``); without
+        # it, or on a later message in the same ad chat, the message is not from an ad.
+        ad = (context or {}).get("ad") or {}
+        if not ad.get("source_id"):
+            return {"code": "not_from_ad", "details": {}}
+        if isinstance(wanted_ads, list) and ad["source_id"] not in wanted_ads:
+            return {
+                "code": "other_ad",
+                "details": {"expected": list(wanted_ads), "received": ad["source_id"]},
+            }
     match = trigger.get("match")
     if match:
         from apps.automation import keywords
@@ -3037,6 +3068,7 @@ def explain_enrollment(
     message: dict,
     message_at,
     is_first_message: bool,
+    ad: dict | None = None,
 ) -> list[dict]:
     """For each automation a customer's message could have started: did it, and if not, why not.
 
@@ -3047,7 +3079,7 @@ def explain_enrollment(
     Callers supply the message facts; this module reads no other app's data.
     """
     out: list[dict] = []
-    context = {"message": message}
+    context = {"message": message, **({"ad": ad} if ad else {})}
     for wf in Workflow.objects.filter(account_id=account_id).order_by("name"):
         trigger = (wf.definition or {}).get("trigger", {})
         kind = trigger.get("type")

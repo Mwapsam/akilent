@@ -209,6 +209,14 @@ def _alert_overdue(conversation, now) -> None:
 
 
 @shared_task(queue="celery")
+def alert_waiting_ad_chats() -> dict:
+    """Email each workspace about chats from its Meta ads left unanswered (``ad_alerts``)."""
+    from apps.conversations.ad_alerts import sweep
+
+    return sweep()
+
+
+@shared_task(queue="celery")
 def capture_benchmarks() -> int:
     """Measure each business's starting week and day-30 week once they've closed (``benchmarks``)."""
     from apps.conversations import benchmarks

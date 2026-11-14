@@ -194,6 +194,16 @@ def _inbox_context(request, account) -> dict:
     if channel:
         qs = qs.filter(channel=channel)
 
+    # Chats that came from a Meta ad (the "ad chats waiting" alert links here).
+    from apps.core.releases import is_released
+
+    if request.GET.get("from") == "ad" and is_released("ads_automation"):
+        from django.db.models import Exists
+
+        from apps.conversations.models import AdReferral
+
+        qs = qs.filter(Exists(AdReferral.objects.filter(conversation=OuterRef("pk"))))
+
     # Combinable with any tab ("My + Overdue", "Unassigned + Overdue"): the
     # same waiting-on-us definition every tab already uses, just past the
     # stricter OVERDUE_WAITING cutoff instead of the 24h one.

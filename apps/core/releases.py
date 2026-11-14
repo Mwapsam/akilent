@@ -58,6 +58,10 @@ UNRELEASED_FEATURES: dict[str, tuple[str, ...]] = {
     # first-reply times, leads and paid orders per ad. Shown in Which posts sold, on the
     # post page and in the inbox details panel; no pages of its own.
     "ads_inbox_verdict": (),
+    # Ad-aware automations (docs/strategy/akilent-ads.md, "ad chats that run smoothly"): the
+    # "Only chats that came from a Meta ad" trigger filter, the "Answer ad chats straight
+    # away" starter, and the "ad chats waiting" alert. No pages of its own.
+    "ads_automation": (),
     # Audience Intelligence, "What people are saying" (docs/plans/audience-intelligence-spec.md):
     # topics on each comment, the topic filter and correction in Comments, and the post
     # page's summary with comment-level outcomes. The signals themselves are written

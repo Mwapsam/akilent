@@ -865,6 +865,7 @@ def at_risk(account, now: datetime | None = None) -> dict:
         .annotate(talked=Exists(recent_talk))
         .filter(talked=False)
         .count(),
+        "ad_waiting": _ad_waiting(account, now),
     }
 
     def plural(n, one, many):
@@ -891,6 +892,18 @@ def at_risk(account, now: datetime | None = None) -> dict:
                 "text": f"{n} {plural(n, 'customer is', 'customers are')} waiting for a reply",
                 "url": "/inbox/?view=needs_attention",
                 "cta": "Open inbox",
+            }
+        )
+    if counts["ad_waiting"]:
+        n = counts["ad_waiting"]
+        actions.append(
+            {
+                "key": "ad_waiting",
+                "count": n,
+                "text": f"{n} {plural(n, 'chat', 'chats')} from your Meta ads "
+                f"{plural(n, 'has', 'have')} waited over an hour for a reply",
+                "url": "/inbox/?view=needs_attention&from=ad",
+                "cta": "Open ad chats",
             }
         )
     if counts["followups_due"]:
@@ -947,6 +960,15 @@ def at_risk(account, now: datetime | None = None) -> dict:
             }
         )
     return {"counts": counts, "actions": actions}
+
+
+def _ad_waiting(account, now) -> int:
+    """Open chats from Meta ads past the unanswered threshold (``ads_automation``), else 0."""
+    from apps.conversations import ad_alerts
+
+    if not ad_alerts.is_released():
+        return 0
+    return len(ad_alerts.waiting(now, account=account, limit=200).get(account.id, []))
 
 
 def _url(name: str, fallback: str) -> str:

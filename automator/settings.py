@@ -953,6 +953,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.conversations.tasks.escalate_overdue_conversations",
         "schedule": 900.0,  # OVERDUE_WAITING is 2h; 15-minutely matches the campaign sweeper's cadence
     },
+    "alert-waiting-ad-chats": {
+        "task": "apps.conversations.tasks.alert_waiting_ad_chats",
+        "schedule": 300.0,  # the threshold is an hour; five minutes late is still in time
+    },
     "run-due-scheduled-jobs": {
         "task": "apps.scheduler.tasks.run_due_jobs",
         "schedule": 60.0,  # send-later / scheduled campaigns resolve at minute granularity

@@ -9,6 +9,7 @@ Allowed placeholders:
   {lead.status}
   {product.name}        {product.price}       {product.currency}
   {business.name}
+  {ad.headline}         the headline of the Meta ad the chat came from (blank if none)
   {form_answers.<key>}  an answer from a form the run sent (blank if it was skipped)
 """
 
@@ -28,6 +29,7 @@ _ALLOWLIST: frozenset[str] = frozenset(
         "product.price",
         "product.currency",
         "business.name",
+        "ad.headline",
     ]
 )
 

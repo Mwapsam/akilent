@@ -170,6 +170,42 @@ def record(conversation, message, channel: str, data: dict, *, received_at=None)
     return referral
 
 
+def fresh_for(conversation) -> dict | None:
+    """The ad the conversation's latest customer message came from, for automations.
+
+    ``{source_id, headline, channel}`` when that message carried an ad referral, or when an
+    Instagram standalone referral (no message of its own) arrived since the customer's
+    previous message. Later messages in the same ad chat are not "from an ad" again; a tap
+    on a different ad is. Called right after ``capture`` on the inbound path.
+    """
+    from apps.conversations.models import AdReferral, Message
+
+    inbound = list(
+        Message.objects.filter(
+            conversation=conversation, direction=Message.Direction.INBOUND
+        )
+        .order_by("-timestamp", "-pk")
+        .values("pk", "timestamp")[:2]
+    )
+    if not inbound:
+        return None
+    latest = inbound[0]
+    refs = AdReferral.objects.filter(conversation=conversation)
+    ref = refs.filter(message_id=latest["pk"]).first()
+    if ref is None:
+        standalone = refs.filter(message__isnull=True)
+        if len(inbound) > 1:
+            standalone = standalone.filter(received_at__gt=inbound[1]["timestamp"])
+        ref = standalone.order_by("-received_at", "-pk").first()
+    if ref is None:
+        return None
+    return {
+        "source_id": ref.source_id,
+        "headline": ref.headline,
+        "channel": ref.channel,
+    }
+
+
 def capture(conversation, message):
     """Inbound hook: store the ad this message came from, if it carries one."""
     channel, data = referral_for_message(message)
