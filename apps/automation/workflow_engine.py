@@ -141,10 +141,29 @@ _TRIGGER_TYPES = {
     "lead.lost",
     # A customer finished one of the business's forms (optionally: a given form).
     "conversation.form_completed",
+    # Website chat (Chatbot Studio, docs/plans/chatbot-studio.md). Only a chatbot's own
+    # workflow uses these, and apps.chatbot enrols it directly: a website visitor never starts
+    # the account's other message workflows, and these never fire on WhatsApp/Instagram/
+    # Facebook. "opened" = the visitor opened the chat window, before typing anything.
+    "website_chat.opened",
+    "website_chat.message_received",
 }
 
 # Triggers that carry the customer's message, so a keyword ``match`` can be applied to them.
-_MESSAGE_TRIGGERS = {"conversation.message_received", "whatsapp.received"}
+_MESSAGE_TRIGGERS = {
+    "conversation.message_received",
+    "whatsapp.received",
+    "website_chat.message_received",
+}
+# Triggers that start a run inside a customer's conversation, so steps that reply in that
+# conversation (reply_text, buttons, questions) have somewhere to say it.
+CONVERSATION_TRIGGERS = frozenset(
+    {
+        "conversation.message_received",
+        "website_chat.message_received",
+        "website_chat.opened",
+    }
+)
 # A keyword workflow answers a repeated question once per window, not once per message.
 DEFAULT_KEYWORD_COOLDOWN_MINUTES = 60
 # How long a "wait for reply" step waits for the customer's choice by default (a day), and
@@ -425,7 +444,7 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
                     step_id=sid,
                     field="text",
                 )
-            if trig.get("type") != "conversation.message_received":
+            if trig.get("type") not in CONVERSATION_TRIGGERS:
                 _error(
                     f"step {sid!r}: reply_text needs the 'customer messages you' trigger, "
                     "because it replies in that conversation",
@@ -497,7 +516,7 @@ def validate_definition(definition: dict, account=None) -> list[dict]:
                     field="buttons" if step["type"] == "send_buttons" else "rows",
                 )
             _trig_type = trig.get("type")
-            _all_channels = _trig_type == "conversation.message_received"
+            _all_channels = _trig_type in CONVERSATION_TRIGGERS
             if not _all_channels:
                 _error(
                     f"step {sid!r}: {step['type']} needs the 'customer messages you' trigger, "

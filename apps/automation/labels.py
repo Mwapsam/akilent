@@ -24,6 +24,8 @@ TRIGGER_LABELS = {
     "order.created": "When an order is placed",
     "order.paid": "When an order is paid",
     "conversation.form_completed": "When a customer finishes a form",
+    "website_chat.opened": "When a visitor opens your website chat",
+    "website_chat.message_received": "When a visitor messages your website chat",
 }
 
 STEP_LABELS = {

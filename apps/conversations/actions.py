@@ -265,9 +265,67 @@ class ReplyAction(Action):
 
             return facebook_inbox.send(conversation, body, idempotency_key)
 
+        if conversation.channel == conversation.Channel.WEBSITE_CHAT:
+            return _reply_website_chat(conversation, body, idempotency_key)
+
         raise ActionError(
             f"reply not yet implemented for channel {conversation.channel!r}"
         )
+
+
+def website_chat_sender(key: str | None) -> str:
+    """``sent_by`` for a website chat message from its idempotency key ("" = a person).
+
+    Same convention as Instagram's and Facebook's ``sender_of``.
+    """
+    key = key or ""
+    if key.startswith("ai-auto:"):
+        return "ai"
+    if key.startswith(("wf:", "form:")):
+        return "automation"
+    return ""
+
+
+def _reply_website_chat(conversation, body: str, idempotency_key: str | None) -> dict:
+    """Website chat has no provider to call: the reply is saved on the conversation and the
+    visitor's widget picks it up when it next checks for messages (``/api/chat/poll/``).
+
+    A key that was used before returns the first message, so a retried automation step or a
+    repeated inbox send never shows the visitor the same message twice.
+    """
+    from django.utils import timezone
+
+    from apps.conversations.inbox_keys import sender_metadata
+    from apps.conversations.models import Message
+    from apps.conversations.services import record_outbound_message
+
+    if idempotency_key:
+        earlier = Message.objects.filter(
+            conversation=conversation,
+            direction=Message.Direction.OUTBOUND,
+            metadata__idempotency_key=idempotency_key,
+        ).first()
+        if earlier is not None:
+            return {"message_id": earlier.id}
+
+    metadata: dict = {"message_type": "text"}
+    who = website_chat_sender(idempotency_key)
+    if who:
+        metadata["sent_by"] = who
+    if idempotency_key:
+        metadata["idempotency_key"] = idempotency_key
+    # A reply from the inbox: which teammate, and the browser's key for the attempt.
+    metadata.update(sender_metadata(idempotency_key))
+    message, _ = record_outbound_message(
+        conversation=conversation,
+        body=body,
+        timestamp=timezone.now(),
+        status="delivered",
+        metadata=metadata,
+    )
+    # "message_id", not "outbound_message_id": the workflow engine stores the latter as a
+    # foreign key to WhatsApp's outbound record, and this is a conversation Message.
+    return {"message_id": message.id}
 
 
 class ReplyMediaAction(Action):

@@ -68,7 +68,7 @@ def _sanitise_error(msg: str) -> str:
     return msg if msg in _SAFE_ERRORS else "An error occurred."
 
 
-def _session_for(request: HttpRequest, session_key: str):
+def _session_for(request: HttpRequest, session_key: str, *, polling: bool = False):
     """(session, None) for a usable session, else (None, error response).
 
     Order matters: the Origin is checked (and CORS allowed) before the rate limit and the
@@ -90,7 +90,12 @@ def _session_for(request: HttpRequest, session_key: str):
     if not auth.check_origin(session.chatbot, request):
         return None, auth.forbidden("Origin not authorized.")
     auth.allow_cors(request)
-    if not auth.check_rate_limit(session_key):
+    within = (
+        auth.check_poll_rate_limit(session_key)
+        if polling
+        else auth.check_rate_limit(session_key)
+    )
+    if not within:
         return None, auth.rate_limited()
     if _is_session_expired(session):
         return None, JsonResponse({"error": "Session expired."}, status=410)
@@ -133,15 +138,16 @@ def init(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"error": "Service misconfiguration."}, status=503)
 
     from apps.chatbot.models import ChatSession
-    from apps.chatbot.services.conversation import history
+    from apps.chatbot.services.conversation import messages_after
 
     chatbot: ChatbotConfig = chatbot_obj  # type: ignore[assignment]
     session = _resumable_session(chatbot, data.get("session_key"))
     if session is None:
         session = ChatSession.objects.create(chatbot=chatbot)
         messages: list[dict] = []
+        cursor = 0
     else:
-        messages = history(session)
+        messages, cursor = messages_after(session, None)
 
     return JsonResponse(
         {
@@ -149,6 +155,7 @@ def init(request: HttpRequest) -> JsonResponse:
             "api_origin": api_origin,
             "config": serializers.public_config(chatbot),
             "messages": messages,
+            "cursor": cursor,
         }
     )
 
@@ -190,10 +197,65 @@ def message(request: HttpRequest) -> JsonResponse:
     if error is not None:
         return error
 
-    from apps.chatbot.services.responder import handle_message
+    from apps.chatbot.services.inbound import handle_visitor_message
 
-    result = handle_message(session, body)
-    return JsonResponse(result)
+    return JsonResponse(handle_visitor_message(session, body))
+
+
+@csrf_exempt
+@auth.with_cors
+@require_POST
+def open_chat(request: HttpRequest) -> JsonResponse:
+    """POST {session_key} → {messages, cursor}: the visitor opened the chat window.
+
+    Runs the bot's "visitor opens the chat" automation the first time in a session.
+    """
+    data = _parse_body(request)
+    if data is None:
+        return JsonResponse({"error": "Invalid request."}, status=400)
+    session_key = data.get("session_key", "")
+    if not isinstance(session_key, str) or not session_key:
+        return JsonResponse({"error": "session_key is required."}, status=400)
+    session, error = _session_for(request, session_key)
+    if error is not None:
+        return error
+
+    from apps.chatbot.services.inbound import handle_opened
+
+    return JsonResponse(handle_opened(session))
+
+
+@csrf_exempt
+@auth.with_cors
+@require_POST
+def poll(request: HttpRequest) -> JsonResponse:
+    """POST {session_key, cursor} → {messages, cursor}: anything said since ``cursor``.
+
+    How replies from the team (sent from the inbox) and from automations that answer later
+    reach the visitor. POST, so the session key never sits in a URL or an access log.
+    """
+    data = _parse_body(request)
+    if data is None:
+        return JsonResponse({"error": "Invalid request."}, status=400)
+    session_key = data.get("session_key", "")
+    if not isinstance(session_key, str) or not session_key:
+        return JsonResponse({"error": "session_key is required."}, status=400)
+    cursor = data.get("cursor", 0)
+    if not isinstance(cursor, int) or isinstance(cursor, bool) or cursor < 0:
+        return JsonResponse({"error": "Invalid request."}, status=400)
+    session, error = _session_for(request, session_key, polling=True)
+    if error is not None:
+        return error
+
+    from apps.chatbot.services.conversation import messages_after
+
+    if not session.conversation_id:
+        return JsonResponse({"messages": [], "cursor": 0})
+    messages, new_cursor = messages_after(session, cursor) if cursor else ([], None)
+    if new_cursor is None:
+        # A widget with no cursor yet starts from now rather than replaying the chat.
+        messages, new_cursor = messages_after(session, None)
+    return JsonResponse({"messages": messages, "cursor": new_cursor})
 
 
 @csrf_exempt

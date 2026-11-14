@@ -19,7 +19,9 @@ logger = logging.getLogger(__name__)
 _RECENT_MESSAGES = 20
 
 
-def build(session: ChatSession, query: str) -> dict:
+def build(
+    session: ChatSession, query: str, *, exclude_message_id: int | None = None
+) -> dict:
     """Return the context dict passed to the LLM on every turn.
 
     Keys:
@@ -34,7 +36,7 @@ def build(session: ChatSession, query: str) -> dict:
     return {
         "purpose": session.chatbot.purpose,
         "identity": _identity(session),
-        "messages": _recent_messages(session),
+        "messages": _recent_messages(session, exclude_message_id),
         "actions": _enabled_actions(session),
         "knowledge": retrieve(session.chatbot, query),
     }
@@ -55,16 +57,21 @@ def _identity(session: ChatSession) -> dict:
     }
 
 
-def _recent_messages(session: ChatSession) -> list[dict]:
+def _recent_messages(
+    session: ChatSession, exclude_message_id: int | None = None
+) -> list[dict]:
     if not session.conversation_id:
         return []
     from apps.conversations.models import Message
 
-    msgs = (
-        Message.objects.filter(conversation_id=session.conversation_id)
-        .order_by("-timestamp")
-        .values("direction", "body", "timestamp")[:_RECENT_MESSAGES]
+    qs = Message.objects.filter(conversation_id=session.conversation_id).exclude(
+        body=""
     )
+    if exclude_message_id is not None:
+        qs = qs.exclude(pk=exclude_message_id)
+    msgs = qs.order_by("-timestamp", "-pk").values("direction", "body", "timestamp")[
+        :_RECENT_MESSAGES
+    ]
     return [
         {
             "role": "user" if m["direction"] == "inbound" else "assistant",

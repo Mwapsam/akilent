@@ -63,7 +63,11 @@ def simulate(
         "waiting": None,
         "ended": False,
     }
-    if trigger.get("type") in ("conversation.message_received", "whatsapp.received"):
+    if trigger.get("type") in (
+        "conversation.message_received",
+        "whatsapp.received",
+        "website_chat.message_received",
+    ):
         if message:
             transcript.append({"kind": "customer", "text": message})
         why = _trigger_refusal(trigger, message)

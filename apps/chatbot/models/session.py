@@ -38,6 +38,9 @@ class ChatSession(models.Model):
     visitor_email = models.EmailField(blank=True)
     visitor_phone = models.CharField(max_length=30, blank=True)
     identified_at = models.DateTimeField(null=True, blank=True)
+    # When the visitor first opened the chat window: the "visitor opens the chat" trigger fires
+    # once per session, not on every page they open it from.
+    opened_at = models.DateTimeField(null=True, blank=True)
     started_at = models.DateTimeField(auto_now_add=True)
     last_activity_at = models.DateTimeField(auto_now=True)
 

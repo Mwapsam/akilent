@@ -1,7 +1,33 @@
 # Chatbot Studio — spec and phased plan
 
-Status (2026-11-14): **P0 built** (uncommitted): 84 chatbot tests pass, and a browser check from a
-second origin passed. P1–P6 aren't built. The website chatbot is still an unreleased feature
+Status (2026-11-14): **P0 committed; P1 built** (uncommitted): 112 chatbot tests pass, and 3,538
+across automation/conversations/ai/core/accounts/chatbot with no failures. A browser check from a
+second origin passed: greeting on open, holding reply, a team reply arriving by poll, and a reload
+with no duplicates. P2–P6 aren't built.
+
+P1 as built, and where it departed from the plan below:
+- Triggers `website_chat.opened` and `website_chat.message_received` (`CONVERSATION_TRIGGERS` in
+  `workflow_engine.py`). They're hidden from the trigger picker until `chatbot` is released.
+- `apps/chatbot/services/inbound.py` decides who answers, in this order: team took over → a
+  waiting automation → the bot's own workflow → the bot's AI (or a one-time holding reply when AI
+  is off).
+- `conversations.services.record_inbound_website_message` records the message with the same
+  follow-on work as other channels.
+- The `reply` action has a website-chat branch (saved for the widget, `sent_by` taken from the key,
+  repeated keys return the first send).
+- `/api/chat/open/` and `/api/chat/poll/` (with its own rate limit). The widget polls every 4s
+  while open and 20s while closed.
+- Inbox shows a globe icon for website chats.
+- **Pulled forward from P4:** `ChatbotConfig.workflow` (migration 0006, plus `ChatSession.opened_at`).
+  The engine scoping needed it.
+- **Pulled forward from P3:** the bot's AI now respects `apps.ai.api.is_available` (plan, provider,
+  owner switch). Bot replies are marked `sent_by="ai"`, so reports no longer count them as a person.
+- **Deferred to P6:** the `apps/core/channels.py` registry entry. About 19 modules read the
+  registry (signup, onboarding, billing, docs), and an entry would show website chat to customers
+  before release. Unregistered channels are never hidden from the inbox and pass
+  `_require_channel_enabled`.
+- The "When a customer messages you (any channel)" trigger label should say which channels before
+  release, because website chat deliberately doesn't run those workflows. The website chatbot is still an unreleased feature
 (`chatbot` in `apps/core/releases.py`). Each phase below needs its own go-ahead.
 
 P0 as built:

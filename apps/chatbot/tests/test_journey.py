@@ -49,6 +49,8 @@ def provider(monkeypatch):
     monkeypatch.setattr(
         "apps.ai.providers.get_ai_provider", lambda account=None, tier="": fake
     )
+    # AI is on for the business (provider, plan and the owner's switch).
+    monkeypatch.setattr("apps.ai.api.is_available", lambda account: True)
     return fake
 
 

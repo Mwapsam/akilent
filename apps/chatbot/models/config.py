@@ -3,6 +3,9 @@ import secrets
 from django.core.exceptions import ValidationError
 from django.db import models
 
+# Trigger types (apps.automation) a chatbot's workflow can start from.
+WEBSITE_CHAT_TRIGGERS = ("website_chat.opened", "website_chat.message_received")
+
 
 def _default_public_key() -> str:
     return "pk_chat_" + secrets.token_hex(16)
@@ -61,6 +64,16 @@ class ChatbotConfig(models.Model):
         on_delete=models.SET_NULL,
         related_name="chatbots",
     )
+    # The conversation this bot runs (Chatbot Studio): an automation Workflow whose trigger is
+    # "visitor opens the chat" or "visitor messages the chat". Without one, or when it doesn't
+    # answer, the bot's built-in AI answers from its knowledge.
+    workflow = models.ForeignKey(
+        "automation.Workflow",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="chatbots",
+    )
     chatbot_type = models.CharField(
         max_length=20,
         choices=ChatbotType.choices,
@@ -85,6 +98,24 @@ class ChatbotConfig(models.Model):
                     "System chatbots must be assigned to the platform account."
                 )
             return
+        if self.workflow_id and self.workflow.account_id != self.account_id:
+            raise ValidationError(
+                {"workflow": "The workflow must belong to the chatbot's account."}
+            )
+        if self.workflow_id:
+            trigger = ((self.workflow.definition or {}).get("trigger") or {}).get(
+                "type"
+            )
+            draft = ((self.workflow.draft_definition or {}).get("trigger") or {}).get(
+                "type"
+            )
+            if not {trigger, draft} & set(WEBSITE_CHAT_TRIGGERS):
+                raise ValidationError(
+                    {
+                        "workflow": "Choose an automation that starts when a visitor "
+                        "opens or messages your website chat."
+                    }
+                )
         is_platform = self.account.is_platform_account
         if self.chatbot_type == self.ChatbotType.SYSTEM and not is_platform:
             raise ValidationError(

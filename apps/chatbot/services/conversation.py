@@ -91,6 +91,9 @@ def get_or_create_for_website_chat(session: object) -> Conversation:
                 account=session.chatbot.account,
                 contact=locked.contact,
                 channel=Conversation.Channel.WEBSITE_CHAT,
+                # Unread only once the visitor writes (register_inbound): a chat opened by a
+                # "visitor opens the chat" greeting isn't waiting on anyone yet.
+                is_unread=False,
             )
             locked.conversation = conversation
             locked.save(update_fields=["contact", "conversation", "last_activity_at"])
@@ -115,86 +118,54 @@ def get_or_create_for_website_chat(session: object) -> Conversation:
     return conversation  # type: ignore[return-value]
 
 
-def record_inbound_chatbot_message(session: object, body: str) -> object:
-    """Persist an inbound message from the visitor into the conversation thread."""
-    from apps.chatbot.models import ChatSession
+def _who(row: dict) -> str:
     from apps.conversations.models import Message
 
-    assert isinstance(session, ChatSession)
-
-    conversation = get_or_create_for_website_chat(session)
-    now = timezone.now()
-
-    message = Message.objects.create(
-        account=session.chatbot.account,
-        conversation=conversation,
-        direction=Message.Direction.INBOUND,
-        body=body,
-        timestamp=now,
-    )
-    # Opens it and marks it unread in the inbox, like an inbound message on any channel.
-    conversation.register_inbound(now)
-
-    session.last_activity_at = now
-    session.save(update_fields=["last_activity_at"])
-
-    return message
+    if row["direction"] == Message.Direction.INBOUND:
+        return "visitor"
+    meta = row["metadata"] or {}
+    if meta.get("sent_by") in ("ai", "automation") or meta.get("source") == "chatbot":
+        return "bot"
+    if meta.get("auto_kind") == "holding":
+        return "bot"
+    return "team"
 
 
-def record_outbound_chatbot_message(session: object, body: str) -> object:
-    """Persist the bot's reply into the conversation thread."""
-    from apps.chatbot.models import ChatSession
-    from apps.conversations.models import Message
+def messages_after(
+    session: ChatSession,
+    cursor: int | None,
+    *,
+    after_message_id: int | None = None,
+    limit: int = _HISTORY_LIMIT,
+) -> tuple[list[dict], int]:
+    """Messages for the widget, oldest first, and the cursor to ask from next time.
 
-    assert isinstance(session, ChatSession)
-
+    The cursor is how many messages of this chat the widget has already been given (never a
+    database id). ``cursor`` None or 0 returns the latest ``limit`` messages (a resumed chat);
+    ``after_message_id`` returns what was said after that message (the reply to the visitor's
+    own message, which the widget already shows). Each item is
+    ``{"from": "visitor"|"bot"|"team", "text"}``: no ids, names or metadata.
+    """
     if not session.conversation_id:
-        raise ValueError("No conversation exists for this session yet.")
+        return [], 0
+    from apps.conversations.models import Message
 
-    assert session.conversation is not None
-    now = timezone.now()
-    message = Message.objects.create(
-        account=session.chatbot.account,
-        conversation=session.conversation,
-        direction=Message.Direction.OUTBOUND,
-        body=body,
-        timestamp=now,
-        metadata={"source": "chatbot"},
-    )
-    session.conversation.register_outbound(now)
-
-    session.last_activity_at = now
-    session.save(update_fields=["last_activity_at"])
-
-    return message
+    qs = Message.objects.filter(conversation_id=session.conversation_id).order_by("pk")
+    total = qs.count()
+    fields = ("direction", "body", "metadata")
+    if after_message_id is not None:
+        rows = list(qs.filter(pk__gt=after_message_id).values(*fields)[:limit])
+    elif cursor:
+        start = max(0, min(cursor, total))
+        rows = list(qs.values(*fields)[start:total][:limit])
+    else:
+        rows = list(qs.values(*fields)[max(0, total - limit) : total])
+    return [{"from": _who(r), "text": r["body"]} for r in rows if r["body"]], total
 
 
 def history(session: ChatSession, *, limit: int = _HISTORY_LIMIT) -> list[dict]:
-    """The chat so far for the widget, oldest first: ``{"from": "visitor"|"bot"|"team", "text"}``.
-
-    Only message text and who wrote it are exposed; never ids, names of team members or metadata.
-    """
-    if not session.conversation_id:
-        return []
-    from apps.conversations.models import Message
-
-    rows = list(
-        Message.objects.filter(conversation_id=session.conversation_id)
-        .order_by("-timestamp", "-pk")
-        .values("direction", "body", "metadata")[:limit]
-    )
-    out = []
-    for row in reversed(rows):
-        if not row["body"]:
-            continue
-        if row["direction"] == Message.Direction.INBOUND:
-            who = "visitor"
-        elif (row["metadata"] or {}).get("source") == "chatbot":
-            who = "bot"
-        else:
-            who = "team"
-        out.append({"from": who, "text": row["body"]})
-    return out
+    """The chat so far for a resumed widget, oldest first."""
+    return messages_after(session, None, limit=limit)[0]
 
 
 def identify_visitor(

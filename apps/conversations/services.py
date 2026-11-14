@@ -742,3 +742,57 @@ def record_message_status(message: Message, status: str) -> bool:
     message.save(update_fields=["status"])
     metrics.incr("status_updates_applied", status=status)
     return True
+
+
+def record_inbound_website_message(
+    *, conversation: Conversation, contact, body: str, handle
+) -> Message:
+    """Record a website chat visitor's message and run the same follow-on work as every
+    other channel: ad and ref-code capture, the customer timeline, lead capture, AI's
+    suggestion for the team and the live inbox update.
+
+    Who answers is the chatbot's decision, not this module's: ``handle(conversation, message)``
+    (supplied by apps.chatbot) runs where ``_enroll_workflows`` runs for the other channels and
+    returns one of the ``HANDLED_*`` values ("" leaves the message for the team). A website
+    visitor therefore never starts the account's WhatsApp/Instagram/Facebook message
+    workflows; the chatbot runs only its own.
+    """
+    now = timezone.now()
+    conversation.register_inbound(now)
+    message = Message.objects.create(
+        account=conversation.account,
+        conversation=conversation,
+        direction=Message.Direction.INBOUND,
+        body=body,
+        timestamp=now,
+        metadata={"message_type": "text"},
+    )
+    entry_points.on_inbound_message(conversation, message)
+    emit_event(
+        account=conversation.account,
+        type="conversation.message_received",
+        occurred_at=now,
+        source="website_chat",
+        source_event_id=f"website_chat:{message.pk}",
+        payload={
+            "conversation_id": conversation.public_id,
+            "message_id": message.id,
+            "body": body,
+            "message_type": "text",
+        },
+        subject_type="conversation",
+        subject_id=conversation.public_id,
+    )
+
+    handled = ""
+    try:
+        handled = handle(conversation, message) or ""
+    except Exception:
+        logger.exception(
+            "record_inbound_website_message: handling failed for conversation=%s",
+            conversation.pk,
+        )
+    _announce_processed(conversation, message, handled)
+    _record_customer_activity(contact, now, body)
+    capture_opportunity(conversation, contact, body)
+    return message

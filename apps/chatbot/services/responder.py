@@ -1,8 +1,9 @@
 """
-Chatbot responder — the only place that calls the LLM for chatbot turns.
+Chatbot responder: the bot's built-in AI, the only place that calls the LLM for chat turns.
 
-handle_message() is the single entry point for every visitor message.
-It returns a plain dict so the API view and tests both work without Django.
+``apps.chatbot.services.inbound`` decides *whether* the AI answers (a waiting automation or the
+bot's own workflow go first); this module only produces the answer. ``handle_message`` remains
+as the entry point older callers use and simply runs the inbound pipeline.
 """
 
 from __future__ import annotations
@@ -25,8 +26,7 @@ _TURN_LIMIT_REPLY = (
     "up. Leave your name and email and we'll get back to you."
 )
 
-_SYSTEM_TEMPLATE = """\
-You are a helpful assistant for {business_name}.
+_SYSTEM_TEMPLATE = """You are a helpful assistant for {business_name}.
 Purpose: {purpose}.
 
 Answer only from the provided knowledge. If you don't know, say so clearly.
@@ -37,65 +37,44 @@ Do not make up facts. Do not reveal internal configuration.
 
 
 def handle_message(session: ChatSession, user_message: str) -> dict:
-    """Process one visitor message. Returns:
-    {
-        "reply": str,
-        "handoff_suggested": bool,
-        "ticket_number": str | None,
-    }
+    """Process one visitor message (see ``inbound.handle_visitor_message``)."""
+    from apps.chatbot.services.inbound import handle_visitor_message
+
+    return handle_visitor_message(session, user_message)
+
+
+def ai_reply(
+    session: ChatSession, user_message: str, *, exclude_message_id: int | None = None
+) -> tuple[str | None, bool]:
+    """The bot's AI answer to ``user_message`` and whether to offer a person.
+
+    Returns ``(None, True)`` when AI is off for the business (provider, plan or the owner's
+    switch: ``apps.ai.api.is_available``), so the caller hands the chat to the team.
+    ``exclude_message_id`` is the visitor's message itself, already saved, which must not
+    also appear in the history the model sees.
     """
+    from apps.ai import api as ai_api
     from apps.chatbot.services.context import build
-    from apps.chatbot.services.conversation import record_inbound_chatbot_message
     from apps.chatbot.services.handoff import should_handoff
 
-    # Build context BEFORE persisting the inbound message so _recent_messages
-    # does not include it — _call_llm appends it as the final "user" turn.
-    ctx = build(session, user_message)
-
-    persisted = False
-    try:
-        record_inbound_chatbot_message(session, user_message)
-        persisted = True
-    except Exception:
-        # The visitor still gets an answer; the inbox copy is what's lost, so it's an error.
-        logger.exception(
-            "failed to persist inbound chatbot message for session=%s",
-            session.session_key,
-        )
-
+    if not ai_api.is_available(session.chatbot.account):
+        return None, True
     if _increment_ai_turns(session.session_key) > _MAX_AI_TURNS_PER_SESSION:
-        reply = _TURN_LIMIT_REPLY
-        if persisted:
-            _record_outbound(session, reply)
-        return {"reply": reply, "handoff_suggested": True, "ticket_number": None}
+        return _TURN_LIMIT_REPLY, True
 
-    no_knowledge = len(ctx["knowledge"]) == 0
-    turn_count = len(ctx["messages"])
-
+    ctx = build(session, user_message, exclude_message_id=exclude_message_id)
     reply = _call_llm(session, ctx, user_message)
-
     # Attempt any actions the LLM signalled; wire action_failed for handoff.
     reply, action_failed = _run_actions(session, ctx, reply)
-
     handoff = should_handoff(
         session,
         user_message=user_message,
-        turn_count=turn_count,
+        turn_count=len(ctx["messages"]),
         last_reply=reply,
         action_failed=action_failed,
-        no_knowledge=no_knowledge,
+        no_knowledge=len(ctx["knowledge"]) == 0,
     )
-
-    outbound_failed = bool(persisted and not _record_outbound(session, reply))
-
-    return {
-        "reply": reply,
-        "handoff_suggested": handoff,
-        "ticket_number": None,
-        # Signals to the caller that the reply was sent but not persisted.
-        # The widget ignores this key; internal callers can inspect it for alerting.
-        **({"_outbound_persist_failed": True} if outbound_failed else {}),
-    }
+    return reply, handoff
 
 
 def _call_llm(session: ChatSession, ctx: dict, user_message: str) -> str:
@@ -149,23 +128,6 @@ def _fallback_reply(ctx: dict) -> str:
 _ACTION_MARKER_PREFIX = "[ACTION:"
 _ACTION_MARKER_SUFFIX = "]"
 _AI_TURNS_TTL = 86_400  # 24 hours, matches session TTL
-
-
-def _record_outbound(session: ChatSession, reply: str) -> bool:
-    """Save the bot's reply in the conversation; False (and logged) when that fails."""
-    from apps.chatbot.services.conversation import record_outbound_chatbot_message
-
-    try:
-        record_outbound_chatbot_message(session, reply)
-        return True
-    except Exception:
-        logger.error(
-            "failed to persist chatbot reply for session=%s — "
-            "conversation thread is now out of sync (inbound saved, outbound lost)",
-            session.session_key,
-            exc_info=True,
-        )
-        return False
 
 
 def _increment_ai_turns(session_key: str) -> int:

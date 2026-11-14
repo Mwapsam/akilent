@@ -95,6 +95,8 @@ ADVANCED_TYPES = frozenset(
 TRIGGER_ORDER = (
     "conversation.message_received",
     "whatsapp.received",
+    "website_chat.message_received",
+    "website_chat.opened",
     "contact.created",
     "contact.updated",
     "lead.created",
@@ -221,9 +223,15 @@ def step_catalog(account) -> list[dict]:
 
 def trigger_catalog() -> list[dict]:
     from apps.automation.workflow_engine import _TRIGGER_TYPES
+    from apps.core.releases import is_released
 
+    # Website chat triggers belong to the unreleased chatbot (apps/core/releases.py).
+    hidden = set() if is_released("chatbot") else set(WEBSITE_CHAT_TRIGGERS)
     return [
         {"type": t, "label": TRIGGER_LABELS.get(t, t)}
         for t in TRIGGER_ORDER
-        if t in _TRIGGER_TYPES
+        if t in _TRIGGER_TYPES and t not in hidden
     ]
+
+
+WEBSITE_CHAT_TRIGGERS = ("website_chat.message_received", "website_chat.opened")

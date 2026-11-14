@@ -43,7 +43,20 @@
     open: false,
     turnCount: 0,
     identified: false,
+    // How many messages of this chat the widget has shown; the server sends what comes after.
+    cursor: 0,
+    openedSent: false,
+    busy: false,
+    // Bumped whenever the widget itself changes the chat (a send), so a check for new messages
+    // that was already on its way when it happened can't show the same reply twice.
+    epoch: 0,
   };
+
+  // How often to check for replies from the team: often while the chat is open, rarely when
+  // it's closed, never while the page is in a background tab.
+  var POLL_OPEN_MS = 4000;
+  var POLL_CLOSED_MS = 20000;
+  var pollTimer = null;
 
   // The session kept from an earlier page of this visit. init() offers it back to the server,
   // which resumes it (with the chat so far) or starts a new one.
@@ -58,13 +71,48 @@
   function init() {
     startSession(savedSessionKey, function (data) {
       render();
-      var past = data.messages || [];
-      for (var i = 0; i < past.length; i++) {
-        if (past[i].from === "visitor") appendVisitorMsg(past[i].text);
-        else appendBotMsg(past[i].text);
-      }
+      showMessages(data.messages);
+      schedulePoll();
     });
   }
+
+  function showMessages(list) {
+    list = list || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].from === "visitor") appendVisitorMsg(list[i].text);
+      else appendBotMsg(list[i].text);
+    }
+  }
+
+  function takeCursor(data) {
+    if (data && typeof data.cursor === "number") state.cursor = data.cursor;
+  }
+
+  // ── Replies that arrive later (the team, from the inbox) ──────────────────
+
+  function schedulePoll() {
+    if (pollTimer) clearTimeout(pollTimer);
+    pollTimer = setTimeout(pollNow, state.open ? POLL_OPEN_MS : POLL_CLOSED_MS);
+  }
+
+  function pollNow() {
+    pollTimer = null;
+    if (!state.sessionKey || document.hidden || state.busy) return schedulePoll();
+    var epoch = state.epoch;
+    post("/api/chat/poll/", { session_key: state.sessionKey, cursor: state.cursor }, function (err, data) {
+      if (err && err.status === 410) return;  // expired: the next message starts a new chat
+      if (!err && data && epoch === state.epoch) {
+        if (data.messages && data.messages.length && !state.open) markUnread();
+        showMessages(data.messages);
+        takeCursor(data);
+      }
+      schedulePoll();
+    });
+  }
+
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden && state.sessionKey) { if (pollTimer) clearTimeout(pollTimer); pollNow(); }
+  });
 
   function startSession(resumeKey, done) {
     var body = { public_key: PUBLIC_KEY };
@@ -74,6 +122,8 @@
       state.sessionKey = data.session_key;
       state.apiOrigin = data.api_origin || API_BASE;
       state.config = data.config;
+      state.cursor = 0;
+      takeCursor(data);
       try {
         sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ sessionKey: state.sessionKey }));
       } catch (_) {}
@@ -210,7 +260,30 @@
   function toggle() {
     state.open = !state.open;
     panel.style.display = state.open ? "flex" : "none";
-    if (state.open) input.focus();
+    if (state.open) {
+      input.focus();
+      clearUnread();
+      if (!state.openedSent) {
+        // Lets the bot greet the visitor ("visitor opens the chat" automations). The server
+        // runs it once per chat however many pages it's opened from.
+        state.openedSent = true;
+        state.epoch++;
+        post("/api/chat/open/", { session_key: state.sessionKey }, function (err, data) {
+          if (err || !data) return;
+          if (state.cursor === 0) showMessages(data.messages);
+          takeCursor(data);
+        });
+      }
+    }
+    schedulePoll();
+  }
+
+  function markUnread() {
+    if (widget) widget.style.boxShadow = "0 0 0 3px #fff, 0 0 0 6px " + ((state.config || {}).primary_color || "#1a56db");
+  }
+
+  function clearUnread() {
+    if (widget) widget.style.boxShadow = "0 4px 12px rgba(0,0,0,.2)";
   }
 
   function onSend() {
@@ -219,8 +292,12 @@
     input.value = "";
     appendVisitorMsg(text);
     setLoading(true);
+    state.busy = true;
+    state.epoch++;
     sendMessage(text, function (err, data) {
       setLoading(false);
+      state.busy = false;
+      state.epoch++;
       if (err) {
         if (err.status === 410) {
           // The chat went quiet for a day and expired: start a fresh one and resend.
@@ -240,7 +317,9 @@
         return;
       }
       state.turnCount++;
-      appendBotMsg(data.reply);
+      if (data.messages) showMessages(data.messages);
+      else if (data.reply) appendBotMsg(data.reply);
+      takeCursor(data);
       if (data.handoff_suggested && !state.identifyFormShown) {
         showHandoffPrompt();
       }

@@ -219,6 +219,24 @@ def check_rate_limit(session_key: str) -> bool:
     return count <= _RATE_LIMIT
 
 
+# The widget checks for new messages every few seconds while a chat is open; that must never
+# use up the visitor's allowance for sending messages, so it has its own, wider limit.
+_POLL_RATE_LIMIT = 40  # checks per window
+_POLL_RATE_WINDOW = 60  # seconds
+
+
+def check_poll_rate_limit(session_key: str) -> bool:
+    """Return True if this session is within the limit for checking for new messages."""
+    cache_key = f"chatbot_poll_rate:{session_key}"
+    if cache.add(cache_key, 1, timeout=_POLL_RATE_WINDOW):
+        return True
+    try:
+        count = cache.incr(cache_key)
+    except ValueError:
+        return True
+    return count <= _POLL_RATE_LIMIT
+
+
 def check_init_rate_limit(ip: str) -> bool:
     """Return True if this IP is within the init endpoint rate limit."""
     cache_key = f"chatbot_init_rate:{ip}"
