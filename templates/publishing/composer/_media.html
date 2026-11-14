@@ -96,11 +96,16 @@
         <h3 id="library-title" class="font-semibold text-ink">Choose from your media</h3>
         <button type="button" class="btn btn-ghost btn-sm" @click="libraryOpen = false">Close</button>
       </div>
-      <form class="flex gap-2" @submit.prevent="loadLibrary()">
+      {% comment %}Not a <form>: this sits inside #composer-form, and a nested form's </form>
+      closes the composer's form early. Everything after it (the action bar's Schedule,
+      Publish now, Save and close) was left outside any form, so those buttons did nothing.
+      Enter here searches; it must never submit the post.{% endcomment %}
+      <div class="flex gap-2" role="search">
         <label class="sr-only" for="library-q">Search media</label>
-        <input id="library-q" class="input flex-1 min-w-0" x-model="libraryQuery" placeholder="Name or tag">
-        <button type="submit" class="btn btn-secondary btn-sm">Search</button>
-      </form>
+        <input id="library-q" class="input flex-1 min-w-0" x-model="libraryQuery" placeholder="Name or tag"
+               @keydown.enter.prevent="loadLibrary()">
+        <button type="button" class="btn btn-secondary btn-sm" @click="loadLibrary()">Search</button>
+      </div>
       <p class="text-sm text-ink-subtle" x-show="libraryLoading">Loading…</p>
       <p class="text-sm tone-coral-fg" role="alert" x-show="libraryError" x-text="libraryError"></p>
       <p class="text-sm text-ink-subtle" x-show="!libraryLoading && !libraryError && !libraryItems.length">Nothing here yet. Files you upload are added to your media.</p>

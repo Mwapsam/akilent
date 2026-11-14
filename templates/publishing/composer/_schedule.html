@@ -73,8 +73,8 @@
                   const fd = new FormData(); fd.append('timezone', device);
                   fd.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
                   fetch('{% url 'settings-timezone' %}', { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-                    .then(r => r.json()).then(d => { if (d.ok) saved = d.timezone; else error = d.error || 'Couldn't save it.'; })
-                    .catch(() => { error = 'Couldn't save it. Try again.'; }).finally(() => { saving = false; });"
+                    .then(r => r.json()).then(d => { if (d.ok) saved = d.timezone; else error = d.error || 'Could not save it.'; })
+                    .catch(() => { error = 'Could not save it. Try again.'; }).finally(() => { saving = false; });"
                 x-text="'Use ' + device + ' (this device)'"></button>
         or <a href="{% url 'settings-hours' %}" class="cs-link">choose another</a>.
       </span>

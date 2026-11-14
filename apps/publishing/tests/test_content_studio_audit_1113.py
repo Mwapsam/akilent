@@ -155,3 +155,47 @@ def test_device_timezone_is_read_in_init_not_x_init(owner):
     html = client.get(reverse("publishing:post-new")).content.decode()
     assert not re.search(r'x-init="\s*(try|for|while)\b', html)
     assert "resolvedOptions().timeZone" in html.split("init() {", 1)[1][:200]
+
+
+# --- The composer's buttons submit it (2026-11-14) ---------------------------------------
+
+
+def _composer_html(client, settings):
+    from apps.core.releases import UNRELEASED_FEATURES
+
+    settings.RELEASED_FEATURES = frozenset(UNRELEASED_FEATURES)  # media library and all
+    return client.get(reverse("publishing:post-new")).content.decode()
+
+
+def test_composer_form_holds_its_action_buttons(owner, settings):
+    """A <form> inside #composer-form (the media library search was one) is dropped by the
+    browser, but its </form> closes the composer's form early: Schedule, Publish now and
+    Save and close were left outside it and did nothing. The browser ends the form at the
+    first </form> after it opens, so that part must hold every button and no other form."""
+    _, _, client = owner
+    html = _composer_html(client, settings)
+    start = html.index('<form id="composer-form"')
+    body = html[start + 1 : html.index("</form>", start)]
+    assert "<form" not in body
+    for action in ("draft", "schedule", "publish_now"):
+        assert f'value="{action}"' in body, action
+
+
+def test_composer_alpine_expressions_have_balanced_quotes(owner, settings):
+    """An apostrophe inside a single-quoted JS string ('Couldn't…') breaks the whole
+    handler; Alpine only reports it when the element is used."""
+    from html.parser import HTMLParser
+
+    _, _, client = owner
+    html = _composer_html(client, settings)
+    bad = []
+
+    class P(HTMLParser):
+        def handle_starttag(self, tag, attrs):
+            for name, value in attrs:
+                if value and name.startswith(("x-", ":", "@")):
+                    if value.replace("\'", "").count("'") % 2:
+                        bad.append(f"{tag} {name}={value[:120]}")
+
+    P().feed(html)
+    assert not bad, bad
